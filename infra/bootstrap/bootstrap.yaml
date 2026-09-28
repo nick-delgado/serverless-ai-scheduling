@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  sched-bootstrap — one-time, admin-deployed foundation for the AI scheduling assistant.
+  Creates the CloudFormation execution role (and the permissions boundary every
+  workload role must carry), the SAM artifact bucket, and a monthly budget alarm.
+  See docs/runbooks/aws-setup.md and docs/adr/0003-iac-layout.md.
+
+Parameters:
+  BudgetLimitUsd:
+    Type: Number
+    Default: 25
+    MinValue: 1
+    Description: Monthly cost budget (USD) for the whole account; alerts at 80% actual and 100% forecast.
+  BudgetAlertEmail:
+    Type: String
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    Description: Email address that receives budget alerts.
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # Permissions boundary: the ceiling for every IAM role created by sched-* stacks
+  # (Lambda roles, Identity Pool role, ...). Even if a template asks for more,
+  # the effective permissions can never exceed this.
+  # ---------------------------------------------------------------------------
+  WorkloadPermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: sched-permissions-boundary
+      Description: Maximum permissions for roles created by sched-* stacks.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: WorkloadServices
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+              - cloudwatch:PutMetricData
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DescribeTable
+              - bedrock-mantle:CreateInference
+              - bedrock-mantle:CountTokens
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+              - ses:SendEmail
+              - ses:SendRawEmail
+              - transcribe:StartStreamTranscription
+              - transcribe:StartStreamTranscriptionWebSocket
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+              - s3:GetObject
+              - s3:PutObject
+              - lambda:InvokeFunction
+              - cognito-identity:GetId
+              - cognito-identity:GetCredentialsForIdentity
+            Resource: "*"
+          - Sid: NeverIamOrAccountLevel
+            Effect: Deny
+            Action:
+              - iam:*
+              - organizations:*
+              - account:*
+              - sso:*
+            Resource: "*"
+
+  # ---------------------------------------------------------------------------
+  # CloudFormation execution role. Agents deploy with the SchedDeployer SSO
+  # permission set, which may only drive CloudFormation and PassRole *this* role.
+  # ---------------------------------------------------------------------------
+  CfnExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sched-cfn-exec
+      Description: Assumed by CloudFormation to create sched-* stack resources.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: sched-cfn-exec
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WorkloadServiceControlPlanes
+                Effect: Allow
+                Action:
+                  - apigateway:*
+                  - cloudfront:*
+                  - cloudwatch:*
+                  - cognito-identity:*
+                  - cognito-idp:*
+                  - dynamodb:*
+                  - events:*
+                  - lambda:*
+                  - logs:*
+                  - s3:*
+                  - ses:*
+                  - ssm:*
+                  - xray:*
+                  - bedrock:GetFoundationModel
+                  - bedrock:ListFoundationModels
+                Resource: "*"
+              - Sid: CreateWorkloadRolesOnlyWithBoundary
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:PutRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:PutRolePermissionsBoundary
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-*
+                Condition:
+                  StringEquals:
+                    iam:PermissionsBoundary: !Ref WorkloadPermissionsBoundary
+              - Sid: ManageWorkloadRoles
+                Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:PassRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-*
+              - Sid: ProtectBootstrapIdentities
+                Effect: Deny
+                Action: iam:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-cfn-exec
+                  - !Ref WorkloadPermissionsBoundary
+              - Sid: NoBoundaryRemoval
+                Effect: Deny
+                Action: iam:DeleteRolePermissionsBoundary
+                Resource: "*"
+
+  # ---------------------------------------------------------------------------
+  # SAM / CloudFormation artifact bucket
+  # ---------------------------------------------------------------------------
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub sched-artifacts-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt ArtifactBucket.Arn
+              - !Sub ${ArtifactBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ---------------------------------------------------------------------------
+  # Cost guardrail
+  # ---------------------------------------------------------------------------
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: sched-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+  # ---------------------------------------------------------------------------
+  # Discovery parameters for the workload stacks and scripts
+  # ---------------------------------------------------------------------------
+  CfnExecRoleArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /sched/bootstrap/cfn-exec-role-arn
+      Type: String
+      Value: !GetAtt CfnExecutionRole.Arn
+
+  PermissionsBoundaryArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /sched/bootstrap/permissions-boundary-arn
+      Type: String
+      Value: !Ref WorkloadPermissionsBoundary
+
+  ArtifactBucketParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /sched/bootstrap/artifact-bucket
+      Type: String
+      Value: !Ref ArtifactBucket
+
+Outputs:
+  CfnExecutionRoleArn:
+    Description: Pass as --role-arn to sam deploy / cloudformation deploy.
+    Value: !GetAtt CfnExecutionRole.Arn
+  PermissionsBoundaryArn:
+    Description: Every IAM role in sched-* stacks must set this as its PermissionsBoundary.
+    Value: !Ref WorkloadPermissionsBoundary
+  ArtifactBucketName:
+    Description: S3 bucket for SAM/CloudFormation artifacts (--s3-bucket).
+    Value: !Ref ArtifactBucket

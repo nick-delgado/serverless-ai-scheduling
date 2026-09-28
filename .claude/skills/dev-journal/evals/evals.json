@@ -1,0 +1,23 @@
+{
+  "skill_name": "dev-journal",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "the S-1 spike is done — opus 5 took 9.8s p95 for a tool round trip, sonnet 5 was 4.1s, haiku 2.3s, and cache reads showed up on the 2nd call for all three. write it up",
+      "expected_output": "Creates a dated journal entry with a finding-style title and the exact numbers as evidence, updates ADR-002's Validation section (and status if appropriate), and adds a row to docs/journal/README.md. Does not invent additional numbers.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "we're switching from REST API response streaming to a WebSocket API because streaming through CloudFront kept buffering. record that decision",
+      "expected_output": "Writes a new ADR superseding ADR-007 (does not rewrite ADR-007's body), marks ADR-007 'Superseded by ADR-NNNN', updates the ADR index, and writes a journal entry describing the reversal and its evidence.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "M1 is closed. update the readme",
+      "expected_output": "Rewrites README Chapter 3 as a short narrative from M1 journal entries with 1–2 concrete numbers and links, updates the status line, and keeps setup instructions out of the story (links to runbooks instead).",
+      "files": []
+    }
+  ]
+}

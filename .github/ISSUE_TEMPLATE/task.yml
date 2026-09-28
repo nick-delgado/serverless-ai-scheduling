@@ -1,0 +1,43 @@
+name: Task
+description: A unit of backlog work that one agent can complete in one PR.
+title: "[<ID>] <short imperative title>"
+labels: ["status:ready"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What this task achieves and why (one short paragraph). Cite PRD requirement IDs.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable statements. Each one should be verifiable by a command, test, or observation.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: owned_paths
+    attributes:
+      label: Owned paths
+      description: Files/directories this task may create or modify. Anything else needs a callout in the PR.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issues that must be closed first ("Blocked by #N"), and what this unblocks.
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Commands or steps that prove the acceptance criteria.
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: ADRs, PRD sections, research notes, external docs.
