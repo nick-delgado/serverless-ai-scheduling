@@ -1,0 +1,11 @@
+# Prose and CloudFormation are formatted by hand; keep Prettier on code and config.
+*.md
+infra/
+docs/
+.claude/
+package-lock.json
+node_modules/
+dist/
+coverage/
+.aws-sam/
+.worktrees/

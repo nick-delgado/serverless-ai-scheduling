@@ -1,0 +1,14 @@
+{
+  "name": "@sched/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Evaluation harness: scenarios, patient simulator, graders, LLM judge, reports, baselines.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  }
+}

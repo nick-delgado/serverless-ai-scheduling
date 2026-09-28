@@ -1,0 +1,14 @@
+{
+  "name": "@sched/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The agent loop (runAgentTurn), LlmClient interface + Bedrock client, model profiles, and prompts.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@sched/tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent tools, repository interfaces with in-memory and DynamoDB implementations, Clock, and fixtures.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  }
+}
