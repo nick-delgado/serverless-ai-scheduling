@@ -44,14 +44,22 @@ These directories are created as the milestones land. If a directory doesn't exi
 
 ## Commands
 
-Available after issue M1-01 (monorepo scaffold) lands:
+Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`; package names `@sched/<dir>`):
 
 ```bash
 npm ci                                   # install
-npm run lint && npm run typecheck        # static checks
-npm test                                 # unit tests (Vitest)
-npm run evals -- --suite smoke           # eval smoke suite (see run-evals skill once it exists)
+npm run lint                             # ESLint (typescript-eslint strict) + Prettier check
+npm run format                           # auto-fix formatting and lint
+npm run typecheck                        # tsc --noEmit for the root configs and every workspace
+npm test                                 # all Vitest projects
+npm test -w packages/contracts           # one workspace
 ```
+
+Coming later: `npm run evals -- --suite smoke` (S7-01, #30; documented by the `run-evals` skill).
+
+Toolchain notes:
+- TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
+- Internal packages export their TypeScript source (`"exports": "./src/index.ts"`). There's no build step between workspaces; esbuild (Lambdas) and Vite (web) bundle directly.
 
 Infra commands (the `sam-deploy` skill documents them fully once it exists):
 

@@ -1,3 +1,6 @@
+# agent worktrees (see task-workflow skill)
+.worktrees/
+
 # dependencies & builds
 node_modules/
 dist/

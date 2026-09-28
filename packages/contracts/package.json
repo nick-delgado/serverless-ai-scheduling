@@ -1,0 +1,14 @@
+{
+  "name": "@sched/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zod schemas and inferred types shared across the stack: domain entities, tool inputs/outputs, chat stream events, API shapes.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  }
+}

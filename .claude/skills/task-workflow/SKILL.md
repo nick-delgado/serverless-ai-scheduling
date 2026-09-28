@@ -55,11 +55,11 @@ If the issue is already assigned or `status:in-progress`, don't take it over. Pi
 
 ```bash
 git fetch origin
-git worktree add "../sched-wt/<issue#>-<slug>" -b "<branch>" origin/main
-cd "../sched-wt/<issue#>-<slug>"
+git worktree add ".worktrees/<issue#>-<slug>" -b "<branch>" origin/main
+cd ".worktrees/<issue#>-<slug>" && npm ci
 ```
 
-If the `EnterWorktree` tool is available, you can use it instead. Worktrees let several agents build and test at the same time without stepping on each other's working directories.
+Worktrees let several agents build and test at the same time without stepping on each other's working directories. Keep them **inside the repo under `.worktrees/`**, which is git-ignored and excluded from lint and tests. Claude Code's file tools (Read/Edit/Write) only work inside the project directory, so a worktree at `../something` can be reached by shell commands but not edited normally.
 
 ## 4. Read before you write
 
@@ -138,7 +138,7 @@ gh issue edit <N> --add-label "status:review" --remove-label "status:in-progress
   gh issue edit <dependent> --add-label "status:ready" --remove-label "status:backlog"
   ```
 
-  Then run `git worktree remove "../sched-wt/<issue#>-<slug>"` and delete the branch. This keeps the ready queue accurate for the next agent.
+  Then run `git worktree remove ".worktrees/<issue#>-<slug>"` and delete the branch. This keeps the ready queue accurate for the next agent.
 
 ## Label reference
 

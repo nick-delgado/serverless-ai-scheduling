@@ -1,0 +1,14 @@
+{
+  "name": "@sched/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lambda handlers: POST /api/chat (streaming), GET /api/session.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  }
+}
