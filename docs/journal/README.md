@@ -11,3 +11,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | Date | Entry | Chapter |
 |---|---|---|
 | 2026-09-28 | [Why this project, and planning before building](2026-09-28-why-this-project.md) | 1. The question |
+| 2026-09-28 | ["ACTIVE" in the model catalog doesn't mean you can call it](2026-09-28-active-is-not-callable.md) | 3. The walking skeleton |

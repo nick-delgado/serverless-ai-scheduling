@@ -1,0 +1,15 @@
+{
+  "name": "@sched/spike-s1-bedrock-tool-latency",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike S-1 (#9): per-model tool-use round-trip latency, tokens, caching, and IAM on Claude in Amazon Bedrock (Mantle). Throwaway; informs ADR-002.",
+  "scripts": {
+    "start": "tsx run.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.0",
+    "@anthropic-ai/sdk": "^0.129.0"
+  }
+}

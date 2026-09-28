@@ -1,6 +1,6 @@
 # ADR-002: Model selection and Bedrock client
 
-- **Status:** Proposed. Pending spike S-1; model choice is finalized after the M3 eval matrix.
+- **Status:** Proposed. **Interim development path accepted 2026-09-28** (Sonnet 4.6 via bedrock-runtime; see "Interim decision" below). Client and default model are finalized after the Opus 5 / Sonnet 5 rerun and the M3 eval matrix.
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
@@ -63,3 +63,72 @@ Per-model parameter differences are captured in a `ModelProfile` so the loop cod
 2. Confirm the exact IAM actions and resource ARNs, the model access status (Opus 5 has per-model access criteria), and whether prompt-cache reads show up on the second call.
 3. Check whether Mantle calls appear in Bedrock model invocation logging.
 4. Record the results in this ADR and in a journal entry.
+
+### Interim results (2026-09-28): partially blocked on account access
+
+The spike uses a production-sized prefix: a draft system prompt plus all 7 tool schemas, about 2.6k tokens. Raw results are in `spikes/s1-bedrock-tool-latency/results/`.
+
+**Access (why most of the matrix couldn't run yet)**
+
+| Model | `get-foundation-model-availability` | Mantle (`AnthropicBedrockMantle`) | bedrock-runtime (`AnthropicBedrock`, US inference profile) |
+|---|---|---|---|
+| Opus 5 | authorization `AUTHORIZED`, **agreement `NOT_AVAILABLE`** | 403 "not available for this account" | 403 "not available for this account" |
+| Sonnet 5 | authorization `AUTHORIZED`, **agreement `NOT_AVAILABLE`** | 403 (same) | 403 (same) |
+| Haiku 4.5 | authorization `AUTHORIZED`, agreement `AVAILABLE` | 403 (same) with ID `anthropic.claude-haiku-4-5`; other IDs 404 | ✅ works via `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+
+- **"ACTIVE" in the model catalog doesn't mean callable.** Opus 5 and Sonnet 5 still need their AWS Marketplace agreement accepted. Bedrock does that on the first call by an identity with Marketplace permissions, and our least-privilege `SchedDeployer` role deliberately has none. The fix is a one-time human step (runbook step 6).
+- **Mantle refuses even Haiku**, whose agreement is in place. So Claude in Amazon Bedrock (Mantle) looks like a separate enablement on this account. We'll retest after the agreements are accepted.
+- **On-demand runtime model IDs need an inference profile.** The bare catalog ID fails with "on-demand throughput isn't supported"; the `us.` prefix works.
+
+**Haiku 4.5, bedrock-runtime, 7 of 10 turns completed** (the other 3 were throttled; see below)
+
+| Metric | p50 | p95 |
+|---|---|---|
+| Call A (question → `tool_use`), first block | 1.27 s | 2.17 s |
+| Call A total | 1.77 s | 2.86 s |
+| Call B (answer), first text | 1.24 s | 2.46 s |
+| **Full turn (A + B)** | **3.54 s** | **4.68 s** |
+
+- **Tool use:** 7/7 completed turns called `check_availability` with the correct specialty, date, and time of day. Every answer listed only the slots the tool returned.
+- **Tokens and cost:** about 5,366 input and 242 output tokens per turn; about $0.0066 per turn at Anthropic list prices (an estimate; Bedrock billing may differ).
+- **Caching: 0 tokens written or read.** This confirms the 4,096-token minimum cacheable prefix for Haiku 4.5. At our prompt size, Haiku will pay full input price on every call. Opus 5 (512 minimum) and Sonnet 5 (1,024) should cache it.
+
+**Throttling:** after about 15 calls in two minutes, Bedrock returned 429 "Too many requests", even with the SDK's retries. New accounts appear to start with low on-demand quotas. A full eval matrix, thousands of calls, will need pacing (now in the spike: `--pace-ms`, 6 retries) and probably a quota increase. `SchedDeployer` can't read Service Quotas yet; a read-only addition is proposed in `infra/bootstrap/sched-deployer-policy.json`.
+
+**IAM (resolved from the Service Authorization Reference):** `bedrock-mantle:CreateInference` targets `arn:aws:bedrock-mantle:<region>:<account>:project/*` and is narrowed to models with the `bedrock-mantle:Model` condition key. On the runtime path, `bedrock:InvokeModel*` applies to the inference-profile and foundation-model ARNs.
+
+**Emerging direction (not yet decided):** if Mantle stays unavailable, switch the default client to bedrock-runtime via `AnthropicBedrock` with US inference profiles. That's the path AWS recommends for new applications, it supports invocation logging, it has the same Messages API surface in the SDK, and the `LlmClient` interface makes the swap one file. Decide after the rerun.
+
+**Update (same day): an account-level entitlement restriction, not an agreement step.** Nick tried to accept the agreements as `sched-admin` (playground and CLI) and got the same `AccessDeniedException ... contact AWS Sales`. According to AWS's knowledge-center guidance, an access-denied message that mentions "contact AWS Sales" means an **account-level entitlement restriction**. IAM, SCPs, and console model access can't fix it; AWS Support has to lift it.
+
+Agreement status across every Anthropic model on the account:
+- **Agreement `AVAILABLE`:** Haiku 4.5, Sonnet 4, Sonnet 4.6.
+- **`NOT_AVAILABLE`:** every Opus (4.1 → 5.5), every Fable, and Sonnet 4.5 / 5 / 5.5.
+
+**Sonnet 4.6 and Haiku 4.5 are callable today** (bedrock-runtime, US inference profiles). Result, N=10 each, 20/20 turns OK with `--pace-ms 2500` and no 429s:
+
+| Metric | Sonnet 4.6 (adaptive thinking, effort `medium`) | Haiku 4.5 |
+|---|---|---|
+| Call A first block, p50 / p95 | 1.38 s / 1.61 s | 1.32 s / 1.60 s |
+| Call A total, p50 / p95 | 2.67 s / 2.93 s | 1.82 s / 2.12 s |
+| Call B (answer) first text, p50 / p95 | 1.44 s / 2.60 s | 1.17 s / 2.23 s |
+| **Full turn, p50 / p95** | **5.16 s / 7.02 s** | **3.54 s / 4.08 s** |
+| Correct `check_availability` call | 10/10 | 10/10 |
+| Tokens per turn (uncached in / cache write / cache read / out) | 1,113 / 214 / 4,070 / 262 | 5,365 / 0 / 0 / 235 |
+| **Estimated cost per turn** | **$0.0093** | **$0.0065** |
+
+- **Caching narrows the price gap.** Sonnet 4.6 costs 3× Haiku per token, but only about 1.4× per turn, because it caches the 2,142-token prefix from the second call on. Haiku can't cache it at all (4,096 minimum).
+- **An anecdote, not a metric:** Sonnet 4.6's answers followed the prompt's formatting rules more closely (weekday + date on every option, first name, asks for the visit reason). Haiku omitted per-option weekdays and used bold markdown. The eval harness will quantify this.
+- Both models meet NFR-001 on this single-tool turn from a laptop. The first streamed text arrives in about 1.2–1.4 s p50, against a target of ≤ 3 s.
+
+**Proposed interim path (awaiting Nick's decision):**
+1. Nick opens an AWS Support case to lift the entitlement restriction for Opus 5 and Sonnet 5. First he checks whether the account is on the Free plan; if so, upgrading to the Paid plan may be the fix.
+2. Until then, development and the M1 walking skeleton use **bedrock-runtime + Sonnet 4.6** (`us.anthropic.claude-sonnet-4-6`), with Haiku 4.5 as the second profile. Model choice is config (`AGENT_MODEL_PROFILE`), so nothing structural changes.
+3. When entitlement arrives, rerun this spike for Opus 5 and Sonnet 5 on both backends, then finalize the client and the default model here.
+
+### Interim decision (accepted by Nick, 2026-09-28)
+
+- **Client:** `AnthropicBedrock` from `@anthropic-ai/bedrock-sdk` (bedrock-runtime), behind the `LlmClient` interface. Mantle is unavailable to this account.
+- **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- **IAM:** `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` on the US inference-profile ARNs plus the underlying foundation-model ARNs in the US regions they route to.
+- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default.

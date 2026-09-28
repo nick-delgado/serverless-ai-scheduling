@@ -87,13 +87,24 @@ Confirm the budget alert subscription email if AWS sends one.
 
 ## 6. Enable Bedrock model access
 
-1. Console → **Amazon Bedrock** (us-east-1) → **Model access**.
-2. Enable **Claude Opus 5**, **Claude Sonnet 5**, and **Claude Haiku 4.5**. If this is the account's first Anthropic model, submit the one-time use-case form. Opus 5 has per-model access criteria; note what the console says.
-3. Verify from the CLI (spike S-1 does this properly):
+1. Console → **Amazon Bedrock** (us-east-1) → **Model catalog** (formerly **Model access**).
+2. For **Claude Opus 5**, **Claude Sonnet 5**, and **Claude Haiku 4.5**: if this is the account's first Anthropic model, submit the one-time use-case form. Opus 5 has per-model access criteria; note what the console says.
+3. **Accept each model's AWS Marketplace agreement. Being listed as "ACTIVE" isn't enough** (found in spike S-1). Bedrock accepts the agreement on the model's first call, but only when the caller has AWS Marketplace permissions. The `SchedDeployer` role has none, by design. So, **signed in as `sched-admin`**, send one message to each model in the Bedrock **playground** (select the model → "Open in playground" → send "hi"), or run:
    ```bash
-   aws bedrock list-foundation-models --profile sched-dev --region us-east-1 \
-     --by-provider anthropic --query 'modelSummaries[].modelId'
+   for m in us.anthropic.claude-opus-5 us.anthropic.claude-sonnet-5 us.anthropic.claude-haiku-4-5-20251001-v1:0; do
+     aws bedrock-runtime invoke-model --profile sched-admin --region us-east-1 --model-id "$m" \
+       --cli-binary-format raw-in-base64-out \
+       --body '{"anthropic_version":"bedrock-2023-05-31","max_tokens":5,"messages":[{"role":"user","content":"hi"}]}' /dev/null
+   done
    ```
+4. Verify that each model's agreement shows `AVAILABLE`. It may show `PENDING` for a few minutes:
+   ```bash
+   for m in anthropic.claude-opus-5 anthropic.claude-sonnet-5 anthropic.claude-haiku-4-5-20251001-v1:0; do
+     aws bedrock get-foundation-model-availability --profile sched-dev --region us-east-1 --model-id "$m" \
+       --query '[modelId, agreementAvailability.status, authorizationStatus]' --output text
+   done
+   ```
+5. **Check the on-demand quotas.** New accounts can start low; spike S-1 was throttled after about 15 calls. Go to Console → **Service Quotas** → **Amazon Bedrock**, search for each model (e.g., "Claude Sonnet 5"), and note the requests-per-minute and tokens-per-minute values. Request increases if they're in single digits, because the eval harness makes thousands of calls.
 
 ## 7. Verify an SES identity (sandbox)
 

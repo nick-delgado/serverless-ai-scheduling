@@ -9,3 +9,5 @@ dist/
 coverage/
 .aws-sam/
 .worktrees/
+# Generated spike/eval outputs
+spikes/**/results/
