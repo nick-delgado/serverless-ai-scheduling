@@ -65,7 +65,9 @@
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/sched-cfn-exec",
       "Condition": {
-        "StringEquals": { "iam:PassedToService": "cloudformation.amazonaws.com" }
+        "StringEquals": {
+          "iam:PassedToService": "cloudformation.amazonaws.com"
+        }
       }
     },
     {
@@ -127,7 +129,12 @@
         "bedrock:ListFoundationModels",
         "bedrock:GetFoundationModel",
         "bedrock:GetFoundationModelAvailability",
-        "bedrock:ListInferenceProfiles"
+        "bedrock:ListInferenceProfiles",
+        "servicequotas:GetServiceQuota",
+        "servicequotas:ListServiceQuotas",
+        "servicequotas:GetAWSDefaultServiceQuota",
+        "servicequotas:ListRequestedServiceQuotaChangeHistoryByQuota",
+        "bedrock:GetModelInvocationLoggingConfiguration"
       ],
       "Resource": "*"
     },

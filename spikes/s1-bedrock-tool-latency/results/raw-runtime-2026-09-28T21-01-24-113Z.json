@@ -1,0 +1,414 @@
+{
+  "startedAt": "2026-09-28T21:01:24.113Z",
+  "callerArn": "arn:aws:sts::<account>:assumed-role/AWSReservedSSO_SchedDeployer_028303973e6f6f7f/nick",
+  "results": [
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 1,
+      "ok": true,
+      "costUsd": 0.0066110000000000006,
+      "callA": {
+        "msToMessageStart": 2172,
+        "msToFirstBlock": 2173,
+        "msToFirstText": 2173,
+        "msToToolUseStart": 2506,
+        "stopReason": "tool_use",
+        "msTotal": 2856,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 140
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "time_of_day": "afternoon",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        }
+      },
+      "callB": {
+        "msToMessageStart": 1426,
+        "msToFirstBlock": 1426,
+        "msToFirstText": 1427,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1822,
+        "usage": {
+          "input": 2852,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 108
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! We have three afternoon dermatology slots available on Tuesday, October 13:\n\n1. **Dr. Priya Lee** — Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** — Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** — Tuesday, October 13 at 4:00 PM ET\n\nWhich one works best for you?",
+      "turnMs": 4678
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 2,
+      "ok": true,
+      "costUsd": 0.006627,
+      "callA": {
+        "msToMessageStart": 1343,
+        "msToFirstBlock": 1343,
+        "msToFirstText": 1344,
+        "msToToolUseStart": 1493,
+        "stopReason": "tool_use",
+        "msTotal": 1890,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 141
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 1061,
+        "msToFirstBlock": 1062,
+        "msToFirstText": 1062,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1670,
+        "usage": {
+          "input": 2853,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 110
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I found three afternoon openings for dermatology on Tuesday, October 13:\n\n1. **Dr. Priya Lee** – Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** – Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** – Tuesday, October 13 at 4:00 PM ET\n\nWhich of these works best for you?",
+      "turnMs": 3560
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 3,
+      "ok": true,
+      "costUsd": 0.006644,
+      "callA": {
+        "msToMessageStart": 1242,
+        "msToFirstBlock": 1242,
+        "msToFirstText": 1242,
+        "msToToolUseStart": 1428,
+        "stopReason": "tool_use",
+        "msTotal": 1821,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 143
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 1187,
+        "msToFirstBlock": 1187,
+        "msToFirstText": 1187,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1708,
+        "usage": {
+          "input": 2855,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 111
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I found three dermatology slots on Tuesday, October 13 in the afternoon:\n\n1. **Dr. Priya Lee** — Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** — Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** — Tuesday, October 13 at 4:00 PM ET\n\nWould any of these work for you?",
+      "turnMs": 3529
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 4,
+      "ok": true,
+      "costUsd": 0.006637,
+      "callA": {
+        "msToMessageStart": 1190,
+        "msToFirstBlock": 1190,
+        "msToFirstText": 1191,
+        "msToToolUseStart": 1525,
+        "stopReason": "tool_use",
+        "msTotal": 1769,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 141
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 1472,
+        "msToFirstBlock": 1472,
+        "msToFirstText": 1472,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1773,
+        "usage": {
+          "input": 2853,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 112
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I have three dermatology slots available on Tuesday, October 13 in the afternoon:\n\n1. **Dr. Priya Lee** – Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** – Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** – Tuesday, October 13 at 4:00 PM ET\n\nWhich of these works best for you?",
+      "turnMs": 3542
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 5,
+      "ok": true,
+      "costUsd": 0.006606,
+      "callA": {
+        "msToMessageStart": 1157,
+        "msToFirstBlock": 1158,
+        "msToFirstText": 1158,
+        "msToToolUseStart": 1550,
+        "stopReason": "tool_use",
+        "msTotal": 1759,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 140
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 1242,
+        "msToFirstBlock": 1243,
+        "msToFirstText": 1243,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1726,
+        "usage": {
+          "input": 2852,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 107
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I found three afternoon slots on Tuesday, October 13:\n\n1. **Dr. Priya Lee** — Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** — Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** — Tuesday, October 13 at 4:00 PM ET\n\nWhich of these works best for you, Maria?",
+      "turnMs": 3485
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 6,
+      "ok": true,
+      "costUsd": 0.006377,
+      "callA": {
+        "msToMessageStart": 1270,
+        "msToFirstBlock": 1270,
+        "msToFirstText": null,
+        "msToToolUseStart": 1270,
+        "stopReason": "tool_use",
+        "msTotal": 1753,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 121
+        },
+        "blockTypes": ["tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 1225,
+        "msToFirstBlock": 1225,
+        "msToFirstText": 1225,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 1671,
+        "usage": {
+          "input": 2833,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 84
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I found three afternoon slots on Tuesday, October 13:\n\n1. **Dr. Priya Lee** — 2:30 PM ET\n2. **Dr. Priya Lee** — 3:30 PM ET\n3. **Dr. Samuel Okafor** — 4:00 PM ET\n\nWhich of these works best for you?",
+      "turnMs": 3424
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 7,
+      "ok": true,
+      "costUsd": 0.006527,
+      "callA": {
+        "msToMessageStart": 1315,
+        "msToFirstBlock": 1316,
+        "msToFirstText": null,
+        "msToToolUseStart": 1316,
+        "stopReason": "tool_use",
+        "msTotal": 1724,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 121
+        },
+        "blockTypes": ["tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "callB": {
+        "msToMessageStart": 2457,
+        "msToFirstBlock": 2457,
+        "msToFirstText": 2457,
+        "msToToolUseStart": null,
+        "stopReason": "end_turn",
+        "msTotal": 2946,
+        "usage": {
+          "input": 2833,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 114
+        },
+        "blockTypes": ["text"]
+      },
+      "finalText": "Great! I found three dermatology openings for you on Tuesday, October 13 in the afternoon:\n\n1. **Dr. Priya Lee** — Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** — Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** — Tuesday, October 13 at 4:00 PM ET\n\nWhich of these works best for you?",
+      "turnMs": 4670
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 8,
+      "ok": false,
+      "costUsd": 0,
+      "error": "429: 429 Too many requests, please wait before trying again."
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 9,
+      "ok": false,
+      "costUsd": 0.003219,
+      "callA": {
+        "msToMessageStart": 3890,
+        "msToFirstBlock": 3890,
+        "msToFirstText": 3898,
+        "msToToolUseStart": 4074,
+        "stopReason": "tool_use",
+        "msTotal": 4488,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 140
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "error": "429: 429 Too many requests, please wait before trying again."
+    },
+    {
+      "model": "haiku-4.5",
+      "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "run": 10,
+      "ok": false,
+      "costUsd": 0.003219,
+      "callA": {
+        "msToMessageStart": 1184,
+        "msToFirstBlock": 1184,
+        "msToFirstText": 1184,
+        "msToToolUseStart": 1417,
+        "stopReason": "tool_use",
+        "msTotal": 1786,
+        "usage": {
+          "input": 2519,
+          "cacheWrite": 0,
+          "cacheRead": 0,
+          "output": 140
+        },
+        "blockTypes": ["text", "tool_use"]
+      },
+      "toolName": "check_availability",
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "error": "429: 429 Too many requests, please wait before trying again."
+    }
+  ]
+}

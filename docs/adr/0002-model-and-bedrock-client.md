@@ -63,3 +63,40 @@ Per-model parameter differences are captured in a `ModelProfile` so the loop cod
 2. Confirm the exact IAM actions and resource ARNs, the model access status (Opus 5 has per-model access criteria), and whether prompt-cache reads show up on the second call.
 3. Check whether Mantle calls appear in Bedrock model invocation logging.
 4. Record the results in this ADR and in a journal entry.
+
+### Interim results (2026-09-28): partially blocked on account access
+
+The spike uses a production-sized prefix: a draft system prompt plus all 7 tool schemas, about 2.6k tokens. Raw results are in `spikes/s1-bedrock-tool-latency/results/`.
+
+**Access (why most of the matrix couldn't run yet)**
+
+| Model | `get-foundation-model-availability` | Mantle (`AnthropicBedrockMantle`) | bedrock-runtime (`AnthropicBedrock`, US inference profile) |
+|---|---|---|---|
+| Opus 5 | authorization `AUTHORIZED`, **agreement `NOT_AVAILABLE`** | 403 "not available for this account" | 403 "not available for this account" |
+| Sonnet 5 | authorization `AUTHORIZED`, **agreement `NOT_AVAILABLE`** | 403 (same) | 403 (same) |
+| Haiku 4.5 | authorization `AUTHORIZED`, agreement `AVAILABLE` | 403 (same) with ID `anthropic.claude-haiku-4-5`; other IDs 404 | ✅ works via `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+
+- **"ACTIVE" in the model catalog doesn't mean callable.** Opus 5 and Sonnet 5 still need their AWS Marketplace agreement accepted. Bedrock does that on the first call by an identity with Marketplace permissions, and our least-privilege `SchedDeployer` role deliberately has none. The fix is a one-time human step (runbook step 6).
+- **Mantle refuses even Haiku**, whose agreement is in place. So Claude in Amazon Bedrock (Mantle) looks like a separate enablement on this account. We'll retest after the agreements are accepted.
+- **On-demand runtime model IDs need an inference profile.** The bare catalog ID fails with "on-demand throughput isn't supported"; the `us.` prefix works.
+
+**Haiku 4.5, bedrock-runtime, 7 of 10 turns completed** (the other 3 were throttled; see below)
+
+| Metric | p50 | p95 |
+|---|---|---|
+| Call A (question → `tool_use`), first block | 1.27 s | 2.17 s |
+| Call A total | 1.77 s | 2.86 s |
+| Call B (answer), first text | 1.24 s | 2.46 s |
+| **Full turn (A + B)** | **3.54 s** | **4.68 s** |
+
+- **Tool use:** 7/7 completed turns called `check_availability` with the correct specialty, date, and time of day. Every answer listed only the slots the tool returned.
+- **Tokens and cost:** about 5,366 input and 242 output tokens per turn; about $0.0066 per turn at Anthropic list prices (an estimate; Bedrock billing may differ).
+- **Caching: 0 tokens written or read.** This confirms the 4,096-token minimum cacheable prefix for Haiku 4.5. At our prompt size, Haiku will pay full input price on every call. Opus 5 (512 minimum) and Sonnet 5 (1,024) should cache it.
+
+**Throttling:** after about 15 calls in two minutes, Bedrock returned 429 "Too many requests", even with the SDK's retries. New accounts appear to start with low on-demand quotas. A full eval matrix, thousands of calls, will need pacing (now in the spike: `--pace-ms`, 6 retries) and probably a quota increase. `SchedDeployer` can't read Service Quotas yet; a read-only addition is proposed in `infra/bootstrap/sched-deployer-policy.json`.
+
+**IAM (resolved from the Service Authorization Reference):** `bedrock-mantle:CreateInference` targets `arn:aws:bedrock-mantle:<region>:<account>:project/*` and is narrowed to models with the `bedrock-mantle:Model` condition key. On the runtime path, `bedrock:InvokeModel*` applies to the inference-profile and foundation-model ARNs.
+
+**Emerging direction (not yet decided):** if Mantle stays unavailable, switch the default client to bedrock-runtime via `AnthropicBedrock` with US inference profiles. That's the path AWS recommends for new applications, it supports invocation logging, it has the same Messages API surface in the SDK, and the `LlmClient` interface makes the swap one file. Decide after the rerun.
+
+**Still to do (after Nick's access step):** rerun Opus 5 and Sonnet 5 on both backends (N=10), check cache reads, check invocation logging, then make the decision here.
