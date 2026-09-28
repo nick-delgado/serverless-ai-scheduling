@@ -1,6 +1,6 @@
 # ADR-002: Model selection and Bedrock client
 
-- **Status:** Proposed. Pending spike S-1; model choice is finalized after the M3 eval matrix.
+- **Status:** Proposed. **Interim development path accepted 2026-09-28** (Sonnet 4.6 via bedrock-runtime; see "Interim decision" below). Client and default model are finalized after the Opus 5 / Sonnet 5 rerun and the M3 eval matrix.
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
@@ -125,3 +125,10 @@ Agreement status across every Anthropic model on the account:
 1. Nick opens an AWS Support case to lift the entitlement restriction for Opus 5 and Sonnet 5. First he checks whether the account is on the Free plan; if so, upgrading to the Paid plan may be the fix.
 2. Until then, development and the M1 walking skeleton use **bedrock-runtime + Sonnet 4.6** (`us.anthropic.claude-sonnet-4-6`), with Haiku 4.5 as the second profile. Model choice is config (`AGENT_MODEL_PROFILE`), so nothing structural changes.
 3. When entitlement arrives, rerun this spike for Opus 5 and Sonnet 5 on both backends, then finalize the client and the default model here.
+
+### Interim decision (accepted by Nick, 2026-09-28)
+
+- **Client:** `AnthropicBedrock` from `@anthropic-ai/bedrock-sdk` (bedrock-runtime), behind the `LlmClient` interface. Mantle is unavailable to this account.
+- **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- **IAM:** `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` on the US inference-profile ARNs plus the underlying foundation-model ARNs in the US regions they route to.
+- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default.

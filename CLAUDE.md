@@ -22,7 +22,7 @@ A serverless AI scheduling assistant, built as a portfolio proof-of-concept. A p
   - Amazon Transcribe Streaming, Amazon SES
   - Claude via Amazon Bedrock
 - **IaC:** AWS SAM (CloudFormation), one template per stack (see ADR-003).
-- **LLM client:** `@anthropic-ai/bedrock-sdk` → `AnthropicBedrockMantle` (see ADR-002). Always go through the `LlmClient` interface in `packages/agent`; never call Bedrock directly from handlers or tools.
+- **LLM client:** `@anthropic-ai/bedrock-sdk` → `AnthropicBedrock` on bedrock-runtime, with US inference profiles. This is the interim decision in ADR-002, because Mantle is unavailable to this account. Always go through the `LlmClient` interface in `packages/agent`; never call Bedrock directly from handlers or tools.
 
 ## Repository layout
 
@@ -84,7 +84,11 @@ sam build -t infra/stacks/<stack>.yaml && sam deploy --config-env dev   # per st
 - Stacks are named `sched-<env>-<stack>` (e.g., `sched-dev-data`). Cross-stack values go through SSM parameters under `/sched/<env>/...`. Only touch `sched-*` stacks.
 - Deploys run through the CloudFormation execution role (`--role-arn` from the bootstrap stack output).
 - **Ask before destructive operations:** deleting a stack, deleting or overwriting table data, or anything touching the bootstrap stack.
-- Bedrock model IDs (Claude in Amazon Bedrock, `anthropic.` prefix): `anthropic.claude-opus-5` (default), `anthropic.claude-sonnet-5`, `anthropic.claude-haiku-4-5`. Model choice is config, not code (ADR-002).
+- Bedrock model IDs, which must be inference profiles on bedrock-runtime:
+  - **Development default:** `us.anthropic.claude-sonnet-4-6`.
+  - Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+  - **Targets once AWS lifts the account's entitlement restriction:** `us.anthropic.claude-opus-5` and `us.anthropic.claude-sonnet-5`. They currently fail with "not available for this account".
+  - Model choice is config, not code (ADR-002). Pace bulk calls: new-account quotas throttle quickly.
 - Eval runs call Bedrock and cost real money. Say what a run will cost before starting a full matrix run.
 
 ## How work flows
