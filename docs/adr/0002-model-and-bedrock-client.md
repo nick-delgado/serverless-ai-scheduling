@@ -99,4 +99,29 @@ The spike uses a production-sized prefix: a draft system prompt plus all 7 tool 
 
 **Emerging direction (not yet decided):** if Mantle stays unavailable, switch the default client to bedrock-runtime via `AnthropicBedrock` with US inference profiles. That's the path AWS recommends for new applications, it supports invocation logging, it has the same Messages API surface in the SDK, and the `LlmClient` interface makes the swap one file. Decide after the rerun.
 
-**Still to do (after Nick's access step):** rerun Opus 5 and Sonnet 5 on both backends (N=10), check cache reads, check invocation logging, then make the decision here.
+**Update (same day): an account-level entitlement restriction, not an agreement step.** Nick tried to accept the agreements as `sched-admin` (playground and CLI) and got the same `AccessDeniedException ... contact AWS Sales`. According to AWS's knowledge-center guidance, an access-denied message that mentions "contact AWS Sales" means an **account-level entitlement restriction**. IAM, SCPs, and console model access can't fix it; AWS Support has to lift it.
+
+Agreement status across every Anthropic model on the account:
+- **Agreement `AVAILABLE`:** Haiku 4.5, Sonnet 4, Sonnet 4.6.
+- **`NOT_AVAILABLE`:** every Opus (4.1 → 5.5), every Fable, and Sonnet 4.5 / 5 / 5.5.
+
+**Sonnet 4.6 and Haiku 4.5 are callable today** (bedrock-runtime, US inference profiles). Result, N=10 each, 20/20 turns OK with `--pace-ms 2500` and no 429s:
+
+| Metric | Sonnet 4.6 (adaptive thinking, effort `medium`) | Haiku 4.5 |
+|---|---|---|
+| Call A first block, p50 / p95 | 1.38 s / 1.61 s | 1.32 s / 1.60 s |
+| Call A total, p50 / p95 | 2.67 s / 2.93 s | 1.82 s / 2.12 s |
+| Call B (answer) first text, p50 / p95 | 1.44 s / 2.60 s | 1.17 s / 2.23 s |
+| **Full turn, p50 / p95** | **5.16 s / 7.02 s** | **3.54 s / 4.08 s** |
+| Correct `check_availability` call | 10/10 | 10/10 |
+| Tokens per turn (uncached in / cache write / cache read / out) | 1,113 / 214 / 4,070 / 262 | 5,365 / 0 / 0 / 235 |
+| **Estimated cost per turn** | **$0.0093** | **$0.0065** |
+
+- **Caching narrows the price gap.** Sonnet 4.6 costs 3× Haiku per token, but only about 1.4× per turn, because it caches the 2,142-token prefix from the second call on. Haiku can't cache it at all (4,096 minimum).
+- **An anecdote, not a metric:** Sonnet 4.6's answers followed the prompt's formatting rules more closely (weekday + date on every option, first name, asks for the visit reason). Haiku omitted per-option weekdays and used bold markdown. The eval harness will quantify this.
+- Both models meet NFR-001 on this single-tool turn from a laptop. The first streamed text arrives in about 1.2–1.4 s p50, against a target of ≤ 3 s.
+
+**Proposed interim path (awaiting Nick's decision):**
+1. Nick opens an AWS Support case to lift the entitlement restriction for Opus 5 and Sonnet 5. First he checks whether the account is on the Free plan; if so, upgrading to the Paid plan may be the fix.
+2. Until then, development and the M1 walking skeleton use **bedrock-runtime + Sonnet 4.6** (`us.anthropic.claude-sonnet-4-6`), with Haiku 4.5 as the second profile. Model choice is config (`AGENT_MODEL_PROFILE`), so nothing structural changes.
+3. When entitlement arrives, rerun this spike for Opus 5 and Sonnet 5 on both backends, then finalize the client and the default model here.

@@ -52,6 +52,14 @@ const MODELS: ModelConfig[] = [
     price: { input: 2, output: 10 },
   },
   {
+    // Previous-generation Sonnet: entitled on this account while Opus 5 / Sonnet 5 await AWS (see ADR-002).
+    key: "sonnet-4.6",
+    ids: { mantle: ["anthropic.claude-sonnet-4-6"], runtime: ["us.anthropic.claude-sonnet-4-6"] },
+    // Sonnet 4.6 needs adaptive thinking set explicitly (omitting it runs without thinking).
+    params: { thinking: { type: "adaptive" }, output_config: { effort: "medium" } },
+    price: { input: 3, output: 15 },
+  },
+  {
     key: "haiku-4.5",
     ids: {
       mantle: ["anthropic.claude-haiku-4-5"],
