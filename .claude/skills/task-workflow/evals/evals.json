@@ -1,0 +1,23 @@
+{
+  "skill_name": "task-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "you're the agent for the tools stream today. grab whatever's next and get going",
+      "expected_output": "Lists open status:ready issues in stream:tools, checks blockers are closed, claims one (assignee + label + comment), creates a worktree on a feat/<n>-<slug> branch, and reads the issue's owned paths/acceptance criteria and cited ADRs before coding.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "ok I think book_appointment is done, can you wrap up #23 and open the PR",
+      "expected_output": "Runs lint/typecheck/test and the eval smoke suite (tools changed), checks each acceptance criterion, confirms push permission if not already given, opens a PR with 'Closes #23', FR IDs, verification evidence, and moves the issue to status:review; considers a journal entry.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "can you start on the reschedule tool? I know the data layer PR isn't merged yet but just get ahead on it",
+      "expected_output": "Checks the blocked_by dependency, explains that building on an unmerged interface risks conflicting versions, and either proposes working against the merged contract/in-memory repo only or picks a different ready issue — asking the user rather than silently proceeding.",
+      "files": []
+    }
+  ]
+}

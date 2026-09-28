@@ -1,0 +1,21 @@
+# dependencies & builds
+node_modules/
+dist/
+build/
+coverage/
+.aws-sam/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# eval run outputs (baselines are committed under packages/evals/baselines/)
+packages/evals/results/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
