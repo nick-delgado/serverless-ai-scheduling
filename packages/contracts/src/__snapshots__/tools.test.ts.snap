@@ -1,0 +1,196 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tool registry > matches the committed snapshot (model-facing changes show up in PR diffs) 1`] = `
+[
+  {
+    "description": "List Cedar Ridge Health providers, optionally filtered by specialty or by part of a name. Use it to resolve a provider the patient mentions ("Dr. Lee") into a provider_id, or to show who practices a specialty.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "name_query": {
+          "description": "Part of a provider's name as the patient said it, e.g. 'Lee' or 'Dr. Okafor'.",
+          "maxLength": 60,
+          "minLength": 1,
+          "type": "string",
+        },
+        "specialty": {
+          "description": "Only return providers in this specialty.",
+          "enum": [
+            "family_medicine",
+            "pediatrics",
+            "dermatology",
+            "cardiology",
+            "physical_therapy",
+          ],
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "find_providers",
+  },
+  {
+    "description": "Find open 30-minute appointment slots by provider or specialty, within a date range (at most 31 days), optionally only mornings or afternoons. Returns up to 10 slots in time order, each with a slot_id and a start_local time to quote verbatim. Only offer slots returned by this tool, and only book slot_ids it returned.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "date_range": {
+          "additionalProperties": false,
+          "description": "Days to search, in the clinic's timezone (ET).",
+          "properties": {
+            "end_date": {
+              "description": "Last day to search (inclusive), YYYY-MM-DD in the clinic's timezone (ET).",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string",
+            },
+            "start_date": {
+              "description": "First day to search, YYYY-MM-DD in the clinic's timezone (ET).",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "start_date",
+            "end_date",
+          ],
+          "type": "object",
+        },
+        "provider_id": {
+          "description": "Only this provider (an id from find_providers).",
+          "pattern": "^prov_[a-z0-9]+(?:_[a-z0-9]+)*$",
+          "type": "string",
+        },
+        "specialty": {
+          "description": "Only providers in this specialty.",
+          "enum": [
+            "family_medicine",
+            "pediatrics",
+            "dermatology",
+            "cardiology",
+            "physical_therapy",
+          ],
+          "type": "string",
+        },
+        "time_of_day": {
+          "default": "any",
+          "description": "morning = before 12:00 PM ET, afternoon = 12:00 PM ET or later.",
+          "enum": [
+            "morning",
+            "afternoon",
+            "any",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "date_range",
+      ],
+      "type": "object",
+    },
+    "name": "check_availability",
+  },
+  {
+    "description": "List the logged-in patient's appointments (upcoming only unless include_past is true). The patient's identity is applied automatically; never ask for or pass a patient ID.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "include_past": {
+          "default": false,
+          "description": "Also include past appointments.",
+          "type": "boolean",
+        },
+      },
+      "type": "object",
+    },
+    "name": "get_my_appointments",
+  },
+  {
+    "description": "Get the logged-in patient's first and last name and preferred provider, if any. The patient's identity is applied automatically.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+    "name": "get_patient_profile",
+  },
+  {
+    "description": "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. If the slot was just taken, it returns a SLOT_UNAVAILABLE error; offer other times.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Short reason for the visit, in the patient's words.",
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string",
+        },
+        "slot_id": {
+          "description": "A slot_id returned by check_availability in this conversation.",
+          "pattern": "^slot_[a-z0-9]+(?:_[a-z0-9]+)*_\\d{8}T\\d{4}Z$",
+          "type": "string",
+        },
+      },
+      "required": [
+        "slot_id",
+        "reason",
+      ],
+      "type": "object",
+    },
+    "name": "book_appointment",
+  },
+  {
+    "description": "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointment_id": {
+          "description": "The appointment to move (an id from get_my_appointments).",
+          "pattern": "^appt_[0-9A-Za-z]{10,40}$",
+          "type": "string",
+        },
+        "new_slot_id": {
+          "description": "The new slot (a slot_id from check_availability).",
+          "pattern": "^slot_[a-z0-9]+(?:_[a-z0-9]+)*_\\d{8}T\\d{4}Z$",
+          "type": "string",
+        },
+      },
+      "required": [
+        "appointment_id",
+        "new_slot_id",
+      ],
+      "type": "object",
+    },
+    "name": "reschedule_appointment",
+  },
+  {
+    "description": "Hand the conversation to front-desk staff: records the escalation and emails staff your summary plus the transcript. Use it when the patient asks for a person, after two failed attempts, when the patient is frustrated, or for out-of-scope requests. Use it at most once per conversation, then give the patient the phone number and hours it returns.",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Why the conversation is being handed to staff.",
+          "enum": [
+            "patient_requested",
+            "repeated_failure",
+            "frustration",
+            "out_of_scope",
+          ],
+          "type": "string",
+        },
+        "summary": {
+          "description": "Two or three sentences for the front desk: what the patient needs and what was already tried.",
+          "maxLength": 1000,
+          "minLength": 10,
+          "type": "string",
+        },
+      },
+      "required": [
+        "reason",
+        "summary",
+      ],
+      "type": "object",
+    },
+    "name": "escalate_to_human",
+  },
+]
+`;

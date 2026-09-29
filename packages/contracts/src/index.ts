@@ -1,6 +1,20 @@
 /**
- * @sched/contracts: Zod schemas and inferred types shared across the stack: domain entities, tool inputs/outputs, chat stream events, API shapes.
+ * @sched/contracts: the integration seam every stream codes against (M1-02, #4).
  *
- * Placeholder from the monorepo scaffold (M1-01, #3). Populated by M1-02 (#4).
+ * - `domain`: stored entities (camelCase, ADR-004)
+ * - `tools`: model-facing tool inputs/outputs (snake_case) + `toolDefinitionsForModel()`
+ * - `trace`: per-turn agent trace (ADR-001)
+ * - `stream`: chat stream events + NDJSON helpers (ADR-007)
+ * - `api`: HTTP request/response shapes for the SPA
+ *
+ * Changing a schema here is a cross-stream change; call it out in the PR (CLAUDE.md).
+ * Valid examples for every schema: `@sched/contracts/testing`.
  */
-export const PACKAGE_NAME = "@sched/contracts";
+export * from "./api";
+export * from "./clinic";
+export * from "./domain";
+export * from "./ids";
+export * from "./primitives";
+export * from "./stream";
+export * from "./tools";
+export * from "./trace";
