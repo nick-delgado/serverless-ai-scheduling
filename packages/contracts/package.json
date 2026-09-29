@@ -5,10 +5,14 @@
   "type": "module",
   "description": "Zod schemas and inferred types shared across the stack: domain entities, tool inputs/outputs, chat stream events, API shapes.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/examples.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }
