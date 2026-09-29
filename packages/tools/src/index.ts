@@ -1,6 +1,14 @@
 /**
- * @sched/tools: Agent tools, repository interfaces with in-memory and DynamoDB implementations, Clock, and fixtures.
+ * @sched/tools: agent tools, the repository layer, the Clock, and the tool registry/executor.
  *
- * Placeholder from the monorepo scaffold (M1-01, #3). Populated by M1-03 (#5), S4-* (#19-#23).
+ * - `repos`: repository interfaces (ADR-004) + the in-memory implementation (DynamoDB lands in #13)
+ * - `clock`: the injected Clock (System/Frozen) and clinic-time helpers (America/New_York, DST-aware)
+ * - `registry`: ToolContext, ToolHandler, TOOL_REGISTRY, and `createToolExecutor` (the seam with #15)
+ *
+ * The clinic fixture is a separate entry point: `import { buildClinicFixture } from "@sched/tools/fixtures"`.
  */
 export const PACKAGE_NAME = "@sched/tools";
+
+export * from "./clock";
+export * from "./registry";
+export * from "./repos";

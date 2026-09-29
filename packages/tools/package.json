@@ -5,10 +5,14 @@
   "type": "module",
   "description": "Agent tools, repository interfaces with in-memory and DynamoDB implementations, Clock, and fixtures.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./fixtures": "./fixtures/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@sched/contracts": "*"
   }
 }
