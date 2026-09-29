@@ -66,6 +66,8 @@ Infra commands (full guide: the **`sam-deploy` skill**):
 ```bash
 sam validate --lint -t infra/stacks/<stack>.yaml --region us-east-1
 scripts/deploy.sh <data|auth|api|web|all> dev     # validate + build + deploy in dependency order, via the CFN exec role
+scripts/deploy.sh all <name>                      # ephemeral env sched-<name>-* for experimental/cross-stream work
+scripts/teardown.sh <name>                        # delete it when done (refuses dev/demo)
 ```
 
 ## Architecture rules (non-negotiable)

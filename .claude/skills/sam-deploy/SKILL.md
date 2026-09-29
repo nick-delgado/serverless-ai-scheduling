@@ -32,7 +32,9 @@ Infrastructure is AWS SAM (CloudFormation) with **one template per stack** (ADR-
 sam validate --lint -t infra/stacks/<stack>.yaml --region us-east-1   # before every commit that touches infra
 scripts/deploy.sh <stack> dev                                        # one stack
 scripts/deploy.sh all dev                                            # everything, in order
-scripts/deploy.sh data dev -- DeletionProtection=disabled            # extra parameter overrides after --
+scripts/deploy.sh data dev -- DeletionProtection=disabled            # overrides after -- (sent only to templates that declare them)
+scripts/deploy.sh all pr52                                           # ephemeral env: sched-pr52-* (see below)
+scripts/teardown.sh pr52                                             # delete an ephemeral env (refuses dev/demo)
 
 aws cloudformation describe-stacks --stack-name sched-dev-<stack> --query 'Stacks[0].Outputs'
 aws ssm get-parameters-by-path --path /sched/dev --recursive --query 'Parameters[].[Name,Value]' --output table
@@ -41,9 +43,22 @@ aws ssm get-parameters-by-path --path /sched/dev --recursive --query 'Parameters
 `deploy.sh` validates, builds (`.aws-sam/build-<stack>`), and deploys with:
 - `--role-arn`, the CloudFormation execution role from `/sched/bootstrap/cfn-exec-role-arn`. CloudFormation acts as that role; you, as `SchedDeployer`, can only drive CloudFormation and pass that role.
 - `--s3-bucket`, from `/sched/bootstrap/artifact-bucket`.
-- tags `project=sched env=<env> stack=<stack>`.
+- tags `project=sched env=<env> stack=<stack> git-branch=<branch> git-commit=<sha>[-dirty]`. These are **provenance** tags: they record which branch and commit is running in an environment.
 
 Account-specific values are resolved at runtime, so **never hard-code account IDs, ARNs, or emails in templates, samconfig, or docs.** The repo is public.
+
+## Worktrees, the shared `dev` env, and ephemeral envs
+
+`deploy.sh` deploys **the checkout it lives in**: `repo_root` comes from the script's own path (`${BASH_SOURCE[0]}/..`). Run from `.worktrees/<n>-<slug>/`, it uses that worktree's templates, `samconfig.toml`, and `.aws-sam/` build directory. Your branch doesn't need to be merged to deploy, and parallel worktrees don't overwrite each other's builds.
+
+The flip side: `dev` is **shared**, and the last deploy wins. With several agents working:
+- **In `dev`, deploy only the stacks your issue owns.** The script prints a note when an unmerged branch deploys to `dev`.
+- **Use an ephemeral env for anything experimental or cross-stream:** `scripts/deploy.sh all <name>` creates a full, independent `sched-<name>-*` set, with its own table, user pool, and SSM parameters under `/sched/<name>/`, at about $0 idle. Names are lowercase, 2–16 characters (e.g., `pr52`, `wt15`). IAM is keyed on `sched-*`, so no permission changes are needed.
+- **Ephemeral envs default to `DeletionProtection=disabled`.** When you're done, run `scripts/teardown.sh <name>`, which asks you to type the env name, or pass `--yes` in automation. Ask Nick before tearing down anything you didn't create yourself in this task.
+- **Check what's running:** `aws cloudformation describe-stacks --stack-name sched-dev-<stack> --query 'Stacks[0].Tags'` shows `git-branch` and `git-commit`.
+- Once CI deploys from `main` (M3-06, #41), `dev` will track `main`, and branch work belongs in ephemeral envs.
+
+**Protected envs** (`dev`, `demo`) keep deletion protection on, and `teardown.sh` refuses them. Their list is `PROTECTED_ENVS` in both scripts.
 
 ## Rules when editing templates
 
@@ -82,7 +97,7 @@ aws cloudformation describe-stack-events --stack-name sched-dev-<stack> \
   --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].[LogicalResourceId,ResourceStatusReason]' --output table
 ```
 
-## Teardown (only when Nick asks)
+## Teardown of a protected env (only when Nick asks)
 
 Deleting stacks and data is destructive, so confirm with Nick first, every time.
 
