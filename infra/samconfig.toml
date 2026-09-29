@@ -1,0 +1,27 @@
+# Per-stack SAM defaults (ADR-003). Use scripts/deploy.sh rather than calling sam directly: it resolves
+# the CloudFormation execution role and artifact bucket from SSM (/sched/bootstrap/*) at deploy time,
+# so no account-specific values live in this public repo, and it deploys stacks in dependency order.
+version = 0.1
+
+[default.global.parameters]
+region = "us-east-1"
+
+[data.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+
+[auth.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+
+[api.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+
+[web.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false

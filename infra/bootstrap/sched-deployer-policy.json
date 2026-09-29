@@ -134,7 +134,9 @@
         "servicequotas:ListServiceQuotas",
         "servicequotas:GetAWSDefaultServiceQuota",
         "servicequotas:ListRequestedServiceQuotaChangeHistoryByQuota",
-        "bedrock:GetModelInvocationLoggingConfiguration"
+        "bedrock:GetModelInvocationLoggingConfiguration",
+        "dynamodb:DescribeTimeToLive",
+        "dynamodb:DescribeContinuousBackups"
       ],
       "Resource": "*"
     },

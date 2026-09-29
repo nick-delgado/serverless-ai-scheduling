@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  sched-<env>-auth: Cognito User Pool + SPA app client (ADR-005). Skeleton from M1-04 (#6);
+  S1-01 (#12) adds the Identity Pool, the Transcribe-only role, and demo-user seeding.
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedPattern: "^[a-z][a-z0-9-]{1,15}$"
+  DeletionProtection:
+    Type: String
+    Default: enabled
+    AllowedValues: [enabled, disabled]
+    Description: Protects the user pool. Redeploy with "disabled" before a deliberate teardown.
+
+Conditions:
+  Protect: !Equals [!Ref DeletionProtection, enabled]
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub sched-${Env}-patients
+      UserPoolTier: LITE
+      DeletionProtection: !If [Protect, ACTIVE, INACTIVE]
+      # Demo patients are created by an admin script; nobody can sign themselves up.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 3
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - { Name: admin_only, Priority: 1 }
+      MfaConfiguration: "OFF" # documented demo trade-off (ADR-005)
+      UserPoolTags:
+        project: sched
+        env: !Ref Env
+
+  SpaClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub sched-${Env}-spa
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false # public SPA client
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED # no account enumeration (FR-001)
+      EnableTokenRevocation: true
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 7
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  UserPoolIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/auth/user-pool-id
+      Type: String
+      Value: !Ref UserPool
+
+  UserPoolArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/auth/user-pool-arn
+      Type: String
+      Value: !GetAtt UserPool.Arn
+
+  SpaClientIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/auth/spa-client-id
+      Type: String
+      Value: !Ref SpaClient
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+  SpaClientId:
+    Value: !Ref SpaClient

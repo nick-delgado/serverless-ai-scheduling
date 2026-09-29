@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  sched-<env>-api: REST API + Lambda handlers (ADR-007). Skeleton from M1-04 (#6), with the
+  Function defaults every handler inherits and a canary that proves the deploy path can create a
+  Lambda role under the permissions boundary. M1-05 (#7) adds the streaming REST API and chat handler.
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedPattern: "^[a-z][a-z0-9-]{1,15}$"
+  PermissionsBoundaryArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /sched/bootstrap/permissions-boundary-arn
+    Description: Every role in sched-* stacks must carry this boundary (bootstrap stack; ADR-003).
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 30
+    PermissionsBoundary: !Ref PermissionsBoundaryArn
+    LoggingConfig:
+      LogFormat: JSON
+    Environment:
+      Variables:
+        SCHED_ENV: !Ref Env
+    Tags:
+      project: sched
+      env: !Ref Env
+
+Resources:
+  # Throwaway: replaced by real handlers in M1-05. Kept tiny (inline, no bundling) on purpose.
+  CanaryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-canary
+      RetentionInDays: 14
+
+  CanaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub sched-${Env}-api-canary
+      Description: Deploy-path canary (role creation under the permissions boundary).
+      Handler: index.handler
+      InlineCode: |
+        exports.handler = async () => ({ ok: true, env: process.env.SCHED_ENV });
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref CanaryLogGroup
+
+  StatusParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/api/status
+      Type: String
+      Value: skeleton
+
+Outputs:
+  CanaryFunctionName:
+    Value: !Ref CanaryFunction

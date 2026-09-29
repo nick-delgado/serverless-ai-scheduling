@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  sched-<env>-data: the single DynamoDB table (ADR-004). On-demand, point-in-time recovery,
+  TTL on expiresAt, and GSI1, a sparse index of OPEN slots plus the provider list.
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedPattern: "^[a-z][a-z0-9-]{1,15}$"
+    Description: Environment name (stack names are sched-<env>-<stack>).
+  DeletionProtection:
+    Type: String
+    Default: enabled
+    AllowedValues: [enabled, disabled]
+    Description: Protects stateful resources. Redeploy with "disabled" before a deliberate teardown.
+
+Conditions:
+  Protect: !Equals [!Ref DeletionProtection, enabled]
+
+Resources:
+  MainTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub sched-${Env}-main
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [Protect, true, false]
+      AttributeDefinitions:
+        - { AttributeName: PK, AttributeType: S }
+        - { AttributeName: SK, AttributeType: S }
+        - { AttributeName: GSI1PK, AttributeType: S }
+        - { AttributeName: GSI1SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - { AttributeName: GSI1PK, KeyType: HASH }
+            - { AttributeName: GSI1SK, KeyType: RANGE }
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - { Key: project, Value: sched }
+        - { Key: env, Value: !Ref Env }
+
+  TableNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/data/table-name
+      Type: String
+      Value: !Ref MainTable
+
+  TableArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/data/table-arn
+      Type: String
+      Value: !GetAtt MainTable.Arn
+
+Outputs:
+  TableName:
+    Value: !Ref MainTable
+  TableArn:
+    Value: !GetAtt MainTable.Arn
