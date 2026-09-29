@@ -85,6 +85,18 @@ This creates:
 
 Confirm the budget alert subscription email if AWS sends one.
 
+### Updating the bootstrap stack later
+
+When a PR changes `infra/bootstrap/bootstrap.yaml`, re-apply it as admin. Existing parameter values (budget, email) are kept when you omit them:
+
+```bash
+aws sso login --profile sched-admin
+aws cloudformation deploy --profile sched-admin --region us-east-1 \
+  --stack-name sched-bootstrap --template-file infra/bootstrap/bootstrap.yaml --capabilities CAPABILITY_NAMED_IAM
+```
+
+When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
+
 ## 6. Enable Bedrock model access
 
 1. Console → **Amazon Bedrock** (us-east-1) → **Model catalog** (formerly **Model access**).

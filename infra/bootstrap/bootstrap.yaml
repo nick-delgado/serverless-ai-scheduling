@@ -114,6 +114,11 @@ Resources:
                   - bedrock:GetFoundationModel
                   - bedrock:ListFoundationModels
                 Resource: "*"
+              # With --role-arn, CloudFormation expands the SAM transform as this role (found in #6).
+              - Sid: ExpandSamTransform
+                Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
               - Sid: CreateWorkloadRolesOnlyWithBoundary
                 Effect: Allow
                 Action:

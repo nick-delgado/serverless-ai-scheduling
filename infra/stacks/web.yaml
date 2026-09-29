@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  sched-<env>-web: private S3 bucket + CloudFront (OAC), with /api/* routed to the REST API (ADR-007).
+  Placeholder from M1-04 (#6); M1-05 (#7) adds the bucket, distribution, and behaviors.
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedPattern: "^[a-z][a-z0-9-]{1,15}$"
+
+Resources:
+  StatusParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/web/status
+      Type: String
+      Value: skeleton
+
+Outputs:
+  Status:
+    Value: !GetAtt StatusParam.Value
