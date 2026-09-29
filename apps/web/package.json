@@ -10,5 +10,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@sched/contracts": "*",
+    "amazon-cognito-identity-js": "^6.3.20"
   }
 }

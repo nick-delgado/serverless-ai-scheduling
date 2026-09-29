@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cedar Ridge Health · walking skeleton</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      /* Author display rules beat the UA's [hidden] rule, so restate it. */
+      [hidden] {
+        display: none !important;
+      }
+      form {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      label {
+        display: grid;
+        gap: 0.25rem;
+      }
+      input,
+      textarea,
+      button {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+      }
+      #reply {
+        white-space: pre-wrap;
+        min-height: 4rem;
+        padding: 0.75rem;
+        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        border-radius: 6px;
+      }
+      .muted {
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+      .error {
+        color: #c62828;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Cedar Ridge Health</h1>
+      <p class="muted">
+        Walking skeleton (#7): sign in, send a message, and watch the reply stream through CloudFront, API
+        Gateway, and Lambda from Claude on Bedrock. Throwaway page; the real app replaces it.
+      </p>
+
+      <form id="login">
+        <label>Username <input name="username" autocomplete="username" required /></label>
+        <label
+          >Password <input name="password" type="password" autocomplete="current-password" required
+        /></label>
+        <button type="submit">Sign in</button>
+      </form>
+
+      <form id="chat" hidden>
+        <label
+          >Message
+          <textarea name="text" rows="3" required>Hi! What can you help me with?</textarea>
+        </label>
+        <button type="submit">Send</button>
+      </form>
+
+      <div id="reply" aria-live="polite"></div>
+      <p id="status" class="muted" role="status"></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
