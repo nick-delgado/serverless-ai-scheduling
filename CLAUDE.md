@@ -96,6 +96,18 @@ sam build -t infra/stacks/<stack>.yaml && sam deploy --config-env dev   # per st
 - Every change maps to a GitHub issue. Use the **`task-workflow` skill**: claim the issue, work in a worktree, check the definition of done, open a PR that closes the issue.
 - Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
+- **CI** (`.github/workflows/ci.yml`) runs on every PR and every push to `main`, with two jobs:
+  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, and test on Node from `.nvmrc`.
+  - **`cfn-lint`**: every `infra/**/*.yaml`.
+
+  A PR isn't done until both are green.
+- **Recommended branch protection for `main`** (Nick enables it in Settings → Branches):
+  - require a pull request before merging;
+  - require status checks `Lint, typecheck, test` and `cfn-lint` to pass;
+  - require branches to be up to date;
+  - block force pushes.
+
+  The workflow deliberately has no path filters, so required checks always report, even on docs-only PRs.
 
 ## Definition of done
 

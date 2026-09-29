@@ -1,0 +1,45 @@
+# Every PR and every push to main runs the same checks agents run locally
+# (CLAUDE.md "Definition of done"). No path filters on purpose: required status
+# checks must always report, or docs-only PRs would sit "pending" forever.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  cfn-lint:
+    name: cfn-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # Pinned to the version used locally (docs/runbooks/aws-setup.md step 1).
+      - run: pip install cfn-lint==1.57.0
+      - run: cfn-lint --regions us-east-1 --template 'infra/**/*.yaml'
