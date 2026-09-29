@@ -96,6 +96,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## How work flows
 
 - Every change maps to a GitHub issue. Use the **`task-workflow` skill**: claim the issue, work in a worktree, check the definition of done, open a PR that closes the issue.
+- Adding, changing, or debugging an agent tool: follow the **`add-agent-tool` skill** (contract, handler, tests, registry entry, description, evals).
 - Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 - **CI** (`.github/workflows/ci.yml`) runs on every PR and every push to `main`, with two jobs:
