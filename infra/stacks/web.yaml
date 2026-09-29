@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  sched-<env>-web: private S3 bucket + CloudFront (OAC), with /api/* routed to the REST API (ADR-007).
-  Placeholder from M1-04 (#6); M1-05 (#7) adds the bucket, distribution, and behaviors.
+  sched-<env>-web: private S3 bucket + CloudFront (OAC) for the SPA, with /api/* routed to the
+  REST API origin (ADR-007), so the browser sees one origin and needs no CORS. From M1-05 (#7).
 
 Parameters:
   Env:
@@ -10,13 +10,157 @@ Parameters:
     AllowedPattern: "^[a-z][a-z0-9-]{1,15}$"
 
 Resources:
+  # ---------------------------------------------------------------------------------------------
+  # SPA assets: private bucket, readable only by this distribution
+  # ---------------------------------------------------------------------------------------------
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # sched-* prefix: the SchedDeployer role may only sync to sched-* buckets.
+      BucketName: !Sub sched-${Env}-web-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - { Key: project, Value: sched }
+        - { Key: env, Value: !Ref Env }
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudFrontReadViaOac
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt SiteBucket.Arn
+              - !Sub ${SiteBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  SiteOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub sched-${Env}-web-oac
+        Description: CloudFront reads the private SPA bucket (SigV4).
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ---------------------------------------------------------------------------------------------
+  # CloudFront: default behavior → S3, /api/* → REST API (no caching, all viewer headers but Host)
+  # ---------------------------------------------------------------------------------------------
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub sched-${Env} SPA + /api/* (ADR-007)
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        # Deliberately no CustomErrorResponses: they are distribution-wide and would turn the API's
+        # 401/403/404 into index.html. SPA deep links, when needed, get a CloudFront Function on the
+        # default behavior only.
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            # The api stack's SSM outputs for *this* Env. The origin path is the stage, so
+            # /api/chat on the viewer side becomes /<stage>/api/chat at API Gateway.
+            DomainName: !Sub "{{resolve:ssm:/sched/${Env}/api/execute-api-domain}}"
+            OriginPath: !Sub "/{{resolve:ssm:/sched/${Env}/api/stage-name}}"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              HTTPSPort: 443
+              OriginSSLProtocols: [TLSv1.2]
+              # Longest gap CloudFront tolerates between bytes from the origin (the default quota max).
+              OriginReadTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # Managed-SecurityHeadersPolicy
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD]
+            # Streaming responses must not be compressed or cached (ADR-007).
+            Compress: false
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+      Tags:
+        - { Key: project, Value: sched }
+        - { Key: env, Value: !Ref Env }
+
+  # ---------------------------------------------------------------------------------------------
+  # Outputs for the asset upload and scripts (/sched/<env>/web/...)
+  # ---------------------------------------------------------------------------------------------
   StatusParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /sched/${Env}/web/status
       Type: String
-      Value: skeleton
+      Value: walking-skeleton
+
+  BucketNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/web/bucket-name
+      Type: String
+      Value: !Ref SiteBucket
+
+  DistributionIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/web/distribution-id
+      Type: String
+      Value: !Ref Distribution
+
+  DomainParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/web/domain
+      Type: String
+      Value: !GetAtt Distribution.DomainName
 
 Outputs:
-  Status:
-    Value: !GetAtt StatusParam.Value
+  SiteUrl:
+    Value: !Sub https://${Distribution.DomainName}
+  BucketName:
+    Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref Distribution

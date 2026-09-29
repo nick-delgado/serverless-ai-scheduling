@@ -1,0 +1,15 @@
+{
+  "name": "@sched/spike-s2-streaming",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike S-2 (#7): does an NDJSON reply stream incrementally through CloudFront -> REST API (response streaming) -> Lambda -> Bedrock? Throwaway; informs ADR-007.",
+  "scripts": {
+    "start": "tsx measure.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@sched/contracts": "*",
+    "amazon-cognito-identity-js": "^6.3.20"
+  }
+}

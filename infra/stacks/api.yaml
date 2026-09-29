@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
-  sched-<env>-api: REST API + Lambda handlers (ADR-007). Skeleton from M1-04 (#6), with the
-  Function defaults every handler inherits and a canary that proves the deploy path can create a
-  Lambda role under the permissions boundary. M1-05 (#7) adds the streaming REST API and chat handler.
+  sched-<env>-api: Regional REST API with a Cognito User Pool authorizer and a response-streaming
+  Lambda integration for POST /api/chat (ADR-007). Walking skeleton from M1-05 (#7): the chat
+  function streams one Bedrock reply as NDJSON; S3-03 (#17) swaps in the agent loop.
 
 Parameters:
   Env:
@@ -30,34 +30,152 @@ Globals:
     Tags:
       project: sched
       env: !Ref Env
+  Api:
+    # Without this, SAM also creates a stray stage named "Stage".
+    OpenApiVersion: "3.0.1"
 
 Resources:
-  # Throwaway: replaced by real handlers in M1-05. Kept tiny (inline, no bundling) on purpose.
-  CanaryLogGroup:
+  # ---------------------------------------------------------------------------------------------
+  # POST /api/chat: streaming chat handler (walking skeleton)
+  # ---------------------------------------------------------------------------------------------
+  ChatSkeletonLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-canary
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-chat-skeleton
       RetentionInDays: 14
 
-  CanaryFunction:
+  ChatSkeletonFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      # SAM's esbuild builder can't resolve npm-workspace packages (@sched/contracts), so the
+      # Makefile bundles with esbuild from the repo root instead. WorkingDirectory is relative to
+      # this template and lies outside CodeUri, so SAM runs make there rather than in its scratch copy.
+      BuildMethod: makefile
+      WorkingDirectory: ../..
     Properties:
-      FunctionName: !Sub sched-${Env}-api-canary
-      Description: Deploy-path canary (role creation under the permissions boundary).
+      FunctionName: !Sub sched-${Env}-api-chat-skeleton
+      Description: POST /api/chat walking skeleton (#7). Streams one Bedrock reply as NDJSON events.
+      CodeUri: ../../services/api
       Handler: index.handler
-      InlineCode: |
-        exports.handler = async () => ({ ok: true, env: process.env.SCHED_ENV });
+      MemorySize: 1024
+      # Bounds the whole streamed turn. The SDK's own timeout (60 s) covers the wait for Bedrock.
+      Timeout: 120
+      Environment:
+        Variables:
+          # TEMPORARY direct Bedrock call; #17 moves model selection to AGENT_MODEL_PROFILE (ADR-002).
+          MODEL_ID: us.anthropic.claude-sonnet-4-6
+          NODE_OPTIONS: --enable-source-maps
       LoggingConfig:
         LogFormat: JSON
-        LogGroup: !Ref CanaryLogGroup
+        LogGroup: !Ref ChatSkeletonLogGroup
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: InvokeSonnet46ViaUsInferenceProfile
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6
+                # The US profile routes to the foundation model in several US regions.
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*
 
+  ChatApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub sched-${Env}-api
+      StageName: live
+      EndpointConfiguration:
+        Type: REGIONAL
+      # Stage-wide throttle: a cheap guard in front of Bedrock spend (the account quota is 10 req/min).
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: 5
+          ThrottlingBurstLimit: 10
+      Tags:
+        project: sched
+        env: !Ref Env
+      # Response streaming isn't a first-class SAM property, so the API is defined in OpenAPI.
+      DefinitionBody:
+        openapi: "3.0.1"
+        info:
+          title: !Sub sched-${Env}-api
+          version: "1"
+        paths:
+          /api/chat:
+            post:
+              summary: Send a chat message; the reply streams back as NDJSON ChatStreamEvents.
+              security:
+                - CognitoUserPool: []
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${ChatSkeletonFunction.Arn}/response-streaming-invocations
+                responseTransferMode: STREAM
+                # Streaming integrations may run up to 15 minutes; an agent turn needs well under 5.
+                timeoutInMillis: 300000
+        components:
+          securitySchemes:
+            # No OAuth scopes on the method, so the authorizer validates the Cognito *ID* token.
+            CognitoUserPool:
+              type: apiKey
+              name: Authorization
+              in: header
+              x-amazon-apigateway-authtype: cognito_user_pools
+              x-amazon-apigateway-authorizer:
+                type: cognito_user_pools
+                providerARNs:
+                  # Resolved from the auth stack's SSM output for *this* Env (see sam-deploy skill).
+                  - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"
+
+  ChatApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ChatSkeletonFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/chat
+
+  # ---------------------------------------------------------------------------------------------
+  # Outputs for the web stack and scripts (/sched/<env>/api/...)
+  # ---------------------------------------------------------------------------------------------
   StatusParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /sched/${Env}/api/status
       Type: String
-      Value: skeleton
+      Value: walking-skeleton
+
+  RestApiIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/api/rest-api-id
+      Type: String
+      Value: !Ref ChatApi
+
+  ExecuteApiDomainParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/api/execute-api-domain
+      Type: String
+      Value: !Sub ${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
+
+  StageNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/api/stage-name
+      Type: String
+      Value: !Ref ChatApi.Stage
 
 Outputs:
-  CanaryFunctionName:
-    Value: !Ref CanaryFunction
+  RestApiId:
+    Value: !Ref ChatApi
+  StageName:
+    Value: !GetAtt StageNameParam.Value
+  ChatUrl:
+    Description: Direct execute-api URL (the SPA goes through CloudFront at /api/chat instead).
+    Value: !Sub https://${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageNameParam.Value}/api/chat
+  ChatFunctionName:
+    Value: !Ref ChatSkeletonFunction

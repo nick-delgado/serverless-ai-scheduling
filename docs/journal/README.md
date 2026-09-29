@@ -15,3 +15,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-09-29 | [Least privilege meets a real deploy](2026-09-29-least-privilege-meets-reality.md) | 3. The walking skeleton |
 | 2026-09-29 | [A double-booking test only counts once you've watched it fail](2026-09-29-watch-the-double-booking-test-fail.md) | 3. The walking skeleton |
 | 2026-09-29 | [The agent loop never learns whose data it touches](2026-09-29-the-loop-never-sees-the-patient.md) | 4. Teaching the agent to schedule |
+| 2026-09-29 | [The reply streams through CloudFront untouched: first token in about 1 s, 15 ms of overhead](2026-09-29-streaming-survives-cloudfront.md) | 3. The walking skeleton |

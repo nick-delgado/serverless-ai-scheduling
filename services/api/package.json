@@ -10,5 +10,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.0",
+    "@anthropic-ai/sdk": "^0.129.0",
+    "@sched/contracts": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
