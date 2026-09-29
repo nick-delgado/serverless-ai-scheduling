@@ -1,0 +1,56 @@
+id: l1-slot-taken-offer-alternatives
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-031, adr9.confirm-before-write]
+context:
+  - patient: "Do you have any dermatology openings next week? Afternoons work best."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: dermatology
+        date_range: { start_date: 2026-10-12, end_date: 2026-10-16 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261014T1900Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T19:00:00Z
+            start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+          - slot_id: slot_okafor_20261015T1800Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-15T18:00:00Z
+            start_local: Thursday, October 15, 2026 at 2:00 PM ET
+          - slot_id: slot_okafor_20261016T1700Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-16T17:00:00Z
+            start_local: Friday, October 16, 2026 at 1:00 PM ET
+  - assistant: "Here are three dermatology afternoons next week: Wednesday, October 14 at 3:00 PM ET with Dr. Priya Lee; Thursday, October 15 at 2:00 PM ET with Dr. Samuel Okafor; or Friday, October 16 at 1:00 PM ET with Dr. Okafor. Which works best?"
+  - patient: "The Thursday one with Dr. Okafor works. It is for my eczema."
+  - assistant: "To confirm: Dr. Samuel Okafor (dermatology), Thursday, October 15, 2026 at 2:00 PM ET, at 400 Cedar Ridge Pkwy, for eczema. Shall I book it?"
+  - patient: "Yes, book it."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_okafor_20261015T1800Z, reason: eczema }
+  - tool_result:
+      tool: book_appointment
+      error:
+        code: SLOT_UNAVAILABLE
+        message: "That slot was just booked by someone else."
+        hint: "Offer other times."
+expect:
+  any_of:
+    - { action: respond }
+    - { action: tool_call, tool: check_availability }
+  forbid_tools: [book_appointment] # a different slot needs its own confirmation first

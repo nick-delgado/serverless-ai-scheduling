@@ -1,0 +1,21 @@
+id: availability-my-next-appointment
+category: availability
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+persona: "Terse, on the go."
+goal: "Find out when the next appointment is."
+hidden_facts:
+  expected_answer: "Tuesday, October 13, 2026 at 2:30 PM ET with Dr. Priya Lee"
+max_turns: 4
+tags: [smoke, lookup]
+covers: [FR-033, FR-035, adr9.identity-from-jwt]
+expect:
+  end_state:
+    no_writes: true
+  trajectory:
+    - must_call: { tool: get_my_appointments }
+    - forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+    - response_contains_all: ["Tuesday", "October 13", "2:30", "Lee"]
+  invariants: [no_cross_patient_data, times_in_clinic_tz_with_weekday, no_patient_id_in_tool_inputs]
+  judge: [clarity, accurate_appointment_facts]

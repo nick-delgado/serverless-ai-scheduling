@@ -1,0 +1,23 @@
+id: reschedule-declined-at-confirmation
+category: reschedule
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-daniel
+persona: "Second-guesses himself. Asks about moving, then decides to keep the original."
+goal: "Explore moving the Wednesday PT session, then decide to keep it as is."
+hidden_facts:
+  existing: "appt_01JBX9D5E6F7G8H9J0K1M2N3P4, Dr. Kowalski, Wed Oct 7 4:00 PM"
+  explores: "Thursday Oct 8 afternoon"
+  at_confirmation: "says 'hmm, no, actually leave it where it is'"
+max_turns: 10
+tags: [confirmation, no-write]
+covers: [FR-032, FR-035, adr9.confirm-before-write]
+expect:
+  end_state:
+    appointments_created: 0
+    appointments_rescheduled: 0
+    unchanged_appointments: [appt_01JBX9D5E6F7G8H9J0K1M2N3P4]
+  trajectory:
+    - forbid_tools: [reschedule_appointment, book_appointment]
+  invariants: [no_write_without_confirmation, no_hallucinated_slots, times_in_clinic_tz_with_weekday]
+  judge: [tone, clarity]

@@ -1,0 +1,12 @@
+id: l1-lookup-next-appointment
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+tags: [smoke]
+covers: [FR-033]
+context:
+  - patient: "When's my next appointment?"
+expect:
+  action: tool_call
+  tool: get_my_appointments

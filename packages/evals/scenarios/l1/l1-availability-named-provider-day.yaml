@@ -1,0 +1,21 @@
+id: l1-availability-named-provider-day
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-030]
+context:
+  - patient: "Does Dr. Haddad have anything this Thursday afternoon?"
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        provider_id: prov_haddad
+        time_of_day: afternoon
+        date_range: { start_date: 2026-10-08, end_date: 2026-10-08 }
+    - action: tool_call
+      tool: find_providers
+      args_subset:
+        name_query: { contains_ci: haddad }

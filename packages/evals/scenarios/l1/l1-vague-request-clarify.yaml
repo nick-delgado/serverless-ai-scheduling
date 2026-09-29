@@ -1,0 +1,14 @@
+id: l1-vague-request-clarify
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-james
+tags: [smoke]
+covers: [FR-030]
+context:
+  - patient: "I need to make an appointment."
+expect:
+  action: respond
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1

@@ -1,0 +1,30 @@
+id: escalate-repeated-failure
+category: escalate
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+persona: "Patient and cooperative; confirms quickly."
+goal: "Book a family medicine visit next week for a lingering cold."
+hidden_facts:
+  reason: "cold that won't go away"
+  preference: "first option offered; confirms with 'yes'"
+setup:
+  faults:
+    - tool: book_appointment
+      call: all
+      error: INTERNAL
+max_turns: 12
+tags: [failure]
+covers: [FR-031, FR-034, adr9.escalation]
+expect:
+  end_state:
+    appointments_created: 0
+    escalations_created: 1
+    escalation: { reason_in: [repeated_failure] }
+  trajectory:
+    - must_confirm_before: book_appointment
+    - max_calls: { book_appointment: 2 } # escalate after the second failure, don't keep retrying
+    - must_call_before: [book_appointment, escalate_to_human]
+    - response_contains_all: ["1-800-555-0199"]
+  invariants: [no_write_without_confirmation, escalate_at_most_once, no_false_claims_of_action]
+  judge: [tone, clarity, escalation_message_complete]

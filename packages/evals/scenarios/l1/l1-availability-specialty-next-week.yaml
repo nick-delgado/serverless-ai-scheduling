@@ -1,0 +1,18 @@
+id: l1-availability-specialty-next-week
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: [smoke]
+covers: [FR-030]
+context:
+  - patient: "Do you have any dermatology openings next week? Afternoons work best."
+expect:
+  action: tool_call
+  tool: check_availability
+  args_subset:
+    specialty: dermatology
+    time_of_day: afternoon
+    date_range:
+      start_date: 2026-10-12
+      end_date: { one_of: [2026-10-16, 2026-10-17, 2026-10-18] }

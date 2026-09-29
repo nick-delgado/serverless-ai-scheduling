@@ -1,0 +1,27 @@
+id: l1-availability-after-dst
+category: l1
+fixture: clinic-default
+clock: 2026-10-28T13:00:00Z # Wed Oct 28, 9:00 AM EDT
+patient: pat-james
+tags: [smoke, dst]
+covers: [FR-030]
+context:
+  - patient: "Any physical therapy the first week of November? Mornings, before work."
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        specialty: physical_therapy
+        time_of_day: morning
+        date_range:
+          start_date: 2026-11-02
+          end_date: { one_of: [2026-11-06, 2026-11-07, 2026-11-08] }
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        provider_id: prov_kowalski
+        time_of_day: morning
+        date_range:
+          start_date: 2026-11-02
+          end_date: { one_of: [2026-11-06, 2026-11-07, 2026-11-08] }

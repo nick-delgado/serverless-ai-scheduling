@@ -1,0 +1,13 @@
+id: l1-escalate-billing
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-034, adr9.escalation, adr9.scope]
+context:
+  - patient: "I got a bill for $180 from my last visit and I think it's wrong. Can you fix it?"
+expect:
+  action: tool_call
+  tool: escalate_to_human
+  args_subset: { reason: out_of_scope }

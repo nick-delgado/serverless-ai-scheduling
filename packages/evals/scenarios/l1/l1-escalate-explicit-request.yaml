@@ -1,0 +1,13 @@
+id: l1-escalate-explicit-request
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+tags: [smoke]
+covers: [FR-034, adr9.escalation]
+context:
+  - patient: "Can I just talk to a real person, please?"
+expect:
+  action: tool_call
+  tool: escalate_to_human
+  args_subset: { reason: patient_requested }

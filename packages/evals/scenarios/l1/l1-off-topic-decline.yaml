@@ -1,0 +1,15 @@
+id: l1-off-topic-decline
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+tags: []
+covers: [adr9.scope]
+context:
+  - patient: "What's a good recipe for banana bread?"
+expect:
+  action: respond
+  forbid_tools: all
+  response:
+    must_not_contain: [flour, "baking soda", "350"]
+    contains_any: [appointment, schedul, book]

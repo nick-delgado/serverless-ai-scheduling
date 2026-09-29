@@ -1,0 +1,30 @@
+id: reschedule-single-appointment
+category: reschedule
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+persona: "Busy parent. Something came up on Tuesday; wants the same doctor a day later."
+goal: "Move the Dr. Lee appointment on Tuesday Oct 13 to Wednesday or Thursday that week, afternoon."
+hidden_facts:
+  existing: "appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, Dr. Lee, Tue Oct 13 2:30 PM"
+  wants: "same provider, Wed Oct 14 or Thu Oct 15, after noon"
+max_turns: 12
+tags: [smoke, happy-path]
+covers: [FR-032, FR-033, FR-035, adr9.confirm-before-write]
+expect:
+  end_state:
+    appointments_created: 0
+    appointments_rescheduled: 1
+    rescheduled:
+      appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+      provider_id: prov_lee
+      local_date_between: [2026-10-14, 2026-10-15]
+      local_time_after: "12:00"
+    released_slots: [slot_lee_20261013T1830Z]
+  trajectory:
+    - must_call_before: [get_my_appointments, reschedule_appointment]
+    - must_call_before: [check_availability, reschedule_appointment]
+    - must_confirm_before: reschedule_appointment
+    - forbid_tools: [book_appointment, escalate_to_human]
+  invariants: [no_write_without_confirmation, no_hallucinated_slots, times_in_clinic_tz_with_weekday]
+  judge: [tone, clarity, summarizes_change]
