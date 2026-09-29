@@ -12,7 +12,7 @@ Each ADR records one significant decision: the context, the options we weighed, 
 | [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted |
 | [006](0006-voice-transcription.md) | Voice transcription: browser → Transcribe Streaming | Proposed (spike S-3) |
-| [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Proposed (spike S-2) |
+| [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7) |
 | [008](0008-evaluation-strategy.md) | Evaluation strategy | Accepted |
 | [009](0009-safety-and-privacy.md) | Safety, privacy, and abuse controls | Accepted |
 

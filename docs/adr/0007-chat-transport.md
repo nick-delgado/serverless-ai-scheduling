@@ -1,7 +1,7 @@
 # ADR-007: Chat transport — REST API with Lambda response streaming
 
-- **Status:** Proposed. Pending spike S-2, which is part of the M1 walking skeleton.
-- **Date:** 2026-09-28
+- **Status:** Accepted (2026-09-29). Spike S-2, run as part of the M1 walking skeleton (#7), confirmed it; see Validation.
+- **Date:** 2026-09-28 (proposed), 2026-09-29 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-012, FR-013, NFR-001, ADR-001, ADR-003
 
@@ -27,7 +27,7 @@ The limitations don't affect us: no VTL response transforms, no integration cach
 3. **REST API + Lambda response streaming (NDJSON events).** Live tool status, real token streaming, a long timeout, and it fits CloudFormation/SAM (OpenAPI definition).
 4. **WebSocket API.** Fully bidirectional, but it needs a connections table, `@connections` posting, and reconnect logic. Too much for request/response chat.
 
-## Decision (proposed)
+## Decision
 
 **Option 3.**
 - `POST /api/chat` is a **Regional REST API** method with a Cognito authorizer.
@@ -54,5 +54,55 @@ The limitations don't affect us: no VTL response transforms, no integration cach
 
 ## Validation (spike S-2, folded into issue M1-05)
 
+The plan was:
 - The deployed walking skeleton streams deltas through CloudFront → REST API → Lambda → Bedrock.
 - Measure time to first byte (target ≤ 3 s at p50) and confirm the Cognito authorizer works with streaming.
+
+### Results (2026-09-29, #7)
+
+**Setup.** `sched-dev`, deployed from `spike/7-walking-skeleton`:
+- CloudFront (`/api/*` behavior: `CachingDisabled` + `AllViewerExceptHostHeader`, origin path = stage).
+- Regional REST API, Cognito User Pool authorizer, `responseTransferMode: STREAM`, `timeoutInMillis` 300000.
+- Lambda `nodejs24.x` / arm64 / 1024 MB with `awslambda.streamifyResponse`.
+- Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`, no thinking). About 97 input and 149 output tokens per reply.
+
+The client was a laptop in the US Southeast (edge POP ATL59). `spikes/s2-streaming/measure.ts` ran 10 requests per target, round-robin, 8 s apart. Raw data: `spikes/s2-streaming/results/`.
+
+| Metric (N=10 each, warm) | Via CloudFront p50 / p95 | Direct execute-api p50 / p95 |
+|---|---|---|
+| Time to first byte (= response headers) | **1.03 s** / 2.66 s | 1.04 s / 1.80 s |
+| Time to first `text_delta` | **1.03 s** / 2.66 s | 1.04 s / 1.80 s |
+| Total (stream ended) | 3.90 s / 7.07 s | 4.07 s / 5.87 s |
+| Lambda's own first delta (from its log) | 0.86 s / 2.44 s | 0.85 s / 1.64 s |
+| Transport overhead, first delta (client − Lambda) | 161 ms / 224 ms | 145 ms / 228 ms |
+| Network chunks per response (median) | 73 | 71 |
+
+p95 is nearest-rank, so with N=10 it is the maximum. 20/20 runs ended with `done`.
+
+**What the numbers say:**
+- **Streaming is truly incremental through CloudFront.** Every response arrived in 60–81 separate network chunks, almost always one NDJSON event per chunk (only 9 of 1,428 chunks carried two). The chunks were spread over 1–4.6 s, at about 25 events/s: the model's own pace.
+- **No buffering or compression.** The mid-stream pauses of 1.6–2.0 s show up on both paths, so they come from Bedrock, not CloudFront. No response had `content-encoding`, and every one said `x-cache: Miss from cloudfront`.
+- **CloudFront adds about 15 ms at p50** over the direct execute-api URL. The model dominates: about 85% of time-to-first-token is Bedrock.
+- **Cold start.** Init was 474 ms. The first request after deploy (`curl -N`) saw its first delta at 1.85 s, still within target.
+- **NFR-001 / the ADR target is met.** Time to first byte is 1.03 s p50 against a 3 s target, and full turns take about 4 s. Numbers for agent turns with tools come with #17.
+- **Auth.**
+  - With no token or a malformed token, API Gateway returns 401 `{"message":"Unauthorized"}` on both paths.
+  - With a valid ID token the authorizer passes and the stream flows, so the Cognito authorizer and streaming work together.
+  - A bad body with a valid token gets 400 plus one NDJSON `error` event, and CloudFront passes it through unchanged (no custom error responses).
+- **The browser renders progressively.** Checked with headless Chrome on the skeleton page, over HTTP/2.
+
+**Decision:** accepted as proposed. The buffered-array fallback isn't needed. `parseChatResponseBody` keeps supporting it anyway, at no cost.
+
+### Learned during the spike (consequences for later work)
+
+- **Headers arrive with the first event.** The Node.js runtime writes the HTTP status/header prelude on the first `write()`, so a client sees nothing until the model's first token. That makes TTFB equal to time-to-first-token. It also lets the handler choose the status late:
+  - 400 for bad input;
+  - 429/503 when Bedrock rejects the call up front;
+  - 200 once text flows, with a mid-stream failure becoming an `error` event under 200.
+
+  The UI must start its "processing" animation on send, not on response headers.
+- **CloudFront drops `Authorization` on GET and HEAD.** It forwards the header only for POST/PUT/PATCH/DELETE (and uncached OPTIONS). The `/api/*` behavior uses `CachingDisabled`, so it can't put the header in a cache key. Our `POST /api/chat` is unaffected, but a `GET /api/session` (#18) would reach the authorizer without its token and get 401. #18 must pick one of these:
+  - a custom cache policy whose cache key includes `Authorization`, with the origin sending `Cache-Control: no-store`;
+  - a POST for the session call;
+  - a different identity-source header for the authorizer.
+- **SAM's `BuildMethod: esbuild` doesn't work with our npm workspaces.** It runs `npm install` in an isolated copy of `CodeUri`, where `@sched/contracts` can't resolve. Functions use `BuildMethod: makefile` with `Metadata.WorkingDirectory` at the repo root, and `services/api/Makefile` runs esbuild there. With `nodejs*` runtimes, `sam build --cached` still reruns make on every build, so edits in `packages/*` can't leave a stale bundle. This refines ADR-003's bundling line.

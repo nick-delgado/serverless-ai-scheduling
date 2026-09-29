@@ -20,8 +20,8 @@ Infrastructure is AWS SAM (CloudFormation) with **one template per stack** (ADR-
 |---|---|---|---|
 | data | `infra/stacks/data.yaml` | DynamoDB `sched-<env>-main` (+ GSI1, TTL, PITR) | `data/table-name`, `data/table-arn` |
 | auth | `infra/stacks/auth.yaml` | Cognito User Pool + SPA client (Identity Pool comes with S1-01) | `auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id` |
-| api | `infra/stacks/api.yaml` | REST API + Lambda handlers (canary until M1-05) | `api/status` (more once the API exists) |
-| web | `infra/stacks/web.yaml` | S3 + CloudFront (placeholder until M1-05) | `web/status` |
+| api | `infra/stacks/api.yaml` | Regional REST API (OpenAPI body, Cognito authorizer, streaming Lambda integration) + handlers | `api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status` |
+| web | `infra/stacks/web.yaml` | Private S3 + CloudFront (OAC); `/api/*` → REST API | `web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |
 
 **Deploy order is data → auth → api → web**, because later stacks read earlier stacks' SSM parameters. `sched-bootstrap` is admin-only and deployed once by Nick. Never deploy, update, or delete it.
 
@@ -65,11 +65,11 @@ The flip side: `dev` is **shared**, and the last deploy wins. With several agent
 1. **Every IAM role carries the permissions boundary.** For SAM functions, `Globals.Function.PermissionsBoundary` already does this. For any explicit `AWS::IAM::Role`, set `PermissionsBoundary: !Ref PermissionsBoundaryArn`, with the parameter typed `AWS::SSM::Parameter::Value<String>` and defaulting to `/sched/bootstrap/permissions-boundary-arn`. Without it, the execution role is **denied** `iam:CreateRole`. That's by design, not a bug to work around.
 2. **Role names must start with `sched-`.** SAM's generated names (`sched-<env>-<stack>-<Logical>Role-…`) already do; explicit `RoleName`s must too.
 3. **The boundary is a ceiling.** It allows logs, X-Ray, CloudWatch metrics, DynamoDB item operations, Bedrock (`bedrock-mantle:CreateInference`, `bedrock:InvokeModel*`), SES send, Transcribe streaming, SSM reads, S3 get/put, Lambda invoke, and Cognito Identity credentials. It denies all IAM, Organizations, and account actions. If a function needs something outside that, stop and ask Nick. The boundary lives in the admin-only bootstrap stack.
-4. **Cross-stack values go through SSM** (`/sched/<env>/<stack>/<name>`), not `Fn::ImportValue`. Exports lock the producer stack.
+4. **Cross-stack values go through SSM** (`/sched/<env>/<stack>/<name>`), not `Fn::ImportValue`. Exports lock the producer stack. Read another stack's env-specific value with a dynamic reference, `!Sub "{{resolve:ssm:/sched/${Env}/<stack>/<name>}}"`, not a typed `AWS::SSM::Parameter::Value<String>` parameter: a parameter's default can't include `Env`, so an ephemeral env would silently read dev's value. (Typed parameters are fine for env-independent values like the permissions boundary.)
 5. **Scope function policies tightly.** Grant a table ARN from SSM, specific actions, and Bedrock only on the model or profile ARNs in use.
 6. **Parameterize by `Env`.** No hard-coded `dev` anywhere.
 7. **Stateful resources are protected.** The table and user pool take a `DeletionProtection` parameter, `enabled` by default.
-8. Lambda defaults: `nodejs24.x`, `arm64`, JSON logs, an explicit log group with 14-day retention. Bundle TypeScript with `Metadata: { BuildMethod: esbuild }` (entry points in `services/api/src/handlers/`).
+8. Lambda defaults: `nodejs24.x`, `arm64`, JSON logs, an explicit log group with 14-day retention. Bundle TypeScript with `Metadata: { BuildMethod: makefile, WorkingDirectory: ../.. }` and a `build-<LogicalId>` target in `services/api/Makefile` (entry points in `services/api/src/handlers/`). **Not** `BuildMethod: esbuild`: it runs `npm install` in an isolated copy of `CodeUri`, which can't resolve workspace packages like `@sched/contracts` (ADR-007, #7).
 
 ## Before opening a PR that touches infra
 
