@@ -23,6 +23,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 
 **Identity and authorization**
 - The patient ID comes from the JWT only (ADR-005). Tools can reach only that patient's records, so there is no tool that can read another patient's data.
+- **Conversation ownership** (ADR-004 amendment, 2026-09-29): IDs in a request body are never trusted on their own. Message items store `patientId`. Reading a conversation, appending to it, and reading or updating its escalation all check that `patientId` against the JWT `sub` in the data layer. A mismatch looks exactly like "not found".
 - Lambda roles are least-privilege:
   - The chat function can read and write the table and call `bedrock-mantle:CreateInference` on the configured models. It can call `ses:SendEmail` only from the verified identity.
 
