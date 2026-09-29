@@ -6,13 +6,17 @@
   "description": "Agent tools, repository interfaces with in-memory and DynamoDB implementations, Clock, and fixtures.",
   "exports": {
     ".": "./src/index.ts",
+    "./dynamo": "./src/repos/dynamo/index.ts",
     "./fixtures": "./fixtures/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dynamodb:local": "docker run --rm -d -p 8000:8000 --name sched-dynamodb-local amazon/dynamodb-local"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1143.0",
+    "@aws-sdk/lib-dynamodb": "^3.1143.0",
     "@sched/contracts": "*"
   }
 }
