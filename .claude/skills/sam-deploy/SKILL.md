@@ -54,7 +54,7 @@ Account-specific values are resolved at runtime, so **never hard-code account ID
 The flip side: `dev` is **shared**, and the last deploy wins. With several agents working:
 - **In `dev`, deploy only the stacks your issue owns.** The script prints a note when an unmerged branch deploys to `dev`.
 - **Use an ephemeral env for anything experimental or cross-stream:** `scripts/deploy.sh all <name>` creates a full, independent `sched-<name>-*` set, with its own table, user pool, and SSM parameters under `/sched/<name>/`, at about $0 idle. Names are lowercase, 2–16 characters (e.g., `pr52`, `wt15`). IAM is keyed on `sched-*`, so no permission changes are needed.
-- **Ephemeral envs default to `DeletionProtection=disabled`.** When you're done, run `scripts/teardown.sh <name>`, which asks you to type the env name, or pass `--yes` in automation. Ask Nick before tearing down anything you didn't create yourself in this task.
+- **Ephemeral envs default to `DeletionProtection=disabled`.** When you're done, run `scripts/teardown.sh <name>`, which asks you to type the env name, or pass `--yes` in automation. Teardown empties the env's site bucket (`/sched/<name>/web/bucket-name`) before deleting the web stack, because CloudFormation can't delete a non-empty bucket. It refuses any bucket that doesn't match `sched-<name>-web-*`. Deleting the web stack takes several minutes while CloudFront disables the distribution. Ask Nick before tearing down anything you didn't create yourself in this task.
 - **Check what's running:** `aws cloudformation describe-stacks --stack-name sched-dev-<stack> --query 'Stacks[0].Tags'` shows `git-branch` and `git-commit`.
 - Once CI deploys from `main` (M3-06, #41), `dev` will track `main`, and branch work belongs in ephemeral envs.
 
