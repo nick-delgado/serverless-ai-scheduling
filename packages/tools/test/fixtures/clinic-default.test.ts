@@ -49,11 +49,18 @@ describe("clinic-default fixture", () => {
     });
   });
 
-  it("has 4 weeks of weekday slots: 20 days × 8 providers × 18 half-hour slots", () => {
-    expect(fixture.clinicDays).toHaveLength(20);
+  it("has 5 weeks of weekday slots: 25 days × 8 providers × 18 half-hour slots", () => {
+    expect(fixture.clinicDays).toHaveLength(25);
     expect(fixture.clinicDays[0]).toBe("2026-10-05");
-    expect(fixture.clinicDays.at(-1)).toBe("2026-10-30");
-    expect(fixture.slots).toHaveLength(20 * 8 * 18);
+    expect(fixture.clinicDays.at(-1)).toBe("2026-11-06");
+    expect(fixture.slots).toHaveLength(25 * 8 * 18);
+  });
+
+  it("crosses the Nov 1 DST change by default, so evals see both EDT and EST slots", () => {
+    const starts = new Set(fixture.slots.map((s) => s.startUtc));
+    expect(starts.has("2026-10-30T12:00:00Z")).toBe(true); // Fri 8:00 AM EDT
+    expect(starts.has("2026-11-02T13:00:00Z")).toBe(true); // Mon 8:00 AM EST
+    expect(starts.has("2026-11-02T12:00:00Z")).toBe(false); // 7:00 AM EST would be before opening
   });
 
   it("puts every slot inside clinic hours, Mon–Fri, 30 minutes long", () => {

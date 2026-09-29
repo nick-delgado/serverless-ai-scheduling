@@ -24,13 +24,13 @@ The headline acceptance test comes from ADR-004: 10 parallel bookings of one slo
 
 ## What surprised us
 
-- **The default fixture never actually crosses DST.** We assumed the four weeks from Monday Oct 5 contained the Nov 1 change. They do, but only barely. Nov 1 is the window's last day and a Sunday, so the last slot is Friday Oct 30, still on EDT. The DST tests build the fixture from Oct 26 instead. The converted UTC start shifts by an hour (Fri 8:00 AM ET is 12:00Z, Mon 8:00 AM ET is 13:00Z), and clinic hours stay 8:00–4:30 on both sides.
+- **The default fixture never actually crosses DST.** We assumed the four weeks from Monday Oct 5 contained the Nov 1 change. They do, but only barely. Nov 1 is the window's last day and a Sunday, so the last slot is Friday Oct 30, still on EDT. The DST tests build the fixture from Oct 26 instead. **Update (Nick's review):** the default is now five weeks (through Fri Nov 6), so the standard eval fixture crosses the change too. The converted UTC start shifts by an hour (Fri 8:00 AM ET is 12:00Z, Mon 8:00 AM ET is 13:00Z), and clinic hours stay 8:00–4:30 on both sides.
 
 ## Evidence
 
 - `npm test -w packages/tools`: 132 tests pass, 55 of them the repository contract suite. The whole repo: 314.
 - Injected race: 10/10 successes, with 3 contract tests failing. Reverted: 1/10, all green.
-- Fixture: 8 providers, 6 patients, 2,880 slots (20 weekdays × 8 × 18), 4 booked. Maria's appointment matches the contracts example (`slot_lee_20261013T1830Z`).
+- Fixture: 8 providers, 6 patients, 3,600 slots (25 weekdays × 8 × 18, five weeks crossing DST), 4 booked. Maria's appointment matches the contracts example (`slot_lee_20261013T1830Z`).
 
 ## What's next
 

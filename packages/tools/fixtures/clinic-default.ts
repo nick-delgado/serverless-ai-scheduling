@@ -29,8 +29,12 @@ import { validateSeed, type ClinicSeed } from "../src/repos/seed";
 
 export const CLINIC_DEFAULT_NAME = "clinic-default";
 
-/** The defaults match the eval clock in ADR-008 and the contracts examples: Monday, October 5, 2026. */
-export const CLINIC_DEFAULT_OPTIONS = { baseDate: "2026-10-05", weeks: 4 } as const;
+/**
+ * The defaults match the eval clock in ADR-008 and the contracts examples: Monday, October 5, 2026.
+ * Five weeks (through Fri Nov 6) so the default window crosses the Nov 1 DST change, giving evals both
+ * EDT and EST slots.
+ */
+export const CLINIC_DEFAULT_OPTIONS = { baseDate: "2026-10-05", weeks: 5 } as const;
 
 export interface ClinicFixtureOptions {
   /** First day of the window (clinic-local). Any day of the week; weekends simply have no slots. */
