@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS, type ClinicFixture } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
-import { createToolExecutor, type ToolContext, type ToolExecutionResult } from "../../src/registry";
+import {
+  createToolExecutor,
+  TOOL_REGISTRY,
+  type ToolContext,
+  type ToolExecutionResult,
+} from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import { findProviders } from "../../src/tools/find_providers";
@@ -27,19 +32,34 @@ describe("find_providers", () => {
   let repos: InMemoryRepositories;
   let clock: FrozenClock;
 
-  const run = (input: unknown = {}, patientId: string = MARIA): Promise<ToolExecutionResult> => {
-    const ctx: ToolContext = { patientId, conversationId: EXAMPLES.ConversationId, clock, repos };
-    return createToolExecutor({ find_providers: findProviders }, ctx).execute({
+  const contextFor = (patientId: string): ToolContext => ({
+    patientId,
+    conversationId: EXAMPLES.ConversationId,
+    clock,
+    repos,
+  });
+  const run = (input: unknown = {}, patientId: string = MARIA): Promise<ToolExecutionResult> =>
+    createToolExecutor({ find_providers: findProviders }, contextFor(patientId)).execute({
       id: "toolu_test",
       name: "find_providers",
       input,
     });
-  };
 
   beforeEach(() => {
     fixture = buildClinicFixture();
     clock = new FrozenClock(fixture.suggestedNow);
     repos = createInMemoryRepositories({ seed: fixture, clock, ids: sequentialIds() });
+  });
+
+  it("is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler", async () => {
+    const executor = createToolExecutor(TOOL_REGISTRY, contextFor(MARIA));
+    expect(executor.definitions.map((d) => d.name)).toContain("find_providers");
+    const result = await executor.execute({
+      id: "toolu_test",
+      name: "find_providers",
+      input: { name_query: "Okafor" },
+    });
+    expect(idsOf(result)).toEqual(["prov_okafor"]);
   });
 
   it("lists every provider in a stable order (specialty, then last name) with no filter", async () => {

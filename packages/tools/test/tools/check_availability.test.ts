@@ -1,10 +1,25 @@
-import { LIMITS, TOOLS, type ToolError, type ToolOutput } from "@sched/contracts";
+import {
+  LIMITS,
+  makeSlotId,
+  SPECIALTIES,
+  toCanonicalUtc,
+  TOOLS,
+  type Provider,
+  type Slot,
+  type ToolError,
+  type ToolOutput,
+} from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
+import { buildClinicFixture, FIXTURE_PATIENT_IDS, type ClinicFixture } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
-import { createToolExecutor, type ToolContext, type ToolExecutionResult } from "../../src/registry";
+import {
+  createToolExecutor,
+  TOOL_REGISTRY,
+  type ToolContext,
+  type ToolExecutionResult,
+} from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import { checkAvailability } from "../../src/tools/check_availability";
@@ -23,65 +38,87 @@ const errorOf = (r: ToolExecutionResult): ToolError["error"] => {
 const localTimes = (r: ToolExecutionResult): string[] =>
   outputOf(r).slots.map((s) => s.start_local.replace(/^.* at /, ""));
 const days = (start_date: string, end_date: string = start_date) => ({ start_date, end_date });
+/** An extra OPEN 30-minute slot for a fixture provider, at any hour (the seed validator allows it). */
+const openSlot = (provider: Provider, startUtc: string): Slot => ({
+  slotId: makeSlotId(provider.providerId, startUtc),
+  providerId: provider.providerId,
+  specialty: provider.specialty,
+  startUtc,
+  endUtc: toCanonicalUtc(new Date(Date.parse(startUtc) + 30 * 60_000)),
+  status: "OPEN",
+});
 
 describe("check_availability", () => {
+  let fixture: ClinicFixture;
   let repos: InMemoryRepositories;
   let clock: FrozenClock;
 
-  const run = (input: unknown, patientId: string = MARIA): Promise<ToolExecutionResult> => {
-    const ctx: ToolContext = { patientId, conversationId: EXAMPLES.ConversationId, clock, repos };
-    return createToolExecutor({ check_availability: checkAvailability }, ctx).execute({
+  const contextFor = (patientId: string): ToolContext => ({
+    patientId,
+    conversationId: EXAMPLES.ConversationId,
+    clock,
+    repos,
+  });
+  const run = (input: unknown, patientId: string = MARIA): Promise<ToolExecutionResult> =>
+    createToolExecutor({ check_availability: checkAvailability }, contextFor(patientId)).execute({
       id: "toolu_test",
       name: "check_availability",
       input,
     });
-  };
 
   beforeEach(() => {
-    const fixture = buildClinicFixture();
+    fixture = buildClinicFixture();
     clock = new FrozenClock(fixture.suggestedNow); // Mon Oct 5, 2026, 9:00 AM ET
     repos = createInMemoryRepositories({ seed: fixture, clock, ids: sequentialIds() });
   });
 
+  it("is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler", async () => {
+    const executor = createToolExecutor(TOOL_REGISTRY, contextFor(MARIA));
+    expect(executor.definitions.map((d) => d.name)).toContain("check_availability");
+    const result = await executor.execute({
+      id: "toolu_test",
+      name: "check_availability",
+      input: { provider_id: "prov_lee", date_range: days("2026-10-06") },
+    });
+    expect(outputOf(result).slots[0]).toMatchObject({
+      slot_id: "slot_lee_20261006T1200Z",
+      start_local: "Tuesday, October 6, 2026 at 8:00 AM ET",
+    });
+  });
+
   describe("by provider (AP-4)", () => {
     it("returns open afternoon slots in time order, skipping the one Maria already holds", async () => {
-      const result = outputOf(
-        await run({ provider_id: "prov_lee", date_range: days("2026-10-13"), time_of_day: "afternoon" }),
-      );
-      expect(result.truncated).toBe(false);
-      expect(result.slots[0]).toEqual({
-        slot_id: "slot_lee_20261013T1600Z",
+      clock.set("2026-10-13T17:00:00Z"); // Tue Oct 13, 1:00 PM ET
+      const result = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-13"),
+        time_of_day: "afternoon",
+      });
+      expect(outputOf(result).slots[0]).toEqual({
+        slot_id: "slot_lee_20261013T1730Z",
         provider_id: "prov_lee",
         provider_name: "Dr. Priya Lee",
         specialty: "dermatology",
-        start_utc: "2026-10-13T16:00:00Z",
-        start_local: "Tuesday, October 13, 2026 at 12:00 PM ET",
+        start_utc: "2026-10-13T17:30:00Z",
+        start_local: "Tuesday, October 13, 2026 at 1:30 PM ET",
       });
-      expect(result.slots.map((s) => s.slot_id)).not.toContain("slot_lee_20261013T1830Z");
-      expect(
-        localTimes(
-          await run({ provider_id: "prov_lee", date_range: days("2026-10-13"), time_of_day: "afternoon" }),
-        ),
-      ).toEqual([
-        "12:00 PM ET",
-        "12:30 PM ET",
-        "1:00 PM ET",
+      // 2:30 PM is Maria's (slot_lee_20261013T1830Z); 4:30 PM is past the limit.
+      expect(localTimes(result)).toEqual([
         "1:30 PM ET",
         "2:00 PM ET",
         "3:00 PM ET",
         "3:30 PM ET",
         "4:00 PM ET",
-        "4:30 PM ET",
       ]);
+      expect(outputOf(result).truncated).toBe(true);
     });
 
     it("splits morning and afternoon at 12:00 PM ET", async () => {
+      clock.set("2026-10-06T14:00:00Z"); // Tue Oct 6, 10:00 AM ET
       const morning = localTimes(
         await run({ provider_id: "prov_lee", date_range: days("2026-10-06"), time_of_day: "morning" }),
       );
-      expect(morning).toHaveLength(8);
-      expect(morning.at(0)).toBe("8:00 AM ET");
-      expect(morning.at(-1)).toBe("11:30 AM ET");
+      expect(morning).toEqual(["10:30 AM ET", "11:00 AM ET", "11:30 AM ET"]);
       const afternoon = localTimes(
         await run({ provider_id: "prov_lee", date_range: days("2026-10-06"), time_of_day: "afternoon" }),
       );
@@ -143,10 +180,7 @@ describe("check_availability", () => {
       });
     });
 
-    it("keeps an EST day's range to exactly that clinic day (no spill from UTC midnight)", async () => {
-      const all = outputOf(await run({ specialty: "physical_therapy", date_range: days("2026-11-02") }));
-      // 18 slots that day; the first 10 run 8:00 AM to 12:30 PM ET.
-      expect(all.truncated).toBe(true);
+    it("judges an EST day's afternoon on the EST wall clock (specialty path)", async () => {
       const afternoon = outputOf(
         await run({
           specialty: "physical_therapy",
@@ -154,12 +188,48 @@ describe("check_availability", () => {
           time_of_day: "afternoon",
         }),
       );
-      expect(afternoon.truncated).toBe(false);
-      expect(afternoon.slots.at(-1)).toMatchObject({
-        start_utc: "2026-11-02T21:30:00Z",
-        start_local: "Monday, November 2, 2026 at 4:30 PM ET",
+      expect(afternoon.truncated).toBe(true); // 10 afternoon slots that day
+      // 11:30 AM EST is 16:30Z, which a UTC-4 reading would call 12:30 PM.
+      expect(afternoon.slots[0]).toMatchObject({
+        start_utc: "2026-11-02T17:00:00Z",
+        start_local: "Monday, November 2, 2026 at 12:00 PM ET",
       });
       expect(afternoon.slots.every((s) => s.start_local.startsWith("Monday, November 2"))).toBe(true);
+    });
+
+    it("bounds a provider_id search by clinic midnights, not UTC ones", async () => {
+      const kowalski = fixture.providers.find((p) => p.providerId === "prov_kowalski");
+      if (!kowalski) throw new Error("the fixture has no prov_kowalski");
+      // Fri Nov 6 and Sat Nov 7 are EST (UTC-5); the fixture has nothing after 5:00 PM or on weekends.
+      const eveningBefore = openSlot(kowalski, "2026-11-07T00:30:00Z"); // Fri Nov 6, 7:30 PM ET
+      const lateOnTheDay = openSlot(kowalski, "2026-11-08T04:30:00Z"); // Sat Nov 7, 11:30 PM ET
+      repos = createInMemoryRepositories({
+        seed: { ...fixture, slots: [...fixture.slots, eveningBefore, lateOnTheDay] },
+        clock,
+        ids: sequentialIds(),
+      });
+
+      // Sat Nov 7 runs 05:00Z Nov 7 to 05:00Z Nov 8: the 04:30Z slot is in, the 00:30Z one is not.
+      expect(outputOf(await run({ provider_id: "prov_kowalski", date_range: days("2026-11-07") }))).toEqual({
+        slots: [
+          {
+            slot_id: lateOnTheDay.slotId,
+            provider_id: "prov_kowalski",
+            provider_name: "Dr. Anna Kowalski",
+            specialty: "physical_therapy",
+            start_utc: "2026-11-08T04:30:00Z",
+            start_local: "Saturday, November 7, 2026 at 11:30 PM ET",
+          },
+        ],
+        truncated: false,
+      });
+      // And the 00:30Z slot belongs to Friday.
+      clock.set("2026-11-06T22:00:00Z"); // Fri Nov 6, 5:00 PM ET: the regular slots have all started
+      expect(
+        outputOf(await run({ provider_id: "prov_kowalski", date_range: days("2026-11-06") })).slots.map(
+          (s) => s.slot_id,
+        ),
+      ).toEqual([eveningBefore.slotId]);
     });
   });
 
@@ -195,28 +265,37 @@ describe("check_availability", () => {
       );
       expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-10", "2026-10-11", "2026-10-12"]);
       expect(result.slots[0]?.start_local).toBe("Monday, October 12, 2026 at 12:00 PM ET");
-      expect(result.truncated).toBe(false); // 9 afternoon slots for one cardiologist
+      expect(result.truncated).toBe(true); // 9 afternoon slots for one cardiologist
     });
 
     it("searches every specialty when neither provider nor specialty is given", async () => {
-      const { slots, truncated } = outputOf(await run({ date_range: days("2026-10-06") }));
+      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
+      const result = await run({ date_range: days("2026-10-06") });
+      expect(byDay).toHaveBeenCalledTimes(SPECIALTIES.length);
+      expect(new Set(byDay.mock.calls.map((c) => c[0]))).toEqual(new Set(SPECIALTIES));
+      const { slots, truncated } = outputOf(result);
       expect(truncated).toBe(true);
+      // All at 8:00 AM, so in provider order across specialties.
       expect(slots.map((s) => s.provider_id)).toEqual([
         "prov_alvarez",
         "prov_brooks",
         "prov_chen",
         "prov_haddad",
         "prov_kowalski",
-        "prov_lee",
-        "prov_nakamura",
-        "prov_okafor",
-        "prov_alvarez",
-        "prov_brooks",
       ]);
-      expect(localTimes(await run({ date_range: days("2026-10-06") })).slice(7, 9)).toEqual([
-        "8:00 AM ET",
-        "8:30 AM ET",
-      ]);
+      expect(new Set(localTimes(result))).toEqual(new Set(["8:00 AM ET"]));
+    });
+
+    it("leaves out a slot whose provider record is missing, and still answers", async () => {
+      vi.spyOn(repos.providers, "list").mockResolvedValue(
+        fixture.providers.filter((p) => p.providerId === "prov_okafor"), // no prov_lee
+      );
+      const { slots, truncated } = outputOf(
+        await run({ specialty: "dermatology", date_range: days("2026-10-06") }),
+      );
+      expect(slots.map((s) => s.provider_id)).toEqual(Array(LIMITS.availabilityMaxSlots).fill("prov_okafor"));
+      expect(slots[0]?.start_local).toBe("Tuesday, October 6, 2026 at 8:00 AM ET");
+      expect(truncated).toBe(true);
     });
 
     it("answers an empty range (a weekend) with [] and truncated: false", async () => {
@@ -229,7 +308,7 @@ describe("check_availability", () => {
     });
 
     it("sets truncated: false at exactly the limit", async () => {
-      clock.set("2026-10-06T15:30:00Z"); // Tue Oct 6, 11:30 AM ET: 12:00 through 4:30 PM remain, exactly 10
+      clock.set("2026-10-06T18:00:00Z"); // Tue Oct 6, 2:00 PM ET: 2:30 through 4:30 PM remain, exactly 5
       for (const input of [
         { provider_id: "prov_lee", date_range: days("2026-10-06") },
         { specialty: "cardiology", date_range: days("2026-10-06", "2026-10-06") },
@@ -238,6 +317,36 @@ describe("check_availability", () => {
         expect(result.slots).toHaveLength(LIMITS.availabilityMaxSlots);
         expect(result.truncated).toBe(false);
       }
+    });
+
+    it("reads the next day when the first one fills exactly the limit, to know whether more exist", async () => {
+      clock.set("2026-10-06T18:00:00Z"); // Tue Oct 6, 2:00 PM ET: exactly 5 cardiology slots left today
+      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
+      const result = await run({ specialty: "cardiology", date_range: days("2026-10-06", "2026-10-07") });
+      expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-06", "2026-10-07"]);
+      expect(localTimes(result)).toEqual([
+        "2:30 PM ET",
+        "3:00 PM ET",
+        "3:30 PM ET",
+        "4:00 PM ET",
+        "4:30 PM ET",
+      ]);
+      expect(outputOf(result).truncated).toBe(true);
+    });
+
+    it("fills the limit across two days in time order", async () => {
+      clock.set("2026-10-06T19:00:00Z"); // Tue Oct 6, 3:00 PM ET: three cardiology slots left today
+      const { slots, truncated } = outputOf(
+        await run({ specialty: "cardiology", date_range: days("2026-10-06", "2026-10-09") }),
+      );
+      expect(slots.map((s) => s.start_local)).toEqual([
+        "Tuesday, October 6, 2026 at 3:30 PM ET",
+        "Tuesday, October 6, 2026 at 4:00 PM ET",
+        "Tuesday, October 6, 2026 at 4:30 PM ET",
+        "Wednesday, October 7, 2026 at 8:00 AM ET",
+        "Wednesday, October 7, 2026 at 8:30 AM ET",
+      ]);
+      expect(truncated).toBe(true);
     });
   });
 
@@ -259,6 +368,17 @@ describe("check_availability", () => {
       );
       expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-05"]);
       expect(result.slots[0]?.start_local).toBe("Monday, October 5, 2026 at 9:30 AM ET");
+    });
+
+    it("takes today from the clinic calendar, not the UTC one", async () => {
+      clock.set("2026-10-06T01:00:00Z"); // Mon Oct 5, 9:00 PM ET, already Oct 6 in UTC
+      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
+      // Oct 5 is still today: an empty success (every slot has started), not a past-dates error.
+      expect(outputOf(await run({ specialty: "cardiology", date_range: days("2026-10-05") }))).toEqual({
+        slots: [],
+        truncated: false,
+      });
+      expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-05"]);
     });
 
     it("rejects a range that ended before today, with a hint to ask for upcoming days", async () => {
