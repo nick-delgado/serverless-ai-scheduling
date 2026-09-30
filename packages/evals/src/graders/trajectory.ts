@@ -1,0 +1,267 @@
+/**
+ * Trajectory rules (`expect.trajectory`, scenarios/README.md) over the transcript: tool calls and
+ * assistant messages in order. Rules constrain *relations* (a before b, confirmation before a write),
+ * never one fixed call sequence: models legitimately differ in the order of independent lookups (#60:
+ * gpt-oss-120b sometimes calls find_providers before check_availability).
+ */
+import type { InMemorySnapshot } from "@sched/tools";
+
+import { targetSlotOf } from "../environment";
+import type { TrajectoryRule } from "../schema";
+import { assistantTexts, toolCalls, type ToolCallEvent, type TranscriptEvent } from "../transcript";
+import { localFacts, matchArgs } from "./matchers";
+import { countQuestions, includesCi, isExplicitYes, reasonKeywords } from "./text";
+import { check, type GraderResult } from "./types";
+
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** What a confirmation must restate for a slot: provider, weekday, date, and time. */
+export function slotRestatementProblem(
+  text: string,
+  slotId: string,
+  state: InMemorySnapshot,
+): string | undefined {
+  const slot = state.slots.find((s) => s.slotId === slotId);
+  if (slot === undefined) return `unknown slot ${slotId}`;
+  const provider = state.providers.find((p) => p.providerId === slot.providerId);
+  const f = localFacts(slot.startUtc);
+  const [h = 0, m = 0] = f.time.split(":").map(Number);
+  const hour12 = ((h + 11) % 12) + 1;
+  const period = h >= 12 ? "p" : "a";
+  const timeRe = new RegExp(`\\b${hour12}(:${String(m).padStart(2, "0")})?\\s*${period}\\.?\\s?m\\b`, "i");
+  const [, month = 1, day = 1] = f.date.split("-").map(Number);
+  const monthName = MONTH_NAMES[month - 1] ?? "";
+  const dateRe = new RegExp(`\\b(${monthName}|${monthName.slice(0, 3)})\\.?\\s+${day}\\b`, "i");
+  const weekday = WEEKDAY_NAMES[["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(f.weekday)] ?? "";
+  const missing = [
+    provider !== undefined && !includesCi(text, provider.lastName) ? `provider (${provider.lastName})` : "",
+    !includesCi(text, weekday.slice(0, 3)) ? `weekday (${weekday})` : "",
+    !dateRe.test(text) ? `date (${monthName} ${day})` : "",
+    !timeRe.test(text) ? `time (${hour12}:${String(m).padStart(2, "0")} ${period.toUpperCase()}M)` : "",
+  ].filter(Boolean);
+  return missing.length === 0 ? undefined : `does not restate ${missing.join(", ")}`;
+}
+
+/**
+ * Confirmation before one write call (ADR-009 "confirmation before any write"): the patient's last
+ * message before the call is an explicit yes, and the assistant message before that restates the target
+ * slot's provider, weekday, date, and time (and, for a booking, the visit reason). A retry of the same
+ * slot after a failed call inherits that call's confirmation (ADR-008 amendment, 2026-09-29).
+ */
+export function confirmationProblem(
+  events: readonly TranscriptEvent[],
+  call: ToolCallEvent,
+  state: InMemorySnapshot,
+): string | undefined {
+  const index = events.indexOf(call);
+  const slotId = targetSlotOf(call.name, call.input);
+  const retryOf = events
+    .slice(0, index)
+    .filter((e): e is ToolCallEvent => e.kind === "tool_call" && e.name === call.name)
+    .at(-1);
+  if (
+    retryOf !== undefined &&
+    !retryOf.ok &&
+    slotId !== undefined &&
+    targetSlotOf(retryOf.name, retryOf.input) === slotId
+  )
+    return confirmationProblem(events, retryOf, state);
+
+  let yesAt = -1;
+  for (let i = index - 1; i >= 0; i--)
+    if (events[i]?.kind === "patient") {
+      yesAt = i;
+      break;
+    }
+  const yes = events[yesAt];
+  if (yes === undefined || yes.kind !== "patient") return "no patient message before the call";
+  if (!isExplicitYes(yes.text))
+    return `the patient's last message is not an explicit yes: "${yes.text.slice(0, 120)}"`;
+
+  const restatement = events
+    .slice(0, yesAt)
+    .filter((e) => e.kind === "assistant")
+    .at(-1);
+  if (restatement === undefined || restatement.kind !== "assistant")
+    return "no assistant restatement before the yes";
+  if (slotId !== undefined) {
+    const problem = slotRestatementProblem(restatement.text, slotId, state);
+    if (problem !== undefined) return `the restatement ${problem}`;
+  }
+  if (call.name === "book_appointment") {
+    const reason = (call.input as { reason?: unknown }).reason;
+    const words = typeof reason === "string" ? reasonKeywords(reason) : [];
+    if (words.length > 0 && !words.some((w) => includesCi(restatement.text, w)))
+      return `the restatement does not mention the reason ("${String(reason)}")`;
+  }
+  return undefined;
+}
+
+function ruleName(rule: TrajectoryRule): string {
+  const [key, value] = Object.entries(rule)[0] ?? ["?", undefined];
+  const arg =
+    typeof value === "string"
+      ? value
+      : Array.isArray(value)
+        ? value.join(",")
+        : key === "must_call" && typeof value === "object" && value !== null && "tool" in value
+          ? String(value.tool)
+          : key === "respond_immediately" &&
+              typeof value === "object" &&
+              value !== null &&
+              "after_script_step" in value
+            ? `step ${String(value.after_script_step)}`
+            : "";
+  return `trajectory.${key}${arg ? `(${arg})` : ""}`;
+}
+
+export function gradeTrajectoryRule(
+  rule: TrajectoryRule,
+  events: readonly TranscriptEvent[],
+  state: InMemorySnapshot,
+): GraderResult {
+  const name = ruleName(rule);
+  const calls = toolCalls(events);
+  const texts = assistantTexts(events);
+  const all = texts.join("\n\n");
+  const firstIndex = (tool: string) => events.findIndex((e) => e.kind === "tool_call" && e.name === tool);
+
+  if ("must_call" in rule) {
+    const spec = typeof rule.must_call === "string" ? { tool: rule.must_call } : rule.must_call;
+    const candidates = calls.filter((c) => c.name === spec.tool);
+    if (candidates.length === 0) return check("trajectory", name, `${spec.tool} was never called`);
+    const subset = "args_subset" in spec ? spec.args_subset : undefined;
+    if (subset === undefined) return check("trajectory", name, undefined);
+    const mismatches = candidates.map((c) => matchArgs(subset, c.input));
+    return check("trajectory", name, mismatches.includes(undefined) ? undefined : mismatches[0]);
+  }
+  if ("must_call_before" in rule) {
+    const [a, b] = rule.must_call_before;
+    const ia = firstIndex(a);
+    const ib = firstIndex(b);
+    return check(
+      "trajectory",
+      name,
+      ib < 0 || (ia >= 0 && ia < ib)
+        ? undefined
+        : `${b} was called ${ia < 0 ? `without any ${a}` : `before ${a}`}`,
+    );
+  }
+  if ("must_confirm_before" in rule) {
+    const problems = calls
+      .filter((c) => c.name === rule.must_confirm_before)
+      .map((c) => confirmationProblem(events, c, state))
+      .filter((p) => p !== undefined);
+    return check("trajectory", name, problems[0], true);
+  }
+  if ("must_ask_before" in rule) {
+    const at = firstIndex(rule.must_ask_before);
+    if (at < 0) return check("trajectory", name, undefined);
+    const asked = events.slice(0, at).some((e) => e.kind === "assistant" && countQuestions(e.text) > 0);
+    return check("trajectory", name, asked ? undefined : `no question asked before ${rule.must_ask_before}`);
+  }
+  if ("forbid_tools" in rule) {
+    const hit = calls.filter((c) => rule.forbid_tools.includes(c.name as never));
+    const writes = rule.forbid_tools.some((t) => t === "book_appointment" || t === "reschedule_appointment");
+    return check(
+      "trajectory",
+      name,
+      hit.length === 0 ? undefined : `called ${hit.map((c) => c.name).join(", ")}`,
+      writes,
+    );
+  }
+  if ("max_calls" in rule) {
+    const over = Object.entries(rule.max_calls).flatMap(([tool, max]) => {
+      const n = calls.filter((c) => c.name === tool).length;
+      return max !== undefined && n > max ? [`${tool} called ${n} times (max ${max})`] : [];
+    });
+    return check("trajectory", name, over[0]);
+  }
+  if ("max_questions_per_turn" in rule) {
+    const max = rule.max_questions_per_turn;
+    const bad = texts.find((t) => countQuestions(t) > max);
+    return check(
+      "trajectory",
+      name,
+      bad === undefined ? undefined : `${countQuestions(bad)} questions in: "${bad.slice(0, 160)}"`,
+    );
+  }
+  if ("respond_immediately" in rule) {
+    const r = rule.respond_immediately;
+    const at = events.findIndex((e) => e.kind === "patient" && e.scriptStep === r.after_script_step);
+    if (at < 0) return check("trajectory", name, `script step ${r.after_script_step} was never sent`, true);
+    const next = events[at + 1];
+    const reply = events.slice(at + 1).find((e) => e.kind === "assistant");
+    if (reply === undefined || reply.kind !== "assistant") return check("trajectory", name, "no reply", true);
+    if (r.before_any_tool && next?.kind === "tool_call")
+      return check("trajectory", name, `called ${next.name} before replying`, true);
+    const missingAll = (r.contains_all ?? []).filter((s) => !includesCi(reply.text, s));
+    const anyOk = r.contains_any === undefined || r.contains_any.some((s) => includesCi(reply.text, s));
+    return check(
+      "trajectory",
+      name,
+      missingAll.length > 0
+        ? `reply lacks ${missingAll.join(", ")}`
+        : anyOk
+          ? undefined
+          : `reply has none of ${r.contains_any?.join(", ") ?? ""}`,
+      true,
+    );
+  }
+  if ("response_contains_all" in rule) {
+    const missing = rule.response_contains_all.filter((s) => !includesCi(all, s));
+    return check("trajectory", name, missing.length === 0 ? undefined : `never said ${missing.join(", ")}`);
+  }
+  if ("response_contains_any" in rule) {
+    return check(
+      "trajectory",
+      name,
+      rule.response_contains_any.some((s) => includesCi(all, s))
+        ? undefined
+        : `said none of ${rule.response_contains_any.join(", ")}`,
+    );
+  }
+  if ("final_response_contains_all" in rule) {
+    const last = texts.at(-1) ?? "";
+    const missing = rule.final_response_contains_all.filter((s) => !includesCi(last, s));
+    return check(
+      "trajectory",
+      name,
+      missing.length === 0 ? undefined : `final reply lacks ${missing.join(", ")}`,
+    );
+  }
+  if ("response_must_not_contain" in rule) {
+    const hit = rule.response_must_not_contain.filter((s) => includesCi(all, s));
+    return check(
+      "trajectory",
+      name,
+      hit.length === 0 ? undefined : `said ${hit.map((s) => `"${s}"`).join(", ")}`,
+      true,
+    );
+  }
+  // response_must_match_none
+  const hit = rule.response_must_match_none.filter((source) => new RegExp(source, "i").test(all));
+  return check("trajectory", name, hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`, true);
+}
+
+export function gradeTrajectory(
+  rules: readonly TrajectoryRule[],
+  events: readonly TranscriptEvent[],
+  state: InMemorySnapshot,
+): GraderResult[] {
+  return rules.map((rule) => gradeTrajectoryRule(rule, events, state));
+}
