@@ -1,13 +1,15 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { ChatStreamEvent, TOOL_STATUS_LABELS, ToolError, TurnTrace } from "@sched/contracts";
+import { ChatStreamEvent, TOOL_STATUS_LABELS, ToolError, TurnTrace, visibleText } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
 import {
+  CACHE_POINT,
   FALLBACK_MESSAGES,
+  type LlmMessage,
   MODEL_PROFILES,
   runAgentTurn,
   ScriptedLlmClient,
+  scriptedMalformed,
   scriptedMaxTokens,
   scriptedRefusal,
   scriptedText,
@@ -46,17 +48,14 @@ describe("runAgentTurn: stop_reason end_turn", () => {
     expect(input.events.filter((e) => e.type === "text_delta").length).toBeGreaterThan(1); // streamed, not one blob
     expect(result.newMessages).toEqual([
       { role: "user", content: [{ type: "text", text: "Hello" }] },
-      {
-        role: "assistant",
-        content: [{ type: "text", text: "Hi Maria! How can I help you today?", citations: null }],
-      },
+      { role: "assistant", content: [{ type: "text", text: "Hi Maria! How can I help you today?" }] },
     ]);
     expect(llm.requests).toHaveLength(1);
     expect(result.trace.iterations).toBe(1);
   });
 
   it("does not store an empty reply (the API rejects empty assistant messages in history)", async () => {
-    const llm = new ScriptedLlmClient([{ content: [], stop_reason: "end_turn" }]);
+    const llm = new ScriptedLlmClient([{ content: [], stopReason: "end_turn" }]);
     const result = await runAgentTurn(turnInput(llm));
     expect(result.outcome).toBe("completed");
     expect(result.newMessages.map((m) => m.role)).toEqual(["user"]);
@@ -67,7 +66,7 @@ describe("runAgentTurn: stop_reason end_turn", () => {
 describe("runAgentTurn: stop_reason tool_use", () => {
   it("runs a single tool, feeds the result back, and loops to the answer", async () => {
     const llm = new ScriptedLlmClient([
-      scriptedToolUse([{ id: "toolu_1", ...CHECK }], { thinking: "They want dermatology on Tuesday." }),
+      scriptedToolUse([{ id: "toolu_1", ...CHECK }], { reasoning: "They want dermatology on Tuesday." }),
       scriptedText("Dr. Lee has an opening on Tuesday, October 13, 2026 at 2:30 PM ET."),
     ]);
     const executor = fakeExecutor({ check_availability: availability });
@@ -81,7 +80,7 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     expect(toolResults(result.newMessages[2])).toEqual([
       {
         type: "tool_result",
-        tool_use_id: "toolu_1",
+        toolUseId: "toolu_1",
         content: JSON.stringify(EXAMPLES.CheckAvailabilityOutput),
       },
     ]);
@@ -95,7 +94,7 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     });
     expect(input.events.slice(1).every((e) => e.type === "text_delta")).toBe(true);
     expect(result.trace.toolCalls).toEqual([
-      expect.objectContaining({ toolUseId: "toolu_1", name: "check_availability", ok: true }),
+      expect.objectContaining({ toolUseId: "toolu_1", name: "check_availability", known: true, ok: true }),
     ]);
   });
 
@@ -130,7 +129,7 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     expect(finished).toEqual(["toolu_b", "toolu_a"]); // b finished first...
     const userMessages = result.newMessages.filter((m) => m.role === "user");
     expect(userMessages).toHaveLength(2); // the patient's message + ONE tool-result message
-    expect(toolResults(result.newMessages[2]).map((b) => b.tool_use_id)).toEqual(["toolu_a", "toolu_b"]); // ...but order is the model's
+    expect(toolResults(result.newMessages[2]).map((b) => b.toolUseId)).toEqual(["toolu_a", "toolu_b"]); // ...but order is the model's
     expect(input.events.filter((e) => e.type === "status").map((e) => e.type === "status" && e.tool)).toEqual(
       ["find_providers", "check_availability"],
     );
@@ -148,7 +147,7 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     const result = await runAgentTurn(turnInput(llm, { executor }));
 
     const [block] = toolResults(result.newMessages[2]);
-    expect(block?.is_error).toBe(true);
+    expect(block?.isError).toBe(true);
     expect(ToolError.parse(JSON.parse(String(block?.content)))).toEqual(slotTaken);
     expect(result.outcome).toBe("completed");
     expect(result.trace.toolCalls[0]).toMatchObject({ ok: false, errorCode: "SLOT_UNAVAILABLE" });
@@ -168,14 +167,14 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     const result = await runAgentTurn(turnInput(llm, { executor }));
 
     const [block] = toolResults(result.newMessages[2]);
-    expect(block?.is_error).toBe(true);
+    expect(block?.isError).toBe(true);
     const body = ToolError.parse(JSON.parse(String(block?.content)));
     expect(body.error.code).toBe("INTERNAL");
     expect(String(block?.content)).not.toContain("DynamoDB"); // internals stay out of the model's context
     expect(result.trace.toolCalls[0]).toMatchObject({ ok: false, errorCode: "INTERNAL" });
   });
 
-  it("answers a call to a tool it never offered with NOT_FOUND, without running or tracing it", async () => {
+  it("answers a call to a tool it never offered with NOT_FOUND, without running it, and traces it as unknown", async () => {
     const executor = fakeExecutor({ check_availability: availability });
     const llm = new ScriptedLlmClient([
       scriptedToolUse([
@@ -190,11 +189,14 @@ describe("runAgentTurn: stop_reason tool_use", () => {
 
     expect(executor.calls.map((c) => c.id)).toEqual(["toolu_ok"]);
     const [bad, ok] = toolResults(result.newMessages[2]);
-    expect(bad).toMatchObject({ tool_use_id: "toolu_bad", is_error: true });
+    expect(bad).toMatchObject({ toolUseId: "toolu_bad", isError: true });
     expect(ToolError.parse(JSON.parse(String(bad?.content))).error.code).toBe("NOT_FOUND");
-    expect(ok?.is_error).toBeUndefined();
+    expect(ok?.isError).toBeUndefined();
     expect(input.events.filter((e) => e.type === "status")).toHaveLength(1);
-    expect(result.trace.toolCalls.map((t) => t.toolUseId)).toEqual(["toolu_ok"]);
+    expect(result.trace.toolCalls.map((t) => [t.toolUseId, t.name, t.known, t.errorCode])).toEqual([
+      ["toolu_bad", "delete_all_appointments", false, "NOT_FOUND"],
+      ["toolu_ok", "check_availability", true, undefined],
+    ]);
     TurnTrace.parse(result.trace);
   });
 
@@ -243,13 +245,31 @@ describe("runAgentTurn: stop_reason max_tokens", () => {
 
     const result = await runAgentTurn(turnInput(llm));
 
-    expect(llm.requests.map((r) => r.max_tokens)).toEqual([sonnet.maxTokens, sonnet.retryMaxTokens]);
+    expect(llm.requests.map((r) => r.maxTokens)).toEqual([sonnet.maxTokens, sonnet.retryMaxTokens]);
     // The retry is the same conversation: the truncated reply was never appended.
     expect(llm.requests[1]?.messages).toEqual(llm.requests[0]?.messages);
     expect(result.newMessages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(result.text).toBe("Done.");
     expect(result.outcome).toBe("completed");
-    expect(result.trace.llmCalls.map((c) => c.stopReason)).toEqual(["max_tokens", "end_turn"]);
+    expect(result.trace.llmCalls.map((c) => [c.stopReason, c.attempt])).toEqual([
+      ["max_tokens", 0],
+      ["end_turn", 1],
+    ]);
+  });
+
+  it("resets streamed text from a truncated response back to what was kept", async () => {
+    const llm = new ScriptedLlmClient([
+      scriptedToolUse([CHECK], { text: "Let me check." }),
+      scriptedMaxTokens({ partialText: "Dr. Lee has an open" }),
+      scriptedText("Dr. Lee is free Tuesday at 2:30 PM ET."),
+    ]);
+    const input = turnInput(llm);
+
+    const result = await runAgentTurn(input);
+
+    expect(input.events).toContainEqual({ type: "text_reset", keepChars: "Let me check.".length });
+    expect(visibleText(input.events)).toBe(result.text);
+    expect(result.text).toBe(`Let me check.${TEXT_BLOCK_SEPARATOR}Dr. Lee is free Tuesday at 2:30 PM ET.`);
   });
 
   it("never runs a tool whose input was cut off at max_tokens", async () => {
@@ -258,7 +278,7 @@ describe("runAgentTurn: stop_reason max_tokens", () => {
       { id: "toolu_cut", name: "book_appointment", input: { slot_id: EXAMPLES.SlotId } },
     ]);
     const llm = new ScriptedLlmClient([
-      { ...truncated, stop_reason: "max_tokens" },
+      { ...truncated, stopReason: "max_tokens" },
       scriptedText("Which reason?"),
     ]);
 
@@ -284,12 +304,22 @@ describe("runAgentTurn: stop_reason max_tokens", () => {
     expect(textDeltas(input.events)).toBe(FALLBACK_MESSAGES.maxTokens);
   });
 
-  it("fails gracefully (no retry) when the context window is exhausted", async () => {
-    const llm = new ScriptedLlmClient([{ content: [], stop_reason: "model_context_window_exceeded" }]);
+  it("fails gracefully (no retry) with its own outcome when the context window is exhausted", async () => {
+    const llm = new ScriptedLlmClient([
+      {
+        content: [],
+        stopReason: "context_window_exceeded",
+        providerStopReason: "model_context_window_exceeded",
+      },
+    ]);
     const result = await runAgentTurn(turnInput(llm));
-    expect(result.outcome).toBe("max_tokens");
+    expect(result.outcome).toBe("context_window_exceeded");
     expect(llm.requests).toHaveLength(1);
-    expect(result.text).toBe(FALLBACK_MESSAGES.maxTokens);
+    expect(result.text).toBe(FALLBACK_MESSAGES.contextWindow);
+    expect(TurnTrace.parse(result.trace).llmCalls[0]).toMatchObject({
+      stopReason: "context_window_exceeded",
+      providerStopReason: "model_context_window_exceeded",
+    });
   });
 });
 
@@ -304,28 +334,30 @@ describe("runAgentTurn: stop_reason refusal", () => {
     const result = await runAgentTurn(turnInput(llm));
 
     expect(result.outcome).toBe("completed");
-    expect(llm.requests.map((r) => r.model)).toEqual([sonnet.modelId, haiku.modelId, haiku.modelId]);
-    // The fallback request uses the fallback's own params: Haiku 4.5 takes no effort and no thinking.
-    expect(llm.requests[0]).toMatchObject({
+    expect(llm.requests.map((r) => r.modelId)).toEqual([sonnet.modelId, haiku.modelId, haiku.modelId]);
+    // The fallback request uses the fallback's own fields: Haiku 4.5 takes no effort and no thinking.
+    expect(llm.requests[0]?.modelFields).toEqual({
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
     });
-    expect(llm.requests[1]).not.toHaveProperty("thinking");
-    expect(llm.requests[1]).not.toHaveProperty("output_config");
-    expect(llm.requests[1]?.max_tokens).toBe(haiku.maxTokens);
+    expect(llm.requests[1]?.modelFields).toEqual({});
+    expect(llm.requests[1]?.maxTokens).toBe(haiku.maxTokens);
     // The refused response was discarded, not stored.
     expect(llm.requests[1]?.messages).toEqual(llm.requests[0]?.messages);
     // The trace keeps the requested profile; each call records the model that ran it.
     expect(result.trace.modelProfile).toBe("sonnet-4.6");
-    expect(result.trace.llmCalls.map((c) => [c.modelId, c.stopReason])).toEqual([
-      [sonnet.modelId, "refusal"],
-      [haiku.modelId, "tool_use"],
-      [haiku.modelId, "end_turn"],
+    expect(result.trace.llmCalls.map((c) => [c.modelId, c.stopReason, c.attempt])).toEqual([
+      [sonnet.modelId, "refusal", 0],
+      [haiku.modelId, "tool_use", 1],
+      [haiku.modelId, "end_turn", 0],
     ]);
   });
 
   it("gives a safe message with the front desk number when the fallback refuses too", async () => {
-    const llm = new ScriptedLlmClient([scriptedRefusal({ category: "general_harms" }), scriptedRefusal()]);
+    const llm = new ScriptedLlmClient([
+      scriptedRefusal({ providerStopReason: "guardrail_intervened" }),
+      scriptedRefusal(),
+    ]);
     const input = turnInput(llm);
 
     const result = await runAgentTurn(input);
@@ -339,7 +371,7 @@ describe("runAgentTurn: stop_reason refusal", () => {
     expect(textDeltas(input.events)).toBe(FALLBACK_MESSAGES.refusal);
   });
 
-  it("separates partial text from a mid-stream refusal from what follows", async () => {
+  it("takes back partial text from a mid-stream refusal with text_reset before the retry streams", async () => {
     const llm = new ScriptedLlmClient([
       scriptedRefusal({ partialText: "Sure, " }),
       scriptedText("Happy to help."),
@@ -349,7 +381,52 @@ describe("runAgentTurn: stop_reason refusal", () => {
     const result = await runAgentTurn(input);
 
     expect(result.text).toBe("Happy to help."); // the refused partial isn't stored
-    expect(textDeltas(input.events)).toBe(`Sure, ${TEXT_BLOCK_SEPARATOR}Happy to help.`);
+    expect(textDeltas(input.events)).toBe("Sure, Happy to help.");
+    const reset = input.events.findIndex((e) => e.type === "text_reset");
+    expect(input.events[reset]).toEqual({ type: "text_reset", keepChars: 0 });
+    expect(textDeltas(input.events.slice(0, reset))).toBe("Sure, ");
+    expect(visibleText(input.events)).toBe(result.text);
+  });
+
+  it("sends no text_reset when the discarded response streamed nothing", async () => {
+    const llm = new ScriptedLlmClient([scriptedRefusal(), scriptedText("Happy to help.")]);
+    const input = turnInput(llm);
+    await runAgentTurn(input);
+    expect(input.events.some((e) => e.type === "text_reset")).toBe(false);
+  });
+});
+
+describe("runAgentTurn: stop_reason malformed_output", () => {
+  it("retries a malformed response once on the same profile, discarding it", async () => {
+    const executor = fakeExecutor({ check_availability: availability });
+    const llm = new ScriptedLlmClient([
+      scriptedMalformed({ partialText: "Let me" }),
+      scriptedToolUse([CHECK]),
+      scriptedText("Found it."),
+    ]);
+    const input = turnInput(llm, { executor });
+
+    const result = await runAgentTurn(input);
+
+    expect(result.outcome).toBe("completed");
+    expect(llm.requests.map((r) => r.modelId)).toEqual([sonnet.modelId, sonnet.modelId, sonnet.modelId]);
+    expect(llm.requests[1]?.messages).toEqual(llm.requests[0]?.messages);
+    expect(executor.calls).toHaveLength(1);
+    expect(visibleText(input.events)).toBe("Found it.");
+    expect(result.trace.llmCalls.map((c) => [c.stopReason, c.providerStopReason, c.attempt])).toEqual([
+      ["malformed_output", "malformed_tool_use", 0],
+      ["tool_use", undefined, 1],
+      ["end_turn", undefined, 0],
+    ]);
+  });
+
+  it("gives up with an apology after a second malformed response", async () => {
+    const llm = new ScriptedLlmClient([scriptedMalformed(), scriptedMalformed(), scriptedText("unused")]);
+    const result = await runAgentTurn(turnInput(llm));
+    expect(result.outcome).toBe("malformed_output");
+    expect(llm.requests).toHaveLength(2);
+    expect(result.text).toBe(FALLBACK_MESSAGES.malformedOutput);
+    TurnTrace.parse(result.trace);
   });
 });
 
@@ -368,7 +445,7 @@ describe("runAgentTurn: iteration cap", () => {
     expect(executor.calls).toHaveLength(7);
     const lastResults = toolResults(result.newMessages.at(-2));
     expect(lastResults).toHaveLength(1);
-    expect(lastResults[0]?.is_error).toBe(true);
+    expect(lastResults[0]?.isError).toBe(true);
     expect(ToolError.parse(JSON.parse(String(lastResults[0]?.content))).error.code).toBe("NOT_ALLOWED");
     expect(result.newMessages.at(-1)).toEqual({
       role: "assistant",
@@ -455,22 +532,12 @@ describe("runAgentTurn: trace", () => {
     const llm = new ScriptedLlmClient([
       scriptedRefusal(),
       scriptedToolUse([CHECK], {
-        usage: {
-          input_tokens: 50,
-          output_tokens: 30,
-          cache_read_input_tokens: 2000,
-          cache_creation_input_tokens: 200,
-        },
+        usage: { inputTokens: 50, outputTokens: 30, cacheReadTokens: 2000, cacheWriteTokens: 200 },
       }),
       scriptedMaxTokens(),
       scriptedToolUse([{ name: "book_appointment", input: EXAMPLES.BookAppointmentInput }]),
       scriptedText("That slot was just taken.", {
-        usage: {
-          input_tokens: 10,
-          output_tokens: 5,
-          cache_read_input_tokens: 2400,
-          cache_creation_input_tokens: 0,
-        },
+        usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 2400, cacheWriteTokens: 0 },
       }),
     ]);
 
@@ -488,6 +555,8 @@ describe("runAgentTurn: trace", () => {
       outcome: "completed",
     });
     expect(trace.llmCalls.map((c) => c.index)).toEqual([0, 1, 2, 3, 4]);
+    expect(trace.llmCalls.map((c) => c.attempt)).toEqual([0, 1, 0, 1, 0]);
+    expect(trace.llmCalls[0]?.providerStopReason).toBe("content_filtered");
     expect(trace.llmCalls.map((c) => c.stopReason)).toEqual([
       "refusal",
       "tool_use",
@@ -518,7 +587,7 @@ describe("runAgentTurn: trace", () => {
     expect(trace.durationMs).toBeGreaterThanOrEqual(trace.llmCalls.reduce((sum, c) => sum + c.durationMs, 0));
   });
 
-  it("emits only contract-valid status and text_delta events, never done or error", async () => {
+  it("emits only contract-valid status and text events, never done or error", async () => {
     const llm = new ScriptedLlmClient([
       scriptedToolUse([CHECK], { text: "One moment." }),
       scriptedText("Found it."),
@@ -531,10 +600,12 @@ describe("runAgentTurn: trace", () => {
 });
 
 describe("runAgentTurn: prompt caching", () => {
-  it("puts the breakpoint on the stable system block (after tools), the dynamic block after it, and a rolling one on the last message", async () => {
+  const cachePoints = (blocks: readonly { type: string }[]) => blocks.filter((b) => b.type === "cache_point");
+
+  it("puts a cache point after the stable system block (after tools), the dynamic block after it, and a rolling one at the end of the last message", async () => {
     const llm = new ScriptedLlmClient([scriptedToolUse([CHECK]), scriptedText("Found it.")]);
-    const history: Anthropic.MessageParam[] = [
-      { role: "user", content: "Hi" },
+    const history: LlmMessage[] = [
+      { role: "user", content: [{ type: "text", text: "Hi" }] },
       { role: "assistant", content: [{ type: "text", text: "Hello! How can I help?" }] },
     ];
 
@@ -542,43 +613,124 @@ describe("runAgentTurn: prompt caching", () => {
 
     for (const request of llm.requests) {
       expect(request.system).toEqual([
-        { type: "text", text: SYSTEM.stable, cache_control: { type: "ephemeral" } },
+        { type: "text", text: SYSTEM.stable },
+        CACHE_POINT,
         { type: "text", text: SYSTEM.dynamic },
       ]);
-      // Tools render before system, so the system breakpoint caches them too. They're sent exactly as
-      // defined (stable bytes, stable order) and carry no marker of their own.
+      // Tools render before system, so the system cache point caches them too. They're sent exactly as
+      // defined (stable bytes, stable order).
       expect(request.tools).toEqual(fakeExecutor().definitions);
-      expect(valuesForKey(request.tools, "cache_control")).toEqual([]);
-      // Exactly two breakpoints: the stable system block, and the last block of the final user message.
-      expect(valuesForKey(request, "cache_control")).toHaveLength(2);
-      const last = contentOf(request.messages.at(-1)).at(-1);
-      expect(last).toHaveProperty("cache_control", { type: "ephemeral" });
-      expect(valuesForKey(request.messages.slice(0, -1), "cache_control")).toEqual([]);
+      // Exactly two cache points: after the stable system block, and at the end of the final user message.
+      expect(cachePoints(request.messages.flatMap((m) => m.content))).toHaveLength(1);
+      expect(contentOf(request.messages.at(-1)).at(-1)).toEqual(CACHE_POINT);
     }
-    // First call: the breakpoint is on the patient's message; second: on the tool results.
-    expect(contentOf(llm.requests[0]?.messages.at(-1)).at(-1)?.type).toBe("text");
-    expect(contentOf(llm.requests[1]?.messages.at(-1)).at(-1)?.type).toBe("tool_result");
+    // First call: the cache point follows the patient's message; second: the tool results.
+    expect(contentOf(llm.requests[0]?.messages.at(-1)).at(-2)?.type).toBe("text");
+    expect(contentOf(llm.requests[1]?.messages.at(-1)).at(-2)?.type).toBe("tool_result");
     // Markers exist only on request copies, never in stored messages.
-    expect(valuesForKey(result.newMessages, "cache_control")).toEqual([]);
+    expect(valuesForKey(result.newMessages, "type")).not.toContain("cache_point");
   });
 
   it("sends one system block when there's no dynamic context", async () => {
     const llm = new ScriptedLlmClient([scriptedText("Hi!")]);
     await runAgentTurn(turnInput(llm, { system: { version: "v", stable: "Stable only." } }));
-    expect(llm.requests[0]?.system).toEqual([
-      { type: "text", text: "Stable only.", cache_control: { type: "ephemeral" } },
+    expect(llm.requests[0]?.system).toEqual([{ type: "text", text: "Stable only." }, CACHE_POINT]);
+  });
+
+  it("places cache points only where the profile's model accepts them", async () => {
+    const nova = new ScriptedLlmClient([scriptedText("Hi!")]);
+    await runAgentTurn(turnInput(nova, { profile: MODEL_PROFILES["nova-2-lite"] }));
+    expect(cachePoints(nova.requests[0]?.system ?? [])).toHaveLength(1);
+    expect(cachePoints(nova.requests[0]?.messages.flatMap((m) => m.content) ?? [])).toEqual([]);
+
+    const oss = new ScriptedLlmClient([scriptedText("Hi!")]);
+    await runAgentTurn(turnInput(oss, { profile: MODEL_PROFILES["gpt-oss-120b"] }));
+    expect(valuesForKey(oss.requests, "type")).not.toContain("cache_point");
+  });
+});
+
+describe("runAgentTurn: reasoning replay", () => {
+  const claudeReasoning = {
+    type: "reasoning",
+    family: "anthropic.claude",
+    modelId: "us.anthropic.claude-sonnet-4-6",
+    text: "Earlier reasoning.",
+    signature: "sig_prev",
+  } as const;
+  const history: LlmMessage[] = [
+    { role: "user", content: [{ type: "text", text: "I need a dermatologist." }] },
+    { role: "assistant", content: [claudeReasoning, { type: "text", text: "Sure, which day works?" }] },
+  ];
+
+  it("sends reasoning back to a model of the same family", async () => {
+    const llm = new ScriptedLlmClient([scriptedText("Tuesday works.")]);
+    await runAgentTurn(turnInput(llm, { history, profile: haiku }));
+    expect(contentOf(llm.requests[0]?.messages[1])).toEqual(history[1]?.content);
+  });
+
+  it("drops another family's reasoning from the request, never from history", async () => {
+    const llm = new ScriptedLlmClient([scriptedText("Tuesday works.")]);
+    const result = await runAgentTurn(turnInput(llm, { history, profile: MODEL_PROFILES["gpt-oss-120b"] }));
+    expect(contentOf(llm.requests[0]?.messages[1])).toEqual([
+      { type: "text", text: "Sure, which day works?" },
     ]);
+    expect(history[1]?.content[0]).toEqual(claudeReasoning);
+    expect(result.newMessages).toHaveLength(2);
+  });
+
+  it("drops even its own family's reasoning for a model that rejects reasoning input (Nova Pro)", async () => {
+    const novaReasoning = {
+      type: "reasoning",
+      family: "amazon.nova",
+      modelId: "x",
+      text: "[REDACTED]",
+    } as const;
+    const llm = new ScriptedLlmClient([scriptedText("Tuesday works.")]);
+    await runAgentTurn(
+      turnInput(llm, {
+        history: [
+          ...history.slice(0, 1),
+          { role: "assistant", content: [novaReasoning, { type: "text", text: "Which day?" }] },
+        ],
+        profile: MODEL_PROFILES["nova-pro"],
+      }),
+    );
+    expect(valuesForKey(llm.requests, "type")).not.toContain("reasoning");
+    expect(llm.requests[0]?.inlineReasoningTag).toBe("thinking");
+  });
+
+  it("tags reasoning with the model that produced it, and doesn't store a reasoning-only reply", async () => {
+    const llm = new ScriptedLlmClient([
+      scriptedToolUse([CHECK], { reasoning: "Dermatology, Tuesday." }),
+      {
+        content: [{ type: "reasoning", family: "x", modelId: "x", text: "[REDACTED]" }],
+        stopReason: "end_turn",
+      },
+    ]);
+    const result = await runAgentTurn(turnInput(llm, { profile: MODEL_PROFILES["nova-2-lite"] }));
+    expect(contentOf(result.newMessages[1])[0]).toMatchObject({
+      type: "reasoning",
+      family: "amazon.nova",
+      modelId: MODEL_PROFILES["nova-2-lite"].modelId,
+    });
+    expect(result.newMessages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
   });
 });
 
 describe("runAgentTurn: append-only history", () => {
   it("never mutates its inputs, and every request starts with the history unchanged", async () => {
-    const history: Anthropic.MessageParam[] = deepFreeze([
-      { role: "user", content: "I need a dermatologist." },
+    const history: LlmMessage[] = deepFreeze([
+      { role: "user", content: [{ type: "text", text: "I need a dermatologist." }] },
       {
         role: "assistant",
         content: [
-          { type: "thinking", thinking: "Earlier reasoning.", signature: "sig_prev" },
+          {
+            type: "reasoning",
+            family: "anthropic.claude",
+            modelId: sonnet.modelId,
+            text: "Earlier reasoning.",
+            signature: "sig_prev",
+          },
           { type: "text", text: "Sure, which day works?" },
         ],
       },
@@ -601,19 +753,23 @@ describe("runAgentTurn: append-only history", () => {
     expect(toolUse).toMatchObject({ input: CHECK.input });
   });
 
-  it("passes assistant content back unchanged, thinking blocks and signatures included", async () => {
-    const first = scriptedToolUse([{ id: "toolu_t", ...CHECK }], { thinking: "Dermatology, Tuesday PM." });
+  it("passes assistant content back unchanged, reasoning blocks and signatures included", async () => {
+    const first = scriptedToolUse([{ id: "toolu_t", ...CHECK }], { reasoning: "Dermatology, Tuesday PM." });
     const llm = new ScriptedLlmClient([first, scriptedText("Found one.")]);
 
     const result = await runAgentTurn(turnInput(llm));
 
-    expect(llm.requests[1]?.messages[1]).toEqual({ role: "assistant", content: first.content });
-    expect(result.newMessages[1]).toEqual({ role: "assistant", content: first.content });
-    expect(contentOf(result.newMessages[1])[0]).toEqual({
-      type: "thinking",
-      thinking: "Dermatology, Tuesday PM.",
-      signature: expect.any(String),
-    });
+    expect(llm.requests[1]?.messages[1]).toEqual(result.newMessages[1]);
+    expect(contentOf(result.newMessages[1])).toEqual([
+      {
+        type: "reasoning",
+        family: "anthropic.claude",
+        modelId: sonnet.modelId,
+        text: "Dermatology, Tuesday PM.",
+        signature: expect.any(String),
+      },
+      first.content[1],
+    ]);
   });
 
   it("continues a conversation across turns by appending (the next turn's prefix is this turn's messages)", async () => {
