@@ -1,6 +1,6 @@
 import { LIMITS, TOOLS, type Provider, type ToolError, type ToolOutput } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS, type ClinicFixture } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
@@ -145,9 +145,25 @@ describe("find_providers", () => {
   });
 
   it("rejects a model-supplied patient_id and reads no patient data", async () => {
+    // Every method of every repository that holds patient data.
+    const patientData = {
+      patients: repos.patients,
+      appointments: repos.appointments,
+      conversations: repos.conversations,
+      escalations: repos.escalations,
+    };
+    const reads = Object.entries(patientData).flatMap(([repoName, repo]) =>
+      Object.keys(repo).map((method) => ({
+        name: `${repoName}.${method}`,
+        spy: vi.spyOn(repo as unknown as Record<string, (...args: never[]) => unknown>, method),
+      })),
+    );
+    expect(reads.length).toBeGreaterThanOrEqual(6);
+
     expect(errorOf(await run({ patient_id: WALTER })).code).toBe("INVALID_INPUT");
     // The answer doesn't depend on who is asking.
     expect(outputOf(await run({}, WALTER))).toEqual(outputOf(await run({}, MARIA)));
+    for (const { name, spy } of reads) expect(spy, name).not.toHaveBeenCalled();
   });
 
   it("writes nothing", async () => {
