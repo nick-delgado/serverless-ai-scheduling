@@ -44,7 +44,13 @@ function matchesTimeOfDay(startUtc: string, timeOfDay: TimeOfDay): boolean {
   return timeOfDay === "morning" ? hour < NOON : hour >= NOON;
 }
 
-const toSlotOption = (slot: Slot, provider: Provider): SlotOption => ({
+/** A slot that can be offered, with the provider it will be described by. */
+interface Candidate {
+  slot: Slot;
+  provider: Provider;
+}
+
+const toSlotOption = ({ slot, provider }: Candidate): SlotOption => ({
   slot_id: slot.slotId,
   provider_id: slot.providerId,
   provider_name: provider.displayName,
@@ -53,7 +59,7 @@ const toSlotOption = (slot: Slot, provider: Provider): SlotOption => ({
   start_local: formatClinicDateTime(slot.startUtc),
 });
 
-const byStartThenProvider = (a: Slot, b: Slot): number => {
+const byStartThenProvider = ({ slot: a }: Candidate, { slot: b }: Candidate): number => {
   const d = Date.parse(a.startUtc) - Date.parse(b.startUtc);
   if (d !== 0) return d;
   return a.providerId < b.providerId ? -1 : a.providerId > b.providerId ? 1 : 0;
@@ -74,15 +80,17 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
   }
   const firstDay = range.start_date < today ? today : range.start_date;
 
-  let providers = new Map<ProviderId, Provider>();
   // Future, in the requested part of the day, and describable. A slot whose provider record is missing
   // can't be named to the patient, so it is left out rather than failing the whole search.
-  const wanted = (slot: Slot): boolean =>
-    Date.parse(slot.startUtc) > nowMs &&
-    matchesTimeOfDay(slot.startUtc, timeOfDay) &&
-    providers.has(slot.providerId);
+  const offerable = (slots: readonly Slot[], providers: ReadonlyMap<ProviderId, Provider>): Candidate[] =>
+    slots.flatMap((slot) => {
+      const provider = providers.get(slot.providerId);
+      return provider && Date.parse(slot.startUtc) > nowMs && matchesTimeOfDay(slot.startUtc, timeOfDay)
+        ? [{ slot, provider }]
+        : [];
+    });
 
-  let matches: Slot[];
+  let candidates: Candidate[];
 
   if (providerId !== undefined) {
     const provider = await ctx.repos.providers.get(providerId);
@@ -100,29 +108,22 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
         "Call check_availability again with only provider_id, or only specialty. Use find_providers to check who practices what.",
       );
     }
-    providers = new Map([[provider.providerId, provider]]);
     const utc = clinicDateRangeUtc(firstDay, range.end_date);
-    matches = (await ctx.repos.slots.listOpenByProvider(providerId, utc)).filter(wanted);
+    const slots = await ctx.repos.slots.listOpenByProvider(providerId, utc);
+    candidates = offerable(slots, new Map([[provider.providerId, provider]]));
   } else {
-    const list = await ctx.repos.providers.list(specialty !== undefined ? { specialty } : {});
-    providers = new Map(list.map((p) => [p.providerId, p]));
+    const list = await ctx.repos.providers.list({ specialty });
+    const providers = new Map(list.map((p) => [p.providerId, p]));
     const specialties: readonly Specialty[] = specialty !== undefined ? [specialty] : SPECIALTIES;
-    matches = [];
-    for (let day = firstDay; day <= range.end_date && matches.length <= MAX; day = addDays(day, 1)) {
+    candidates = [];
+    for (let day = firstDay; day <= range.end_date && candidates.length <= MAX; day = addDays(day, 1)) {
       const perSpecialty = await Promise.all(
         specialties.map((s) => ctx.repos.slots.listOpenBySpecialtyAndDay(s, day)),
       );
-      matches.push(...perSpecialty.flat().filter(wanted).sort(byStartThenProvider));
+      candidates.push(...offerable(perSpecialty.flat(), providers));
     }
   }
 
-  const options: SlotOption[] = matches
-    .sort(byStartThenProvider)
-    .slice(0, MAX)
-    .flatMap((slot) => {
-      const provider = providers.get(slot.providerId);
-      return provider ? [toSlotOption(slot, provider)] : [];
-    });
-
-  return toolOk({ slots: options, truncated: matches.length > options.length });
+  candidates.sort(byStartThenProvider);
+  return toolOk({ slots: candidates.slice(0, MAX).map(toSlotOption), truncated: candidates.length > MAX });
 };

@@ -20,8 +20,8 @@ const toProviderSummary = (p: Provider): ProviderSummary => ({
 
 export const findProviders: ToolHandler<"find_providers"> = async (input, ctx) => {
   const providers = await ctx.repos.providers.list({
-    ...(input.specialty !== undefined && { specialty: input.specialty }),
-    ...(input.name_query !== undefined && { nameQuery: input.name_query }),
+    specialty: input.specialty,
+    nameQuery: input.name_query,
   });
   return toolOk({
     providers: providers.slice(0, LIMITS.providersMaxResults).map(toProviderSummary),
