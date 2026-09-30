@@ -17,7 +17,8 @@
     "format": "prettier --write . && eslint . --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "evals": "tsx packages/evals/src/cli.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
