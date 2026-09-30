@@ -36,6 +36,7 @@ import type { Repositories } from "./repos/types";
 // #20 get_my_appointments, get_patient_profile
 
 // #21 book_appointment
+import { bookAppointment } from "./tools/book_appointment";
 
 // #22 reschedule_appointment
 
@@ -106,6 +107,7 @@ export const TOOL_REGISTRY: ToolRegistry = {
   // #19 find_providers, check_availability
   // #20 get_my_appointments, get_patient_profile
   // #21 book_appointment
+  book_appointment: bookAppointment,
   // #22 reschedule_appointment
   // #23 escalate_to_human
 };
