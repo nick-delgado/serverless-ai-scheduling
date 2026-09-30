@@ -8,14 +8,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "evals": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
   },
-  "devDependencies": {
-    "yaml": "^2.9.1"
-  },
   "dependencies": {
+    "@sched/agent": "*",
     "@sched/contracts": "*",
-    "@sched/tools": "*"
+    "@sched/tools": "*",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
   }
 }
