@@ -13,7 +13,7 @@
 - A range that ended before today (clinic calendar) is `INVALID_INPUT`, with the current clinic time in the message and a hint to ask the patient for upcoming days.
 - Today, with every remaining slot already started, is an ordinary empty success.
 
-The agent recorded the choice in the handler and the PR body, but not in the journal. The PR review flagged that gap (STD-2a) and, separately, the fact that the spec was silent (SPEC-2). This entry records the options. The behaviour itself still waits for Nick's call on SPEC-2.
+The agent recorded the choice in the handler and the PR body, but not in the journal. The PR review flagged that gap (STD-2a) and, separately, the fact that the spec was silent (SPEC-2). Nick weighed the options below and kept the agent's rule.
 
 ## Why we chose what we chose
 
@@ -26,7 +26,9 @@ The agent didn't write down the options it weighed, only the reason for its choi
 | **Clamp a partly past range; reject a wholly past one (chosen)** | "This week" just works; "last Friday" gets an error whose hint tells the model what to do next | The clamp is silent: the model can't tell that Monday and Tuesday were skipped. |
 | Clamp and tell the model (a note in the output) | Never silent | Needs a field in the contract's output schema (a cross-stream change), and an eval run to see whether models use it. |
 
-The deciding argument was the first row: an empty list is an answer, and a wrong answer the model will state confidently. An error with a hint is a prompt to go back to the patient.
+The deciding argument was the first row: an empty list is an answer, and a wrong answer the model will state confidently. An error with a hint is a prompt to go back to the patient. It also hands the model the current clinic time, which helps because models get relative dates wrong. Our first L1 eval run had already produced "define next week" as a finding.
+
+The costs Nick accepted: the clamp can hide a miscomputed range that is half in the past, and a weaker model may handle an error worse than an empty list (retrying the same dates, or escalating instead of re-asking). The evals will show whether that happens. The fourth row would remove the silent clamp, but it is a contracts change, so it waits for evidence that it's needed.
 
 ## What surprised us
 
@@ -43,5 +45,5 @@ The review also surfaced a conflict between the issue ("≤ 5 slots") and the co
 
 ## What's next
 
-- Nick decides SPEC-2: keep this rule, or return an empty success for a wholly past range.
-- If the rule stays, consider the description nit from PR #70 ("dates must be today or later, clinic time") and measure it with an L1 case such as `l1-availability-past-dates`.
+- Once the eval runner lands (#30), add the L1 case `l1-availability-past-dates` ("anything last Friday?" should get a clarifying reply, or a search starting today or later) and run it across the model profiles.
+- Use that case to decide whether the description should say "dates must be today or later (clinic time)", the optional nit from PR #70.
