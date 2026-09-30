@@ -1,5 +1,5 @@
 /**
- * check_availability (FR-030): open slots by provider, by specialty, or across the clinic, within a
+ * check_availability (FR-030): open slots by provider or by specialty (one of them is required), within a
  * clinic-local date range, optionally mornings or afternoons only.
  *
  * Query paths (ADR-004):
@@ -7,6 +7,9 @@
  * - `specialty` only → AP-5, the sparse specialty+day index (`slots.listOpenBySpecialtyAndDay`), one clinic
  *   day at a time. Days are walked in order and the walk stops as soon as more than
  *   `LIMITS.availabilityMaxSlots` matches are in hand, so a typical request costs one or two queries, not 31.
+ *   Providers not accepting new patients are left out of this path only (decision, PR #70 review):
+ *   `SlotOption` has no acceptance flag, so the model couldn't warn a new patient. Asked for by
+ *   `provider_id`, they are still offered.
  * - neither → INVALID_INPUT (decision, PR #70 review): a clinic-wide list mixes specialties the patient
  *   didn't ask for, so the hint sends the model back to ask what kind of visit or which provider.
  *
@@ -19,6 +22,9 @@
  * - A range that ends before today (clinic-local) is INVALID_INPUT with a hint to ask for future dates,
  *   rather than an empty success the model could misreport as "fully booked".
  * - Today with every remaining slot already started is an ordinary empty success.
+ *
+ * Order: the repositories return slots ascending by start (AP-4) or by start, then providerId (AP-5), and
+ * days are walked in order, so the candidates are already sorted and are only cut to the limit.
  */
 import {
   LIMITS,
@@ -58,12 +64,6 @@ const toSlotOption = ({ slot, provider }: Candidate): SlotOption => ({
   start_local: formatClinicDateTime(slot.startUtc),
 });
 
-const byStartThenProvider = ({ slot: a }: Candidate, { slot: b }: Candidate): number => {
-  const d = Date.parse(a.startUtc) - Date.parse(b.startUtc);
-  if (d !== 0) return d;
-  return a.providerId < b.providerId ? -1 : a.providerId > b.providerId ? 1 : 0;
-};
-
 export const checkAvailability: ToolHandler<"check_availability"> = async (input, ctx) => {
   const { provider_id: providerId, specialty, date_range: range, time_of_day: timeOfDay } = input;
   const now = ctx.clock.now();
@@ -79,8 +79,8 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
   }
   const firstDay = range.start_date < today ? today : range.start_date;
 
-  // Future, in the requested part of the day, and describable. A slot whose provider record is missing
-  // can't be named to the patient, so it is left out rather than failing the whole search.
+  // Future, in the requested part of the day, and by a provider in `providers`. A slot whose provider
+  // record is missing can't be named to the patient, so it is left out rather than failing the search.
   const offerable = (slots: readonly Slot[], providers: ReadonlyMap<ProviderId, Provider>): Candidate[] =>
     slots.flatMap((slot) => {
       const provider = providers.get(slot.providerId);
@@ -112,7 +112,7 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
     candidates = offerable(slots, new Map([[provider.providerId, provider]]));
   } else if (specialty !== undefined) {
     const list = await ctx.repos.providers.list({ specialty });
-    const providers = new Map(list.map((p) => [p.providerId, p]));
+    const providers = new Map(list.filter((p) => p.acceptingNewPatients).map((p) => [p.providerId, p]));
     candidates = [];
     for (let day = firstDay; day <= range.end_date && candidates.length <= MAX; day = addDays(day, 1)) {
       candidates.push(
@@ -127,6 +127,5 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
     );
   }
 
-  candidates.sort(byStartThenProvider);
   return toolOk({ slots: candidates.slice(0, MAX).map(toSlotOption), truncated: candidates.length > MAX });
 };

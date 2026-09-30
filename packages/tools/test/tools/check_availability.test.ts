@@ -1,4 +1,5 @@
 import {
+  CLINIC,
   LIMITS,
   makeSlotId,
   toCanonicalUtc,
@@ -37,13 +38,13 @@ const errorOf = (r: ToolExecutionResult): ToolError["error"] => {
 const localTimes = (r: ToolExecutionResult): string[] =>
   outputOf(r).slots.map((s) => s.start_local.replace(/^.* at /, ""));
 const days = (start_date: string, end_date: string = start_date) => ({ start_date, end_date });
-/** An extra OPEN 30-minute slot for a fixture provider, at any hour (the seed validator allows it). */
+/** An extra OPEN slot, one visit long, for a fixture provider, at any hour (the seed validator allows it). */
 const openSlot = (provider: Provider, startUtc: string): Slot => ({
   slotId: makeSlotId(provider.providerId, startUtc),
   providerId: provider.providerId,
   specialty: provider.specialty,
   startUtc,
-  endUtc: toCanonicalUtc(new Date(Date.parse(startUtc) + 30 * 60_000)),
+  endUtc: toCanonicalUtc(new Date(Date.parse(startUtc) + CLINIC.visitMinutes * 60_000)),
   status: "OPEN",
 });
 
@@ -328,6 +329,22 @@ describe("check_availability", () => {
         "Wednesday, October 7, 2026 at 8:30 AM ET",
       ]);
       expect(truncated).toBe(true);
+    });
+
+    it("leaves providers not accepting new patients out of a specialty search, but not a provider_id one", async () => {
+      // Dr. Brooks (family medicine) isn't taking new patients, so Dr. Alvarez's slots are all that's offered.
+      const bySpecialty = outputOf(
+        await run({ specialty: "family_medicine", date_range: days("2026-10-06") }),
+      );
+      expect(bySpecialty.slots.map((s) => s.provider_id)).toEqual(
+        Array(LIMITS.availabilityMaxSlots).fill("prov_alvarez"),
+      );
+      expect(bySpecialty.slots[1]?.start_local).toBe("Tuesday, October 6, 2026 at 8:30 AM ET");
+      expect(bySpecialty.truncated).toBe(true);
+      // Asked for by name, he is still offered.
+      expect(
+        outputOf(await run({ provider_id: "prov_brooks", date_range: days("2026-10-06") })).slots[0],
+      ).toMatchObject({ provider_id: "prov_brooks", start_local: "Tuesday, October 6, 2026 at 8:00 AM ET" });
     });
   });
 
