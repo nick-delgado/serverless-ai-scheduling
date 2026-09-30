@@ -20,6 +20,15 @@ jobs:
     name: Lint, typecheck, test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # DynamoDB Local for the repository contract suite on DynamoDB (#13). With CI set, those tests fail
+    # instead of skipping when the endpoint is unreachable, so they are part of this required check.
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+    env:
+      DYNAMODB_ENDPOINT: http://localhost:8000
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
