@@ -30,9 +30,10 @@ The deciding argument was the first row: an empty list is an answer, and a wrong
 
 The costs Nick accepted: the clamp can hide a miscomputed range that is half in the past, and a weaker model may handle an error worse than an empty list (retrying the same dates, or escalating instead of re-asking). The evals will show whether that happens. The fourth row would remove the silent clamp, but it is a contracts change, so it waits for evidence that it's needed.
 
-The review found two more places where the spec was silent, and Nick applied the same principle to both:
-- **Mismatched filters stay an error (SPEC-3).** A `provider_id` whose specialty contradicts `specialty` returns an error, not an empty list. The mismatch usually means the patient or the model has the wrong doctor in mind, and an empty list would hide that.
-- **A search with neither filter is now an error (SPEC-4).** The agent had answered it with a clinic-wide list. On the test clock (Tue Oct 6), that list was five 8:00 AM slots, chosen by the alphabetical order of provider ids: a family doctor, a family doctor not taking new patients, a pediatrician, a cardiologist and a physical therapist. None of it reflected why the patient was coming in, and picking a specialty for the patient edges toward the medical advice ADR-009 rules out. The error's hint now tells the model to ask what kind of visit, or which provider.
+The reviews found three more places where the spec was silent. Nick applied the same principle to the first two, and filtered in the handler for the third:
+- **Mismatched filters stay an error (first review, SPEC-3).** A `provider_id` whose specialty contradicts `specialty` returns an error, not an empty list. The mismatch usually means the patient or the model has the wrong doctor in mind, and an empty list would hide that.
+- **A search with neither filter is now an error (first review, SPEC-4).** The agent had answered it with a clinic-wide list. On the test clock (Tue Oct 6), that list was five 8:00 AM slots, chosen by the alphabetical order of provider ids: a family doctor, a family doctor not taking new patients, a pediatrician, a cardiologist and a physical therapist. None of it reflected why the patient was coming in, and picking a specialty for the patient edges toward the medical advice ADR-009 rules out. The error's hint now tells the model to ask what kind of visit, or which provider.
+- **Specialty searches leave out providers not taking new patients (second review, SPEC-2).** `SlotOption` has no acceptance flag, so a family-medicine search that included Dr. Brooks let the model offer him to a new patient with nothing to warn it. Nick chose the handler-only option over a contract change: a specialty search offers only providers accepting new patients, and a search for a provider by `provider_id` still returns their slots.
 
 ## What surprised us
 
@@ -44,7 +45,7 @@ The review also surfaced a conflict between the issue ("≤ 5 slots") and the co
 
 - Rule and rationale: header of `packages/tools/src/tools/check_availability.ts`.
 - Tests: "rejects a range that ended before today, with a hint to ask for upcoming days", "clamps a range that starts in the past to today", "takes today from the clinic calendar, not the UTC one", and "bounds a provider_id search by clinic midnights, not UTC ones" in `packages/tools/test/tools/check_availability.test.ts`.
-- The other two rules: "rejects a provider_id that contradicts the specialty" and "rejects a search with neither provider_id nor specialty, with a hint to ask the patient", in the same file.
+- The other three rules: "rejects a provider_id that contradicts the specialty", "rejects a search with neither provider_id nor specialty, with a hint to ask the patient" and "leaves providers not accepting new patients out of a specialty search, but not a provider_id one", in the same file.
 - Mutation checks run while fixing the review: a UTC-day range, a UTC "today", and `<` for `<=` in the early exit each fail exactly the test written for them.
 - Review report and response: comments on PR #70.
 
