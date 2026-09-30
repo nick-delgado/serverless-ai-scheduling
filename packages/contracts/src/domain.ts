@@ -5,6 +5,7 @@
 import { z } from "zod";
 
 import { LIMITS, Specialty } from "./clinic";
+import { ContentBlock } from "./content";
 import { AppointmentId, ConversationId, EscalationId, PatientId, ProviderId, SlotId, TurnId } from "./ids";
 import { IsoDate, IsoDateTimeUtc } from "./primitives";
 
@@ -73,12 +74,9 @@ export const Appointment = z
 export type Appointment = z.infer<typeof Appointment>;
 
 /**
- * An Anthropic Messages API content block, stored verbatim (text, tool_use, tool_result, thinking, ...).
- * Deliberately loose: the SDK owns these shapes, and history must be replayed byte-for-byte (CLAUDE.md rule 4).
+ * One stored message (ADR-004). The envelope is stable across contract versions; since v1.1 `content`
+ * holds provider-neutral blocks (`content.ts`, ADR-010).
  */
-export const ContentBlock = z.looseObject({ type: z.string().min(1) });
-export type ContentBlock = z.infer<typeof ContentBlock>;
-
 export const ConversationMessage = z.strictObject({
   conversationId: ConversationId,
   seq: z.int().nonnegative(),

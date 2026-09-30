@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import * as C from "./index";
+
 import { ChatRequest } from "./api";
 import { IsoDate, IsoDateTimeUtc } from "./primitives";
 import { Slot } from "./domain";
@@ -113,5 +115,35 @@ describe("stream events (ADR-007)", () => {
       ChatStreamEventList.safeParse([EXAMPLES.ChatStatusEvent, EXAMPLES.ChatTextDeltaEvent]).success,
     ).toBe(false);
     expect(ChatStreamEventList.safeParse([EXAMPLES.ChatErrorEvent]).success).toBe(true);
+  });
+});
+
+describe("contracts v1.1 (#60)", () => {
+  it("traces a call to a tool the model invented, marked known: false", () => {
+    const invented = { ...EXAMPLES.ToolCallTrace, name: "delete_all_appointments", known: false, ok: false };
+    expect(C.ToolCallTrace.safeParse(invented).success).toBe(true);
+    expect(C.ToolCallTrace.safeParse({ ...invented, known: true }).success).toBe(false);
+    expect(
+      C.ToolCallTrace.safeParse({ ...invented, name: "x".repeat(C.TRACE_TOOL_NAME_MAX + 1) }).success,
+    ).toBe(false);
+  });
+
+  it("requires every field a content block lists, and rejects unknown block types", () => {
+    expect(C.ContentBlock.safeParse({ type: "text", text: "" }).success).toBe(false);
+    expect(C.ContentBlock.safeParse({ type: "tool_result", content: "{}" }).success).toBe(false);
+    expect(C.ContentBlock.safeParse({ type: "reasoning", text: "no family tag" }).success).toBe(false);
+    expect(C.ContentBlock.safeParse({ type: "thinking", thinking: "", signature: "s" }).success).toBe(false);
+    // Unknown keys are tolerated (forward compatibility for stored rows).
+    expect(C.ContentBlock.safeParse({ type: "text", text: "Hi", extra: null }).success).toBe(true);
+  });
+
+  it("visibleText applies text_reset truncation in order", () => {
+    const events: C.ChatStreamEvent[] = [
+      { type: "text_delta", text: "Let me check." },
+      { type: "text_delta", text: "\n\nSure, " },
+      { type: "text_reset", keepChars: 13 },
+      { type: "text_delta", text: "\n\nDr. Lee is free." },
+    ];
+    expect(C.visibleText(events)).toBe("Let me check.\n\nDr. Lee is free.");
   });
 });

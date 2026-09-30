@@ -19,6 +19,19 @@ export const ChatTextDeltaEvent = z.strictObject({
   text: z.string().min(1),
 });
 
+/**
+ * Discard streamed text that won't be kept (contracts v1.1, ADR-007). The loop sends it when it throws
+ * away a response whose text already streamed (a refusal, a `max_tokens` cut-off, malformed output) and
+ * retries. The client truncates the in-progress assistant bubble to its first `keepChars` characters
+ * (JavaScript string length, i.e. UTF-16 code units, counted over every `text_delta` of this turn),
+ * drops anything still queued in its typewriter buffer beyond that, and keeps rendering the deltas that
+ * follow. Applying every reset in order yields exactly the text the turn stored.
+ */
+export const ChatTextResetEvent = z.strictObject({
+  type: z.literal("text_reset"),
+  keepChars: z.int().nonnegative(),
+});
+
 export const ChatDoneEvent = z.strictObject({
   type: z.literal("done"),
   conversationId: ConversationId,
@@ -45,6 +58,7 @@ export const ChatErrorEvent = z.strictObject({
 export const ChatStreamEvent = z.discriminatedUnion("type", [
   ChatStatusEvent,
   ChatTextDeltaEvent,
+  ChatTextResetEvent,
   ChatDoneEvent,
   ChatErrorEvent,
 ]);
@@ -68,6 +82,19 @@ export const TOOL_STATUS_LABELS: Record<ToolName, string> = {
   reschedule_appointment: "Rescheduling your appointment…",
   escalate_to_human: "Contacting the front desk…",
 };
+
+/**
+ * The assistant text a client shows after these events: `text_delta`s appended in order, each
+ * `text_reset` truncating to its `keepChars`. The reference implementation of the client rule above.
+ */
+export function visibleText(events: readonly ChatStreamEvent[]): string {
+  let text = "";
+  for (const event of events) {
+    if (event.type === "text_delta") text += event.text;
+    else if (event.type === "text_reset") text = text.slice(0, event.keepChars);
+  }
+  return text;
+}
 
 export function isTerminalEvent(event: ChatStreamEvent | undefined): boolean {
   return event?.type === "done" || event?.type === "error";
