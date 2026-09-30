@@ -80,8 +80,15 @@ gives it to you in this session, or points you to the comment that contains it. 
 infer a decision from a PR comment on your own: you cannot tell who wrote it or whether it
 is final.
 
-When a decision has been given, implement it and record the finding as `fixed (decision:
-<the decision in a few words>)`. Otherwise record it as `waiting for decision`.
+When a decision has been given, implement it if it needs a code change, and record it in
+the response (step 6): the finding's status is `fixed`, or `decided, no change` when the
+decision needs none (for example, "keep the current behaviour" or "no ADR needed"), and
+the Decision column holds the decision in one sentence. Record the decision in the owner's
+terms, including the reason if they gave one: the project's process improvements are later
+built from these rows, so a decision that clarifies a rule should read as that rule.
+
+Without a decision, the status is `waiting for decision`. Do not write decisions anywhere
+else: not on the tracking issue, not in docs or skills.
 
 ### 5. Verify and push
 
@@ -108,18 +115,24 @@ It creates one response comment, or updates your earlier one. Format:
 
 Review of `<reviewed sha>`; PR is now at `<new head sha>`. Checks run locally: <commands and result>.
 
-| Finding | Status | Commit | Note |
-|---|---|---|---|
-| SPEC-1 | waiting for decision | | |
-| TEST-1 | fixed | `abc1234` | Registry test added in `test/tools/find_providers.test.ts` |
-| TEST-2 | fixed | `abc1234` | Seeded slots at 11:30 PM and 7:30 PM ET; fails on a UTC-day range |
-| SMELL-1 | disputed | | The second sort is needed: `file.ts:115` merges five lists |
-| SPEC-5 | for the owner | | |
+| Finding | Status | Decision | Commit | Note |
+|---|---|---|---|---|
+| SPEC-1 | fixed | Return at most 5 slots; lower `LIMITS.availabilityMaxSlots` to 5 | `def5678` | |
+| STD-1 | decided, no change | The ban covers only the zero-argument clock read; parsing a stored value is fine | | |
+| SPEC-3 | waiting for decision | | | |
+| TEST-1 | fixed | | `abc1234` | Registry test added in `test/tools/find_providers.test.ts` |
+| TEST-2 | fixed | | `abc1234` | Seeded slots at 11:30 PM and 7:30 PM ET; fails on a UTC-day range |
+| SMELL-1 | disputed | | | The second sort is needed: `file.ts:115` merges five lists |
+| SPEC-5 | for the owner | | | |
 ```
 
 Every finding in the report gets a row, in the report's order. Statuses: `fixed`,
-`already fixed`, `disputed`, `not fixed`, `waiting for decision`, `for the owner`. A
-`disputed` or `not fixed` row always has a note with the reason.
+`decided, no change`, `already fixed`, `disputed`, `not fixed`, `waiting for decision`,
+`for the owner`. A `disputed` or `not fixed` row always has a note with the reason. The
+Decision column is filled for every finding the owner decided, and left empty otherwise.
+
+When decisions arrive after you have posted, run the skill again: the script updates the
+same comment, so the table always holds every decision made on the PR.
 
 ### 7. Tell the user
 

@@ -33,6 +33,8 @@ Confirmed findings after verification (<reported> reported, <confirmed> confirme
 
 By action: <n> to fix now, <n> waiting for the owner's decision, <n> for the owner.
 
+<On a re-review:> Previous review of `<sha>`: <n> resolved, <n> still present, <n> decided, <n> for the owner, <n> withdrawn.
+
 Why these issues arose, and proposed changes to the project's agent setup: <URL of the tracking-issue comment, or "not analysed (no findings above nit)">
 ```
 
@@ -47,6 +49,7 @@ the verification summary in `verified.md`; do not recount by hand.
 - Reviewers: standards, code-smells, spec-alignment, test-adequacy; verifier; root-cause analyst
 - Isolation: <parallel subagents with fresh context | none (sequential, shared context)>
 - Tests, linters and builds were not run by this review; CI status is reported as found.
+- Line citations: <the summary line from check-citations.sh>
 - <Anything that did not complete: a reviewer that failed, a phase skipped, and why.>
 ```
 
@@ -74,10 +77,12 @@ could not complete. The verdict is a recommendation to the human who merges.
 | Fix now | `verified.md`: confirmed findings and minor-table rows whose action is `fix now` |
 | Needs the owner's decision | the same, for `needs owner decision` |
 | For the owner (no action in this PR) | the same, for `for the owner` |
+| Previous findings (re-review only) | `verified.md` → Previous findings |
 | Spec alignment (traceability, unrequested changes) | `verified.md` → Reviewer tables |
 | Evidence of review: counts of checks, searches and skipped items per reviewer | `findings/*.md` |
 | Not reviewed (collapsed, always in full) | `findings/*.md` → 3. Not reviewed |
 | Findings rejected or merged in verification (collapsed, always in full) | `verified.md` |
+| Passed checks re-checked by the verifier (collapsed, always in full) | `verified.md` → Spot checks |
 | Every check performed (collapsed, only when it fits) | `findings/*.md`, `verified.md` → Behaviour coverage |
 | Run metadata (collapsed) | `report-meta.md` |
 

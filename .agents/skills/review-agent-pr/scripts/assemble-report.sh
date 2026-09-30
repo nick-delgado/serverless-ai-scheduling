@@ -186,6 +186,18 @@ build_report() {
   echo
   group "for the owner"
 
+  local previous
+  previous="$(h2 "$verified" "Previous findings" | trim)"
+  case "$previous" in
+    "" | "No previous review."*) ;;
+    *)
+      printf '\n### Previous findings\n\n'
+      echo "What became of each finding from the previous review, checked against this commit."
+      echo
+      printf '%s\n' "$previous"
+      ;;
+  esac
+
   printf '\n### Spec alignment\n\n'
   h3 "$verified" "Spec traceability" | trim | or_default "Not reviewable: no spec found."
   printf '\n**Unrequested changes**\n\n'
@@ -219,6 +231,13 @@ build_report() {
   h2 "$verified" "Verification summary" | trim
   printf '\n</details>\n'
 
+  local spot spot_count
+  spot="$(h2 "$verified" "Spot checks" | trim)"
+  spot_count="$(printf '%s\n' "$spot" | rows)"
+  printf '\n<details>\n<summary>Passed checks re-checked by the verifier (%s)</summary>\n\n' "$spot_count"
+  printf '%s\n' "$spot" | or_default "None."
+  printf '\n</details>\n'
+
   if [ "$with_tables" = "yes" ]; then
     printf '\n<details>\n<summary>Every check performed</summary>\n\n'
     for r in $reviewers; do
@@ -246,7 +265,7 @@ build_report() {
 build_process() {
   local pr="$1" sha="$2"
 
-  echo "<!-- agent-pr-review:process pr=$pr -->"
+  echo "<!-- agent-pr-review:process pr=$pr sha=$sha -->"
   echo "## Review of PR #$pr at \`$sha\`"
   echo
   echo "Why the agent produced the findings of that review, and what could change in the project's docs, skills, prompts, specs and guardrails. Causes are inferences from the repository: the agent's prompt and transcript were not available."
@@ -272,7 +291,7 @@ case "$mode" in
     for required in "$run/report-head.md" "$run/report-meta.md" "$verified"; do
       [ -s "$required" ] || { echo "error: missing or empty $required" >&2; exit 1; }
     done
-    need "$verified" "Confirmed findings" "Minor findings table" "Rejected findings" "Verification summary" "Reviewer tables"
+    need "$verified" "Confirmed findings" "Minor findings table" "Rejected findings" "Spot checks" "Previous findings" "Verification summary" "Reviewer tables"
     fail_if_missing
     confirmed="$(h2 "$verified" "Confirmed findings")"
     case "$confirmed" in
@@ -304,6 +323,7 @@ case "$mode" in
   process)
     [ "$#" -eq 4 ] || usage
     case "$3" in '' | *[!0-9]*) echo "error: PR number must be numeric, got '$3'" >&2; exit 2 ;; esac
+    case "$4" in '' | *[!0-9a-f]*) echo "error: head sha must be hexadecimal, got '$4'" >&2; exit 2 ;; esac
     [ -s "$rootcause" ] || { echo "error: missing or empty $rootcause" >&2; exit 1; }
     need "$rootcause" "Cause summary" "Patterns" "Proposals" "Not explained"
     fail_if_missing

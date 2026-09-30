@@ -66,6 +66,14 @@ that acts on a question only the owner can answer is guessing a second time.
 If part of a finding can be fixed now and part needs a decision, split it into two
 findings.
 
+### Line numbers
+
+Every `path:line` in your output, in findings and in every table, is a line of that file as
+it is in `<RUN_DIR>/worktree` (the PR head), numbered from 1 as an editor shows it. Get it
+with `grep -n` or by reading the file. **Never cite a position in `diff.patch`**: the diff
+is for seeing what changed, not for locating code. Use the full path from the repository
+root. A script checks every citation against the files after verification.
+
 ### Rules for a valid finding
 
 - The quoted code exists at the stated location in `<RUN_DIR>/worktree`.

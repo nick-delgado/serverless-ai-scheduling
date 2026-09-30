@@ -25,5 +25,27 @@ fi
 echo "tracking-issue: $issue"
 echo "url: $(gh issue view "$issue" --json url --jq '.url')"
 
-gh api --paginate "repos/{owner}/{repo}/issues/${issue}/comments" \
-  --jq '.[] | "\n======== comment \(.id) by \(.user.login) at \(.created_at) (updated \(.updated_at)) ========\n\(.body)"'
+log="$(
+  gh api --paginate "repos/{owner}/{repo}/issues/${issue}/comments" \
+    --jq '.[] | "\n======== comment \(.id) by \(.user.login) at \(.created_at) (updated \(.updated_at)) ========\n\(.body)"'
+)"
+printf '%s\n' "$log"
+
+# The owner's decisions on each reviewed PR are recorded in the response comment the
+# address-pr-review skill posts on that PR.
+prs="$(printf '%s\n' "$log" | sed -n 's/^<!-- agent-pr-review:process pr=\([0-9][0-9]*\)\( sha=[0-9a-f]*\)\{0,1\} -->$/\1/p' | sort -un)"
+
+for pr in $prs; do
+  state="$(gh pr view "$pr" --json state --jq '.state' 2>/dev/null || echo "unknown")"
+  printf '\n======== decisions and fixes on PR #%s (%s) ========\n' "$pr" "$state"
+  response="$(
+    gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
+      --jq '.[] | select(.body | startswith("<!-- agent-pr-review:response -->")) | "response comment \(.id) by \(.user.login), updated \(.updated_at)\n\(.body)"' |
+      awk '/^response comment [0-9]+ by / { buf = "" } { buf = buf $0 "\n" } END { printf "%s", buf }'
+  )"
+  if [ -n "$response" ]; then
+    printf '%s\n' "$response"
+  else
+    echo "No response comment: no fixes or decisions recorded on this PR yet."
+  fi
+done

@@ -5,8 +5,13 @@ disprove them?
 
 Four reviewers worked independently and wrote `<RUN_DIR>/findings/*.md`. Reviewers
 over-report: they misread code, quote rules that do not apply, and flag things that were
-already there. Your job is to try to refute every finding. What you cannot refute is
-confirmed. You add no new findings of your own.
+already there. Your main job is to try to refute every finding. What you cannot refute is
+confirmed.
+
+Reviewers also under-report: a "pass" is a claim too. So you also spot-check a sample of
+the checks they passed, and, when the PR was reviewed before, settle what became of each
+previous finding. Those are the only two ways you add findings; you do not review the PR
+afresh.
 
 ## Method
 
@@ -78,6 +83,42 @@ When you are unsure after checking, keep the finding and set its confidence to `
 reject because a finding is inconvenient or small; reject only for a stated reason from the
 steps above.
 
+## Spot-check the passes
+
+Choose passed checks from the reviewers' "Checks performed" tables and the "Behaviour
+coverage" table, and try to break each one the way you would a finding: open the code, and
+for a test, work out whether it would really fail if the behaviour were broken.
+
+- How many: 8 when there are confirmed findings; 15 when there are none, since then nothing
+  else in this review has been looked at twice.
+- Which: at least half from test adequacy and spec traceability, where a wrong "pass" does
+  most harm; prefer checks with a vague scope or no citation, and every reviewer at least
+  once.
+- A pass that does not hold becomes a finding, in the finding-schema format with the ID
+  prefix `VER` (`VER-1`), and goes through steps 1 to 8 like any other.
+- Also check the citations in the rows you sample: a line number that points at the wrong
+  code is corrected in the table you copy, and noted.
+
+## Previous findings (re-review only)
+
+If `<RUN_DIR>/previous/report.md` exists, the PR was reviewed before. List every finding in
+it: the full blocks, the rows of every table, and any "Previous findings" table it carries
+forward from earlier rounds. `<RUN_DIR>/previous/earlier/` may hold the reports of earlier
+rounds, recovered from the comment's edit history; add their findings too, except those a
+later round already settled as `resolved` or `withdrawn`. For each, settle its status at
+the current head:
+
+| Status | When |
+|---|---|
+| `resolved` | The problem is gone. Cite the code or test that shows it (`file:line`). |
+| `still present` | The problem is still there. Unless a reviewer reported it again, add it back as a confirmed finding under its original ID, re-checked through steps 1 to 8. |
+| `decided` | The owner decided it (see `<RUN_DIR>/previous/response.md`, the Decision column or a `decision:` note). Check that the code matches the decision; if it does not, it is `still present`. |
+| `for the owner` | It was marked for the owner and nothing in this PR changed that. |
+| `withdrawn` | On a second look it was never a problem (the earlier review was wrong). Say why. |
+
+The response file holds the authoring agent's claims ("fixed", "disputed"). Treat them as
+claims to check, not as evidence. For a disputed finding, judge the dispute on the code.
+
 ## Output: `<RUN_DIR>/verified.md`
 
 ```markdown
@@ -103,6 +144,18 @@ fields added:>
 
 <then a second table, "Merged": ID, folded into, why>
 
+## Spot checks
+
+| Reviewer | Check (as the reviewer wrote it) | What you did | Result |
+|---|---|---|---|
+<one row per sampled pass; Result is `holds`, `holds, citation corrected`, or `does not hold: VER-n`>
+
+## Previous findings
+
+| ID | Before (severity, action) | Agent's response | Status now | Evidence |
+|---|---|---|---|---|
+<one row per previous finding; or the single line "No previous review.">
+
 ## Verification summary
 
 | Reviewer | Reported | Confirmed | Adjusted | Merged | Rejected |
@@ -127,3 +180,6 @@ so use exactly these `##` and `###` headings, in this order, and no other `##` h
 - Under "Reviewer tables", copy each reviewer's table of that name, corrected where a
   rejection or adjustment changes a row. Write `Not produced.` under a heading whose
   reviewer supplied no table.
+- Every `path:line` you write, including in copied tables, must be a line of the file in
+  `<RUN_DIR>/worktree`, never a position in `diff.patch`. A script checks every citation in
+  this file after you finish, and invalid ones are sent back to you.
