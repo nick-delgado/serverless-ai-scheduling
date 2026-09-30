@@ -122,7 +122,7 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
   } else {
     return toolFail(
       "INVALID_INPUT",
-      "Say which provider or which specialty to search: provider_id or specialty is required.",
+      "No provider_id or specialty was given; one of them is required.",
       "Ask the patient what kind of visit they need or which provider they want, then call check_availability again with specialty or provider_id.",
     );
   }

@@ -380,12 +380,12 @@ describe("check_availability", () => {
     });
 
     it("rejects a range that ended before today, with a hint to ask for upcoming days", async () => {
-      const error = errorOf(
-        await run({ specialty: "cardiology", date_range: days("2026-10-01", "2026-10-02") }),
-      );
-      expect(error.code).toBe("INVALID_INPUT");
-      expect(error.message).toContain("Monday, October 5, 2026");
-      expect(error.hint).toContain("upcoming");
+      for (const filter of [{ specialty: "cardiology" }, { provider_id: "prov_lee" }]) {
+        const error = errorOf(await run({ ...filter, date_range: days("2026-10-01", "2026-10-02") }));
+        expect(error.code).toBe("INVALID_INPUT");
+        expect(error.message).toContain("Monday, October 5, 2026");
+        expect(error.hint).toContain("upcoming");
+      }
     });
 
     it("follows the clock as it moves", async () => {
