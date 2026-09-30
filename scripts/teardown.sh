@@ -35,14 +35,30 @@ if [[ ${#existing[@]} -eq 0 ]]; then
   exit 0
 fi
 
-echo "This permanently deletes: ${existing[*]} (including any table data and users)."
+echo "This permanently deletes: ${existing[*]} (including any table data, users, and site files)."
 if [[ "$assume_yes" != "--yes" ]]; then
   read -r -p "Type the env name ('${env}') to confirm: " answer
   [[ "$answer" == "$env" ]] || { echo "aborted"; exit 1; }
 fi
 
 role_arn="$(aws ssm get-parameter --name /sched/bootstrap/cfn-exec-role-arn --query Parameter.Value --output text)"
+
+# CloudFormation can't delete a bucket that still has objects, so empty the site bucket before its
+# stack goes. The bucket isn't versioned (infra/stacks/web.yaml); if it ever is, versions must be
+# deleted too, which also needs s3:ListBucketVersions / s3:DeleteObjectVersion for SchedDeployer.
+empty_site_bucket() {
+  local bucket
+  bucket="$(aws ssm get-parameter --name "/sched/${env}/web/bucket-name" --query Parameter.Value --output text 2>/dev/null || true)"
+  [[ -z "$bucket" || "$bucket" == "None" ]] && return 0
+  if [[ "$bucket" != sched-"${env}"-web-* ]]; then
+    echo "refusing to empty unexpected bucket '${bucket}' for env '${env}'" >&2
+    exit 1
+  fi
+  echo "==> emptying s3://${bucket}"
+  aws s3 rm "s3://${bucket}" --recursive --only-show-errors
+}
 for name in "${existing[@]}"; do
+  [[ "$name" == "sched-${env}-web" ]] && empty_site_bucket
   echo "==> deleting ${name}"
   aws cloudformation delete-stack --stack-name "$name" --role-arn "$role_arn"
   if ! aws cloudformation wait stack-delete-complete --stack-name "$name"; then
