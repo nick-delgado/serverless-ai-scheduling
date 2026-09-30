@@ -4,10 +4,11 @@
  *
  * Query paths (ADR-004):
  * - `provider_id` given → AP-4 `slots.listOpenByProvider` over the whole UTC range (one query).
- * - otherwise → AP-5, the sparse specialty+day index (`slots.listOpenBySpecialtyAndDay`), one clinic day
- *   at a time, for the requested specialty or for every specialty. Days are walked in order and the walk
- *   stops as soon as more than `LIMITS.availabilityMaxSlots` matches are in hand, so a typical request
- *   costs one or two days of queries, not 31.
+ * - `specialty` only → AP-5, the sparse specialty+day index (`slots.listOpenBySpecialtyAndDay`), one clinic
+ *   day at a time. Days are walked in order and the walk stops as soon as more than
+ *   `LIMITS.availabilityMaxSlots` matches are in hand, so a typical request costs one or two queries, not 31.
+ * - neither → INVALID_INPUT (decision, PR #70 review): a clinic-wide list mixes specialties the patient
+ *   didn't ask for, so the hint sends the model back to ask what kind of visit or which provider.
  *
  * Times: `date_range` is clinic-local (ET) days, converted with `clinicDateRangeUtc` / `clinicDateOf`,
  * which use the offset in effect on each day (the fixture window crosses the Nov 1, 2026 DST change).
@@ -21,12 +22,10 @@
  */
 import {
   LIMITS,
-  SPECIALTIES,
   type Provider,
   type ProviderId,
   type Slot,
   type SlotOption,
-  type Specialty,
   type ToolInput,
 } from "@sched/contracts";
 
@@ -111,17 +110,21 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
     const utc = clinicDateRangeUtc(firstDay, range.end_date);
     const slots = await ctx.repos.slots.listOpenByProvider(providerId, utc);
     candidates = offerable(slots, new Map([[provider.providerId, provider]]));
-  } else {
+  } else if (specialty !== undefined) {
     const list = await ctx.repos.providers.list({ specialty });
     const providers = new Map(list.map((p) => [p.providerId, p]));
-    const specialties: readonly Specialty[] = specialty !== undefined ? [specialty] : SPECIALTIES;
     candidates = [];
     for (let day = firstDay; day <= range.end_date && candidates.length <= MAX; day = addDays(day, 1)) {
-      const perSpecialty = await Promise.all(
-        specialties.map((s) => ctx.repos.slots.listOpenBySpecialtyAndDay(s, day)),
+      candidates.push(
+        ...offerable(await ctx.repos.slots.listOpenBySpecialtyAndDay(specialty, day), providers),
       );
-      candidates.push(...offerable(perSpecialty.flat(), providers));
     }
+  } else {
+    return toolFail(
+      "INVALID_INPUT",
+      "Say which provider or which specialty to search: provider_id or specialty is required.",
+      "Ask the patient what kind of visit they need or which provider they want, then call check_availability again with specialty or provider_id.",
+    );
   }
 
   candidates.sort(byStartThenProvider);

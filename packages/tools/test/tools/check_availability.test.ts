@@ -1,7 +1,6 @@
 import {
   LIMITS,
   makeSlotId,
-  SPECIALTIES,
   toCanonicalUtc,
   TOOLS,
   type Provider,
@@ -233,7 +232,7 @@ describe("check_availability", () => {
     });
   });
 
-  describe("by specialty, or clinic-wide (AP-5 sparse index)", () => {
+  describe("by specialty (AP-5 sparse index)", () => {
     it("uses the specialty+day index and stops once it has enough", async () => {
       const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
       const byProvider = vi.spyOn(repos.slots, "listOpenByProvider");
@@ -266,24 +265,6 @@ describe("check_availability", () => {
       expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-10", "2026-10-11", "2026-10-12"]);
       expect(result.slots[0]?.start_local).toBe("Monday, October 12, 2026 at 12:00 PM ET");
       expect(result.truncated).toBe(true); // 9 afternoon slots for one cardiologist
-    });
-
-    it("searches every specialty when neither provider nor specialty is given", async () => {
-      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
-      const result = await run({ date_range: days("2026-10-06") });
-      expect(byDay).toHaveBeenCalledTimes(SPECIALTIES.length);
-      expect(new Set(byDay.mock.calls.map((c) => c[0]))).toEqual(new Set(SPECIALTIES));
-      const { slots, truncated } = outputOf(result);
-      expect(truncated).toBe(true);
-      // All at 8:00 AM, so in provider order across specialties.
-      expect(slots.map((s) => s.provider_id)).toEqual([
-        "prov_alvarez",
-        "prov_brooks",
-        "prov_chen",
-        "prov_haddad",
-        "prov_kowalski",
-      ]);
-      expect(new Set(localTimes(result))).toEqual(new Set(["8:00 AM ET"]));
     });
 
     it("leaves out a slot whose provider record is missing, and still answers", async () => {
@@ -400,20 +381,32 @@ describe("check_availability", () => {
   });
 
   describe("input and identity", () => {
+    // Each input is valid apart from the one field, and the error must be the schema's, not the handler's.
+    const schemaError = async (input: Record<string, unknown>): Promise<ToolError["error"]> => {
+      const error = errorOf(await run({ specialty: "cardiology", ...input }));
+      expect(error.code).toBe("INVALID_INPUT");
+      expect(error.message).toMatch(/^Invalid input for check_availability/);
+      return error;
+    };
+
     it("rejects schema violations", async () => {
-      expect(errorOf(await run({ date_range: days("2026-10-06", "2026-12-06") })).code).toBe("INVALID_INPUT");
-      expect(errorOf(await run({ date_range: days("2026-10-06"), time_of_day: "evening" })).code).toBe(
-        "INVALID_INPUT",
-      );
-      expect(
-        errorOf(await run({ date_range: { start_date: "10/6/2026", end_date: "10/7/2026" } })).code,
-      ).toBe("INVALID_INPUT");
+      await schemaError({ date_range: days("2026-10-06", "2026-12-06") });
+      await schemaError({ date_range: days("2026-10-06"), time_of_day: "evening" });
+      await schemaError({ date_range: { start_date: "10/6/2026", end_date: "10/7/2026" } });
     });
 
     it("rejects a model-supplied patient_id", async () => {
-      expect(errorOf(await run({ patient_id: WALTER, date_range: days("2026-10-06") })).code).toBe(
-        "INVALID_INPUT",
-      );
+      await schemaError({ patient_id: WALTER, date_range: days("2026-10-06") });
+    });
+
+    it("rejects a search with neither provider_id nor specialty, with a hint to ask the patient", async () => {
+      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
+      const byProvider = vi.spyOn(repos.slots, "listOpenByProvider");
+      const error = errorOf(await run({ date_range: days("2026-10-06") }));
+      expect(error.code).toBe("INVALID_INPUT");
+      expect(error.hint).toContain("Ask the patient what kind of visit");
+      expect(byDay).not.toHaveBeenCalled();
+      expect(byProvider).not.toHaveBeenCalled();
     });
 
     it("answers the same for every patient and never reveals who holds a booked slot", async () => {
@@ -430,7 +423,7 @@ describe("check_availability", () => {
 
     it("writes nothing", async () => {
       const before = repos.snapshot();
-      await run({ date_range: days("2026-10-06", "2026-10-09") });
+      await run({ specialty: "family_medicine", date_range: days("2026-10-06", "2026-10-09") });
       await run({ provider_id: "prov_lee", date_range: days("2026-10-13") });
       expect(repos.snapshot()).toEqual(before);
     });
