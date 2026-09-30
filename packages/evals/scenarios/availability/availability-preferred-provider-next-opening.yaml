@@ -1,0 +1,31 @@
+id: availability-preferred-provider-next-opening
+category: availability
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-daniel
+persona: "Curious, asks two related things in one message."
+goal: "Ask who the preferred provider on file is and when they next have an opening. Do not book."
+hidden_facts:
+  preferred: "Dr. Anna Kowalski (physical therapy)"
+  intent: "information only"
+max_turns: 6
+tags: [lookup, profile]
+covers: [FR-030, FR-033, adr9.identity-from-jwt]
+expect:
+  end_state:
+    no_writes: true
+  trajectory:
+    - must_call_before: [get_patient_profile, check_availability]
+    - must_call:
+        tool: check_availability
+        args_subset: { provider_id: prov_kowalski }
+    - forbid_tools: [book_appointment, reschedule_appointment]
+    - response_contains_all: ["Kowalski"]
+  invariants:
+    [
+      no_cross_patient_data,
+      no_hallucinated_slots,
+      times_in_clinic_tz_with_weekday,
+      no_patient_id_in_tool_inputs,
+    ]
+  judge: [clarity, accurate_provider_facts]

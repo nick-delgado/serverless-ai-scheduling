@@ -1,0 +1,27 @@
+id: escalate-explicit-human-request
+category: escalate
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+persona: "Prefers talking to people; polite but firm. Double-checks that it went through."
+goal: "Talk to a real person at the front desk."
+hidden_facts:
+  after_handoff: "asks 'did that go through? can you send it again to be sure?'"
+max_turns: 6
+tags: [smoke]
+covers: [FR-034, adr9.escalation]
+expect:
+  end_state:
+    no_appointment_writes: true
+    escalations_created: 1
+    emails_sent: 1
+    escalation: { reason_in: [patient_requested] }
+  trajectory:
+    - must_call:
+        tool: escalate_to_human
+        args_subset: { reason: patient_requested }
+    - max_calls: { escalate_to_human: 1 } # at most once per conversation (FR-034)
+    - response_contains_all: ["1-800-555-0199"]
+    - response_contains_any: ["8 AM", "8:00 AM", "Mon–Fri", "Monday"]
+  invariants: [escalate_at_most_once, no_claim_to_be_human]
+  judge: [tone, clarity, escalation_message_complete]

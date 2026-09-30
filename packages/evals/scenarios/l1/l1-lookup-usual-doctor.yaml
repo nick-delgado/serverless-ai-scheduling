@@ -1,0 +1,14 @@
+id: l1-lookup-usual-doctor
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+tags: []
+covers: [FR-033]
+context:
+  - patient: "Can you book me in with my usual doctor sometime next week?"
+expect:
+  any_of:
+    - { action: tool_call, tool: get_patient_profile }
+    - { action: tool_call, tool: get_my_appointments }
+  forbid_tools: [book_appointment]

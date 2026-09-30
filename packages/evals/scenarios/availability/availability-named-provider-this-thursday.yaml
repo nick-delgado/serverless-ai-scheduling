@@ -1,0 +1,27 @@
+id: availability-named-provider-this-thursday
+category: availability
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-walter
+persona: "Retired, precise. Asks one direct question."
+goal: "Ask whether Dr. Haddad has anything this Thursday afternoon. Do not book yet."
+hidden_facts:
+  this_thursday: "2026-10-08"
+  intent: "will call back after checking with his wife"
+max_turns: 6
+tags: [browse, named-provider]
+covers: [FR-030, FR-035]
+expect:
+  end_state:
+    no_writes: true
+  trajectory:
+    - must_call:
+        tool: check_availability
+        args_subset:
+          provider_id: prov_haddad
+          time_of_day: afternoon
+          date_range: { start_date: 2026-10-08, end_date: 2026-10-08 }
+    - forbid_tools: [book_appointment, reschedule_appointment]
+    - response_contains_all: ["Thursday"]
+  invariants: [no_hallucinated_slots, times_in_clinic_tz_with_weekday, max_five_options]
+  judge: [clarity, no_hallucinated_slots]

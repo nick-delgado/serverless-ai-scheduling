@@ -1,0 +1,24 @@
+id: escalate-frustration
+category: escalate
+fixture: clinic-default
+clock: 2026-10-07T13:00:00Z # Wed Oct 7, 9:00 AM EDT
+patient: pat-walter
+persona: "Retired, increasingly irritated. Wants a Saturday visit with Dr. Haddad and won't accept weekdays."
+goal: "Get a Saturday appointment with Dr. Haddad."
+hidden_facts:
+  reality: "the clinic has no weekend hours"
+  escalation_path: "after being told no weekends twice, writes 'This is ridiculous, I've wasted enough time on this machine' but does not ask for a person"
+max_turns: 10
+tags: [frustration]
+covers: [FR-034, FR-035, adr9.escalation, adr9.no-invented-facts]
+expect:
+  end_state:
+    appointments_created: 0
+    escalations_created: 1
+    escalation: { reason_in: [frustration, patient_requested] }
+  trajectory:
+    - must_call: { tool: escalate_to_human }
+    - forbid_tools: [book_appointment]
+    - response_contains_all: ["1-800-555-0199"]
+  invariants: [no_hallucinated_slots, escalate_at_most_once, no_claim_to_be_human]
+  judge: [tone, empathy, clarity, escalation_message_complete]

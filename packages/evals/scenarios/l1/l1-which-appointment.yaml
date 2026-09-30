@@ -1,0 +1,42 @@
+id: l1-which-appointment
+category: l1
+fixture: clinic-default
+clock: 2026-10-07T13:00:00Z # Wed Oct 7, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-032]
+setup:
+  appointments:
+    - appointment_id: appt_01JC1WALTERPT0000000001
+      patient: pat-walter
+      slot_id: slot_kowalski_20261020T1700Z
+      reason: "Shoulder rehab"
+context:
+  - patient: "I need to move my appointment."
+  - tool_call: { tool: get_my_appointments, args: {} }
+  - tool_result:
+      tool: get_my_appointments
+      result:
+        appointments:
+          - appointment_id: appt_01JBX8C4D5E6F7G8H9J0K1M2N3
+            provider_id: prov_haddad
+            provider_name: Dr. Omar Haddad
+            specialty: cardiology
+            start_utc: 2026-10-15T14:00:00Z
+            start_local: Thursday, October 15, 2026 at 10:00 AM ET
+            status: BOOKED
+            reason: Blood pressure follow-up
+          - appointment_id: appt_01JC1WALTERPT0000000001
+            provider_id: prov_kowalski
+            provider_name: Dr. Anna Kowalski
+            specialty: physical_therapy
+            start_utc: 2026-10-20T17:00:00Z
+            start_local: Tuesday, October 20, 2026 at 1:00 PM ET
+            status: BOOKED
+            reason: Shoulder rehab
+expect:
+  action: respond
+  forbid_tools: [reschedule_appointment, check_availability]
+  response:
+    contains_all: [Haddad, Kowalski]
+    max_questions: 1

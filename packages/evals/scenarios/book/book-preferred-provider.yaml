@@ -1,0 +1,27 @@
+id: book-preferred-provider
+category: book
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+persona: "Friendly, chatty, assumes the assistant knows her."
+goal: "Book an annual physical with 'my usual doctor' sometime in the next two weeks."
+hidden_facts:
+  usual_doctor: "Dr. Alvarez, but only says 'my usual doctor' unless asked"
+  reason: "annual physical"
+  availability: "any weekday; mornings slightly preferred"
+  already_has: "an Alvarez appointment Fri Oct 16 11:30 AM for a cough; this is a separate visit"
+max_turns: 10
+tags: [profile]
+covers: [FR-031, FR-033, adr9.confirm-before-write]
+expect:
+  end_state:
+    appointments_created: 1
+    appointment:
+      provider_id: prov_alvarez
+      local_date_between: [2026-10-05, 2026-10-16]
+  trajectory:
+    - must_call_before: [get_patient_profile, check_availability]
+    - must_call_before: [check_availability, book_appointment]
+    - must_confirm_before: book_appointment
+  invariants: [no_write_without_confirmation, no_hallucinated_slots, times_in_clinic_tz_with_weekday]
+  judge: [tone, clarity]

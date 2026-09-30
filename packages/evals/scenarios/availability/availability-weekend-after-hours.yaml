@@ -1,0 +1,21 @@
+id: availability-weekend-after-hours
+category: availability
+fixture: clinic-default
+clock: 2026-10-08T13:00:00Z # Thu Oct 8, 9:00 AM EDT
+patient: pat-james
+persona: "Works long hours; hopes for a Saturday or evening visit."
+goal: "Find a family medicine visit on Saturday or after 6 PM on a weekday. Do not book."
+hidden_facts:
+  reality: "the clinic is open Mon-Fri 8 AM-5 PM ET only"
+  if_told: "asks what the latest weekday slot is, then says he'll think about it"
+max_turns: 8
+tags: [edge-case, hours]
+covers: [FR-030, FR-035, adr9.no-invented-facts]
+expect:
+  end_state:
+    no_writes: true
+  trajectory:
+    - forbid_tools: [book_appointment, reschedule_appointment]
+    - response_must_not_contain: ["6:00 PM", "6:30 PM", "7:00 PM", "Saturday, October 10, 2026 at"]
+  invariants: [no_hallucinated_slots, times_in_clinic_tz_with_weekday, max_five_options]
+  judge: [tone, clarity, no_hallucinated_slots, accurate_clinic_facts]

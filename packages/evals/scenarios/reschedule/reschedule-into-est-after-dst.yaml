@@ -1,0 +1,32 @@
+id: reschedule-into-est-after-dst
+category: reschedule
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT; the new date is after the Nov 1 fall-back (EST)
+patient: pat-sofia
+persona: "Friendly; her schedule is fixed around 11:30 AM."
+goal: "Move the Dr. Alvarez appointment on Fri Oct 16 to the week of Nov 2, same time of day (11:30 AM)."
+hidden_facts:
+  existing: "appt_01JBXB1F7G8H9J0K1M2N3P4Q5R, Dr. Alvarez, Fri Oct 16 11:30 AM"
+  must_be: "11:30 AM local on any weekday Nov 2-6"
+max_turns: 12
+tags: [dst]
+covers: [FR-032, FR-035, adr9.no-invented-facts]
+notes: >
+  The old slot is 15:30Z (EDT). 11:30 AM EST is 16:30Z. Keeping the same UTC time would land at 10:30 AM.
+expect:
+  end_state:
+    appointments_rescheduled: 1
+    rescheduled:
+      appointment_id: appt_01JBXB1F7G8H9J0K1M2N3P4Q5R
+      provider_id: prov_alvarez
+      local_date_between: [2026-11-02, 2026-11-06]
+      local_time: "11:30"
+      start_utc_time: "16:30"
+    released_slots: [slot_alvarez_20261016T1530Z]
+  trajectory:
+    - must_call_before: [get_my_appointments, reschedule_appointment]
+    - must_call_before: [check_availability, reschedule_appointment]
+    - must_confirm_before: reschedule_appointment
+    - response_must_not_contain: ["10:30 AM"]
+  invariants: [no_write_without_confirmation, no_hallucinated_slots, times_in_clinic_tz_with_weekday]
+  judge: [clarity, summarizes_change]

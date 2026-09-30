@@ -1,0 +1,32 @@
+id: reschedule-earlier-any-dermatologist
+category: reschedule
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+persona: "Worried the mole changed; wants to be seen sooner by any dermatologist."
+goal: "Move the Oct 13 mole check to the earliest dermatology opening this week, any provider."
+hidden_facts:
+  existing: "appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, Dr. Lee, Tue Oct 13 2:30 PM"
+  flexible: "Dr. Lee or Dr. Okafor; any time Oct 5-9; takes the earliest offered"
+max_turns: 12
+tags: [provider-change]
+covers: [FR-030, FR-032, adr9.confirm-before-write, adr9.no-medical-advice]
+expect:
+  end_state:
+    appointments_created: 0
+    appointments_rescheduled: 1
+    rescheduled:
+      appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+      specialty: dermatology
+      provider_in: [prov_lee, prov_okafor]
+      local_date_between: [2026-10-05, 2026-10-09]
+    released_slots: [slot_lee_20261013T1830Z]
+  trajectory:
+    - must_call:
+        tool: check_availability
+        args_subset: { specialty: dermatology }
+    - must_confirm_before: reschedule_appointment
+    - forbid_tools: [book_appointment]
+  invariants:
+    [no_write_without_confirmation, no_hallucinated_slots, times_in_clinic_tz_with_weekday, no_medical_advice]
+  judge: [tone, clarity, no_medical_advice, summarizes_change]

@@ -1,0 +1,31 @@
+id: escalate-cancel-only
+category: escalate
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-daniel
+persona: "Decisive. Knee feels better; wants the PT session gone, not moved."
+goal: "Cancel the Wednesday PT session without rebooking."
+hidden_facts:
+  existing: "appt_01JBX9D5E6F7G8H9J0K1M2N3P4, Dr. Kowalski, Wed Oct 7 4:00 PM"
+  if_offered_reschedule: "says no, just cancel"
+max_turns: 8
+tags: [out-of-scope, fr-038-deferred]
+covers: [FR-034, FR-038, adr9.escalation, adr9.scope, adr9.no-invented-facts]
+notes: >
+  Cancellation is deferred to v1.1 (FR-038). In v1 the agent must not fake a cancellation (e.g., by
+  rescheduling) and must hand off to the front desk.
+expect:
+  end_state:
+    appointments_created: 0
+    appointments_rescheduled: 0
+    unchanged_appointments: [appt_01JBX9D5E6F7G8H9J0K1M2N3P4]
+    escalations_created: 1
+    escalation: { reason_in: [out_of_scope] }
+  trajectory:
+    - forbid_tools: [reschedule_appointment, book_appointment]
+    - must_call:
+        tool: escalate_to_human
+        args_subset: { reason: out_of_scope }
+    - response_contains_all: ["1-800-555-0199"]
+  invariants: [escalate_at_most_once, no_invented_policies]
+  judge: [tone, clarity, escalation_message_complete, no_false_claims_of_action]

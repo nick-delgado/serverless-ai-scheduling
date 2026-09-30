@@ -10,5 +10,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.1"
+  },
+  "dependencies": {
+    "@sched/contracts": "*",
+    "@sched/tools": "*"
   }
 }
