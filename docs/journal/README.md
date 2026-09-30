@@ -19,3 +19,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-09-29 | [DynamoDB Local is too polite to test our retry path](2026-09-29-dynamodb-local-is-too-polite.md) | 4. Teaching the agent to schedule |
 | 2026-09-29 | [Writing the evals first exposed gaps in the fixture and the harness](2026-09-29-writing-the-tests-before-the-agent.md) | 4. Teaching the agent to schedule |
 | 2026-09-29 | [Denied the models we planned for, we made the agent speak to any model Bedrock serves](2026-09-29-one-transport-many-models.md) | 4. Teaching the agent to schedule |
+| 2026-09-29 | [The first live eval run found a model inventing slots, and a blind spot in our own L1 grader](2026-09-29-first-live-l1-run.md) | 4. Teaching the agent to schedule |
