@@ -32,6 +32,8 @@ import type { Repositories } from "./repos/types";
 
 // Tool handlers: each tool issue adds its import under its own line (keeps parallel PRs conflict-free).
 // #19 find_providers, check_availability
+import { checkAvailability } from "./tools/check_availability";
+import { findProviders } from "./tools/find_providers";
 
 // #20 get_my_appointments, get_patient_profile
 
@@ -104,6 +106,8 @@ export function toolFail(
  */
 export const TOOL_REGISTRY: ToolRegistry = {
   // #19 find_providers, check_availability
+  find_providers: findProviders,
+  check_availability: checkAvailability,
   // #20 get_my_appointments, get_patient_profile
   // #21 book_appointment
   // #22 reschedule_appointment

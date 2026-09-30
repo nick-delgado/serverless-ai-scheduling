@@ -30,7 +30,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
     "name": "find_providers",
   },
   {
-    "description": "Find open 30-minute appointment slots by provider or specialty, within a date range (at most 31 days), optionally only mornings or afternoons. Returns up to 10 slots in time order, each with a slot_id and a start_local time to quote verbatim. Only offer slots returned by this tool, and only book slot_ids it returned.",
+    "description": "Find open 30-minute appointment slots by provider or specialty, within a date range (at most 31 days), optionally only mornings or afternoons. Returns up to 5 slots in time order, each with a slot_id and a start_local time to quote verbatim. Only offer slots returned by this tool, and only book slot_ids it returned.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
