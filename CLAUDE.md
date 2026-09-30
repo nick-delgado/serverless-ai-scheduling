@@ -38,6 +38,7 @@ scripts/             Seed data, deploy helpers
 spikes/              Throwaway experiments that inform ADRs (not production code)
 docs/                PRD, ADRs, research, runbooks, journal, backlog map
 .claude/skills/      Project skills (task-workflow, dev-journal, ...)
+.agents/skills/      Installed review-harness skills (npx skills; pinned in skills-lock.json, symlinked into .claude/skills/)
 ```
 
 These directories are created as the milestones land. If a directory doesn't exist yet, check `docs/backlog.md` for the issue that creates it rather than inventing a structure.
@@ -97,6 +98,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 
 - Every change maps to a GitHub issue. Use the **`task-workflow` skill**: claim the issue, work in a worktree, check the definition of done, open a PR that closes the issue.
 - Adding, changing, or debugging an agent tool: follow the **`add-agent-tool` skill** (contract, handler, tests, registry entry, description, evals).
+- Reviewing agent PRs: run **`review-agent-pr` in a fresh session** (never the session that wrote or orchestrated the PR). Fix its "Fix now" findings with `address-pr-review` from the PR's worktree, and batch recurring causes into process changes with `improve-agent-process`.
 - Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 - **CI** (`.github/workflows/ci.yml`) runs on every PR and every push to `main`, with two jobs:
