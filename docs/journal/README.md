@@ -18,3 +18,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-09-29 | [The reply streams through CloudFront untouched: first token in about 1 s, 15 ms of overhead](2026-09-29-streaming-survives-cloudfront.md) | 3. The walking skeleton |
 | 2026-09-29 | [DynamoDB Local is too polite to test our retry path](2026-09-29-dynamodb-local-is-too-polite.md) | 4. Teaching the agent to schedule |
 | 2026-09-29 | [Writing the evals first exposed gaps in the fixture and the harness](2026-09-29-writing-the-tests-before-the-agent.md) | 4. Teaching the agent to schedule |
+| 2026-09-29 | [Denied the models we planned for, we made the agent speak to any model Bedrock serves](2026-09-29-one-transport-many-models.md) | 4. Teaching the agent to schedule |

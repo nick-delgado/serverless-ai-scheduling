@@ -20,9 +20,9 @@ A serverless AI scheduling assistant, built as a portfolio proof-of-concept. A p
   - API Gateway REST API with Lambda response streaming
   - Lambda, DynamoDB (single table), Cognito (User Pool + Identity Pool)
   - Amazon Transcribe Streaming, Amazon SES
-  - Claude via Amazon Bedrock
+  - LLMs via Amazon Bedrock (Converse): Claude, Amazon Nova, OpenAI gpt-oss
 - **IaC:** AWS SAM (CloudFormation), one template per stack (see ADR-003).
-- **LLM client:** `@anthropic-ai/bedrock-sdk` → `AnthropicBedrock` on bedrock-runtime, with US inference profiles. This is the interim decision in ADR-002, because Mantle is unavailable to this account. Always go through the `LlmClient` interface in `packages/agent`; never call Bedrock directly from handlers or tools.
+- **LLM client:** `ConverseLlmClient` in `packages/agent` (`@aws-sdk/client-bedrock-runtime` `ConverseStream`) is the single model transport for every provider (ADR-010, superseding ADR-002's client decision). The `LlmClient` interface speaks provider-neutral content blocks (text, tool_use, tool_result, opaque reasoning). Always go through it; never call Bedrock directly from handlers or tools. OpenAI models are used only through Bedrock.
 
 ## Repository layout
 
@@ -86,11 +86,11 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Stacks are named `sched-<env>-<stack>` (e.g., `sched-dev-data`). Cross-stack values go through SSM parameters under `/sched/<env>/...`. Only touch `sched-*` stacks.
 - Deploys run through the CloudFormation execution role (`--role-arn` from the bootstrap stack output).
 - **Ask before destructive operations:** deleting a stack, deleting or overwriting table data, or anything touching the bootstrap stack.
-- Bedrock model IDs, which must be inference profiles on bedrock-runtime:
-  - **Development default:** `us.anthropic.claude-sonnet-4-6`.
-  - Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
-  - **Targets once AWS lifts the account's entitlement restriction:** `us.anthropic.claude-opus-5` and `us.anthropic.claude-sonnet-5`. They currently fail with "not available for this account".
-  - Model choice is config, not code (ADR-002). Pace bulk calls: new-account quotas throttle quickly.
+- Model profiles (`AGENT_MODEL_PROFILE`, `packages/agent/src/profiles.ts`), all called through Converse:
+  - **Development default:** `sonnet-4.6` (`us.anthropic.claude-sonnet-4-6`).
+  - Also callable: `haiku-4.5` (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), `nova-2-lite` (`us.amazon.nova-2-lite-v1:0`), `nova-pro` (`us.amazon.nova-pro-v1:0`), `gpt-oss-120b` (`openai.gpt-oss-120b-1:0`), `gpt-oss-20b` (`openai.gpt-oss-20b-1:0`).
+  - **Not entitled:** `opus-5` and `sonnet-5` stay defined but resolving them throws; AWS denied access ("not available for this account"), and the proprietary GPT-5.x models are blocked the same way.
+  - Model choice is config, not code (ADR-010); the M3 eval matrix picks the default. Pace bulk calls to quota: Claude 10 RPM, Nova 2 Lite 20, Nova Pro 25, gpt-oss 100.
 - Eval runs call Bedrock and cost real money. Say what a run will cost before starting a full matrix run.
 
 ## How work flows

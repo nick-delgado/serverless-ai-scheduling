@@ -37,11 +37,13 @@ The limitations don't affect us: no VTL response transforms, no integration cach
 ```jsonc
 {"type":"status","tool":"check_availability","label":"Checking Dr. Lee's availability…"}
 {"type":"text_delta","text":"I found three openings"}
+{"type":"text_reset","keepChars":0}
 {"type":"done","messageId":"…","usage":{"inputTokens":…,"outputTokens":…,"cacheReadTokens":…}}
 {"type":"error","code":"AGENT_UNAVAILABLE","message":"…","retryable":true}
 ```
 
 - The **client typewriter** renders `text_delta` through a smoothing buffer: a constant characters-per-second pace, catching up on bursts. The text appears character by character whether the network delivers it in chunks or all at once, which satisfies FR-013. `prefers-reduced-motion` renders immediately.
+- **`text_reset`** (contracts v1.1, #60). When the agent loop throws away a response whose text already streamed (a refusal, a `max_tokens` cut-off, or malformed output) and retries, it sends `{"type":"text_reset","keepChars":N}`. The client truncates the in-progress assistant bubble to its first `N` characters (JavaScript string length over this turn's `text_delta`s), drops anything beyond that still queued in the typewriter buffer, and keeps rendering the deltas that follow. Applying every reset in order yields exactly the text the turn stored; `visibleText()` in `packages/contracts` is the reference implementation. A reset never follows `done` or `error`.
 - **CloudFront** routes `/api/*` to the REST API origin, so the site has one origin and no CORS. That behavior uses the managed `CachingDisabled` cache policy and `AllViewerExceptHostHeader` origin request policy, which forward the `Authorization` header.
 - **Fallback:** if streaming through CloudFront or SAM proves unworkable in spike S-2, the same handler returns the event list as one buffered JSON array (option 2). The client already knows how to consume that shape.
 
