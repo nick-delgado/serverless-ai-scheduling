@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Post a review's process findings (causes and proposals) as a comment on the repository's
-# tracking issue, creating the issue on first use. If this user already posted the process
-# findings for the same PR, that comment is updated instead.
+# tracking issue, creating the issue on first use. There is one comment per review round:
+# if this user already posted the process findings for the same PR and reviewed commit,
+# that comment is updated; a re-review of a new commit adds a new comment, so the causes
+# found in earlier rounds stay in the log.
 #
 # Usage: post-process-findings.sh <pr-number> <process-file>
 # Run from inside a clone of the PR's repository. Requires an authenticated gh.
@@ -27,15 +29,15 @@ case "$pr" in
     ;;
 esac
 
-marker="<!-- agent-pr-review:process pr=${pr} -->"
 
 if [ ! -s "$file" ]; then
   echo "error: process file '$file' is missing or empty" >&2
   exit 1
 fi
 
-if [ "$(head -n 1 "$file")" != "$marker" ]; then
-  echo "error: the first line of the file must be: $marker" >&2
+marker="$(head -n 1 "$file")"
+if ! printf '%s\n' "$marker" | grep -qE "^<!-- agent-pr-review:process pr=${pr} sha=[0-9a-f]{7,40} -->\$"; then
+  echo "error: the first line of the file must be: <!-- agent-pr-review:process pr=${pr} sha=<reviewed commit> -->" >&2
   exit 1
 fi
 
