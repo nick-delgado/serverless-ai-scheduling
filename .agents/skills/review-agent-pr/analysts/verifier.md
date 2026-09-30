@@ -119,6 +119,29 @@ the current head:
 The response file holds the authoring agent's claims ("fixed", "disputed"). Treat them as
 claims to check, not as evidence. For a disputed finding, judge the dispute on the code.
 
+## Re-check mode
+
+When your prompt says this is a re-check, there are no reviewer findings. The PR was
+reviewed before, and the authoring agent has since changed it; the changes are in
+`<RUN_DIR>/recheck.patch`. Your job is narrower than a review and wider than verification:
+
+1. **Previous findings:** as above, for every finding. This is the main output.
+2. **The changes themselves.** Read every hunk of `recheck.patch` and the code around it at
+   the head. For each hunk, check that it does what the response claims, and look for new
+   problems of the kinds the reviewers' briefs describe: a test that cannot fail the way its
+   name says, a weakened check, a stale comment or doc left behind, a change outside the
+   task's scope, behaviour the spec or the owner's decisions do not allow. Read the relevant
+   brief in `<SKILL_DIR>/reviewers/` when a hunk falls in its area. A new problem becomes a
+   `VER` finding and goes through steps 1 to 8.
+3. **Spot checks** become the record of step 2: one row per hunk (or group of related
+   hunks), with what you checked and the result.
+
+Write the same output file with the same headings. In the verification summary, give each
+reviewer a row reading `not run (re-check)`, and add a row `Verifier (re-check)` with the
+`VER` findings. Under "Reviewer tables", carry the previous report's spec traceability
+forward, updating the rows the changes affect, and write `Not produced (re-check).` under
+the other two headings.
+
 ## Output: `<RUN_DIR>/verified.md`
 
 ```markdown

@@ -134,7 +134,26 @@ Decision column is filled for every finding the owner decided, and left empty ot
 When decisions arrive after you have posted, run the skill again: the script updates the
 same comment, so the table always holds every decision made on the PR.
 
-### 7. Tell the user
+### 7. Recommend what happens next
+
+Measure the change since the reviewed commit:
+
+```sh
+git diff --shortstat <reviewed sha> HEAD
+git diff --name-status --diff-filter=A <reviewed sha> HEAD     # files added since
+```
+
+Then recommend exactly one of these, and give the reason and the numbers:
+
+| Recommend | When |
+|---|---|
+| **No further review needed** | The report's verdict was `Acceptable`; you fixed only minors and nits; you implemented no owner decision with a code change; nothing is `disputed` or `not fixed`; the change is under about 50 lines with no new files; and the checks pass. The owner can check the response table and the diff by eye. |
+| **A re-check** (`review-agent-pr` in re-check mode, in a fresh session) | Anything else, as long as the change is contained: no new source files and under about 300 changed lines. This covers fixed blockers and majors, implemented decisions, and disputes, which the re-check settles on the code. |
+| **A full review** (`review-agent-pr`, in a fresh session) | The change adds source files, changes more than about 300 lines, or goes beyond the findings and decisions (a refactor, new behaviour). |
+
+If the checks failed, say so first: the fixes are not ready for any review.
+
+### 8. Tell the user
 
 Say what was fixed, what you disputed and why, which decisions are still waiting for them,
-and whether the checks pass. Suggest a re-review of the PR if anything was fixed.
+whether the checks pass, and your recommendation from step 7.

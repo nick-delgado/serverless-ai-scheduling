@@ -1,6 +1,6 @@
 ---
 name: review-agent-pr
-description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong.
+description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 ---
 
 # Review an agent-authored PR
@@ -11,6 +11,16 @@ context, so that no reviewer inherits another's opinion or yours.
 
 All paths below are relative to the directory that contains this file (`SKILL_DIR`). Resolve
 it to an absolute path once and use absolute paths whenever you hand a path to a subagent.
+
+## Full review or re-check
+
+- **Full review** (phases 0 to 7): the first review of a PR, and any re-review the user asks
+  for.
+- **Re-check**: when the user asks to re-check the PR, typically after the authoring agent
+  has fixed the findings of an earlier review. The four reviewers do not run; one verifier
+  checks the changes since the reviewed commit and settles each earlier finding. It costs
+  roughly a fifth of a full review. See "Re-check mode" at the end; everything not listed
+  there works as in a full review.
 
 ## Ground rules
 
@@ -253,6 +263,37 @@ The assembly script copies findings, tables and ledgers from the phase outputs u
 it fails on a missing section or on length, fix the source file it names (re-run that
 phase's subagent if a section is missing) and run it again. Do not write or edit
 `report.md` or `process.md` by hand.
+
+## Re-check mode
+
+Follow the phases above with these differences.
+
+- **Phase 1:** run `get-previous.sh` as usual. A re-check needs a previous report of an
+  earlier commit that is an ancestor of the current head
+  (`git -C "$RUN_DIR/worktree" merge-base --is-ancestor <previous sha> HEAD`). If there is
+  no previous report, the head is the commit it reviewed, or the branch was rebased or
+  force-pushed since, tell the user and run a full review instead. Otherwise write the
+  changes since the previous review:
+
+  ```sh
+  git -C "$RUN_DIR/worktree" diff <previous sha> HEAD > "$RUN_DIR/recheck.patch"
+  ```
+
+  If the changes add a new source file, or `recheck.patch` changes more than about 300
+  lines, a re-check is too narrow: tell the user and run a full review instead.
+- **Phases 2 and 3:** as usual. The manifest's previous-review section also names
+  `recheck.patch`.
+- **Phase 4:** skipped. `RUN_DIR/findings/` stays empty.
+- **Phase 5:** spawn the verifier as usual, adding one line to its prompt: `This is a
+  re-check: there are no reviewer findings. Follow the "Re-check mode" section of your
+  brief. The changes since the previous review are in <RUN_DIR>/recheck.patch. The
+  reviewers' briefs are in <SKILL_DIR>/reviewers/.` Then run
+  the citation check as usual.
+- **Phase 6:** as usual: it runs when there are confirmed findings above nit.
+- **Phase 7:** as usual. In `report-head.md`, the verdict line reads `## Agent PR review
+  (re-check): <verdict>`, and the summary says which commit was re-checked against which.
+  In `report-meta.md`, record `Mode: re-check of <previous sha>..<head sha>; the four
+  reviewers did not run`.
 
 ## What happens next (not part of this skill)
 
