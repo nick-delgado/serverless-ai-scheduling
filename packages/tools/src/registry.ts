@@ -28,6 +28,7 @@ import {
 } from "@sched/contracts";
 
 import type { Clock } from "./clock";
+import type { Notifier } from "./notify";
 import type { Repositories } from "./repos/types";
 
 // Tool handlers: each tool issue adds its import under its own line (keeps parallel PRs conflict-free).
@@ -40,6 +41,7 @@ import type { Repositories } from "./repos/types";
 // #22 reschedule_appointment
 
 // #23 escalate_to_human
+import { escalateToHuman } from "./tools/escalate_to_human";
 
 // ---------------------------------------------------------------------------------------------
 // The seam (structurally identical to the port in packages/agent)
@@ -71,6 +73,8 @@ export interface ToolContext {
   readonly conversationId: ConversationId;
   readonly clock: Clock;
   readonly repos: Repositories;
+  /** Staff notifications (escalate_to_human). Optional: without it, escalations are recorded as FAILED. */
+  readonly notifier?: Notifier;
 }
 
 export type ToolHandlerResult<N extends ToolName> =
@@ -108,6 +112,7 @@ export const TOOL_REGISTRY: ToolRegistry = {
   // #21 book_appointment
   // #22 reschedule_appointment
   // #23 escalate_to_human
+  escalate_to_human: escalateToHuman,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -162,6 +167,7 @@ export function createToolExecutor(
     conversationId: ConversationId.parse(ctx.conversationId),
     clock: ctx.clock,
     repos: ctx.repos,
+    ...(ctx.notifier ? { notifier: ctx.notifier } : {}),
   });
   const registered = registeredNames(registry);
   const definitions = Object.freeze(
