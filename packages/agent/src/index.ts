@@ -1,6 +1,7 @@
 /**
- * @sched/agent: the agent loop (`runAgentTurn`), the `LlmClient` seam with its Bedrock implementation
- * and a scripted fake, and the model profiles (S3-01, #15). The system prompt lives in `prompts/` (#16).
+ * @sched/agent: the agent loop (`runAgentTurn`), the provider-neutral `LlmClient` seam with its Bedrock
+ * Converse implementation and a scripted fake, and the model profiles (S3-01 #15, S3-01b #60).
+ * The system prompt lives in `prompts/` (#16).
  */
 export {
   DEFAULT_LIMITS,
@@ -17,19 +18,42 @@ export {
   MODEL_PROFILES,
   MODEL_PROFILE_ENV,
   MODEL_PROFILE_NAMES,
+  PRICES_AS_OF,
   REFUSAL_FALLBACKS,
+  estimateCostUsd,
   fallbackProfileFor,
   isModelProfileName,
   modelProfileFromEnv,
   resolveModelProfile,
+  type ModelPricing,
   type ModelProfile,
   type ModelProfileName,
 } from "./profiles";
 export { FALLBACK_MESSAGES } from "./fallback-messages";
-export type { LlmCallOptions, LlmClient, LlmRequest, LlmStreamHandlers } from "./llm/client";
-export { BedrockLlmClient, type BedrockLlmClientOptions } from "./llm/bedrock";
+export {
+  CACHE_POINT,
+  LLM_STOP_REASONS,
+  type CachePoint,
+  type ContentBlock,
+  type LlmCallOptions,
+  type LlmClient,
+  type LlmMessage,
+  type LlmRequest,
+  type LlmRequestMessage,
+  type LlmResponse,
+  type LlmRole,
+  type LlmStopReason,
+  type LlmStreamHandlers,
+  type LlmSystemText,
+  type ReasoningBlock,
+  type TextBlock,
+  type ToolResultBlock,
+  type ToolUseBlock,
+} from "./llm/types";
+export { ConverseLlmClient, type ConverseLlmClientOptions, type ConverseSender } from "./llm/converse";
 export {
   ScriptedLlmClient,
+  scriptedMalformed,
   scriptedMaxTokens,
   scriptedRefusal,
   scriptedText,

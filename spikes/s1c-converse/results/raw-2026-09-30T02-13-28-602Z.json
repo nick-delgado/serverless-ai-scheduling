@@ -1,0 +1,1574 @@
+{
+  "runs": 5,
+  "spentUsd": 0.12728284000000004,
+  "checks": {
+    "crossTurnReplay": {
+      "signedReasoningBlocksInHistory": 1,
+      "sonnetNextTurn": "completed",
+      "haikuNextTurn": "completed",
+      "gptOssNextTurn": "completed"
+    },
+    "gptOssReasoningEffortValidated": {
+      "outcome": "error",
+      "error": "The model returned the following errors: {\"error\":{\"code\":\"validation_error\",\"message\":\"Failed to deserialize the JSON body into the target type: Invalid 'reasoning_effort': unknown variant `bogus`, expected one of `high`, `low`, `max`, `medium`, `minimal`, `none`, `xhigh` at line 1 column 10195\",\"param\":null,\"type\":\"invalid_request_error\"}}"
+    }
+  },
+  "records": [
+    {
+      "model": "sonnet-4.6",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 2144,
+          "durationMs": 3363,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 166,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 3124
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1004,
+          "durationMs": 3121,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 96,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 361
+          }
+        }
+      ],
+      "turnMs": 6485,
+      "textDeltas": 33,
+      "firstToLastDeltaMs": 4147,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.01795,
+      "answer": "Let me check that for you right now!\n\nGreat news — there are three afternoon openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nWould any of these work for you, Maria? If so, what's the reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 720,
+          "durationMs": 1321,
+          "usage": {
+            "inputTokens": 3126,
+            "outputTokens": 140,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 696,
+          "durationMs": 1192,
+          "usage": {
+            "inputTokens": 3459,
+            "outputTokens": 82,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2513,
+      "textDeltas": 26,
+      "firstToLastDeltaMs": 1764,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00769,
+      "answer": "I'll check for dermatology appointments on Tuesday, October 13 in the afternoon.\n\nGreat! I found three afternoon slots in dermatology on Tuesday, October 13:\n\n1. Dr. Priya Lee at 2:30 PM ET\n2. Dr. Priya Lee at 3:30 PM ET\n3. Dr. Samuel Okafor at 4:00 PM ET\n\nWould any of these work for you?"
+    },
+    {
+      "model": "nova-2-lite",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "end_date": "2026-10-13",
+          "start_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 799,
+          "durationMs": 2036,
+          "usage": {
+            "inputTokens": 149,
+            "outputTokens": 341,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 2996
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 607,
+          "durationMs": 1400,
+          "usage": {
+            "inputTokens": 694,
+            "outputTokens": 201,
+            "cacheReadTokens": 2703,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3436,
+      "textDeltas": 25,
+      "firstToLastDeltaMs": 285,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00181,
+      "answer": "Here are the dermatology openings for Tuesday, October 13 in the afternoon:\n\n- **Dr. Priya Lee**: 2:30 PM ET  \n- **Dr. Priya Lee**: 3:30 PM ET  \n- **Dr. Samuel Okafor**: 4:00 PM ET  \n\nWould you like to book one of these times? If so, please confirm the provider, time, and share the reason for your visit."
+    },
+    {
+      "model": "nova-pro",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 554,
+          "durationMs": 1191,
+          "usage": {
+            "inputTokens": 134,
+            "outputTokens": 93,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 2704
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 674,
+          "durationMs": 1225,
+          "usage": {
+            "inputTokens": 633,
+            "outputTokens": 80,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 2486
+          }
+        }
+      ],
+      "turnMs": 2417,
+      "textDeltas": 72,
+      "firstToLastDeltaMs": 550,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00117,
+      "answer": "I found three afternoon dermatology openings on Tuesday, October 13:\n1. Dr. Priya Lee, 2:30 PM ET\n2. Dr. Priya Lee, 3:30 PM ET\n3. Dr. Samuel Okafor, 4:00 PM ET\n\nWould you like to book one of these, or should I search for other dates or times?"
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": false,
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 587,
+          "durationMs": 855,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 47,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 689,
+          "durationMs": 1119,
+          "usage": {
+            "inputTokens": 2020,
+            "outputTokens": 41,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 681,
+          "durationMs": 1110,
+          "usage": {
+            "inputTokens": 2099,
+            "outputTokens": 104,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3084,
+      "textDeltas": 3,
+      "firstToLastDeltaMs": 230,
+      "reasoningBlocks": 3,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00102,
+      "answer": "I’m sorry, but I’m unable to look up dermatologist availability right now. If you’d like, I can connect you with our front‑desk staff who can check the schedule for you. Please call 1‑800‑555‑0199 (Monday–Friday, 8 AM–5 PM ET)."
+    },
+    {
+      "model": "gpt-oss-20b",
+      "run": 0,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 595,
+          "durationMs": 741,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 94,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 675,
+          "durationMs": 862,
+          "usage": {
+            "inputTokens": 2196,
+            "outputTokens": 90,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 1603,
+      "textDeltas": 3,
+      "firstToLastDeltaMs": 185,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00034,
+      "answer": "We have three 30‑minute dermatology slots on Tuesday, October 13:\n\n- 2:30 PM ET with Dr. Priya Lee  \n- 3:30 PM ET with Dr. Priya Lee  \n- 4:00 PM ET with Dr. Samuel Okafor  \n\nWhich one would you like to book, and what’s the purpose of your visit?"
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 1128,
+          "durationMs": 2424,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 164,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1046,
+          "durationMs": 2074,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 96,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 359
+          }
+        }
+      ],
+      "turnMs": 4499,
+      "textDeltas": 32,
+      "firstToLastDeltaMs": 3128,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.00713,
+      "answer": "Let me check that for you right now!\n\nGreat news, Maria — there are a few openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nDo any of these work for you? If so, what's the reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 697,
+          "durationMs": 1245,
+          "usage": {
+            "inputTokens": 3126,
+            "outputTokens": 141,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 751,
+          "durationMs": 1217,
+          "usage": {
+            "inputTokens": 3460,
+            "outputTokens": 112,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2462,
+      "textDeltas": 26,
+      "firstToLastDeltaMs": 1737,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00785,
+      "answer": "I'll check for dermatology openings on Tuesday, October 13 in the afternoon.\n\nGreat! We have three dermatology openings on Tuesday, October 13 in the afternoon:\n\n1. **Dr. Priya Lee** — Tuesday, October 13 at 2:30 PM ET\n2. **Dr. Priya Lee** — Tuesday, October 13 at 3:30 PM ET\n3. **Dr. Samuel Okafor** — Tuesday, October 13 at 4:00 PM ET\n\nWould any of these work for you?"
+    },
+    {
+      "model": "nova-2-lite",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "end_date": "2026-10-13",
+          "start_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 580,
+          "durationMs": 1785,
+          "usage": {
+            "inputTokens": 149,
+            "outputTokens": 328,
+            "cacheReadTokens": 2996,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 583,
+          "durationMs": 2065,
+          "usage": {
+            "inputTokens": 694,
+            "outputTokens": 330,
+            "cacheReadTokens": 2703,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3851,
+      "textDeltas": 27,
+      "firstToLastDeltaMs": 311,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00233,
+      "answer": "Hello Maria! Here are the dermatology openings for Tuesday, October 13 in the afternoon:\n\n- **Dr. Priya Lee**: 2:30 PM ET  \n- **Dr. Priya Lee**: 3:30 PM ET  \n- **Dr. Samuel Okafor**: 4:00 PM ET  \n\nWould you like to book one of these slots? If so, please confirm the provider, time, and the reason for your visit."
+    },
+    {
+      "model": "nova-pro",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 542,
+          "durationMs": 1224,
+          "usage": {
+            "inputTokens": 134,
+            "outputTokens": 100,
+            "cacheReadTokens": 2704,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 604,
+          "durationMs": 1103,
+          "usage": {
+            "inputTokens": 633,
+            "outputTokens": 85,
+            "cacheReadTokens": 2486,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2327,
+      "textDeltas": 77,
+      "firstToLastDeltaMs": 498,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00224,
+      "answer": "Great news, Maria! We have three dermatology appointments available on Tuesday, October 13 in the afternoon. Here are your options:\n\n1. Dr. Priya Lee at 2:30 PM ET\n2. Dr. Priya Lee at 3:30 PM ET\n3. Dr. Samuel Okafor at 4:00 PM ET\n\nPlease let me know which time works best for you."
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": false,
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 626,
+          "durationMs": 680,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 41,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 630,
+          "durationMs": 717,
+          "usage": {
+            "inputTokens": 2014,
+            "outputTokens": 44,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 606,
+          "durationMs": 848,
+          "usage": {
+            "inputTokens": 2096,
+            "outputTokens": 40,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 598,
+          "durationMs": 751,
+          "usage": {
+            "inputTokens": 2173,
+            "outputTokens": 90,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2998,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 152,
+      "reasoningBlocks": 3,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00136,
+      "answer": "I’m sorry—I’m unable to retrieve the current schedule right now. I can have a front‑desk team member check the dermatology openings for you.\n\nI’ll connect you with our front desk. Please call 1‑800‑555‑0199 (Mon–Fri, 8 AM–5 PM ET). I’ve also sent them a summary of our conversation so you won’t have to repeat yourself."
+    },
+    {
+      "model": "gpt-oss-20b",
+      "run": 1,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 567,
+          "durationMs": 773,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 78,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 607,
+          "durationMs": 827,
+          "usage": {
+            "inputTokens": 2197,
+            "outputTokens": 94,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 1601,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 203,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00034,
+      "answer": "Here are the afternoon dermatology slots available on Tuesday, October 13:\n\n1. Dr. Priya Lee – 2:30 PM ET  \n2. Dr. Priya Lee – 3:30 PM ET  \n3. Dr. Samuel Okafor – 4:00 PM ET  \n\nWhich time and provider would you like to book? If none of these work, I can look for other dates."
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 995,
+          "durationMs": 2354,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 164,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1124,
+          "durationMs": 2102,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 96,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 359
+          }
+        }
+      ],
+      "turnMs": 4456,
+      "textDeltas": 32,
+      "firstToLastDeltaMs": 3171,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.00713,
+      "answer": "Let me check that for you right now!\n\nGreat news, Maria — there are three afternoon openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nWould any of these work for you? If so, what's the reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 711,
+          "durationMs": 2032,
+          "usage": {
+            "inputTokens": 3126,
+            "outputTokens": 140,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 751,
+          "durationMs": 1212,
+          "usage": {
+            "inputTokens": 3459,
+            "outputTokens": 82,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3244,
+      "textDeltas": 28,
+      "firstToLastDeltaMs": 2507,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00769,
+      "answer": "I'll check for dermatology appointments on Tuesday, October 13 in the afternoon.\n\nGreat! I found three afternoon openings on Tuesday, October 13:\n\n1. Dr. Priya Lee at 2:30 PM ET\n2. Dr. Priya Lee at 3:30 PM ET\n3. Dr. Samuel Okafor at 4:00 PM ET\n\nWhich time and provider work best for you, Maria?"
+    },
+    {
+      "model": "nova-2-lite",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "end_date": "2026-10-13",
+          "start_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 486,
+          "durationMs": 1879,
+          "usage": {
+            "inputTokens": 149,
+            "outputTokens": 380,
+            "cacheReadTokens": 2996,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 543,
+          "durationMs": 1549,
+          "usage": {
+            "inputTokens": 724,
+            "outputTokens": 246,
+            "cacheReadTokens": 2673,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3427,
+      "textDeltas": 24,
+      "firstToLastDeltaMs": 276,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00225,
+      "answer": "Here are the dermatology openings for Tuesday, October 13 in the afternoon:\n\n- **2:30 PM ET** with Dr. Priya Lee  \n- **3:30 PM ET** with Dr. Priya Lee  \n- **4:00 PM ET** with Dr. Samuel Okafor  \n\nWould you like to book one of these slots? If so, please confirm which time and provider you prefer, and share the reason for your visit."
+    },
+    {
+      "model": "nova-pro",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 536,
+          "durationMs": 1215,
+          "usage": {
+            "inputTokens": 134,
+            "outputTokens": 99,
+            "cacheReadTokens": 2704,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 534,
+          "durationMs": 1127,
+          "usage": {
+            "inputTokens": 665,
+            "outputTokens": 87,
+            "cacheReadTokens": 2454,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2342,
+      "textDeltas": 79,
+      "firstToLastDeltaMs": 593,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00227,
+      "answer": "Maria, I found three dermatology openings on Tuesday, October 13 in the afternoon. Here are your options:\n\n1. Dr. Priya Lee at 2:30 PM ET\n2. Dr. Priya Lee at 3:30 PM ET\n3. Dr. Samuel Okafor at 4:00 PM ET\n\nWhich one would you like to book, or would you like to see other options?"
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 611,
+          "durationMs": 686,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 46,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 589,
+          "durationMs": 718,
+          "usage": {
+            "inputTokens": 2019,
+            "outputTokens": 44,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 516,
+          "durationMs": 1118,
+          "usage": {
+            "inputTokens": 2101,
+            "outputTokens": 144,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 571,
+          "durationMs": 693,
+          "usage": {
+            "inputTokens": 2399,
+            "outputTokens": 104,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3215,
+      "textDeltas": 5,
+      "firstToLastDeltaMs": 1083,
+      "reasoningBlocks": 3,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00147,
+      "answer": "<reasoning>Call check_availability with specialty dermatology, date range Oct 13 only, time_of_day afternoon.</reasoning>\n\nSure thing, Maria. Here are the afternoon dermatology slots available on Tuesday, October 13:\n\n- **Dr. Priya Lee – 2:30 PM ET**\n- **Dr. Priya Lee – 3:30 PM ET**\n- **Dr. Samuel Okafor – 4:00 PM ET**\n\nWhich one would you like to book? Please let me know the provider and time, and a brief reason for your visit."
+    },
+    {
+      "model": "gpt-oss-20b",
+      "run": 2,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 604,
+          "durationMs": 818,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 96,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 577,
+          "durationMs": 731,
+          "usage": {
+            "inputTokens": 2215,
+            "outputTokens": 93,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 1549,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 153,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00035,
+      "answer": "Here are the afternoon dermatology slots on Tuesday, October 13:\n\n- 2:30 PM ET – Dr. Priya Lee  \n- 3:30 PM ET – Dr. Priya Lee  \n- 4:00 PM ET – Dr. Samuel Okafor  \n\nWhich time would you like to book? If none work, let me know and I can search for another date."
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 3256,
+          "durationMs": 4500,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 164,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 988,
+          "durationMs": 2022,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 97,
+            "cacheReadTokens": 3483,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 6522,
+      "textDeltas": 33,
+      "firstToLastDeltaMs": 3008,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.00591,
+      "answer": "Let me check that for you right now!\n\nGreat news, Maria — there are a few afternoon openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nWould any of these work for you? If so, what's the reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 700,
+          "durationMs": 1332,
+          "usage": {
+            "inputTokens": 3126,
+            "outputTokens": 139,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 730,
+          "durationMs": 1173,
+          "usage": {
+            "inputTokens": 3458,
+            "outputTokens": 80,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2505,
+      "textDeltas": 29,
+      "firstToLastDeltaMs": 1791,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00768,
+      "answer": "I'll check for dermatology appointments in the afternoon on Tuesday, October 13.\n\nGreat! I found three afternoon slots on Tuesday, October 13:\n\n1. Dr. Priya Lee — 2:30 PM ET\n2. Dr. Priya Lee — 3:30 PM ET\n3. Dr. Samuel Okafor — 4:00 PM ET\n\nWhich of these works best for you, Maria?"
+    },
+    {
+      "model": "nova-2-lite",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "end_date": "2026-10-13",
+          "start_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 2670,
+          "durationMs": 4284,
+          "usage": {
+            "inputTokens": 149,
+            "outputTokens": 439,
+            "cacheReadTokens": 2996,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 499,
+          "durationMs": 2515,
+          "usage": {
+            "inputTokens": 724,
+            "outputTokens": 446,
+            "cacheReadTokens": 2673,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 6799,
+      "textDeltas": 27,
+      "firstToLastDeltaMs": 293,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.0029,
+      "answer": "Hello Maria! Here are the dermatology openings for Tuesday, October 13 in the afternoon:\n\n- **Dr. Priya Lee**: 2:30 PM ET  \n- **Dr. Priya Lee**: 3:30 PM ET  \n- **Dr. Samuel Okafor**: 4:00 PM ET  \n\nWould you like to book one of these times? If so, please let me know which slot you prefer and the reason for your visit."
+    },
+    {
+      "model": "nova-pro",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 587,
+          "durationMs": 1244,
+          "usage": {
+            "inputTokens": 134,
+            "outputTokens": 106,
+            "cacheReadTokens": 2704,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 503,
+          "durationMs": 1101,
+          "usage": {
+            "inputTokens": 645,
+            "outputTokens": 94,
+            "cacheReadTokens": 2474,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2346,
+      "textDeltas": 86,
+      "firstToLastDeltaMs": 596,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.0023,
+      "answer": "Maria, we have a few openings in dermatology on Tuesday, October 13. Here are the available slots:\n1. Dr. Priya Lee at 2:30 PM ET\n2. Dr. Priya Lee at 3:30 PM ET\n3. Dr. Samuel Okafor at 4:00 PM ET\n\nWould you like to book one of these appointments? If so, please let me know which provider and time you prefer."
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 496,
+          "durationMs": 497,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 47,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 693,
+          "durationMs": 1465,
+          "usage": {
+            "inputTokens": 2020,
+            "outputTokens": 52,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 591,
+          "durationMs": 839,
+          "usage": {
+            "inputTokens": 2110,
+            "outputTokens": 89,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 660,
+          "durationMs": 763,
+          "usage": {
+            "inputTokens": 2362,
+            "outputTokens": 93,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3564,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 98,
+      "reasoningBlocks": 3,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00143,
+      "answer": "Sure thing, Maria. Here are the afternoon dermatology slots on Tuesday, October 13:\n\n- **2:30 PM ET** – Dr. Priya Lee  \n- **3:30 PM ET** – Dr. Priya Lee  \n- **4:00 PM ET** – Dr. Samuel Okafor  \n\nLet me know which time works best for you, and I'll book it."
+    },
+    {
+      "model": "gpt-oss-20b",
+      "run": 3,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 552,
+          "durationMs": 793,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 100,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1053,
+          "durationMs": 1265,
+          "usage": {
+            "inputTokens": 2202,
+            "outputTokens": 111,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2059,
+      "textDeltas": 3,
+      "firstToLastDeltaMs": 210,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00035,
+      "answer": "Here are the 30‑minute dermatology slots we have on Tuesday, October 13 in the afternoon:\n\n1. **2:30 PM** – Dr. Priya Lee  \n2. **3:30 PM** – Dr. Priya Lee  \n3. **4:00 PM** – Dr. Samuel Okafor\n\nWould you like to book one of these times? If so, just let me know the time you prefer."
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 1071,
+          "durationMs": 2454,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 166,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1035,
+          "durationMs": 2192,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 97,
+            "cacheReadTokens": 3485,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 4647,
+      "textDeltas": 35,
+      "firstToLastDeltaMs": 3193,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.00594,
+      "answer": "Let me check that for you right now!\n\nGreat news — there are a few afternoon openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nDo any of these work for you, Maria? If so, what's the reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "specialty": "dermatology",
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 670,
+          "durationMs": 1298,
+          "usage": {
+            "inputTokens": 3126,
+            "outputTokens": 141,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 694,
+          "durationMs": 1154,
+          "usage": {
+            "inputTokens": 3460,
+            "outputTokens": 86,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2453,
+      "textDeltas": 25,
+      "firstToLastDeltaMs": 1750,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00772,
+      "answer": "I'll check for dermatology openings on Tuesday, October 13 in the afternoon.\n\nGreat! I found three afternoon slots for you on Tuesday, October 13:\n\n1. **Dr. Priya Lee** — 2:30 PM ET\n2. **Dr. Priya Lee** — 3:30 PM ET\n3. **Dr. Samuel Okafor** — 4:00 PM ET\n\nWould any of these work for you?"
+    },
+    {
+      "model": "nova-2-lite",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "end_date": "2026-10-13",
+          "start_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 511,
+          "durationMs": 2120,
+          "usage": {
+            "inputTokens": 149,
+            "outputTokens": 358,
+            "cacheReadTokens": 2996,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 693,
+          "durationMs": 1635,
+          "usage": {
+            "inputTokens": 711,
+            "outputTokens": 263,
+            "cacheReadTokens": 2686,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 3755,
+      "textDeltas": 26,
+      "firstToLastDeltaMs": 294,
+      "reasoningBlocks": 2,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00224,
+      "answer": "Here are the available dermatology appointments for Tuesday, October 13 in the afternoon:\n\n- **Dr. Priya Lee**: 2:30 PM ET  \n- **Dr. Priya Lee**: 3:30 PM ET  \n- **Dr. Samuel Okafor**: 4:00 PM ET  \n\nWould you like to book one of these times? If so, please confirm the provider, time, and briefly share the reason for your visit."
+    },
+    {
+      "model": "nova-pro",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 816,
+          "durationMs": 1489,
+          "usage": {
+            "inputTokens": 134,
+            "outputTokens": 93,
+            "cacheReadTokens": 2704,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 737,
+          "durationMs": 1444,
+          "usage": {
+            "inputTokens": 645,
+            "outputTokens": 96,
+            "cacheReadTokens": 2474,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 2933,
+      "textDeltas": 85,
+      "firstToLastDeltaMs": 705,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00226,
+      "answer": "Maria, we have three dermatology openings on Tuesday, October 13 in the afternoon. They are:\n\n- Tuesday, October 13 at 2:30 PM ET with Dr. Priya Lee\n- Tuesday, October 13 at 3:30 PM ET with Dr. Priya Lee\n- Tuesday, October 13 at 4:00 PM ET with Dr. Samuel Okafor\n\nWould you like to book one of these appointments?"
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 571,
+          "durationMs": 608,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 46,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 545,
+          "durationMs": 763,
+          "usage": {
+            "inputTokens": 2019,
+            "outputTokens": 45,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 584,
+          "durationMs": 1772,
+          "usage": {
+            "inputTokens": 2102,
+            "outputTokens": 134,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 592,
+          "durationMs": 905,
+          "usage": {
+            "inputTokens": 2408,
+            "outputTokens": 107,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 4048,
+      "textDeltas": 7,
+      "firstToLastDeltaMs": 1675,
+      "reasoningBlocks": 3,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00147,
+      "answer": "<reasoning>Call check_availability with specialty dermatology, date range just Oct 13, time_of_day afternoon.</reasoning>\n\nSure, Maria. Here are the dermatology slots available on Tuesday, October 13 in the afternoon:\n\n- 2:30 PM ET – Dr. Priya Lee  \n- 3:30 PM ET – Dr. Priya Lee  \n- 4:00 PM ET – Dr. Samuel Okafor  \n\nWould you like to book one of these appointments? If so, please let me which time works best and the reason for your visit."
+    },
+    {
+      "model": "gpt-oss-20b",
+      "run": 4,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "time_of_day": "afternoon",
+        "specialty": "dermatology"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 575,
+          "durationMs": 606,
+          "usage": {
+            "inputTokens": 1939,
+            "outputTokens": 63,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 642,
+          "durationMs": 841,
+          "usage": {
+            "inputTokens": 2182,
+            "outputTokens": 86,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 1447,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 195,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00033,
+      "answer": "Here are the afternoon dermatology slots on Tuesday, October 13:\n\n- 2:30 PM ET – Dr. Priya Lee  \n- 3:30 PM ET – Dr. Priya Lee  \n- 4:00 PM ET – Dr. Samuel Okafor  \n\nLet me know if one of these works for you, and I'll book it."
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 100,
+      "outcome": "completed",
+      "correctToolCall": true,
+      "toolInput": {
+        "date_range": {
+          "start_date": "2026-10-13",
+          "end_date": "2026-10-13"
+        },
+        "specialty": "dermatology",
+        "time_of_day": "afternoon"
+      },
+      "calls": [
+        {
+          "stopReason": "tool_use",
+          "ttftMs": 2617,
+          "durationMs": 4122,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 164,
+            "cacheReadTokens": 3124,
+            "cacheWriteTokens": 0
+          }
+        },
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1045,
+          "durationMs": 2080,
+          "usage": {
+            "inputTokens": 1,
+            "outputTokens": 94,
+            "cacheReadTokens": 3483,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 6202,
+      "textDeltas": 31,
+      "firstToLastDeltaMs": 3205,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": true,
+      "costUsd": 0.00586,
+      "answer": "Let me check that for you right now!\n\nGreat news, Maria — there are a few afternoon openings on Tuesday, October 13:\n\n1. **2:30 PM ET** — Dr. Priya Lee\n2. **3:30 PM ET** — Dr. Priya Lee\n3. **4:00 PM ET** — Dr. Samuel Okafor\n\nAny of these work for you? And what's the reason for your visit?"
+    },
+    {
+      "model": "sonnet-4.6",
+      "run": 101,
+      "outcome": "completed",
+      "correctToolCall": false,
+      "calls": [
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 1151,
+          "durationMs": 3484,
+          "usage": {
+            "inputTokens": 3,
+            "outputTokens": 167,
+            "cacheReadTokens": 3483,
+            "cacheWriteTokens": 116
+          }
+        }
+      ],
+      "turnMs": 3485,
+      "textDeltas": 25,
+      "firstToLastDeltaMs": 955,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00399,
+      "answer": "I'm not able to advise on what to bring — for that, I'd suggest calling the front desk at 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET) and they'll be happy to help.\n\nBefore I book the 2:30 slot, could you share a brief reason for your visit?"
+    },
+    {
+      "model": "haiku-4.5",
+      "run": 102,
+      "outcome": "completed",
+      "correctToolCall": false,
+      "calls": [
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 729,
+          "durationMs": 1811,
+          "usage": {
+            "inputTokens": 3567,
+            "outputTokens": 105,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 1811,
+      "textDeltas": 44,
+      "firstToLastDeltaMs": 1052,
+      "reasoningBlocks": 0,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00409,
+      "answer": "I can book the 2:30 PM appointment with Dr. Priya Lee on Tuesday, October 13 for you. But first, what's the reason for your visit today?\n\nAs for what to bring, that's something our front desk can help you with best—I'd recommend calling them at 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET) or they can also answer any questions when you arrive."
+    },
+    {
+      "model": "gpt-oss-120b",
+      "run": 103,
+      "outcome": "completed",
+      "correctToolCall": false,
+      "calls": [
+        {
+          "stopReason": "end_turn",
+          "ttftMs": 623,
+          "durationMs": 885,
+          "usage": {
+            "inputTokens": 2292,
+            "outputTokens": 71,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0
+          }
+        }
+      ],
+      "turnMs": 885,
+      "textDeltas": 2,
+      "firstToLastDeltaMs": 60,
+      "reasoningBlocks": 1,
+      "signedReasoningReplayed": false,
+      "costUsd": 0.00039,
+      "answer": "Sure thing! To complete the booking I’ll just need a brief reason for the visit (e.g., “skin rash,” “mole check,” etc.). Could you let me know?"
+    }
+  ]
+}

@@ -2,22 +2,29 @@
  * A test double for `LlmClient` that replays queued responses, with no network (ADR-001). It records a
  * deep copy of every request, and streams each text block as fixed-size deltas, so runs are
  * deterministic. The eval harness and handler integration tests can use it too.
+ *
+ * Like the real client, it tags every reasoning block with the request's `family` and `modelId`, so
+ * scripted reasoning follows the same replay rules as real reasoning.
  */
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ContentBlock, TokenUsage, ToolUseBlock } from "@sched/contracts";
 
-import type { LlmCallOptions, LlmClient, LlmRequest, LlmStreamHandlers } from "./client";
+import type {
+  LlmCallOptions,
+  LlmClient,
+  LlmRequest,
+  LlmResponse,
+  LlmStopReason,
+  LlmStreamHandlers,
+} from "./types";
 
-/** What one scripted model call returns. The fake fills in the rest of the `Message`. */
+/** What one scripted model call returns. */
 export interface ScriptedResponse {
-  content: Anthropic.ContentBlock[];
-  stop_reason: Anthropic.StopReason;
-  stop_details?: Anthropic.RefusalStopDetails | null;
-  usage?: Partial<
-    Pick<
-      Anthropic.Usage,
-      "input_tokens" | "output_tokens" | "cache_creation_input_tokens" | "cache_read_input_tokens"
-    >
-  >;
+  content: ContentBlock[];
+  stopReason: LlmStopReason;
+  /** Defaults to `stopReason`. */
+  providerStopReason?: string;
+  /** Defaults: 100 input, 20 output, no cache tokens. */
+  usage?: Partial<TokenUsage>;
 }
 
 /**
@@ -60,7 +67,7 @@ export class ScriptedLlmClient implements LlmClient {
     request: LlmRequest,
     handlers: LlmStreamHandlers = {},
     options: LlmCallOptions = {},
-  ): Promise<Anthropic.Message> {
+  ): Promise<LlmResponse> {
     const callIndex = this.requests.length;
     this.requests.push(structuredClone(request));
     options.signal?.throwIfAborted();
@@ -70,10 +77,9 @@ export class ScriptedLlmClient implements LlmClient {
       throw new Error(`ScriptedLlmClient: no scripted response left for call #${callIndex}`);
     }
     if (typeof step !== "function" && "error" in step) throw step.error;
-    const response = typeof step === "function" ? await step(request) : step;
+    const response = toResponse(typeof step === "function" ? await step(request) : step, request);
 
-    const message = toMessage(response, request.model, callIndex);
-    for (const block of message.content) {
+    for (const block of response.content) {
       await Promise.resolve();
       handlers.onContentBlockStart?.({ type: block.type });
       if (block.type !== "text") continue;
@@ -83,35 +89,23 @@ export class ScriptedLlmClient implements LlmClient {
         handlers.onTextDelta?.(block.text.slice(i, i + this.#chunkSize));
       }
     }
-    return message;
+    return response;
   }
 }
 
-function toMessage(response: ScriptedResponse, model: string, index: number): Anthropic.Message {
-  const usage = response.usage ?? {};
+function toResponse(scripted: ScriptedResponse, request: LlmRequest): LlmResponse {
+  const usage = scripted.usage ?? {};
   return {
-    id: `msg_scripted_${String(index).padStart(3, "0")}`,
-    type: "message",
-    role: "assistant",
-    model,
-    content: structuredClone(response.content),
-    stop_reason: response.stop_reason,
-    stop_sequence: null,
-    stop_details:
-      response.stop_details ??
-      (response.stop_reason === "refusal" ? { type: "refusal", category: null, explanation: null } : null),
-    container: null,
-    diagnostics: null,
+    content: structuredClone(scripted.content).map((block) =>
+      block.type === "reasoning" ? { ...block, family: request.family, modelId: request.modelId } : block,
+    ),
+    stopReason: scripted.stopReason,
+    providerStopReason: scripted.providerStopReason ?? scripted.stopReason,
     usage: {
-      input_tokens: usage.input_tokens ?? 100,
-      output_tokens: usage.output_tokens ?? 20,
-      cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
-      cache_creation: null,
-      inference_geo: null,
-      output_tokens_details: null,
-      server_tool_use: null,
-      service_tier: "standard",
+      inputTokens: usage.inputTokens ?? 100,
+      outputTokens: usage.outputTokens ?? 20,
+      cacheReadTokens: usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cacheWriteTokens ?? 0,
     },
   };
 }
@@ -123,27 +117,36 @@ function toMessage(response: ScriptedResponse, model: string, index: number): An
 let toolUseSeq = 0;
 
 export interface ScriptedToolUse {
-  /** Defaults to a unique `toolu_scripted_<n>`. */
+  /** Defaults to a unique `tooluse_scripted_<n>`. */
   id?: string;
   name: string;
   input: unknown;
 }
 
-type Extras = { thinking?: string; usage?: ScriptedResponse["usage"] };
+type Extras = { reasoning?: string; usage?: ScriptedResponse["usage"] };
 
-function thinkingBlocks(thinking: string | undefined): Anthropic.ThinkingBlock[] {
-  return thinking === undefined ? [] : [{ type: "thinking", thinking, signature: `sig_${thinking.length}` }];
+function reasoningBlocks(reasoning: string | undefined): ContentBlock[] {
+  // family/modelId are placeholders: the client re-tags them from the request.
+  return reasoning === undefined
+    ? []
+    : [
+        {
+          type: "reasoning",
+          family: "scripted",
+          modelId: "scripted",
+          text: reasoning,
+          signature: `sig_${reasoning.length}`,
+        },
+      ];
 }
 
-function textBlock(text: string): Anthropic.TextBlock {
-  return { type: "text", text, citations: null };
-}
+const textBlock = (text: string): ContentBlock => ({ type: "text", text });
 
 /** A final answer (`end_turn`). */
 export function scriptedText(text: string, extras: Extras = {}): ScriptedResponse {
   return {
-    content: [...thinkingBlocks(extras.thinking), textBlock(text)],
-    stop_reason: "end_turn",
+    content: [...reasoningBlocks(extras.reasoning), textBlock(text)],
+    stopReason: "end_turn",
     usage: extras.usage,
   };
 }
@@ -155,41 +158,49 @@ export function scriptedToolUse(
 ): ScriptedResponse {
   return {
     content: [
-      ...thinkingBlocks(extras.thinking),
+      ...reasoningBlocks(extras.reasoning),
       ...(extras.text === undefined ? [] : [textBlock(extras.text)]),
-      ...calls.map((call): Anthropic.ToolUseBlock => ({
+      ...calls.map((call): ToolUseBlock => ({
         type: "tool_use",
-        id: call.id ?? `toolu_scripted_${String(++toolUseSeq).padStart(4, "0")}`,
+        id: call.id ?? `tooluse_scripted_${String(++toolUseSeq).padStart(4, "0")}`,
         name: call.name,
         input: call.input,
-        caller: { type: "direct" },
       })),
     ],
-    stop_reason: "tool_use",
+    stopReason: "tool_use",
     usage: extras.usage,
   };
 }
 
-/** A refusal, optionally after some partial text (a mid-stream decline). */
+/** A refusal (e.g. Converse `content_filtered`), optionally after some partial text (a mid-stream decline). */
 export function scriptedRefusal(
-  extras: { partialText?: string; category?: Anthropic.RefusalStopDetails["category"] } = {},
+  extras: { partialText?: string; providerStopReason?: string } = {},
 ): ScriptedResponse {
   return {
     content: extras.partialText === undefined ? [] : [textBlock(extras.partialText)],
-    stop_reason: "refusal",
-    stop_details: { type: "refusal", category: extras.category ?? null, explanation: null },
+    stopReason: "refusal",
+    providerStopReason: extras.providerStopReason ?? "content_filtered",
   };
 }
 
-/** Output cut off at `max_tokens`: partial thinking and/or partial text. */
+/** Output cut off at `max_tokens`: partial reasoning and/or partial text. */
 export function scriptedMaxTokens(
-  extras: { partialText?: string; thinking?: string } = {},
+  extras: { partialText?: string; reasoning?: string } = {},
 ): ScriptedResponse {
   return {
     content: [
-      ...thinkingBlocks(extras.thinking ?? "…"),
+      ...reasoningBlocks(extras.reasoning ?? "…"),
       ...(extras.partialText === undefined ? [] : [textBlock(extras.partialText)]),
     ],
-    stop_reason: "max_tokens",
+    stopReason: "max_tokens",
+  };
+}
+
+/** Unusable output (Converse `malformed_tool_use`), optionally after partial text. */
+export function scriptedMalformed(extras: { partialText?: string } = {}): ScriptedResponse {
+  return {
+    content: extras.partialText === undefined ? [] : [textBlock(extras.partialText)],
+    stopReason: "malformed_output",
+    providerStopReason: "malformed_tool_use",
   };
 }

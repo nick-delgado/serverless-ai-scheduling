@@ -1,0 +1,15 @@
+{
+  "name": "@sched/spike-s1c-converse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike S-1c (#60): live parity check of the provider-neutral LLM layer over Bedrock Converse (Claude, Nova, gpt-oss). Throwaway; informs ADR-010.",
+  "scripts": {
+    "start": "tsx run.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@sched/agent": "*",
+    "@sched/contracts": "*"
+  }
+}

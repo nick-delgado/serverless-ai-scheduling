@@ -1,40 +1,55 @@
 /**
- * The agent loop (ADR-001): our own tool-use loop over the Messages API.
+ * The agent loop (ADR-001): our own tool-use loop over the provider-neutral `LlmClient` (ADR-010).
  *
  * One call to `runAgentTurn` handles one patient message: it calls the model, runs the tools it asks
  * for (concurrently), feeds the results back, and repeats until the model answers or a limit is hit.
- * It streams `status` and `text_delta` events as it goes and returns the messages to append to history,
- * a trace of every model and tool call, and the aggregated token usage.
+ * It streams `status`, `text_delta`, and `text_reset` events as it goes and returns the messages to
+ * append to history, a trace of every model and tool call, and the aggregated token usage.
  *
  * Invariants:
- * - Append-only: `history` is never modified. Assistant content (thinking blocks included) is stored
- *   exactly as the model returned it. A response that gets retried (refusal, `max_tokens`) is discarded,
- *   never stored, so `newMessages` is always a valid continuation of `history`.
+ * - Append-only: `history` is never modified. Assistant content (reasoning blocks included) is stored
+ *   exactly as the client returned it. A response that gets retried (refusal, `max_tokens`, malformed
+ *   output) is discarded, never stored, so `newMessages` is always a valid continuation of `history`.
+ *   If its text already streamed, a `text_reset` tells the client to drop it.
+ * - Reasoning blocks are sent back only to a model of the same family that accepts them; they're
+ *   filtered out of the request copy otherwise, never out of history.
  * - The loop never sees a patient ID. The executor was bound to the patient by the caller.
  * - Bounded: at most `limits.maxIterations` model calls per turn, retries included.
  * - Tool failures never throw out of the loop; they become `is_error` tool results.
  * - The loop never emits `done` or `error`. Those belong to the chat handler, which has the persisted
  *   message ID and maps `outcome` (and any thrown setup error) to the terminal event (ADR-007).
  */
-import type Anthropic from "@anthropic-ai/sdk";
 import {
   type ChatStreamEvent,
+  type ContentBlock,
   type ConversationId,
   type LlmCallTrace,
-  type ModelToolDefinition,
   TOOL_STATUS_LABELS,
+  TRACE_TOOL_NAME_MAX,
   type TokenUsage,
   type ToolCallTrace,
   type ToolError,
   type ToolErrorCode,
   type ToolName,
+  type ToolResultBlock,
+  type ToolUseBlock,
   type TurnId,
   type TurnOutcome,
   type TurnTrace,
 } from "@sched/contracts";
 
 import { FALLBACK_MESSAGES } from "./fallback-messages";
-import type { LlmClient, LlmRequest, LlmStreamHandlers } from "./llm/client";
+import {
+  CACHE_POINT,
+  type LlmClient,
+  type LlmMessage,
+  type LlmRequest,
+  type LlmRequestMessage,
+  type LlmResponse,
+  type LlmStreamHandlers,
+  type LlmSystemText,
+  type CachePoint,
+} from "./llm/types";
 import type { Clock, ToolExecutionResult, ToolExecutor } from "./ports";
 import { fallbackProfileFor, type ModelProfile } from "./profiles";
 
@@ -59,7 +74,7 @@ export const DEFAULT_LIMITS: Readonly<AgentLimits> = { maxIterations: 8, maxTool
 
 export interface RunAgentTurnInput {
   /** Prior messages from storage, oldest first. Never modified. */
-  history: readonly Anthropic.MessageParam[];
+  history: readonly LlmMessage[];
   /** The patient's new message. */
   userMessage: string;
   system: SystemPrompt;
@@ -69,7 +84,7 @@ export interface RunAgentTurnInput {
   profile: ModelProfile;
   clock: Clock;
   limits?: Partial<AgentLimits>;
-  /** Stream sink for `status` and `text_delta` events. Called synchronously, in order. */
+  /** Stream sink for `status`, `text_delta`, and `text_reset` events. Called synchronously, in order. */
   onEvent?: (event: ChatStreamEvent) => void;
   conversationId: ConversationId;
   turnId: TurnId;
@@ -81,7 +96,7 @@ export interface RunAgentTurnInput {
 
 export interface AgentTurnResult {
   /** Messages to append to history: the user message first, then this turn's assistant/tool messages. */
-  newMessages: Anthropic.MessageParam[];
+  newMessages: LlmMessage[];
   trace: TurnTrace;
   /** Summed over every model call in the turn, including discarded ones (they're billed too). */
   usage: TokenUsage;
@@ -95,15 +110,15 @@ export interface AgentTurnResult {
 /** Streamed between separate text blocks so a preamble and the answer don't run together. */
 export const TEXT_BLOCK_SEPARATOR = "\n\n";
 
-const EPHEMERAL = { type: "ephemeral" } as const;
-
 export function runAgentTurn(input: RunAgentTurnInput): Promise<AgentTurnResult> {
   return new AgentTurn(input).run();
 }
 
 // ---------------------------------------------------------------------------------------------
 
-type ToolUse = Anthropic.ToolUseBlock;
+type ToolUse = ToolUseBlock;
+type FinishOutcome =
+  "iteration_limit" | "max_tokens" | "refusal" | "context_window_exceeded" | "malformed_output";
 
 /** One tool_use block and how it was answered. */
 interface ToolRun {
@@ -118,11 +133,9 @@ class AgentTurn {
   readonly #limits: AgentLimits;
   readonly #monotonic: () => number;
   readonly #emit: (event: ChatStreamEvent) => void;
-  readonly #tools: Anthropic.Tool[];
   readonly #offered: ReadonlySet<string>;
-  readonly #system: Anthropic.TextBlockParam[];
 
-  readonly #newMessages: Anthropic.MessageParam[];
+  readonly #newMessages: LlmMessage[];
   readonly #llmCalls: LlmCallTrace[] = [];
   readonly #toolCalls: ToolCallTrace[] = [];
   #usage: TokenUsage = zeroUsage();
@@ -131,18 +144,21 @@ class AgentTurn {
   #profile: ModelProfile;
   #maxTokens: number;
   #retriedMaxTokens = false;
+  #retriedMalformed = false;
   #fellBack = false;
   #toolCallsRun = 0;
-  #textEmitted = false;
+  /** Retries so far of the current step (0 after a response is kept). */
+  #attempt = 0;
+  /** Characters streamed this turn, and how many of them belong to kept responses. */
+  #streamedChars = 0;
+  #keptChars = 0;
 
   constructor(input: RunAgentTurnInput) {
     this.#in = input;
     this.#limits = { ...DEFAULT_LIMITS, ...input.limits };
     this.#monotonic = input.monotonicNow ?? (() => performance.now());
     this.#emit = input.onEvent ?? (() => undefined);
-    this.#tools = input.executor.definitions.map(toSdkTool);
     this.#offered = new Set(input.executor.definitions.map((d) => d.name));
-    this.#system = systemBlocks(input.system);
     this.#newMessages = [{ role: "user", content: [{ type: "text", text: input.userMessage }] }];
     this.#profile = input.profile;
     this.#maxTokens = input.profile.maxTokens;
@@ -180,14 +196,14 @@ class AgentTurn {
     for (;;) {
       if (!this.#canCallModel()) return this.#finishWith("iteration_limit");
 
-      const message = await this.#callModel();
-      if (message === undefined) return "error";
+      const response = await this.#callModel();
+      if (response === undefined) return "error";
 
-      switch (message.stop_reason) {
+      switch (response.stopReason) {
         case "tool_use": {
-          const toolUses = message.content.filter((b): b is ToolUse => b.type === "tool_use");
+          const toolUses = response.content.filter((b): b is ToolUse => b.type === "tool_use");
           if (toolUses.length === 0) {
-            this.#appendAssistant(message);
+            this.#appendAssistant(response);
             return "completed";
           }
           // Don't start side effects (a booking) for a request that's being torn down. Discarding the
@@ -196,7 +212,7 @@ class AgentTurn {
             this.#error = this.#in.signal.reason;
             return "error";
           }
-          this.#appendAssistant(message);
+          this.#appendAssistant(response);
           if (!this.#canCallModel()) {
             // No model call left to read the results, so don't run anything the patient won't hear about.
             this.#appendToolResults(toolUses.map((use) => notRun(use, ITERATION_LIMIT_ERROR)));
@@ -208,6 +224,7 @@ class AgentTurn {
 
         case "max_tokens":
           // Truncated output (possibly a half-written tool input) is discarded, never run or stored.
+          this.#discard();
           if (!this.#retriedMaxTokens) {
             this.#retriedMaxTokens = true;
             this.#maxTokens = this.#profile.retryMaxTokens;
@@ -215,12 +232,14 @@ class AgentTurn {
           }
           return this.#finishWith("max_tokens");
 
-        case "model_context_window_exceeded":
-          return this.#finishWith("max_tokens");
+        case "context_window_exceeded":
+          this.#discard();
+          return this.#finishWith("context_window_exceeded");
 
         case "refusal":
           // Bedrock has no server-side fallbacks, so retry once on the fallback profile (ADR-002), and stay
           // on it for the rest of the turn.
+          this.#discard();
           if (!this.#fellBack) {
             this.#fellBack = true;
             this.#profile = fallbackProfileFor(this.#profile);
@@ -229,13 +248,17 @@ class AgentTurn {
           }
           return this.#finishWith("refusal");
 
-        case "pause_turn":
-          // Only server tools pause, and we have none; if it happens anyway, continue as the API documents.
-          this.#appendAssistant(message);
-          continue;
+        case "malformed_output":
+          // A malformed tool call can't run and can't be stored (it has no valid result). Retry once as-is.
+          this.#discard();
+          if (!this.#retriedMalformed) {
+            this.#retriedMalformed = true;
+            continue;
+          }
+          return this.#finishWith("malformed_output");
 
         default: // end_turn, stop_sequence
-          this.#appendAssistant(message);
+          this.#appendAssistant(response);
           return "completed";
       }
     }
@@ -249,43 +272,45 @@ class AgentTurn {
   // Model calls
   // -------------------------------------------------------------------------------------------
 
-  async #callModel(): Promise<Anthropic.Message | undefined> {
+  async #callModel(): Promise<LlmResponse | undefined> {
     const profile = this.#profile;
     const request: LlmRequest = {
-      ...profile.params,
-      model: profile.modelId,
-      max_tokens: this.#maxTokens,
-      tools: this.#tools,
-      system: this.#system,
-      messages: withConversationBreakpoint([...this.#in.history, ...this.#newMessages]),
+      modelId: profile.modelId,
+      family: profile.family,
+      system: systemBlocks(this.#in.system, profile),
+      tools: this.#in.executor.definitions,
+      messages: requestMessages([...this.#in.history, ...this.#newMessages], profile),
+      maxTokens: this.#maxTokens,
+      modelFields: profile.modelFields,
+      ...(profile.inlineReasoningTag === undefined ? {} : { inlineReasoningTag: profile.inlineReasoningTag }),
     };
     const index = this.#llmCalls.length;
+    const attempt = this.#attempt;
     const startedAt = this.#in.clock.now().toISOString();
     const t0 = this.#monotonic();
     let ttftMs: number | undefined;
     const handlers = this.#streamHandlers(() => {
       ttftMs ??= this.#elapsed(t0);
     });
+    const base = { index, attempt, modelId: profile.modelId, startedAt };
 
     try {
-      const message = await this.#in.llm.streamMessage(request, handlers, { signal: this.#in.signal });
-      const usage = toTokenUsage(message.usage);
-      this.#usage = addUsage(this.#usage, usage);
+      const response = await this.#in.llm.streamMessage(request, handlers, { signal: this.#in.signal });
+      this.#usage = addUsage(this.#usage, response.usage);
       this.#llmCalls.push({
-        index,
-        modelId: profile.modelId,
-        startedAt,
+        ...base,
         durationMs: this.#elapsed(t0),
         ...(ttftMs === undefined ? {} : { ttftMs }),
-        stopReason: message.stop_reason ?? "unknown",
-        usage,
+        stopReason: response.stopReason,
+        ...(response.providerStopReason !== response.stopReason
+          ? { providerStopReason: response.providerStopReason }
+          : {}),
+        usage: response.usage,
       });
-      return message;
+      return response;
     } catch (error) {
       this.#llmCalls.push({
-        index,
-        modelId: profile.modelId,
-        startedAt,
+        ...base,
         durationMs: this.#elapsed(t0),
         ...(ttftMs === undefined ? {} : { ttftMs }),
         stopReason: "error",
@@ -301,18 +326,37 @@ class AgentTurn {
     return {
       onContentBlockStart: (block) => {
         onFirstBlock();
-        if (block.type === "text") separatorPending = this.#textEmitted;
+        if (block.type === "text") separatorPending = this.#streamedChars > 0;
       },
       onTextDelta: (text) => {
         if (text.length === 0) return;
         if (separatorPending) {
           separatorPending = false;
-          this.#emit({ type: "text_delta", text: TEXT_BLOCK_SEPARATOR });
+          this.#stream(TEXT_BLOCK_SEPARATOR);
         }
-        this.#emit({ type: "text_delta", text });
-        this.#textEmitted = true;
+        this.#stream(text);
       },
     };
+  }
+
+  #stream(text: string): void {
+    this.#emit({ type: "text_delta", text });
+    this.#streamedChars += text.length;
+  }
+
+  /** The last response won't be kept: take back any text it streamed, and count the retry. */
+  #discard(): void {
+    this.#attempt += 1;
+    if (this.#streamedChars > this.#keptChars) {
+      this.#emit({ type: "text_reset", keepChars: this.#keptChars });
+      this.#streamedChars = this.#keptChars;
+    }
+  }
+
+  /** The last response is kept: what it streamed is now part of the stored text. */
+  #keep(): void {
+    this.#attempt = 0;
+    this.#keptChars = this.#streamedChars;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -362,45 +406,48 @@ class AgentTurn {
   // History, trace, and fixed replies
   // -------------------------------------------------------------------------------------------
 
-  #appendAssistant(message: Anthropic.Message): void {
-    // The API rejects an empty assistant message in history, so an empty reply isn't stored.
-    if (message.content.length === 0) return;
-    this.#newMessages.push({ role: "assistant", content: message.content });
+  #appendAssistant(response: LlmResponse): void {
+    this.#keep();
+    // An empty assistant message is invalid in history, so a reply with nothing visible or callable
+    // (no text, no tool call; reasoning alone) isn't stored.
+    if (!response.content.some((b) => b.type === "text" || b.type === "tool_use")) return;
+    this.#newMessages.push({ role: "assistant", content: response.content });
   }
 
   /**
    * All results go back in ONE user message, in the model's order (parallel tool use). Every call is
-   * traced, except one naming a tool we never offered: the trace schema only admits real tool names.
+   * traced; one naming a tool we never offered is traced with `known: false`.
    */
   #appendToolResults(runs: ToolRun[]): void {
-    const content = runs.map(({ use, result, durationMs }): Anthropic.ToolResultBlockParam => {
-      if (this.#isOffered(use.name)) {
-        this.#toolCalls.push({
-          toolUseId: use.id,
-          name: use.name,
-          input: structuredClone(use.input),
-          ok: result.ok,
-          ...(result.ok ? {} : { errorCode: result.error.error.code }),
-          durationMs,
-        });
-      }
+    const content = runs.map(({ use, result, durationMs }): ToolResultBlock => {
+      this.#toolCalls.push({
+        toolUseId: use.id,
+        name: use.name.slice(0, TRACE_TOOL_NAME_MAX),
+        known: this.#isOffered(use.name),
+        input: structuredClone(use.input),
+        ok: result.ok,
+        ...(result.ok ? {} : { errorCode: result.error.error.code }),
+        durationMs,
+      });
       return result.ok
-        ? { type: "tool_result", tool_use_id: use.id, content: JSON.stringify(result.output ?? null) }
-        : { type: "tool_result", tool_use_id: use.id, content: JSON.stringify(result.error), is_error: true };
+        ? { type: "tool_result", toolUseId: use.id, content: JSON.stringify(result.output ?? null) }
+        : { type: "tool_result", toolUseId: use.id, content: JSON.stringify(result.error), isError: true };
     });
     this.#newMessages.push({ role: "user", content });
   }
 
   /** Stream and store a fixed reply, and return the outcome it stands for. */
-  #finishWith(outcome: "iteration_limit" | "max_tokens" | "refusal"): TurnOutcome {
+  #finishWith(outcome: FinishOutcome): TurnOutcome {
     const text = {
       iteration_limit: FALLBACK_MESSAGES.iterationLimit,
       max_tokens: FALLBACK_MESSAGES.maxTokens,
+      context_window_exceeded: FALLBACK_MESSAGES.contextWindow,
       refusal: FALLBACK_MESSAGES.refusal,
+      malformed_output: FALLBACK_MESSAGES.malformedOutput,
     }[outcome];
-    if (this.#textEmitted) this.#emit({ type: "text_delta", text: TEXT_BLOCK_SEPARATOR });
-    this.#emit({ type: "text_delta", text });
-    this.#textEmitted = true;
+    if (this.#streamedChars > 0) this.#stream(TEXT_BLOCK_SEPARATOR);
+    this.#stream(text);
+    this.#keptChars = this.#streamedChars;
     this.#newMessages.push({ role: "assistant", content: [{ type: "text", text }] });
     return outcome;
   }
@@ -444,62 +491,44 @@ const INTERNAL_TOOL_ERROR = toolError(
   "Apologize, and offer to try again or to connect the patient with the front desk.",
 );
 
-function toSdkTool(definition: ModelToolDefinition): Anthropic.Tool {
-  return {
-    name: definition.name,
-    description: definition.description,
-    input_schema: definition.input_schema,
-  };
-}
-
-/** Tools render first, then system: a breakpoint on the stable block caches tools + stable system together. */
-function systemBlocks(prompt: SystemPrompt): Anthropic.TextBlockParam[] {
-  const blocks: Anthropic.TextBlockParam[] = [
-    { type: "text", text: prompt.stable, cache_control: EPHEMERAL },
-  ];
+/**
+ * Tools render first, then system. A cache point after the stable block caches tools + stable system
+ * together; the volatile block comes after it. Markers go only where the profile says the model takes them.
+ */
+function systemBlocks(prompt: SystemPrompt, profile: ModelProfile): (LlmSystemText | CachePoint)[] {
+  const blocks: (LlmSystemText | CachePoint)[] = [{ type: "text", text: prompt.stable }];
+  if (profile.cachePoints.system) blocks.push(CACHE_POINT);
   if (prompt.dynamic) blocks.push({ type: "text", text: prompt.dynamic });
   return blocks;
 }
 
 /**
- * A second, rolling breakpoint on the last block of the request's final user message, so the next call
- * (the next iteration or the next turn) reads the conversation so far from cache. It's added to a copy:
- * stored messages never carry `cache_control`.
+ * The request's copy of the conversation:
+ * - reasoning blocks the target model can't take (another family, or a model that rejects them) are
+ *   left out;
+ * - a rolling cache point goes at the end of the final user message, so the next call (the next
+ *   iteration or the next turn) reads the conversation so far from cache.
+ * Stored messages are never changed.
  */
-function withConversationBreakpoint(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
-  const last = messages.at(-1);
-  if (last?.role !== "user") return messages;
-  const content: Anthropic.ContentBlockParam[] =
-    typeof last.content === "string" ? [{ type: "text", text: last.content }] : last.content;
-  const lastBlock = content.at(-1);
-  if (lastBlock?.type !== "text" && lastBlock?.type !== "tool_result") return messages;
-  return [
-    ...messages.slice(0, -1),
-    { ...last, content: [...content.slice(0, -1), { ...lastBlock, cache_control: EPHEMERAL }] },
-  ];
+function requestMessages(messages: readonly LlmMessage[], profile: ModelProfile): LlmRequestMessage[] {
+  const keep = (block: ContentBlock) =>
+    block.type !== "reasoning" || (profile.replaysReasoning && block.family === profile.family);
+  const copy: LlmRequestMessage[] = messages.map((m) => ({ role: m.role, content: m.content.filter(keep) }));
+  const last = copy.at(-1);
+  if (profile.cachePoints.messages && last?.role === "user") last.content = [...last.content, CACHE_POINT];
+  return copy;
 }
 
-function storedText(messages: Anthropic.MessageParam[]): string {
+function storedText(messages: LlmMessage[]): string {
   return messages
     .filter((m) => m.role === "assistant")
-    .flatMap((m) =>
-      typeof m.content === "string" ? [m.content] : m.content.map((b) => (b.type === "text" ? b.text : "")),
-    )
+    .flatMap((m) => m.content.map((b) => (b.type === "text" ? b.text : "")))
     .filter((text) => text.length > 0)
     .join(TEXT_BLOCK_SEPARATOR);
 }
 
 function zeroUsage(): TokenUsage {
   return { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-}
-
-function toTokenUsage(usage: Anthropic.Usage): TokenUsage {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
-  };
 }
 
 function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {

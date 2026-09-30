@@ -1,6 +1,7 @@
 /**
  * Agent tool contracts: the model-facing input schemas (snake_case, strict) and the output shapes the
- * handlers return. `toolDefinitionsForModel()` turns them into the `tools` array sent to Claude.
+ * handlers return. `toolDefinitionsForModel()` turns them into provider-neutral tool definitions; the
+ * LLM adapter maps them to its wire shape (Converse `toolSpec`, ADR-010).
  *
  * Security invariant (CLAUDE.md rule 1, ADR-005): no input schema has a patient identifier. The
  * handler receives the patient from the verified JWT via its ToolContext. Inputs are strict objects,
@@ -266,28 +267,32 @@ export const TOOLS = {
 export type ToolInput<N extends ToolName> = z.infer<(typeof TOOLS)[N]["input"]>;
 export type ToolOutput<N extends ToolName> = z.infer<(typeof TOOLS)[N]["output"]>;
 
-/** Shape of one entry in the Messages API `tools` array (structurally compatible with the SDK's `Tool`). */
+/**
+ * A provider-neutral tool definition (contracts v1.1). The Converse adapter sends it as
+ * `{ toolSpec: { name, description, inputSchema: { json: inputSchema } } }`.
+ */
 export interface ModelToolDefinition {
   name: ToolName;
   description: string;
-  input_schema: { type: "object"; [key: string]: unknown };
+  /** JSON Schema (draft 2020-12 subset) of the tool input, without `$schema`. */
+  inputSchema: { type: "object"; [key: string]: unknown };
 }
 
 /** JSON Schema for a tool input as the model should see it (input view: defaulted fields are optional). */
-export function toolInputJsonSchema(name: ToolName): ModelToolDefinition["input_schema"] {
+export function toolInputJsonSchema(name: ToolName): ModelToolDefinition["inputSchema"] {
   const { $schema: _ignored, ...schema } = z.toJSONSchema(TOOLS[name].input, { io: "input" }) as Record<
     string,
     unknown
   >;
   if (schema.type !== "object") throw new Error(`Tool ${name} input must be an object schema`);
-  return schema as ModelToolDefinition["input_schema"];
+  return schema as ModelToolDefinition["inputSchema"];
 }
 
-/** The `tools` array for the Messages API, in a stable order (stable bytes keep the prompt cache warm). */
+/** Every tool definition, in a stable order (stable bytes keep the prompt cache warm). */
 export function toolDefinitionsForModel(): ModelToolDefinition[] {
   return TOOL_NAMES.map((name) => ({
     name,
     description: TOOLS[name].description,
-    input_schema: toolInputJsonSchema(name),
+    inputSchema: toolInputJsonSchema(name),
   }));
 }

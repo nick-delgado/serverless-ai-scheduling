@@ -7,7 +7,7 @@ Each ADR records one significant decision: the context, the options we weighed, 
 | ADR | Title | Status |
 |---|---|---|
 | [001](0001-agent-runtime.md) | Agent runtime: our own tool-use loop in Lambda | Accepted |
-| [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Proposed; interim dev path accepted (Sonnet 4.6, bedrock-runtime) |
+| [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Client decision superseded by ADR-010; model-selection method stands |
 | [003](0003-iac-layout.md) | Infrastructure as code: SAM, one template per stack | Accepted |
 | [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted |
@@ -15,6 +15,7 @@ Each ADR records one significant decision: the context, the options we weighed, 
 | [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7) |
 | [008](0008-evaluation-strategy.md) | Evaluation strategy | Accepted |
 | [009](0009-safety-and-privacy.md) | Safety, privacy, and abuse controls | Accepted |
+| [010](0010-provider-neutral-llm-layer.md) | Provider-neutral LLM layer via Bedrock Converse | Accepted (spike S-1c, #60) |
 
 ## Template
 

@@ -1,6 +1,6 @@
 # ADR-002: Model selection and Bedrock client
 
-- **Status:** Proposed. **Interim development path accepted 2026-09-28** (Sonnet 4.6 via bedrock-runtime; see "Interim decision" below). Client and default model are finalized after the Opus 5 / Sonnet 5 rerun and the M3 eval matrix.
+- **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6).
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`

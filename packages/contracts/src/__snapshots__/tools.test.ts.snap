@@ -4,7 +4,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
 [
   {
     "description": "List Cedar Ridge Health providers, optionally filtered by specialty or by part of a name. Use it to resolve a provider the patient mentions ("Dr. Lee") into a provider_id, or to show who practices a specialty.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "name_query": {
@@ -31,7 +31,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "Find open 30-minute appointment slots by provider or specialty, within a date range (at most 31 days), optionally only mornings or afternoons. Returns up to 10 slots in time order, each with a slot_id and a start_local time to quote verbatim. Only offer slots returned by this tool, and only book slot_ids it returned.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "date_range": {
@@ -91,7 +91,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "List the logged-in patient's appointments (upcoming only unless include_past is true). The patient's identity is applied automatically; never ask for or pass a patient ID.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "include_past": {
@@ -106,7 +106,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "Get the logged-in patient's first and last name and preferred provider, if any. The patient's identity is applied automatically.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {},
       "type": "object",
@@ -115,7 +115,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. If the slot was just taken, it returns a SLOT_UNAVAILABLE error; offer other times.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "reason": {
@@ -140,7 +140,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "appointment_id": {
@@ -164,7 +164,7 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
   },
   {
     "description": "Hand the conversation to front-desk staff: records the escalation and emails staff your summary plus the transcript. Use it when the patient asks for a person, after two failed attempts, when the patient is frustrated, or for out-of-scope requests. Use it at most once per conversation, then give the patient the phone number and hours it returns.",
-    "input_schema": {
+    "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "reason": {

@@ -77,8 +77,8 @@ describe("security invariant: no patient identity in tool inputs (CLAUDE.md rule
 });
 
 describe("model-facing schema shape", () => {
-  it("does not emit $schema (not part of the Messages API tool shape)", () => {
-    for (const def of toolDefinitionsForModel()) expect(def.input_schema).not.toHaveProperty("$schema");
+  it("does not emit $schema (not part of the Converse toolSpec shape)", () => {
+    for (const def of toolDefinitionsForModel()) expect(def.inputSchema).not.toHaveProperty("$schema");
   });
 
   it("shows defaulted fields as optional to the model", () => {

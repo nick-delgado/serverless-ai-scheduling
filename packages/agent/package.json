@@ -12,8 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^0.34.0",
-    "@anthropic-ai/sdk": "^0.129.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1143.0",
     "@sched/contracts": "*"
   }
 }

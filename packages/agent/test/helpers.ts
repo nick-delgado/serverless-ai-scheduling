@@ -1,9 +1,17 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { type ChatStreamEvent, type ToolName, toolDefinitionsForModel } from "@sched/contracts";
+import {
+  type ChatStreamEvent,
+  type ToolName,
+  type ToolResultBlock,
+  toolDefinitionsForModel,
+} from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 
 import {
+  type CachePoint,
   type Clock,
+  type ContentBlock,
+  type LlmMessage,
+  type LlmRequestMessage,
   MODEL_PROFILES,
   type RunAgentTurnInput,
   type ScriptedLlmClient,
@@ -80,6 +88,7 @@ export function turnInput(
   };
 }
 
+/** Every streamed delta concatenated, ignoring resets (what went over the wire). */
 export function textDeltas(events: ChatStreamEvent[]): string {
   return events.map((e) => (e.type === "text_delta" ? e.text : "")).join("");
 }
@@ -106,14 +115,15 @@ export function allKeys(value: unknown): string[] {
   return Object.entries(value).flatMap(([k, v]) => [k, ...allKeys(v)]);
 }
 
-export function contentOf(message: Anthropic.MessageParam | undefined): Anthropic.ContentBlockParam[] {
+export function contentOf(
+  message: LlmMessage | LlmRequestMessage | undefined,
+): (ContentBlock | CachePoint)[] {
   if (message === undefined) throw new Error("missing message");
-  if (typeof message.content === "string") return [{ type: "text", text: message.content }];
   return message.content;
 }
 
-export function toolResults(message: Anthropic.MessageParam | undefined): Anthropic.ToolResultBlockParam[] {
-  return contentOf(message).filter((b): b is Anthropic.ToolResultBlockParam => b.type === "tool_result");
+export function toolResults(message: LlmMessage | LlmRequestMessage | undefined): ToolResultBlock[] {
+  return contentOf(message).filter((b): b is ToolResultBlock => b.type === "tool_result");
 }
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

@@ -41,6 +41,20 @@ const appointmentSummary = {
   reason: "Mole check",
 } satisfies In<"AppointmentSummary">;
 
+const reasoningBlock = {
+  type: "reasoning",
+  family: "anthropic.claude",
+  modelId: "us.anthropic.claude-sonnet-4-6",
+  text: "They want dermatology on Tuesday afternoon.",
+  signature: "c2lnbmF0dXJlLWV4YW1wbGU=",
+} satisfies In<"ReasoningBlock">;
+const toolUseBlock = {
+  type: "tool_use",
+  id: "tooluse_01",
+  name: "check_availability",
+  input: { specialty: "dermatology", date_range: { start_date: "2026-10-13", end_date: "2026-10-13" } },
+} satisfies In<"ToolUseBlock">;
+
 const statusEvent = {
   type: "status",
   tool: "check_availability",
@@ -118,20 +132,24 @@ export const EXAMPLES = {
     createdAt: NOW,
     updatedAt: NOW,
   } satisfies In<"Appointment">,
+  // content (v1.1, provider-neutral)
+  TextBlock: {
+    type: "text",
+    text: "Hi! Do you have dermatology openings on Tuesday?",
+  } satisfies In<"TextBlock">,
+  ToolUseBlock: toolUseBlock,
+  ToolResultBlock: {
+    type: "tool_result",
+    toolUseId: "tooluse_01",
+    content: '{"slots":[]}',
+  } satisfies In<"ToolResultBlock">,
+  ReasoningBlock: reasoningBlock,
   ContentBlock: { type: "text", text: "Hi! Do you have dermatology openings on Tuesday?" },
   ConversationMessage: {
     conversationId: CONVERSATION_ID,
     seq: 2,
     role: "assistant",
-    content: [
-      { type: "thinking", thinking: "", signature: "sig" },
-      {
-        type: "tool_use",
-        id: "toolu_01",
-        name: "check_availability",
-        input: { specialty: "dermatology", date_range: { start_date: "2026-10-13", end_date: "2026-10-13" } },
-      },
-    ],
+    content: [reasoningBlock, toolUseBlock],
     turnId: TURN_ID,
     createdAt: NOW,
   } satisfies In<"ConversationMessage">,
@@ -226,6 +244,7 @@ export const EXAMPLES = {
   // trace
   LlmCallTrace: {
     index: 0,
+    attempt: 0,
     modelId: "us.anthropic.claude-sonnet-4-6",
     startedAt: NOW,
     durationMs: 2670,
@@ -234,8 +253,9 @@ export const EXAMPLES = {
     usage: USAGE,
   } satisfies In<"LlmCallTrace">,
   ToolCallTrace: {
-    toolUseId: "toolu_01",
+    toolUseId: "tooluse_01",
     name: "check_availability",
+    known: true,
     input: { specialty: "dermatology", date_range: { start_date: "2026-10-13", end_date: "2026-10-13" } },
     ok: true,
     durationMs: 42,
@@ -259,6 +279,7 @@ export const EXAMPLES = {
   // stream
   ChatStatusEvent: statusEvent,
   ChatTextDeltaEvent: deltaEvent,
+  ChatTextResetEvent: { type: "text_reset", keepChars: 0 } satisfies In<"ChatTextResetEvent">,
   ChatDoneEvent: doneEvent,
   ChatErrorCode: "RATE_LIMITED",
   ChatErrorEvent: errorEvent,
