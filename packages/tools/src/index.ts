@@ -10,5 +10,6 @@
 export const PACKAGE_NAME = "@sched/tools";
 
 export * from "./clock";
+export * from "./notify";
 export * from "./registry";
 export * from "./repos";

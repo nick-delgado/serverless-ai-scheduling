@@ -28,18 +28,26 @@ import {
 } from "@sched/contracts";
 
 import type { Clock } from "./clock";
+import type { Notifier } from "./notify";
 import type { Repositories } from "./repos/types";
 
 // Tool handlers: each tool issue adds its import under its own line (keeps parallel PRs conflict-free).
 // #19 find_providers, check_availability
+import { checkAvailability } from "./tools/check_availability";
+import { findProviders } from "./tools/find_providers";
 
 // #20 get_my_appointments, get_patient_profile
+import { getMyAppointments } from "./tools/get_my_appointments";
+import { getPatientProfile } from "./tools/get_patient_profile";
 
 // #21 book_appointment
+import { bookAppointment } from "./tools/book_appointment";
 
 // #22 reschedule_appointment
+import { rescheduleAppointment } from "./tools/reschedule_appointment";
 
 // #23 escalate_to_human
+import { escalateToHuman } from "./tools/escalate_to_human";
 
 // ---------------------------------------------------------------------------------------------
 // The seam (structurally identical to the port in packages/agent)
@@ -71,6 +79,8 @@ export interface ToolContext {
   readonly conversationId: ConversationId;
   readonly clock: Clock;
   readonly repos: Repositories;
+  /** Staff notifications (escalate_to_human). Optional: without it, escalations are recorded as FAILED. */
+  readonly notifier?: Notifier;
 }
 
 export type ToolHandlerResult<N extends ToolName> =
@@ -104,10 +114,17 @@ export function toolFail(
  */
 export const TOOL_REGISTRY: ToolRegistry = {
   // #19 find_providers, check_availability
+  find_providers: findProviders,
+  check_availability: checkAvailability,
   // #20 get_my_appointments, get_patient_profile
+  get_my_appointments: getMyAppointments,
+  get_patient_profile: getPatientProfile,
   // #21 book_appointment
+  book_appointment: bookAppointment,
   // #22 reschedule_appointment
+  reschedule_appointment: rescheduleAppointment,
   // #23 escalate_to_human
+  escalate_to_human: escalateToHuman,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -162,6 +179,7 @@ export function createToolExecutor(
     conversationId: ConversationId.parse(ctx.conversationId),
     clock: ctx.clock,
     repos: ctx.repos,
+    ...(ctx.notifier ? { notifier: ctx.notifier } : {}),
   });
   const registered = registeredNames(registry);
   const definitions = Object.freeze(
