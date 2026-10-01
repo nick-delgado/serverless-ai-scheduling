@@ -8,7 +8,7 @@
 
 The task-worker agent built `reschedule_appointment` around the repository's atomic `appointments.reschedule`. It allowed a move to any open slot, with any provider and in any specialty, on the grounds that the patient had confirmed the new time. The repository leaves that choice to the tool: "The new slot may be with another provider or specialty; whether that is allowed is a tool-level decision."
 
-The review of PR #67 found two consequences. A patient could reach Dr. Brooks, who isn't taking new patients, by booking any open slot and then moving it into one of his. And a dermatology "Mole check" moved into a cardiology slot became a cardiology appointment for a mole check. The first had already been decided: the `book_appointment` entry's "What's next" asked this tool to apply the same new-patient rule. The second was open, and Nick decided it.
+The review of PR #67 found two consequences. A patient could reach Dr. Brooks, who isn't taking new patients, by booking any open slot and then moving it into one of his. And a dermatology "Mole check" moved into a cardiology slot became a cardiology appointment for a mole check. The first had already been decided while this PR waited for review: the `book_appointment` entry's "What's next" asked this tool's review to apply the same new-patient rule, and the review did. The second was open, and Nick decided it.
 
 ## Why we chose what we chose
 
@@ -20,7 +20,7 @@ The review of PR #67 found two consequences. A patient could reach Dr. Brooks, w
 
 ## What surprised us
 
-The lesson from `book_appointment` didn't carry over by itself. Its journal entry said in plain words that this tool's review should apply the new-patient rule, and the first version of the tool still didn't. The retry-ordering bug came back the same way. The specialty rule then changed two existing tests, the taken-slot test and the concurrent-move race. Both had picked their slots across specialties only because those slots happened to be convenient in the fixture, so they now set up same-specialty appointments to keep testing what their names say.
+Both tools were built in parallel, and they made the same two mistakes. `reschedule_appointment` was written on Sept 29, two days before the `book_appointment` review settled the new-patient rule and the retry ordering, so its first version had neither. The rules reached this tool only because the `book_appointment` journal entry asked this tool's review to check for them, and the review did. Without that note, one tool would have been fixed and its twin left as it was. The specialty rule then changed two existing tests, the taken-slot test and the concurrent-move race. Both had picked their slots across specialties only because those slots happened to be convenient in the fixture, so they now set up same-specialty appointments to keep testing what their names say.
 
 ## Evidence
 
