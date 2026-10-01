@@ -19,3 +19,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-09-29 | [DynamoDB Local is too polite to test our retry path](2026-09-29-dynamodb-local-is-too-polite.md) | 4. Teaching the agent to schedule |
 | 2026-09-29 | [Writing the evals first exposed gaps in the fixture and the harness](2026-09-29-writing-the-tests-before-the-agent.md) | 4. Teaching the agent to schedule |
 | 2026-09-29 | [Denied the models we planned for, we made the agent speak to any model Bedrock serves](2026-09-29-one-transport-many-models.md) | 4. Teaching the agent to schedule |
+| 2026-09-30 | [A past date gets an error, not an empty list, so the agent can't call last Friday "fully booked"](2026-09-30-a-past-date-is-an-error-not-an-empty-list.md) | 4. Teaching the agent to schedule |
+| 2026-10-01 | [A retried booking must find the appointment it already made, even after the slot starts](2026-10-01-a-retry-must-find-the-booking-it-made.md) | 4. Teaching the agent to schedule |
