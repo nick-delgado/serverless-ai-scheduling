@@ -3,7 +3,7 @@
  * `TOOL_REGISTRY` is empty on this branch, so the runner tests register these instead. They follow the
  * contracts closely enough for grading (real ids, `start_local` text, repository writes), nothing more.
  */
-import { CLINIC, type AppointmentSummary, type SlotOption } from "@sched/contracts";
+import { CLINIC, LIMITS, type AppointmentSummary, type SlotOption } from "@sched/contracts";
 import {
   clinicDateRangeUtc,
   formatClinicDateTime,
@@ -59,10 +59,10 @@ const checkAvailability: ToolHandler<"check_availability"> = async (input, ctx) 
       return input.time_of_day === "any" || (input.time_of_day === "morning" ? hour < 12 : hour >= 12);
     })
     .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
-  const shown = filtered.slice(0, 10);
+  const shown = filtered.slice(0, LIMITS.availabilityMaxSlots);
   return toolOk({
     slots: await Promise.all(shown.map((s) => slotOption(ctx.repos, s))),
-    truncated: filtered.length > 10,
+    truncated: filtered.length > LIMITS.availabilityMaxSlots,
   });
 };
 

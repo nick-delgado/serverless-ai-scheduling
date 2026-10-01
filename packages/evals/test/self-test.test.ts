@@ -59,7 +59,7 @@ const CHECK_OKAFOR_THU = scriptedToolUse([
   },
 ]);
 const OFFER = scriptedText(
-  "Dr. Samuel Okafor has Thursday, October 15, 2026 at 2:00 PM ET or Thursday, October 15, 2026 at 2:30 PM ET. Which one works, and what is the visit for?",
+  "Dr. Samuel Okafor has Thursday, October 15, 2026 at 1:30 PM ET or Thursday, October 15, 2026 at 2:00 PM ET. Which one works, and what is the visit for?",
 );
 const RESTATE = scriptedText(
   "To confirm: Dr. Samuel Okafor (dermatology), Thursday, October 15, 2026 at 2:00 PM ET, for a mole check. Shall I book it?",
