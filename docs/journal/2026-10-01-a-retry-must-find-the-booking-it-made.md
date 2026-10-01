@@ -32,4 +32,4 @@ All three answers came from what goes wrong when a call is repeated or when a we
 ## What's next
 
 - `reschedule_appointment` (#22) lets a patient move to another provider. Its review should apply the same new-patient rule there.
-- One shared "is this slot still bookable" check for `check_availability` and `book_appointment`, in the cleanup issue #77.
+- One shared "is this slot still bookable" check for `check_availability` and `book_appointment` (review finding SMELL-2): left to Nick, and not yet tracked in any issue.

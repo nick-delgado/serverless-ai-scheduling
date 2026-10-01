@@ -44,12 +44,13 @@ const SLOT_NOT_FOUND = [
 ] as const;
 
 export const bookAppointment: ToolHandler<"book_appointment"> = async (input, ctx) => {
-  // Immutable facts about the slot (start time, provider): safe to read before the atomic write.
+  // The slot's start time and provider (immutable) and its appointmentId, for the hold check below. No read
+  // here decides availability: the atomic write does.
   const slot = await ctx.repos.slots.get(input.slot_id);
   if (!slot) return toolFail("NOT_FOUND", ...SLOT_NOT_FOUND);
 
-  // Resolve the display name before writing: a dangling provider is a broken invariant (INTERNAL), and
-  // failing here means nothing was booked.
+  // The provider gives the display name and acceptingNewPatients. Resolve it before writing: a dangling
+  // provider is a broken invariant (INTERNAL), and failing here means nothing was booked.
   const provider = await ctx.repos.providers.get(slot.providerId);
   if (!provider) throw new Error(`Slot ${slot.slotId} references unknown provider ${slot.providerId}`);
 

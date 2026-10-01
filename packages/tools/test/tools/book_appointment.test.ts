@@ -195,6 +195,15 @@ describe("book_appointment", () => {
     expect(await slotStatus(BROOKS_SLOT)).toBe("OPEN");
   });
 
+  it("refuses a patient whose appointments are only with other providers", async () => {
+    // Maria holds a BOOKED appointment with Dr. Lee but has never seen Dr. Brooks.
+    const before = repos.snapshot();
+    const error = errorOf(await run(MARIA, { slot_id: BROOKS_SLOT, reason: "General check-up" }));
+    expect(error.code).toBe("NOT_ALLOWED");
+    expect(error.hint).toMatch(/same specialty/);
+    expect(repos.snapshot()).toEqual(before);
+  });
+
   it("books an existing patient with a provider not taking new patients", async () => {
     // Walter's fixture history has a COMPLETED annual physical with Dr. Brooks.
     const out = outputOf(await run(WALTER, { slot_id: BROOKS_SLOT, reason: "Follow-up" }));
