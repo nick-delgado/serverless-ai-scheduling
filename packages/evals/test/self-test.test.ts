@@ -7,6 +7,7 @@
 import {
   MODEL_PROFILES,
   ScriptedLlmClient,
+  scriptedMalformed,
   scriptedText,
   scriptedToolUse,
   type ScriptedStep,
@@ -317,6 +318,69 @@ describe("runner", () => {
     const r = await run("book-derm-next-week-afternoon", [{ error: new Error("throttled") }], ["hi"]);
     expect(r.status).toBe("error");
     expect(r.reason).toContain("throttled");
+  });
+
+  it("fault call: all fails every call to the tool, with the harness's INTERNAL text", async () => {
+    const book = (slot: string) =>
+      scriptedToolUse([{ name: "book_appointment", input: { slot_id: slot, reason: "lingering cold" } }]);
+    const r = await run(
+      "escalate-repeated-failure",
+      [
+        book("slot_brooks_20261012T1300Z"),
+        scriptedText("Sorry, let me try again."),
+        book("slot_brooks_20261012T1300Z"),
+        scriptedText("Sorry."),
+      ],
+      ["yes book it", "yes"],
+    );
+    const errors = r.events.flatMap((e) => (e.kind === "tool_call" ? [e.error?.code] : []));
+    expect(errors).toEqual(["INTERNAL", "INTERNAL"]);
+  });
+
+  it("stops at max_turns", async () => {
+    const s = scenario("safety-emergency-chest-pain-911");
+    const replies = Array.from({ length: s.max_turns + 2 }, () => scriptedText("Please call 911 now."));
+    const r = await run(
+      s.id,
+      replies,
+      Array.from({ length: s.max_turns + 2 }, () => "ok"),
+    );
+    expect(r.turns).toBe(s.max_turns);
+    expect(r.stoppedBecause).toBe("max_turns");
+  });
+
+  it("trials are isolated: a second trial books the same slot again", async () => {
+    const steps = () => [CHECK_OKAFOR_THU, OFFER, RESTATE, BOOK_OKAFOR, BOOKED];
+    const s = scenario("book-derm-next-week-afternoon");
+    for (const trial of [1, 2]) {
+      const r = await runScenarioTrial(s, {
+        trial,
+        agent: { llm: new ScriptedLlmClient(steps()), profile },
+        simulator: new QueuedPatientSimulator(PATIENT),
+      });
+      expect(r.status, `trial ${trial}`).toBe("pass");
+    }
+  });
+
+  it("an invented tool fails trajectory.no_unknown_tools (SPEC-1 decision)", async () => {
+    const r = await run(
+      "book-derm-next-week-afternoon",
+      [scriptedToolUse([{ name: "cancel_appointment", input: {} }]), scriptedText("I can't do that here.")],
+      ["cancel my appointment"],
+    );
+    expect(r.status).toBe("fail");
+    expect(failed(r)).toContain("trajectory.no_unknown_tools");
+  });
+
+  it("a malformed_output turn is an agent failure, not an error trial (SPEC-1 decision)", async () => {
+    const r = await run(
+      "book-derm-next-week-afternoon",
+      [scriptedMalformed(), scriptedMalformed()],
+      ["need a derm appt next week"],
+    );
+    expect(r.outcomes).toEqual(["malformed_output"]);
+    expect(r.status).toBe("fail");
+    expect(byName(r, "turn.outcome")?.detail).toBe("turn 1 ended in malformed_output");
   });
 
   it("seeds setup.appointments and binds the executor to the scenario's patient", async () => {

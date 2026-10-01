@@ -1,0 +1,125 @@
+/**
+ * Negative tests for the loader's file checks and the schema refinements: a broken scenario file must be
+ * reported, never loaded or silently dropped.
+ */
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import { L1Case, loadScenarios, Scenario, ScenarioLoadError, SCENARIOS_DIR } from "../src";
+
+const GOOD = join(SCENARIOS_DIR, "book", "book-derm-next-week-afternoon.yaml");
+
+let dirs: string[] = [];
+afterEach(() => {
+  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  dirs = [];
+});
+
+/** A scenarios dir holding `files` (`<folder>/<name>.yaml` → source path or YAML text). */
+function scenariosDir(files: Record<string, { from: string } | string>): string {
+  const dir = mkdtempSync(join(tmpdir(), "evals-loader-"));
+  dirs.push(dir);
+  for (const [path, source] of Object.entries(files)) {
+    const target = join(dir, path);
+    mkdirSync(join(target, ".."), { recursive: true });
+    if (typeof source === "string") writeFileSync(target, source);
+    else copyFileSync(source.from, target);
+  }
+  return dir;
+}
+
+function problems(dir: string): readonly string[] {
+  try {
+    loadScenarios(dir);
+  } catch (error) {
+    expect(error).toBeInstanceOf(ScenarioLoadError);
+    return (error as ScenarioLoadError).problems;
+  }
+  throw new Error("expected a ScenarioLoadError");
+}
+
+describe("loader", () => {
+  it("loads a valid file", () => {
+    const dir = scenariosDir({ "book/book-derm-next-week-afternoon.yaml": { from: GOOD } });
+    expect(loadScenarios(dir).scenarios.map((s) => s.id)).toEqual(["book-derm-next-week-afternoon"]);
+  });
+
+  it("rejects an id that doesn't match the file name", () => {
+    const dir = scenariosDir({ "book/renamed.yaml": { from: GOOD } });
+    expect(problems(dir)).toEqual([
+      'book/renamed.yaml: id "book-derm-next-week-afternoon" must match the file name',
+    ]);
+  });
+
+  it("rejects a category that doesn't match the folder", () => {
+    const dir = scenariosDir({ "escalate/book-derm-next-week-afternoon.yaml": { from: GOOD } });
+    expect(problems(dir)).toEqual([
+      'escalate/book-derm-next-week-afternoon.yaml: category "book" must match the folder',
+    ]);
+  });
+
+  it("rejects a duplicate id", () => {
+    const dir = scenariosDir({
+      "book/book-derm-next-week-afternoon.yaml": { from: GOOD },
+      "escalate/book-derm-next-week-afternoon.yaml": { from: GOOD },
+    });
+    expect(problems(dir)).toContainEqual(
+      'escalate/book-derm-next-week-afternoon.yaml: duplicate id "book-derm-next-week-afternoon"',
+    );
+  });
+
+  it("reports YAML and schema errors from every file at once", () => {
+    const dir = scenariosDir({
+      "book/broken.yaml": "id: [unclosed",
+      "book/empty.yaml": "id: empty\n",
+    });
+    const found = problems(dir);
+    expect(found.some((p) => p.startsWith("book/broken.yaml: YAML parse error"))).toBe(true);
+    expect(found.some((p) => p.startsWith("book/empty.yaml: "))).toBe(true);
+  });
+});
+
+describe("schema refinements", () => {
+  const base = loadScenarios().scenarios.find((s) => s.id === "book-derm-next-week-afternoon");
+  const l1 = loadScenarios().l1.find((c) => c.id === "l1-emergency-911");
+  if (base === undefined || l1 === undefined) throw new Error("fixture scenarios missing");
+
+  it("surface: api needs a request", () => {
+    expect(Scenario.safeParse({ ...base, surface: "api" }).success).toBe(false);
+  });
+
+  it("the script can't be longer than max_turns", () => {
+    expect(Scenario.safeParse({ ...base, script: ["a", "b", "c"], max_turns: 2 }).success).toBe(false);
+  });
+
+  it("response_must_match_none patterns must compile", () => {
+    const doc = {
+      ...base,
+      expect: { ...base.expect, trajectory: [{ response_must_match_none: ["(unclosed"] }] },
+    };
+    expect(Scenario.safeParse(doc).success).toBe(false);
+  });
+
+  it("L1: exactly one of action or any_of", () => {
+    const both = { ...l1, expect: { ...l1.expect, any_of: [{ action: "respond" }] } };
+    expect(L1Case.safeParse(both).success).toBe(false);
+    const { action: _action, ...neither } = l1.expect;
+    expect(L1Case.safeParse({ ...l1, expect: neither }).success).toBe(false);
+  });
+
+  it("L1: a tool_call action names its tool", () => {
+    expect(L1Case.safeParse({ ...l1, expect: { action: "tool_call" } }).success).toBe(false);
+    expect(L1Case.safeParse({ ...l1, expect: { any_of: [{ action: "tool_call" }] } }).success).toBe(false);
+  });
+
+  it("L1: a context tool result must match the tool's output contract", () => {
+    const context = [
+      { tool_call: { tool: "get_my_appointments", args: {} } },
+      { tool_result: { tool: "get_my_appointments", result: { appointments: "none" } } },
+    ];
+    expect(L1Case.safeParse({ ...l1, context }).success).toBe(false);
+  });
+});

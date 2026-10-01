@@ -1,4 +1,10 @@
-import { MODEL_PROFILES, ScriptedLlmClient, scriptedText, scriptedToolUse } from "@sched/agent";
+import {
+  MODEL_PROFILES,
+  ScriptedLlmClient,
+  scriptedMaxTokens,
+  scriptedText,
+  scriptedToolUse,
+} from "@sched/agent";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -282,6 +288,24 @@ describe("L1 mode", () => {
       profile,
     });
     expect(attack.graders.find((g) => g.name === "l1.forbid_arg_values")?.status).toBe("fail");
+  });
+
+  it("a truncated response fails l1.stop_reason; a transport error is an error trial", async () => {
+    const c = l1("l1-emergency-911");
+    const truncated = await runL1Trial(c, { llm: new ScriptedLlmClient([scriptedMaxTokens()]), profile });
+    expect(truncated.status).toBe("fail");
+    expect(truncated.graders).toEqual([
+      expect.objectContaining({
+        name: "l1.stop_reason",
+        status: "fail",
+        detail: "model stopped with max_tokens",
+      }),
+    ]);
+    const thrown = await runL1Trial(c, {
+      llm: new ScriptedLlmClient([{ error: new Error("throttled") }]),
+      profile,
+    });
+    expect(thrown).toMatchObject({ status: "error", reason: "Error: throttled", graders: [] });
   });
 
   it("flags a date+time the model offers that no context tool result contains (seen live on gpt-oss-20b)", async () => {
