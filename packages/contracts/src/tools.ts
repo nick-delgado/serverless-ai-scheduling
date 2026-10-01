@@ -244,7 +244,7 @@ export const TOOLS = {
   book_appointment: {
     name: "book_appointment",
     description:
-      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. If the slot was just taken, it returns a SLOT_UNAVAILABLE error; offer other times.",
+      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint.",
     input: BookAppointmentInput,
     output: BookAppointmentOutput,
   },
