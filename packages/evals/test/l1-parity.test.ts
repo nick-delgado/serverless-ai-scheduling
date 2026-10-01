@@ -1,6 +1,6 @@
 /**
  * L1 builds its own request (`l1Request`) because the agent loop's builder is private to `@sched/agent`
- * (owner decision on PR #71, SMELL-101, option b: a parity test now, the export in a follow-up). This
+ * (owner decision on PR #71, SMELL-101, option b: a parity test now, the export in #85). This
  * test sends the same conversation through the real `runAgentTurn` and checks that the two requests
  * agree, so a field the loop adds later can't silently go missing from L1.
  */
