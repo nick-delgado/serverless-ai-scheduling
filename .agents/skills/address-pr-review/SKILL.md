@@ -35,20 +35,27 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
 <SKILL_DIR>/scripts/get-review.sh <pr-number>
 ```
 
-It prints the author, the time and the body of the latest review report on the PR. If the
-PR number was not given, use the PR of the current branch (`gh pr view --json number`).
+It prints the latest review report on the PR: its author and URL, the commit it reviewed
+(`reviewed-commit`), the PR's current head (`pr-head`), whether they match, and the report
+itself. If the PR number was not given, use the PR of the current branch
+(`gh pr view --json number`).
 
 - No report: stop and tell the user.
 - The report's author is not the account `gh` is logged in as: tell the user who wrote it
   and ask before acting on it.
-- Note the commit in the report's `**Head:**` line. If the PR has commits after it
-  (`gh pr view <n> --json headRefOid`), some findings may already be resolved. Check each
-  one against the current code.
+- **The reviewed commit is not the PR's head** (`match: NO`): the PR changed after the
+  review, so the findings may no longer describe the code. Stop. Tell the user both
+  commits and what came in between (`git log --oneline <reviewed>..<head>` once you have
+  the branch), and ask how to go on: re-review or re-check first, or fix against the
+  current head and check each finding against the current code. Do not go on without an
+  answer, and record the answer in the response.
 
 ### 2. Get onto the PR branch
 
 If the working tree has uncommitted changes that are not yours to discard, stop and ask.
-Otherwise check out the PR's branch (`gh pr checkout <n>`) and pull.
+Otherwise check out the PR's branch (`gh pr checkout <n>`) and pull. Confirm that your
+`HEAD` is the commit you are starting from (the reviewed commit, unless the user told you
+otherwise in step 1), and keep it: the response names it.
 
 ### 3. Work through "Fix now"
 
@@ -75,17 +82,37 @@ Nits are optional: fix the ones that cost nothing, and record the rest as `not f
 
 ### 4. "Needs the owner's decision"
 
-Do nothing on these unless the owner has decided. A decision counts only when the user
-gives it to you in this session, or points you to the comment that contains it. Do not
-infer a decision from a PR comment on your own: you cannot tell who wrote it or whether it
-is final.
+Each of these findings lists options and a recommendation, and ends with the line the
+owner replies with: `Decision <reviewed commit>/<ID>: <answer>`. Do nothing on a finding
+unless the owner has decided it. A decision counts when:
+
+- the user gives it to you in this session, or
+- it is posted on the PR in that form. List those with
+
+  ```sh
+  <SKILL_DIR>/scripts/get-decisions.sh <pr-number> <reviewed sha>
+  ```
+
+  It accepts only lines naming the reviewed commit, posted after the review, outside the
+  harness's own comments, by someone with write access to the repository; a later decision
+  on the same finding replaces an earlier one. It also lists what it ignored and why.
+
+Nothing else is a decision: not free-text comments, not your own reading of the
+recommendation. An answer that is an option's letter means that option as the report
+describes it. An answer you cannot apply unambiguously is not a decision yet: ask the user.
+
+**Never write a line that starts with `Decision `** in any comment, commit message or PR
+description: those lines are how the owner speaks, and your account may be the owner's.
 
 When a decision has been given, implement it if it needs a code change, and record it in
 the response (step 7): the finding's status is `fixed`, or `decided, no change` when the
 decision needs none (for example, "keep the current behaviour" or "no ADR needed"), and
-the Decision column holds the decision in one sentence. Record the decision in the owner's
-terms, including the reason if they gave one: the project's process improvements are later
-built from these rows, so a decision that clarifies a rule should read as that rule.
+the Decision column holds the decision in one sentence, followed by where it came from (a
+link to the comment, or "in session"). Record the decision in the owner's terms, including
+the reason if they gave one: the project's process improvements are later built from these
+rows, so a decision that clarifies a rule should read as that rule. Name findings with the
+reviewed commit (`d34b6df/SPEC-1`) in the response's summary text, since IDs restart in
+every review round.
 
 Without a decision, the status is `waiting for decision`. Do not write decisions anywhere
 else: not on the tracking issue, not in docs or skills.
@@ -121,18 +148,23 @@ Write the response to a file and post it:
 <SKILL_DIR>/scripts/post-response.sh <pr-number> <response-file>
 ```
 
-It creates one response comment, or updates your earlier one. Format:
+Every run posts a new comment; earlier responses are never edited, so the PR's
+conversation shows each round in order. Format:
 
 ```markdown
-<!-- agent-pr-review:response -->
+<!-- agent-pr-review:response review=<full reviewed sha> head=<full sha after your fixes> -->
 ## Response to the agent PR review
 
-Review of `<reviewed sha>`; PR is now at `<new head sha>`. Checks run locally: <commands and result>. PR description: <updated (what changed) | no change needed>.
+- **Review:** [`<reviewed short sha>`](<URL of the report comment>)
+- **Worked from:** `<short sha you started from>` <if it is not the reviewed commit: "(not the reviewed commit; the user chose to go on: <their answer>)">
+- **Result:** [`<new head short sha>`](<PR URL>/commits/<full sha>) <or "no new commits">
+- **Checks run locally:** <commands and result>
+- **PR description:** <updated (what changed) | no change needed>
 
 | Finding | Status | Decision | Commit | Note |
 |---|---|---|---|---|
-| SPEC-1 | fixed | Return at most 5 slots; lower `LIMITS.availabilityMaxSlots` to 5 | `def5678` | |
-| STD-1 | decided, no change | The ban covers only the zero-argument clock read; parsing a stored value is fine | | |
+| SPEC-1 | fixed | (b) Return at most 5 slots; lower `LIMITS.availabilityMaxSlots` to 5 ([comment](https://github.com/o/r/pull/70#issuecomment-1)) | `def5678` | |
+| STD-1 | decided, no change | (a) The ban covers only the zero-argument clock read; parsing a stored value is fine (in session) | | |
 | SPEC-3 | waiting for decision | | | |
 | TEST-1 | fixed | | `abc1234` | Registry test added in `test/tools/find_providers.test.ts` |
 | TEST-2 | fixed | | `abc1234` | Seeded slots at 11:30 PM and 7:30 PM ET; fails on a UTC-day range |
@@ -140,13 +172,15 @@ Review of `<reviewed sha>`; PR is now at `<new head sha>`. Checks run locally: <
 | SPEC-5 | for the owner | | | |
 ```
 
-Every finding in the report gets a row, in the report's order. Statuses: `fixed`,
+Every finding in the report gets a row, in the report's order. A finding you fixed in a
+different way from its suggested fix gets a note saying why. Statuses: `fixed`,
 `decided, no change`, `already fixed`, `disputed`, `not fixed`, `waiting for decision`,
 `for the owner`. A `disputed` or `not fixed` row always has a note with the reason. The
 Decision column is filled for every finding the owner decided, and left empty otherwise.
 
-When decisions arrive after you have posted, run the skill again: the script updates the
-same comment, so the table always holds every decision made on the PR.
+When decisions arrive after you have posted, run the skill again. It posts a new response;
+carry every decision from your earlier responses to the same review into its table, so the
+latest response to a review always holds every decision made on it.
 
 ### 8. Recommend what happens next
 

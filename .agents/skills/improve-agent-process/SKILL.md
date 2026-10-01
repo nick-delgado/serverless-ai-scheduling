@@ -42,9 +42,11 @@ the response comment the authoring agent posted on that PR. Three kinds of text 
   earlier ones.
 - `<!-- agent-pr-review:process-batch -->`: the record of an earlier run of this skill
   (what it changed, deferred and dropped).
-- The response on each reviewed PR (`<!-- agent-pr-review:response -->`): its Decision
-  column holds the owner's decisions on findings that needed one, and its statuses show
-  what was fixed and what the agent disputed.
+- The responses on each reviewed PR (`<!-- agent-pr-review:response ... -->`), oldest
+  first, each naming the review it answers: their Decision columns hold the owner's
+  decisions on findings that needed one (the latest response to a review carries all of
+  them), and their statuses show what was fixed and what the agent disputed. Finding IDs
+  restart in every review round, so identify a finding by round and ID (`6c20495/SPEC-1`).
 
 Reviews logged after the latest batch record are **new**. Earlier ones are **already
 considered**, but still count as evidence of recurrence, and proposals an earlier batch
@@ -68,7 +70,9 @@ file and intent, and keep the best-written version of each.
 ### 4. Collect the owner's decisions
 
 From the response comments, list every finding with a recorded decision: the PR, the
-finding, the decision. A PR with no response comment, or a finding still `waiting for
+review round and finding (`<commit>/<ID>`), the decision. The owner posts decisions on the
+PR as `Decision <commit>/<ID>: <answer>` lines; the responses record them with a link, so
+the responses are enough. A PR with no response comment, or a finding still `waiting for
 decision`, has no decision; do not infer one from other comments.
 
 Decisions matter here in two ways:

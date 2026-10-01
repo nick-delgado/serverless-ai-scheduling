@@ -40,8 +40,7 @@ for pr in $prs; do
   printf '\n======== decisions and fixes on PR #%s (%s) ========\n' "$pr" "$state"
   response="$(
     gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
-      --jq '.[] | select(.body | startswith("<!-- agent-pr-review:response -->")) | "response comment \(.id) by \(.user.login), updated \(.updated_at)\n\(.body)"' |
-      awk '/^response comment [0-9]+ by / { buf = "" } { buf = buf $0 "\n" } END { printf "%s", buf }'
+      --jq '.[] | select(.body | startswith("<!-- agent-pr-review:response")) | "response comment \(.id) by \(.user.login), posted \(.created_at)\n\(.body)\n"'
   )"
   if [ -n "$response" ]; then
     printf '%s\n' "$response"

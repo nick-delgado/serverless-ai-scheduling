@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Post the review report as a single general comment on a PR.
-# If this user already posted a report on the PR, that comment is updated instead.
+# Post the review report as a new general comment on a PR.
+#
+# Every review run gets its own comment, so the PR's conversation shows each round in
+# order: earlier reports are never edited. The report's first line names the commit it
+# reviewed.
 #
 # Usage: post-report.sh <pr-number> <report-file>
 # Run from inside a clone of the PR's repository. Requires an authenticated gh.
 
 set -euo pipefail
 
-MARKER='<!-- agent-pr-review:report -->'
 MAX_CHARS=65536
 
 if [ "$#" -ne 2 ]; then
@@ -30,8 +32,8 @@ if [ ! -s "$report" ]; then
   exit 1
 fi
 
-if [ "$(head -n 1 "$report")" != "$MARKER" ]; then
-  echo "error: the first line of the report must be: $MARKER" >&2
+if ! head -n 1 "$report" | grep -qE '^<!-- agent-pr-review:report sha=[0-9a-f]{40} -->$'; then
+  echo "error: the first line of the report must be: <!-- agent-pr-review:report sha=<full reviewed commit> -->" >&2
   exit 1
 fi
 
@@ -42,19 +44,5 @@ if [ "$chars" -gt "$MAX_CHARS" ]; then
   exit 1
 fi
 
-login="$(gh api user --jq '.login')"
-
-# Newest existing report comment by this user, if any.
-existing="$(
-  gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
-    --jq ".[] | select(.user.login == \"${login}\") | select(.body | startswith(\"${MARKER}\")) | .id" |
-    tail -n 1
-)"
-
-if [ -n "$existing" ]; then
-  gh api --method PATCH "repos/{owner}/{repo}/issues/comments/${existing}" \
-    -F "body=@${report}" --jq '"updated " + .html_url'
-else
-  gh api --method POST "repos/{owner}/{repo}/issues/${pr}/comments" \
-    -F "body=@${report}" --jq '"created " + .html_url'
-fi
+gh api --method POST "repos/{owner}/{repo}/issues/${pr}/comments" \
+  -F "body=@${report}" --jq '"created " + .html_url'

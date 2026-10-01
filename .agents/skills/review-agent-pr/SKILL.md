@@ -75,9 +75,9 @@ Then save the previous review, if this is a re-review:
 <SKILL_DIR>/scripts/get-previous.sh <n> "$RUN_DIR"
 ```
 
-It writes the current report comment, the reports of earlier rounds (from the comment's
-edit history, since the comment is updated in place) and the authoring agent's response
-(from `address-pr-review`) to `RUN_DIR/previous/`. Only the verifier reads them: the reviewers
+It writes the latest report, the last report of each earlier reviewed commit, every
+response from the authoring agent (from `address-pr-review`, oldest first), and the
+owner's decisions posted on the PR to `RUN_DIR/previous/`. Only the verifier reads them: the reviewers
 must not, so that they look at the code without being anchored on earlier findings.
 
 CI state goes into the report as a fact: passing, failing (which checks), pending, or none
@@ -118,9 +118,10 @@ subagent reads it. List paths and one-line descriptions; do not paste file conte
    grouped by area.
 2. **Spec sources** (task level) and **direction sources** (project level), from phase 2,
    each with its path or URL, and what was not found or not accessible. On a re-review,
-   the owner's decisions on earlier findings are part of the task spec: they are recorded
-   in `RUN_DIR/previous/response.md` (the Decision column, or `decision:` notes). Reviewers
-   do not read that file, so state each decision here in one line.
+   the owner's decisions on earlier findings are part of the task spec: they are posted on
+   the PR (`RUN_DIR/previous/decisions.md`) and recorded in the authoring agent's responses
+   (`RUN_DIR/previous/responses.md`, the Decision column). Reviewers do not read those
+   files, so state each decision here in one line, named as `<commit>/<ID>`.
 3. **Standards sources**: every document that tells a contributor how to build here.
    `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (root and nested ones on the path to any changed
    file), `CONTRIBUTING.md`, `README.md` sections on conventions, `docs/` pages on
@@ -255,11 +256,13 @@ the fixing agent from acting on process proposals, and lets causes be compared a
    then:
 
    ```sh
-   <SKILL_DIR>/scripts/assemble-report.sh "$RUN_DIR" report
+   <SKILL_DIR>/scripts/assemble-report.sh "$RUN_DIR" report <full head sha>
    <SKILL_DIR>/scripts/post-report.sh <n> "$RUN_DIR/report.md"
    ```
 
-   The report is one general PR comment, updated in place on a re-run.
+   Every run posts a new comment; earlier reports are never edited, so the PR's
+   conversation is the audit trail. The report's first line and header name the reviewed
+   commit.
 3. Remove the worktree: `git worktree remove --force "$RUN_DIR/worktree"`. Keep the rest of
    `RUN_DIR`; it is the audit trail.
 4. Tell the user: the verdict, the counts by severity and by action (fix now, needs the

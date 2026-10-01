@@ -77,7 +77,8 @@ For each open question `Q<n>` from step 1, find what the implementation assumed 
 it as `unstated-assumption` (minor, or major if the assumption is hard to reverse). These
 are the raw material for the root-cause analysis: they show where the spec left the agent
 to guess. Their action is `needs owner decision`, as is any finding where two spec sources
-disagree: state the question and the options, and do not pick one.
+disagree: state the question and the options, and recommend one, as the finding schema's
+"Suggestions and options" describes. The owner decides; your recommendation is advice.
 
 ### 5. Compare the PR description with the diff
 

@@ -2,7 +2,7 @@
 # Assemble the review's two outputs from the phase outputs in a run directory.
 #
 # Usage:
-#   assemble-report.sh <run-dir> report
+#   assemble-report.sh <run-dir> report <head-sha>
 #       Reads  report-head.md, report-meta.md, verified.md, findings/*.md
 #       Writes report.md: the PR comment (code findings and evidence).
 #
@@ -15,11 +15,10 @@
 
 set -euo pipefail
 
-REPORT_MARKER='<!-- agent-pr-review:report -->'
 SOFT_LIMIT=60000
 
 usage() {
-  echo "usage: $(basename "$0") <run-dir> report" >&2
+  echo "usage: $(basename "$0") <run-dir> report <head-sha>" >&2
   echo "       $(basename "$0") <run-dir> process <pr-number> <head-sha>" >&2
   exit 2
 }
@@ -104,13 +103,23 @@ too_long() {
   exit 1
 }
 
-# Confirmed blocker and major findings with the given action, as report blocks.
+# Confirmed findings with the given action, as report blocks: blockers and majors only, or
+# every severity when the second argument is "all". Findings that need the owner's decision
+# end with the line the owner can reply with.
 top_findings() {
-  h2 "$verified" "Confirmed findings" | awk -v want="$1" '
-    function flush() { if (sev && act) printf "%s", block; block = ""; sev = 0; act = 0 }
+  h2 "$verified" "Confirmed findings" | awk -v want="$1" -v all="${2:-}" -v sha="${report_sha:0:7}" '
+    function flush() {
+      if (sev && act) {
+        printf "%s", block
+        if (want == "needs owner decision" && id != "")
+          printf "\n**To decide, reply on this PR:** `Decision %s/%s: %s`\n\n", sha, id, (rec != "" ? rec : "<your answer>")
+      }
+      block = ""; sev = 0; act = 0; id = ""; rec = ""
+    }
     /^[ ]*```/ { fence = !fence }
-    !fence && /^### / { flush(); sub(/^### /, "#### ") }
-    /^- \*\*Severity:\*\* (blocker|major)/ { sev = 1 }
+    !fence && /^### / { flush(); sub(/^### /, "#### "); id = $2; sub(/:$/, "", id) }
+    /^- \*\*Severity:\*\* / && (all == "all" || /\*\* (blocker|major)/) { sev = 1 }
+    /^- \*\*Recommendation:\*\* \([a-z]\)/ { rec = $3; sub(/,$/, "", rec) }
     /^- \*\*Action:\*\* / { line = $0; gsub(/`/, "", line); if (index(line, "- **Action:** " want) == 1) act = 1; next }
     /^- \*\*(Checked by verifier|Introduced by this PR|Merged|Category|Fixable within the PR.s scope):\*\*/ { next }
     { block = block $0 "\n" }
@@ -136,11 +145,17 @@ minor_rows() {
   '
 }
 
-# One group of the report: full blocks for blockers and majors, a table for the rest.
+# One group of the report: full blocks for blockers and majors, a table for the rest. Every
+# finding that needs the owner's decision is shown in full, whatever its severity.
 group() {
   local action="$1" blocks minors
-  blocks="$(top_findings "$action" | trim)"
-  minors="$(minor_rows "$action")"
+  if [ "$action" = "needs owner decision" ]; then
+    blocks="$(top_findings "$action" all | trim)"
+    minors=""
+  else
+    blocks="$(top_findings "$action" | trim)"
+    minors="$(minor_rows "$action")"
+  fi
   if [ -z "$blocks" ] && [ -z "$minors" ]; then
     echo "None."
     return
@@ -168,7 +183,7 @@ label() {
 build_report() {
   local with_tables="$1" r f
 
-  echo "$REPORT_MARKER"
+  echo "<!-- agent-pr-review:report sha=$report_sha -->"
   trim < "$run/report-head.md"
 
   printf '\n### Fix now\n\n'
@@ -177,7 +192,7 @@ build_report() {
   group "fix now"
 
   printf '\n### Needs the owner'"'"'s decision\n\n'
-  echo "Do not act on these until the owner has answered on this PR."
+  echo 'Do not act on these until the owner has answered. Owner: reply on this PR with one line per decision, in the form shown under each finding (`Decision <commit>/<ID>: <answer>`), giving the letter of an option or your own answer after the colon. The fixing agent reads these lines.'
   echo
   group "needs owner decision"
 
@@ -288,7 +303,9 @@ build_process() {
 
 case "$mode" in
   report)
-    [ "$#" -eq 2 ] || usage
+    [ "$#" -eq 3 ] || usage
+    report_sha="$3"
+    printf '%s' "$report_sha" | grep -qE '^[0-9a-f]{40}$' || { echo "error: give the full 40-character reviewed commit, got '$report_sha'" >&2; exit 2; }
     for required in "$run/report-head.md" "$run/report-meta.md" "$verified"; do
       [ -s "$required" ] || { echo "error: missing or empty $required" >&2; exit 1; }
     done

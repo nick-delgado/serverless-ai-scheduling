@@ -21,10 +21,20 @@ One block per finding. If there are none, write `No findings.` under the heading
   ```
 - **Measured against:** <source path:line or URL> — "<the rule, spec clause or precedent, quoted exactly>"
 - **Why it matters:** <the concrete consequence, in one or two sentences>
-- **Suggested fix:** <what to change; name the existing function, pattern or doc to use>
 - **Introduced by this PR:** yes | worsened | pre-existing (only report pre-existing when the PR depended on it)
 - **Action:** fix now | needs owner decision | for the owner (see "Who acts on a finding")
-- **Decision needed:** <only for "needs owner decision": the question, and the options with what each would change>
+
+<for "fix now" and "for the owner":>
+- **Suggested fix:** <the direction of the fix: what to change and where, naming the existing function, pattern, helper or doc to use>
+- **Done when:** <the observable that shows it is fixed: the test that now fails on the defect, the claim that is now true, the line that is gone>
+
+<for "needs owner decision", instead of the two fields above:>
+- **Decision needed:** <the question, in one sentence the owner can answer without reading the code>
+- **Options:**
+  - (a) <option>: <what changes, what it costs, whether it is easy to reverse>
+  - (b) <option>: <...>
+  - (c) <...: two to four options; include "keep as is" when it is a real option>
+- **Recommendation:** (<letter>), because <the reason, tied to the spec, the project's direction documents, consistency with existing behaviour, or cost and reversibility; cite the source>
 ```
 
 IDs use the reviewer's prefix and a running number: `STD-1`, `SMELL-1`, `SPEC-1`, `TEST-1`.
@@ -65,6 +75,23 @@ that acts on a question only the owner can answer is guessing a second time.
 
 If part of a finding can be fixed now and part needs a decision, split it into two
 findings.
+
+### Suggestions and options
+
+You draft them, because you hold the evidence; the verifier then settles them, with every
+finding of every reviewer in view. Write them to be acted on by an agent that will check
+your claim but should not have to redesign your fix:
+
+- **A suggested fix is a direction, not a patch.** Say what should change and where, and
+  name what already exists to use. Leave the exact code to the agent that fixes it.
+- **Prefer the smallest fix that resolves the finding.** If a larger change would be
+  better, say so in "Why it matters", not in the fix.
+- **"Done when" makes the fix checkable** by the next review round without re-deriving the
+  finding.
+- **Options are real alternatives**, each something a reasonable owner might choose, with
+  its consequence stated plainly. Do not pad the list with options nobody would take.
+- **Recommend one.** The recommendation is advice, grounded in a source the owner can
+  check; the owner decides.
 
 ### Line numbers
 
