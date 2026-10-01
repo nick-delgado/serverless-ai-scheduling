@@ -5,8 +5,8 @@
  * - Identity comes from ctx.patientId (the verified JWT), never from input (CLAUDE.md rule 1). Another
  *   patient's appointment reads as "not found", with no hint that it exists.
  * - The move is one `appointments.reschedule` call (AP-7, one transaction): the old slot is released only
- *   if the new one is booked (CLAUDE.md rule 2). The reads before it only enforce clock rules on values
- *   that never change (slot and appointment start times); the repo's conditional write is the real check.
+ *   if the new one is booked (CLAUDE.md rule 2). The reads before it only enforce the tool-level rules
+ *   listed below; availability, status and ownership are decided by the repo's conditional write.
  * - Checks, in order:
  *   1. The appointment must be the patient's and BOOKED.
  *   2. A retry of a move that already happened (the appointment already holds the new slot) answers
