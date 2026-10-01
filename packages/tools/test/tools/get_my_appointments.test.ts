@@ -1,10 +1,15 @@
 import { TOOLS, type ToolError, type ToolOutput } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS, type ClinicFixture } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
-import { createToolExecutor, type ToolContext, type ToolExecutionResult } from "../../src/registry";
+import {
+  createToolExecutor,
+  TOOL_REGISTRY,
+  type ToolContext,
+  type ToolExecutionResult,
+} from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import { getMyAppointments } from "../../src/tools/get_my_appointments";
@@ -38,20 +43,31 @@ describe("get_my_appointments", () => {
   let repos: InMemoryRepositories;
   let clock: FrozenClock;
 
+  const contextFor = (patientId: string): ToolContext => ({
+    patientId,
+    conversationId: EXAMPLES.ConversationId,
+    clock,
+    repos,
+  });
   // Through the executor, so the strict input schema and output validation the model faces apply.
-  const run = (patientId: string, input: unknown = {}): Promise<ToolExecutionResult> => {
-    const ctx: ToolContext = { patientId, conversationId: EXAMPLES.ConversationId, clock, repos };
-    return createToolExecutor({ get_my_appointments: getMyAppointments }, ctx).execute({
+  const run = (patientId: string, input: unknown = {}): Promise<ToolExecutionResult> =>
+    createToolExecutor({ get_my_appointments: getMyAppointments }, contextFor(patientId)).execute({
       id: "toolu_test",
       name: "get_my_appointments",
       input,
     });
-  };
 
   beforeEach(() => {
     fixture = buildClinicFixture();
     clock = new FrozenClock(fixture.suggestedNow); // Mon Oct 5, 2026, 9:00 AM EDT
     repos = createInMemoryRepositories({ seed: fixture, clock, ids: sequentialIds() });
+  });
+
+  it("is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler", async () => {
+    const executor = createToolExecutor(TOOL_REGISTRY, contextFor(MARIA));
+    expect(executor.definitions.map((d) => d.name)).toContain("get_my_appointments");
+    const result = await executor.execute({ id: "toolu_test", name: "get_my_appointments", input: {} });
+    expect(idsOf(outputOf(result))).toEqual([MARIA_APPT]);
   });
 
   it("returns the logged-in patient's upcoming appointment with a clinic-local time", async () => {
@@ -126,6 +142,11 @@ describe("get_my_appointments", () => {
     expect(outputOf(await run(AISHA, { include_past: true }))).toEqual({ appointments: [] });
     // A patient with no profile at all looks the same: nothing to reveal.
     expect(outputOf(await run(UNKNOWN, { include_past: true }))).toEqual({ appointments: [] });
+  });
+
+  it("reports INTERNAL rather than inventing a name when an appointment's provider record is missing", async () => {
+    vi.spyOn(repos.providers, "get").mockResolvedValue(null);
+    expect(errorOf(await run(MARIA)).code).toBe("INTERNAL");
   });
 
   it("rejects invalid input", async () => {

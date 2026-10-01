@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
-import { createToolExecutor, type ToolContext, type ToolExecutionResult } from "../../src/registry";
+import {
+  createToolExecutor,
+  TOOL_REGISTRY,
+  type ToolContext,
+  type ToolExecutionResult,
+} from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import { getPatientProfile } from "../../src/tools/get_patient_profile";
@@ -27,20 +32,31 @@ describe("get_patient_profile", () => {
   let repos: InMemoryRepositories;
   let clock: FrozenClock;
 
+  const contextFor = (patientId: string): ToolContext => ({
+    patientId,
+    conversationId: EXAMPLES.ConversationId,
+    clock,
+    repos,
+  });
   // Through the executor, so the strict input schema and output validation the model faces apply.
-  const run = (patientId: string, input: unknown = {}): Promise<ToolExecutionResult> => {
-    const ctx: ToolContext = { patientId, conversationId: EXAMPLES.ConversationId, clock, repos };
-    return createToolExecutor({ get_patient_profile: getPatientProfile }, ctx).execute({
+  const run = (patientId: string, input: unknown = {}): Promise<ToolExecutionResult> =>
+    createToolExecutor({ get_patient_profile: getPatientProfile }, contextFor(patientId)).execute({
       id: "toolu_test",
       name: "get_patient_profile",
       input,
     });
-  };
 
   beforeEach(() => {
     const fixture = buildClinicFixture();
     clock = new FrozenClock(fixture.suggestedNow);
     repos = createInMemoryRepositories({ seed: fixture, clock, ids: sequentialIds() });
+  });
+
+  it("is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler", async () => {
+    const executor = createToolExecutor(TOOL_REGISTRY, contextFor(MARIA));
+    expect(executor.definitions.map((d) => d.name)).toContain("get_patient_profile");
+    const result = await executor.execute({ id: "toolu_test", name: "get_patient_profile", input: {} });
+    expect(outputOf(result)).toMatchObject({ first_name: "Maria", last_name: "Santos" });
   });
 
   it("returns the logged-in patient's name and preferred provider, and nothing else", async () => {
