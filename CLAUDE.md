@@ -56,7 +56,14 @@ npm test                                 # all Vitest projects
 npm test -w packages/contracts           # one workspace
 ```
 
-Coming later: `npm run evals -- --suite smoke` (S7-01, #30; documented by the `run-evals` skill).
+Evals (ADR-008; live runs call Bedrock and cost money, so try `--dry-run` first for the case list and estimate):
+
+```bash
+npm run evals -- --suite smoke --mode l1 --profile sonnet-4.6 --trials 1          # single-turn L1 cases (the default mode)
+npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; unscripted ones skip until #31
+```
+
+Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
 
 Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
