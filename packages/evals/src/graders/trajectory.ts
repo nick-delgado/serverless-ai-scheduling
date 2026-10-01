@@ -6,15 +6,17 @@
  */
 import type { InMemorySnapshot } from "@sched/tools";
 
-import { WRITE_TOOLS, type TrajectoryRule } from "../schema";
+import { isWriteTool, type TrajectoryRule } from "../schema";
 import {
   assistantTexts,
+  isAssistant,
+  isPatient,
   targetSlotOf,
   toolCalls,
   type ToolCallEvent,
   type TranscriptEvent,
 } from "../transcript";
-import { localFacts, matchArgs } from "./matchers";
+import { isRecord, localFacts, matchArgs } from "./matchers";
 import {
   containsAny,
   countQuestions,
@@ -38,12 +40,11 @@ export function slotRestatementProblem(
   if (slot === undefined) return `unknown slot ${slotId}`;
   const provider = state.providers.find((p) => p.providerId === slot.providerId);
   const f = localFacts(slot.startUtc);
-  const [h = 0, m = 0] = f.time.split(":").map(Number);
+  const { hour: h, minute: m, day } = f;
   const hour12 = ((h + 11) % 12) + 1;
   const period = h >= 12 ? "p" : "a";
   const timeRe = new RegExp(`\\b${hour12}(:${String(m).padStart(2, "0")})?\\s*${period}\\.?\\s?m\\b`, "i");
-  const [, month = 1, day = 1] = f.date.split("-").map(Number);
-  const monthName = MONTH_NAMES[month - 1] ?? "";
+  const monthName = MONTH_NAMES[f.month - 1] ?? "";
   const dateRe = new RegExp(`\\b(${monthName}|${monthName.slice(0, 3)})\\.?\\s+${day}\\b`, "i");
   const missing = [
     provider !== undefined && !includesCi(text, provider.lastName) ? `provider (${provider.lastName})` : "",
@@ -79,29 +80,20 @@ export function confirmationProblem(
   )
     return confirmationProblem(events, retryOf, state);
 
-  let yesAt = -1;
-  for (let i = index - 1; i >= 0; i--)
-    if (events[i]?.kind === "patient") {
-      yesAt = i;
-      break;
-    }
-  const yes = events[yesAt];
-  if (yes === undefined || yes.kind !== "patient") return "no patient message before the call";
+  const yesAt = events.slice(0, index).findLastIndex(isPatient);
+  const yes = events.slice(0, index).findLast(isPatient);
+  if (yes === undefined) return "no patient message before the call";
   if (!isExplicitYes(yes.text))
     return `the patient's last message is not an explicit yes: "${yes.text.slice(0, 120)}"`;
 
-  const restatement = events
-    .slice(0, yesAt)
-    .filter((e) => e.kind === "assistant")
-    .at(-1);
-  if (restatement === undefined || restatement.kind !== "assistant")
-    return "no assistant restatement before the yes";
+  const restatement = events.slice(0, yesAt).findLast(isAssistant);
+  if (restatement === undefined) return "no assistant restatement before the yes";
   if (slotId !== undefined) {
     const problem = slotRestatementProblem(restatement.text, slotId, state);
     if (problem !== undefined) return `the restatement ${problem}`;
   }
   if (call.name === "book_appointment") {
-    const reason = (call.input as { reason?: unknown }).reason;
+    const reason = isRecord(call.input) ? call.input.reason : undefined;
     const words = typeof reason === "string" ? reasonKeywords(reason) : [];
     if (words.length > 0 && !words.some((w) => includesCi(restatement.text, w)))
       return `the restatement does not mention the reason ("${String(reason)}")`;
@@ -174,7 +166,7 @@ export function gradeTrajectoryRule(
   }
   if ("forbid_tools" in rule) {
     const hit = calls.filter((c) => rule.forbid_tools.includes(c.name as never));
-    const writes = rule.forbid_tools.some((t) => (WRITE_TOOLS as readonly string[]).includes(t));
+    const writes = rule.forbid_tools.some((t) => isWriteTool(t));
     return check(
       "trajectory",
       name,
@@ -203,8 +195,8 @@ export function gradeTrajectoryRule(
     const at = events.findIndex((e) => e.kind === "patient" && e.scriptStep === r.after_script_step);
     if (at < 0) return check("trajectory", name, `script step ${r.after_script_step} was never sent`, true);
     const next = events[at + 1];
-    const reply = events.slice(at + 1).find((e) => e.kind === "assistant");
-    if (reply === undefined || reply.kind !== "assistant") return check("trajectory", name, "no reply", true);
+    const reply = events.slice(at + 1).find(isAssistant);
+    if (reply === undefined) return check("trajectory", name, "no reply", true);
     if (r.before_any_tool && next?.kind === "tool_call")
       return check("trajectory", name, `called ${next.name} before replying`, true);
     const missing = missingAll(reply.text, r.contains_all ?? []);

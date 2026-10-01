@@ -9,7 +9,7 @@ import type { AppointmentMatcher, ArgMatcher, ArgsSubset, Weekday } from "../sch
 import { WEEKDAYS } from "../schema";
 import { includesCi } from "./text";
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 function matchValue(expected: ArgMatcher, actual: unknown, path: string): string | undefined {
@@ -56,18 +56,28 @@ export function allStrings(value: unknown, out: string[] = []): string[] {
 
 const hhmm = (h: number, m: number) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
-/** Local (clinic timezone) facts about an appointment's start. */
+/** Local (clinic timezone) facts about an appointment's start: comparable strings plus their numeric parts. */
 export function localFacts(startUtc: string): {
+  /** `YYYY-MM-DD` */
   date: string;
+  /** `HH:MM`, 24-hour */
   time: string;
   weekday: Weekday;
   utcTime: string;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
 } {
   const start = new Date(startUtc);
   const p = toZonedParts(start, CLINIC.timezone);
   return {
     date: clinicDateOf(start),
     time: hhmm(p.hour, p.minute),
+    month: p.month,
+    day: p.day,
+    hour: p.hour,
+    minute: p.minute,
     // p.weekday is 0 (Sunday) to 6, so the index is always in range.
     weekday: WEEKDAYS[(p.weekday + 6) % 7] as Weekday,
     utcTime: hhmm(start.getUTCHours(), start.getUTCMinutes()),

@@ -3,6 +3,8 @@
  * can't decide (no date next to a time, say) doesn't fire, and the LLM judge (#32) covers nuance.
  */
 
+import { CLINIC } from "@sched/contracts";
+
 export const includesCi = (haystack: string, needle: string): boolean =>
   haystack.toLowerCase().includes(needle.toLowerCase());
 
@@ -86,6 +88,9 @@ export function clockTimes(text: string): { raw: string; index: number }[] {
   return [...text.matchAll(/\b\d{1,2}:\d{2}\s*[ap]\.?\s?m\.?/gi)].map((m) => ({ raw: m[0], index: m.index }));
 }
 
+/** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
+const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
+
 /**
  * Whether a date+time mention carries a weekday (within 40 characters before it) and the clinic
  * timezone (`ET`/`Eastern` within 16 characters after the time).
@@ -93,7 +98,7 @@ export function clockTimes(text: string): { raw: string; index: number }[] {
 export function mentionHasWeekdayAndZone(text: string, mention: DateTimeMention): boolean {
   const before = text.slice(Math.max(0, mention.index - 40), mention.index + mention.raw.length);
   const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + 16);
-  return WEEKDAY_RE.test(before) && /\b(ET|EDT|EST|Eastern)\b/.test(after);
+  return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
 }
 
 /** The needles `text` lacks (case-insensitive): `contains_all` checks. */

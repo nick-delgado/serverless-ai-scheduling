@@ -6,13 +6,14 @@ import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
 import { runL1Trial, type L1TrialResult } from "./l1";
-import type { L1Case, Scenario } from "./schema";
-import { runScenarioTrial, type TrialResult } from "./runner";
+import type { RateLimitStats } from "./rate-limit";
+import { isL1Case, type L1Case, type Scenario } from "./schema";
+import { runScenarioTrial, type TrialResult, type TrialStatus } from "./runner";
 import type { PatientSimulator } from "./simulator";
-import { INTERIM_PROMPT_VERSION, type SystemPromptFactory } from "./system-prompt";
+import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
 
 export type Mode = "l1" | "scenario";
-export type CaseStatus = "pass" | "fail" | "skip" | "error";
+export type CaseStatus = TrialStatus;
 
 export interface CaseResult {
   id: string;
@@ -23,6 +24,10 @@ export interface CaseResult {
   passRate: number;
   /** All k trials passed (pass^k). */
   passHatK: boolean;
+  /** The `--max-cost` guard stopped this case before all its trials ran (TEST-105 decision, PR #71). */
+  budgetStopped?: true;
+  /** Why the case didn't run all its trials (the budget guard). */
+  reason?: string;
   trials: (TrialResult | L1TrialResult)[];
 }
 
@@ -38,6 +43,8 @@ export interface RunSummary {
   /** Share of cases that ran where every trial passed. */
   passHatK: number;
   safetyViolations: number;
+  /** Cases the `--max-cost` guard stopped before all their trials ran (unrun or partly run). */
+  budgetStopped: number;
   /** Scenario mode: retried model calls (`attempt > 0`) across all trials (SPEC-1 decision, PR #71). */
   llmRetries?: number;
   /** L1: share of trials whose next action matched (`l1.action`). */
@@ -61,9 +68,9 @@ export interface RunReport {
   startedAt: string;
   finishedAt: string;
   wallClockMs: number;
-  /** Budget guard: cases left unrun once spend reached `maxCostUsd`. */
+  /** Budget guard: no new trial starts once spend reaches `maxCostUsd`; the trial running then can go over. */
   maxCostUsd?: number;
-  rateLimit?: { calls: number; retries: number; throttles: number };
+  rateLimit?: RateLimitStats;
   summary: RunSummary;
   cases: CaseResult[];
 }
@@ -76,11 +83,11 @@ export interface RunSuiteOptions {
   llmName: string;
   profile: ModelProfile;
   trials: number;
+  /** Default: the interim prompt. The report's `promptVersion` comes from the prompt it builds. */
   systemPrompt?: SystemPromptFactory;
-  promptVersion?: string;
   registry?: ToolRegistry;
   simulator?: PatientSimulator;
-  /** Stop starting trials once estimated spend reaches this (USD). */
+  /** Stop starting new trials once estimated spend reaches this (USD); the trial in flight can go over. */
   maxCostUsd?: number;
   /** Progress callback, one line per trial. */
   onTrial?: (id: string, trial: TrialResult | L1TrialResult) => void;
@@ -116,6 +123,7 @@ export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary 
     passAt1: ran.length === 0 ? 0 : ran.reduce((s, c) => s + c.passRate, 0) / ran.length,
     passHatK: ran.length === 0 ? 0 : ran.filter((c) => c.passHatK).length / ran.length,
     safetyViolations: trials.reduce((s, t) => s + t.safetyViolations, 0),
+    budgetStopped: cases.filter((c) => c.budgetStopped).length,
     ...(mode === "scenario"
       ? { llmRetries: trials.reduce((s, t) => s + ("llmRetries" in t ? t.llmRetries : 0), 0) }
       : {}),
@@ -142,28 +150,34 @@ export async function runSuite(
   const results: CaseResult[] = [];
   let spent = 0;
 
+  const overBudget = () => options.maxCostUsd !== undefined && spent >= options.maxCostUsd;
+  const systemPrompt = options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt };
+  const runTrial = (c: Scenario | L1Case, trial: number): Promise<TrialResult | L1TrialResult> => {
+    if (isL1Case(c) !== (options.mode === "l1"))
+      throw new Error(`${c.id} is not a ${options.mode === "l1" ? "L1 case" : "scenario"}`);
+    return isL1Case(c)
+      ? runL1Trial(c, { llm: options.llm, profile: options.profile, trial, ...systemPrompt })
+      : runScenarioTrial(c, {
+          trial,
+          agent: {
+            llm: options.llm,
+            profile: options.profile,
+            ...systemPrompt,
+            ...(options.registry === undefined ? {} : { registry: options.registry }),
+          },
+          ...(options.simulator === undefined ? {} : { simulator: options.simulator }),
+        });
+  };
+
   for (const c of cases) {
     const trials: (TrialResult | L1TrialResult)[] = [];
+    let budgetStopped = false;
     for (let trial = 1; trial <= options.trials; trial++) {
-      if (options.maxCostUsd !== undefined && spent >= options.maxCostUsd) break;
-      const result =
-        options.mode === "l1"
-          ? await runL1Trial(c as L1Case, {
-              llm: options.llm,
-              profile: options.profile,
-              trial,
-              ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
-            })
-          : await runScenarioTrial(c as Scenario, {
-              trial,
-              agent: {
-                llm: options.llm,
-                profile: options.profile,
-                ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
-                ...(options.registry === undefined ? {} : { registry: options.registry }),
-              },
-              ...(options.simulator === undefined ? {} : { simulator: options.simulator }),
-            });
+      if (overBudget()) {
+        budgetStopped = true;
+        break;
+      }
+      const result = await runTrial(c, trial);
       spent += result.costUsd;
       trials.push(result);
       options.onTrial?.(c.id, result);
@@ -175,9 +189,15 @@ export async function runSuite(
       id: c.id,
       category: c.category,
       tags: c.tags,
-      status: trials.length === 0 ? "skip" : caseStatus(trials),
+      status: caseStatus(trials),
       passRate: ran.length === 0 ? 0 : passedTrials / ran.length,
       passHatK: ran.length === options.trials && passedTrials === options.trials,
+      ...(budgetStopped
+        ? {
+            budgetStopped: true as const,
+            reason: `budget guard ($${String(options.maxCostUsd)} reached) after ${trials.length} of ${options.trials} trial(s)`,
+          }
+        : {}),
       trials,
     });
   }
@@ -189,7 +209,7 @@ export async function runSuite(
     suite: options.suite,
     profile: options.profile.name,
     modelId: options.profile.modelId,
-    promptVersion: options.promptVersion ?? INTERIM_PROMPT_VERSION,
+    promptVersion: (options.systemPrompt ?? interimSystemPrompt)(startedAt, "Patient").version,
     pricesAsOf: PRICES_AS_OF,
     trialsPerCase: options.trials,
     ...(options.mode === "scenario" ? { simulator: options.simulator?.name ?? "script-only" } : {}),
@@ -213,7 +233,7 @@ export function markdownSummary(report: RunReport): string {
     "",
     `- Model: \`${report.modelId}\` · prompt \`${report.promptVersion}\` · ${report.trialsPerCase} trial(s) per case · LLM: ${report.llm}${report.simulator ? ` · simulator: ${report.simulator}` : ""}`,
     `- Cases: ${s.cases} (ran ${s.ran}, passed ${s.passed}, failed ${s.failed}, errored ${s.errored}, skipped ${s.skipped})`,
-    `- pass@1 ${pct(s.passAt1)} · pass^k ${pct(s.passHatK)}${s.toolCallAccuracy === undefined ? "" : ` · tool-call accuracy ${pct(s.toolCallAccuracy)}`} · safety violations ${s.safetyViolations}${s.llmRetries === undefined ? "" : ` · model retries ${s.llmRetries}`}`,
+    `- pass@1 ${pct(s.passAt1)} · pass^k ${pct(s.passHatK)}${s.toolCallAccuracy === undefined ? "" : ` · tool-call accuracy ${pct(s.toolCallAccuracy)}`} · safety violations ${s.safetyViolations}${s.budgetStopped > 0 ? ` · budget guard stopped ${s.budgetStopped} case(s)` : ""}${s.llmRetries === undefined ? "" : ` · model retries ${s.llmRetries}`}`,
     `- Latency p50 ${s.latencyMs.p50} ms · p95 ${s.latencyMs.p95} ms · wall-clock ${(report.wallClockMs / 1000).toFixed(1)} s`,
     `- Estimated cost $${s.costUsd.toFixed(4)} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
     "",
@@ -222,12 +242,13 @@ export function markdownSummary(report: RunReport): string {
   ];
   for (const c of report.cases) {
     const failed = [
-      ...new Set(
-        c.trials.flatMap((t) => [
+      ...new Set([
+        ...(c.reason === undefined ? [] : [c.reason]),
+        ...c.trials.flatMap((t) => [
           ...t.graders.filter((g) => g.status === "fail").map((g) => `${g.name}: ${g.detail ?? ""}`),
           ...("reason" in t && t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
         ]),
-      ),
+      ]),
     ];
     lines.push(
       `| ${c.id} | ${c.status} | ${c.status === "skip" ? "–" : pct(c.passRate)} | ${failed.join("<br>").replaceAll("|", "\\|").slice(0, 400)} |`,

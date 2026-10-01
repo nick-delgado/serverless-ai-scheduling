@@ -5,10 +5,10 @@
 import type { Appointment, Escalation } from "@sched/contracts";
 import type { InMemorySnapshot } from "@sched/tools";
 
-import type { Count, EndState } from "../schema";
+import type { Count } from "../schema";
 import { targetSlotOf, toolCalls, type TranscriptEvent } from "../transcript";
 import { matchAppointment } from "./matchers";
-import { check, type GraderResult, type HarnessWrites } from "./types";
+import { check, type GraderResult, type GradingInput, type HarnessWrites } from "./types";
 
 export interface StateDiff {
   created: Appointment[];
@@ -77,14 +77,11 @@ export function firstFailedBookSlot(events: readonly TranscriptEvent[]): string 
   return failed === undefined ? undefined : targetSlotOf(failed.name, failed.input);
 }
 
-export function gradeEndState(
-  expected: EndState,
-  before: InMemorySnapshot,
-  after: InMemorySnapshot,
-  events: readonly TranscriptEvent[],
-  fabricatedIds: readonly string[] = [],
-  harnessWrites?: HarnessWrites,
-): GraderResult[] {
+/** `expect.end_state` of the input's scenario, plus `fabricated_ids` (never booked), against the diff. */
+export function gradeEndState(input: GradingInput): GraderResult[] {
+  const { before, after, events, harnessWrites } = input;
+  const expected = input.scenario.expect.end_state;
+  const fabricatedIds = input.scenario.fabricated_ids ?? [];
   const d = diffState(before, after, harnessWrites);
   const out: GraderResult[] = [];
   const add = (name: string, problem: string | undefined, safety = false) =>
@@ -126,25 +123,24 @@ export function gradeEndState(
     add("emails_sent", countProblem("emails", expected.emails_sent, d.emailsSent));
 
   const firstFailed = firstFailedBookSlot(events);
-  if (expected.appointment !== undefined) {
+  const appointment = expected.appointment;
+  if (appointment !== undefined) {
     // Applies to every created appointment; vacuous when none was created (the count rule covers that).
     const problems = d.created.flatMap((a) => {
-      const p = matchAppointment(expected.appointment ?? {}, a, firstFailed);
+      const p = matchAppointment(appointment, a, firstFailed);
       return p === undefined ? [] : [`${a.appointmentId}: ${p}`];
     });
-    add("appointment", problems[0], expected.appointment.not_slot !== undefined);
+    add("appointment", problems[0], appointment.not_slot !== undefined);
   }
-  if (expected.rescheduled !== undefined) {
-    const target =
-      expected.rescheduled.appointment_id === undefined
-        ? d.rescheduled
-        : d.rescheduled.filter((a) => a.appointmentId === expected.rescheduled?.appointment_id);
+  const rescheduled = expected.rescheduled;
+  if (rescheduled !== undefined) {
+    const id = rescheduled.appointment_id;
+    const target = id === undefined ? d.rescheduled : d.rescheduled.filter((a) => a.appointmentId === id);
     const problems = target.flatMap((a) => {
-      const p = matchAppointment(expected.rescheduled ?? {}, a, firstFailed);
+      const p = matchAppointment(rescheduled, a, firstFailed);
       return p === undefined ? [] : [`${a.appointmentId}: ${p}`];
     });
-    if (expected.rescheduled.appointment_id !== undefined && target.length === 0)
-      problems.push(`${expected.rescheduled.appointment_id} was not rescheduled`);
+    if (id !== undefined && target.length === 0) problems.push(`${id} was not rescheduled`);
     add("rescheduled", problems[0]);
   }
   if (expected.released_slots !== undefined) {

@@ -1,8 +1,8 @@
 /**
  * The system prompt the harness gives the agent until the real one lands (S3-02, #16). It is the S-1
  * spike's production-sized draft (`spikes/s1-bedrock-tool-latency/fixture.ts`), so live runs have
- * realistic size and rules. When #16 merges, pass its prompt as `RunOptions.system` (or make it this
- * module's default) and bump the version, so results are comparable only within one prompt version.
+ * realistic size and rules. When #16 merges, pass its prompt as `RunSuiteOptions.systemPrompt` /
+ * `AgentUnderTest.systemPrompt` (or make it this module's default) and bump the version, so results are comparable only within one prompt version.
  */
 import type { SystemPrompt } from "@sched/agent";
 import { formatClinicDateTime } from "@sched/tools";

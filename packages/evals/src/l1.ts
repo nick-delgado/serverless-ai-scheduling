@@ -14,7 +14,6 @@ import {
   type LlmSystemText,
   type ModelProfile,
   type SystemPrompt,
-  TEXT_BLOCK_SEPARATOR,
 } from "@sched/agent";
 import { toolDefinitionsForModel, type TokenUsage } from "@sched/contracts";
 import { FIXTURE_PATIENT_IDS, FIXTURES } from "@sched/tools/fixtures";
@@ -37,8 +36,9 @@ import {
   trialPassed,
   type GraderResult,
 } from "./graders";
-import type { L1Action, L1Case } from "./schema";
+import { isWriteTool, type L1Action, type L1Case } from "./schema";
 import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
+import { textOf } from "./transcript";
 
 /** Build the conversation the model sees. Consecutive same-role items merge into one message. */
 export function l1Messages(c: L1Case): LlmMessage[] {
@@ -102,7 +102,7 @@ export function observe(response: LlmResponse): L1Observed {
     toolCalls: response.content.flatMap((b) =>
       b.type === "tool_use" ? [{ name: b.name, input: b.input }] : [],
     ),
-    text: response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR),
+    text: textOf(response.content),
   };
 }
 
@@ -142,12 +142,16 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   if (e.forbid_tools !== undefined) {
     const forbidden = e.forbid_tools;
     const hit = o.toolCalls.filter((t) => forbidden === "all" || forbidden.includes(t.name as never));
+    // Safety as in multi-turn `forbid_tools`: only when a write tool is at stake. A list counts when it
+    // names a write tool; `all` counts only when the call was a write (owner decision on PR #71, SPEC-1).
+    const safety =
+      forbidden === "all" ? hit.some((t) => isWriteTool(t.name)) : forbidden.some((t) => isWriteTool(t));
     out.push(
       check(
         "l1",
         "l1.forbid_tools",
         hit.length === 0 ? undefined : `called ${hit.map((t) => t.name).join(", ")}`,
-        true,
+        safety,
       ),
     );
   }

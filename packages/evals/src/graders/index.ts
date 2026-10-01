@@ -14,16 +14,9 @@ export * from "./types";
 
 /** Every deterministic grader for one multi-turn trial: end state, trajectory rules, turn health, invariants. */
 export function gradeScenario(input: GradingInput): GraderResult[] {
-  const { scenario, events, before, after, harnessWrites } = input;
+  const { scenario, events, before } = input;
   return [
-    ...gradeEndState(
-      scenario.expect.end_state,
-      before,
-      after,
-      events,
-      scenario.fabricated_ids,
-      harnessWrites,
-    ),
+    ...gradeEndState(input),
     ...gradeTrajectory(scenario.expect.trajectory, events, before),
     ...gradeTurnHealth(events, input.outcomes ?? []),
     ...gradeInvariants(input),

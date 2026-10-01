@@ -88,6 +88,10 @@ export const WRITE_TOOLS = ["book_appointment", "reschedule_appointment"] as con
 export const WriteTool = z.enum(WRITE_TOOLS);
 export type WriteTool = z.infer<typeof WriteTool>;
 
+/** `book_appointment` or `reschedule_appointment`: the tools that change the patient's schedule. */
+export const isWriteTool = (name: string): name is WriteTool =>
+  (WRITE_TOOLS as readonly string[]).includes(name);
+
 // ---------------------------------------------------------------------------------------------
 // Setup (fixture overrides, #33)
 // ---------------------------------------------------------------------------------------------
@@ -405,3 +409,6 @@ export const L1Case = z
       });
   });
 export type L1Case = z.infer<typeof L1Case>;
+
+/** Narrows a loaded case: L1 cases live in `l1/` and carry `category: l1`. */
+export const isL1Case = (c: Scenario | L1Case): c is L1Case => c.category === "l1";

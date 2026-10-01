@@ -4,7 +4,7 @@
  * so it sees exactly what the patient saw and what the tools returned.
  */
 import { TEXT_BLOCK_SEPARATOR, type LlmMessage } from "@sched/agent";
-import type { ToolCallTrace, ToolError } from "@sched/contracts";
+import { ToolError, type ContentBlock, type ToolCallTrace } from "@sched/contracts";
 
 export type TranscriptEvent =
   | {
@@ -31,6 +31,10 @@ export type TranscriptEvent =
     };
 
 export type ToolCallEvent = Extract<TranscriptEvent, { kind: "tool_call" }>;
+
+/** The text blocks of one message, joined the way the loop joins them for the patient. */
+export const textOf = (blocks: readonly ContentBlock[]): string =>
+  blocks.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR);
 
 function parseJson(text: string): unknown {
   try {
@@ -60,18 +64,19 @@ export function turnEvents(
 
   for (const [i, m] of newMessages.entries()) {
     if (m.role === "user") {
-      const text = m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR);
+      const text = textOf(m.content);
       if (i === 0 || text.length > 0)
         events.push({ kind: "patient", turn, text, ...(scriptStep === undefined ? {} : { scriptStep }) });
       continue;
     }
-    const text = m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR);
+    const text = textOf(m.content);
     if (text.length > 0) events.push({ kind: "assistant", turn, text });
     for (const b of m.content) {
       if (b.type !== "tool_use") continue;
       const result = results.get(b.id);
       const parsed = result === undefined ? undefined : parseJson(result.content);
       const ok = result !== undefined && !result.isError;
+      const toolError = ok ? undefined : ToolError.safeParse(parsed);
       events.push({
         kind: "tool_call",
         turn,
@@ -81,14 +86,16 @@ export function turnEvents(
         input: b.input,
         ok,
         ...(ok ? { output: parsed } : {}),
-        ...(!ok && typeof parsed === "object" && parsed !== null && "error" in parsed
-          ? { error: (parsed as ToolError).error }
-          : {}),
+        ...(toolError?.success ? { error: toolError.data.error } : {}),
       });
     }
   }
   return events;
 }
+
+export type TextEventOf<K extends "patient" | "assistant"> = Extract<TranscriptEvent, { kind: K }>;
+export const isPatient = (e: TranscriptEvent): e is TextEventOf<"patient"> => e.kind === "patient";
+export const isAssistant = (e: TranscriptEvent): e is TextEventOf<"assistant"> => e.kind === "assistant";
 
 export const assistantTexts = (events: readonly TranscriptEvent[]): string[] =>
   events.flatMap((e) => (e.kind === "assistant" ? [e.text] : []));

@@ -61,12 +61,27 @@ async function world() {
   return { env, book };
 }
 
-const grade = (
+type World = Awaited<ReturnType<typeof world>>["env"];
+
+/** End-state grading of `env` with `expected` (and `fabricated_ids`) in place of the scenario's own. */
+const gradeState = (
   expected: EndState,
-  env: Awaited<ReturnType<typeof world>>["env"],
+  env: World,
+  after = env.repos.snapshot(),
   events: TranscriptEvent[] = [],
   fabricated: string[] = [],
-) => gradeEndState(expected, env.before, env.repos.snapshot(), events, fabricated);
+) => {
+  const base = scenario("book-derm-next-week-afternoon");
+  return gradeEndState({
+    scenario: { ...base, expect: { ...base.expect, end_state: expected }, fabricated_ids: fabricated },
+    events,
+    before: env.before,
+    after,
+    patientId: env.patientId,
+  });
+};
+const grade = (expected: EndState, env: World, events: TranscriptEvent[] = [], fabricated: string[] = []) =>
+  gradeState(expected, env, env.repos.snapshot(), events, fabricated);
 
 describe("end_state", () => {
   it("counts: an exact count and a max both fail when exceeded", async () => {
@@ -162,10 +177,10 @@ describe("end_state", () => {
     const slot = after.slots.find((s) => s.slotId === OKAFOR_THU_1200);
     if (slot === undefined) throw new Error("fixture slot missing");
     slot.status = "BOOKED";
-    const results = gradeEndState({ no_writes: true, no_appointment_writes: true }, env.before, after, []);
+    const results = gradeState({ no_writes: true, no_appointment_writes: true }, env, after);
     expect(byName(results, "end_state.no_writes")).toMatchObject({ status: "fail", safety: true });
     expect(byName(results, "end_state.no_appointment_writes")?.detail).toContain(OKAFOR_THU_1200);
-    const clean = gradeEndState({ no_writes: true }, env.before, env.repos.snapshot(), []);
+    const clean = grade({ no_writes: true }, env);
     expect(byName(clean, "end_state.no_writes")?.status).toBe("pass");
   });
 

@@ -11,6 +11,7 @@
  */
 export const PACKAGE_NAME = "@sched/evals";
 
+export * from "./cli-args";
 export * from "./environment";
 export * from "./graders";
 export * from "./l1";

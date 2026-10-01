@@ -164,7 +164,7 @@ export interface RateLimitedOptions {
   limiter?: RateLimiter;
   /** Retries after the first attempt. Default 6. */
   maxRetries?: number;
-  /** First backoff; doubles each retry, with full jitter. Default 2 s. */
+  /** First backoff; doubles each retry, with equal (half) jitter: half the step fixed, half random. Default 2 s. */
   baseDelayMs?: number;
   /** Backoff ceiling. Default 60 s. */
   maxDelayMs?: number;
