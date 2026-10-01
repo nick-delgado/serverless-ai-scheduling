@@ -16,7 +16,7 @@ export const CLINIC = {
 /** Shared limits so the API, tools, UI, and evals agree. */
 export const LIMITS = {
   chatTextMaxChars: 2000,
-  availabilityMaxSlots: 10,
+  availabilityMaxSlots: 5,
   availabilityMaxRangeDays: 31,
   providersMaxResults: 20,
   reasonMaxChars: 300,
