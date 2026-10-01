@@ -17,7 +17,7 @@ small files for the report.
 ```markdown
 ## Agent PR review: <verdict>
 
-**PR:** #<n> <title> · **Head:** `<short sha>` · **CI:** <passing | failing: names | pending | none> · **Spec:** <issue #m (link) | path/to/spec.md | none found>
+**PR:** #<n> <title> · **Reviewed commit:** [`<short sha>`](<PR URL>/commits/<full sha>) · **CI:** <passing | failing: names | pending | none> · **Spec:** <issue #m (link) | path/to/spec.md | none found>
 
 <Two or three sentences: what the PR does and the most important problems. Code only: say
 nothing here about causes or process.>
@@ -69,7 +69,7 @@ could not complete. The verdict is a recommendation to the human who merges.
 
 ## What the script assembles
 
-### The report (`assemble-report.sh <RUN_DIR> report`)
+### The report (`assemble-report.sh <RUN_DIR> report <full head sha>`)
 
 | Section | Taken from |
 |---|---|

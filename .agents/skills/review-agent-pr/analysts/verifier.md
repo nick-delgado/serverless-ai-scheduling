@@ -63,12 +63,10 @@ For each finding, in every findings file:
    - `for the owner` when step 4 answered no.
    - `needs owner decision` when the right outcome is not settled by the spec, a documented
      rule or the code: two sources conflict, the spec is silent on the behaviour, or the
-     suggested fix begins with "decide", "confirm" or "ask". Make sure "Decision needed"
-     states the question and the options. If the finding also has a part that is right
-     under every option (a missing test, a record of the decision), split that part out as
-     its own `fix now` finding with a suffixed ID (`SPEC-2a`).
-   - `fix now` otherwise. Its "Suggested fix" must be something the agent can do without
-     making a product decision; rewrite it if it is not.
+     suggested fix begins with "decide", "confirm" or "ask". If the finding also has a part
+     that is right under every option (a missing test, a record of the decision), split
+     that part out as its own `fix now` finding with a suffixed ID (`SPEC-2a`).
+   - `fix now` otherwise.
 
 Then, across all files:
 
@@ -78,6 +76,26 @@ Then, across all files:
    locations. Two findings that share a cause but need different fixes (the code and the
    missing record of a decision, say) stay separate; add a "Related:" line to each naming
    the other.
+
+10. **Settle the suggestions and options.** The reviewers drafted them from inside one
+    area; you see every finding and are invested in neither the code nor the findings. You
+    are the last to shape what the authoring agent will do and what the owner will be
+    asked, so this step decides how useful the report is. Hold each confirmed finding to
+    "Suggestions and options" in the finding schema:
+    - **Suggested fix:** check it against the code. Is it correct, the smallest fix that
+      resolves the finding, free of any product decision, and does it use what already
+      exists? Do two findings' fixes touch the same code, conflict, or make each other
+      unnecessary? Then make them consistent and say so in each. Rewrite what falls short.
+    - **Done when:** present and checkable.
+    - **Options:** two to four real alternatives, each with its consequence. Add the one the
+      reviewer missed, including "keep as is" when the code as written is a defensible
+      choice, and drop the ones nobody would take.
+    - **Recommendation:** make your own judgement, from the spec, the direction documents
+      and the owner's earlier decisions in the manifest, not from the reviewer's draft or
+      the authoring agent's choice. Cite the source. If the sources do not favour any
+      option, say so and recommend the cheapest to reverse.
+
+    Note in the finding's "Verification" field what you changed.
 
 When you are unsure after checking, keep the finding and set its confidence to `low`. Do not
 reject because a finding is inconvenient or small; reject only for a stated reason from the
@@ -95,7 +113,7 @@ for a test, work out whether it would really fail if the behaviour were broken.
   most harm; prefer checks with a vague scope or no citation, and every reviewer at least
   once.
 - A pass that does not hold becomes a finding, in the finding-schema format with the ID
-  prefix `VER` (`VER-1`), and goes through steps 1 to 8 like any other.
+  prefix `VER` (`VER-1`), and goes through steps 1 to 10 like any other.
 - Also check the citations in the rows you sample: a line number that points at the wrong
   code is corrected in the table you copy, and noted.
 
@@ -104,19 +122,23 @@ for a test, work out whether it would really fail if the behaviour were broken.
 If `<RUN_DIR>/previous/report.md` exists, the PR was reviewed before. List every finding in
 it: the full blocks, the rows of every table, and any "Previous findings" table it carries
 forward from earlier rounds. `<RUN_DIR>/previous/earlier/` may hold the reports of earlier
-rounds, recovered from the comment's edit history; add their findings too, except those a
-later round already settled as `resolved` or `withdrawn`. For each, settle its status at
+reviewed commits; add their findings too, except those a later round already settled as
+`resolved` or `withdrawn`. Finding IDs restart in every round, so name a previous finding
+by its round as well: `6c20495/SPEC-1`. For each, settle its status at
 the current head:
 
 | Status | When |
 |---|---|
 | `resolved` | The problem is gone. Cite the code or test that shows it (`file:line`). |
-| `still present` | The problem is still there. Unless a reviewer reported it again, add it back as a confirmed finding under its original ID, re-checked through steps 1 to 8. |
-| `decided` | The owner decided it (see `<RUN_DIR>/previous/response.md`, the Decision column or a `decision:` note). Check that the code matches the decision; if it does not, it is `still present`. |
+| `still present` | The problem is still there. Unless a reviewer reported it again, add it back as a confirmed finding under its original ID, re-checked through steps 1 to 10. |
+| `decided` | The owner decided it (see `<RUN_DIR>/previous/decisions.md` for decisions posted on the PR, and
+`<RUN_DIR>/previous/responses.md`: the Decision column or a `decision:` note). Check that the code matches the decision; if it does not, it is `still present`. |
 | `for the owner` | It was marked for the owner and nothing in this PR changed that. |
 | `withdrawn` | On a second look it was never a problem (the earlier review was wrong). Say why. |
 
-The response file holds the authoring agent's claims ("fixed", "disputed"). Treat them as
+The responses file holds the authoring agent's responses, oldest first, each naming the
+reviewed commit it answers and the commit it produced. They are claims ("fixed",
+"disputed"). Treat them as
 claims to check, not as evidence. For a disputed finding, judge the dispute on the code.
 
 ## Re-check mode
@@ -132,7 +154,7 @@ reviewed before, and the authoring agent has since changed it; the changes are i
    name says, a weakened check, a stale comment or doc left behind, a change outside the
    task's scope, behaviour the spec or the owner's decisions do not allow. Read the relevant
    brief in `<SKILL_DIR>/reviewers/` when a hunk falls in its area. A new problem becomes a
-   `VER` finding and goes through steps 1 to 8.
+   `VER` finding and goes through steps 1 to 10.
 3. **Spot checks** become the record of step 2: one row per hunk (or group of related
    hunks), with what you checked and the result.
 
@@ -156,9 +178,12 @@ fields added:>
 
 ## Minor findings table
 
-| ID | Severity | Action | Location | Problem | Suggested fix or decision needed |
+| ID | Severity | Action | Location | Problem | Suggested fix |
 |---|---|---|---|---|---|
-<one row per confirmed minor finding and nit; one sentence per cell; "None." if there are none>
+<one row per confirmed minor finding and nit whose action is `fix now` or `for the owner`;
+one sentence per cell, the last cell holding the suggested fix and, after "Done when:", its
+check; "None." if there are none. Findings that need the owner's decision are not in this
+table: the report shows each of them in full, whatever its severity.>
 
 ## Rejected findings
 
@@ -198,8 +223,7 @@ so use exactly these `##` and `###` headings, in this order, and no other `##` h
 - The minor findings table is what the report shows for minors and nits, and the script
   sorts its rows into the report's three groups by the Action cell. Write that cell as
   exactly `fix now`, `needs owner decision` or `for the owner`. Keep each row to one line;
-  the full blocks above remain the record. For a `needs owner decision` row, the last cell
-  is the question and its options.
+  the full blocks above remain the record.
 - Under "Reviewer tables", copy each reviewer's table of that name, corrected where a
   rejection or adjustment changes a row. Write `Not produced.` under a heading whose
   reviewer supplied no table.

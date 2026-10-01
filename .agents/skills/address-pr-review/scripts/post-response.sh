@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Post the response to an agent PR review as a single comment on the PR.
-# If this user already posted a response on the PR, that comment is updated instead.
+# Post the response to an agent PR review as a new comment on the PR.
+#
+# Every run of the address-pr-review skill gets its own comment, so the PR's conversation
+# shows each round in order: earlier responses are never edited. The response's first line
+# names the reviewed commit and the commit the fixes produced.
 #
 # Usage: post-response.sh <pr-number> <response-file>
 # Run from inside a clone of the PR's repository. Requires an authenticated gh.
 
 set -euo pipefail
 
-MARKER='<!-- agent-pr-review:response -->'
 MAX_CHARS=65536
 
 if [ "$#" -ne 2 ]; then
@@ -30,8 +32,8 @@ if [ ! -s "$file" ]; then
   exit 1
 fi
 
-if [ "$(head -n 1 "$file")" != "$MARKER" ]; then
-  echo "error: the first line of the response must be: $MARKER" >&2
+if ! head -n 1 "$file" | grep -qE '^<!-- agent-pr-review:response review=[0-9a-f]{40} head=[0-9a-f]{40} -->$'; then
+  echo "error: the first line of the response must be: <!-- agent-pr-review:response review=<full reviewed commit> head=<full commit after the fixes> -->" >&2
   exit 1
 fi
 
@@ -41,18 +43,5 @@ if [ "$chars" -gt "$MAX_CHARS" ]; then
   exit 1
 fi
 
-login="$(gh api user --jq '.login')"
-
-existing="$(
-  gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
-    --jq ".[] | select(.user.login == \"${login}\") | select(.body | startswith(\"${MARKER}\")) | .id" |
-    tail -n 1
-)"
-
-if [ -n "$existing" ]; then
-  gh api --method PATCH "repos/{owner}/{repo}/issues/comments/${existing}" \
-    -F "body=@${file}" --jq '"updated " + .html_url'
-else
-  gh api --method POST "repos/{owner}/{repo}/issues/${pr}/comments" \
-    -F "body=@${file}" --jq '"created " + .html_url'
-fi
+gh api --method POST "repos/{owner}/{repo}/issues/${pr}/comments" \
+  -F "body=@${file}" --jq '"created " + .html_url'
