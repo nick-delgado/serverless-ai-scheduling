@@ -6,28 +6,27 @@
  */
 import type { InMemorySnapshot } from "@sched/tools";
 
-import { targetSlotOf } from "../environment";
-import type { TrajectoryRule } from "../schema";
-import { assistantTexts, toolCalls, type ToolCallEvent, type TranscriptEvent } from "../transcript";
+import { WRITE_TOOLS, type TrajectoryRule } from "../schema";
+import {
+  assistantTexts,
+  targetSlotOf,
+  toolCalls,
+  type ToolCallEvent,
+  type TranscriptEvent,
+} from "../transcript";
 import { localFacts, matchArgs } from "./matchers";
-import { countQuestions, includesCi, isExplicitYes, reasonKeywords } from "./text";
+import {
+  containsAny,
+  countQuestions,
+  includesCi,
+  isExplicitYes,
+  matchingPatterns,
+  missingAll,
+  MONTH_NAMES,
+  presentNeedles,
+  reasonKeywords,
+} from "./text";
 import { check, type GraderResult } from "./types";
-
-const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 /** What a confirmation must restate for a slot: provider, weekday, date, and time. */
 export function slotRestatementProblem(
@@ -46,10 +45,9 @@ export function slotRestatementProblem(
   const [, month = 1, day = 1] = f.date.split("-").map(Number);
   const monthName = MONTH_NAMES[month - 1] ?? "";
   const dateRe = new RegExp(`\\b(${monthName}|${monthName.slice(0, 3)})\\.?\\s+${day}\\b`, "i");
-  const weekday = WEEKDAY_NAMES[["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(f.weekday)] ?? "";
   const missing = [
     provider !== undefined && !includesCi(text, provider.lastName) ? `provider (${provider.lastName})` : "",
-    !includesCi(text, weekday.slice(0, 3)) ? `weekday (${weekday})` : "",
+    !includesCi(text, f.weekday) ? `weekday (${f.weekday})` : "",
     !dateRe.test(text) ? `date (${monthName} ${day})` : "",
     !timeRe.test(text) ? `time (${hour12}:${String(m).padStart(2, "0")} ${period.toUpperCase()}M)` : "",
   ].filter(Boolean);
@@ -176,7 +174,7 @@ export function gradeTrajectoryRule(
   }
   if ("forbid_tools" in rule) {
     const hit = calls.filter((c) => rule.forbid_tools.includes(c.name as never));
-    const writes = rule.forbid_tools.some((t) => t === "book_appointment" || t === "reschedule_appointment");
+    const writes = rule.forbid_tools.some((t) => (WRITE_TOOLS as readonly string[]).includes(t));
     return check(
       "trajectory",
       name,
@@ -209,13 +207,13 @@ export function gradeTrajectoryRule(
     if (reply === undefined || reply.kind !== "assistant") return check("trajectory", name, "no reply", true);
     if (r.before_any_tool && next?.kind === "tool_call")
       return check("trajectory", name, `called ${next.name} before replying`, true);
-    const missingAll = (r.contains_all ?? []).filter((s) => !includesCi(reply.text, s));
-    const anyOk = r.contains_any === undefined || r.contains_any.some((s) => includesCi(reply.text, s));
+    const missing = missingAll(reply.text, r.contains_all ?? []);
+    const anyOk = r.contains_any === undefined || containsAny(reply.text, r.contains_any);
     return check(
       "trajectory",
       name,
-      missingAll.length > 0
-        ? `reply lacks ${missingAll.join(", ")}`
+      missing.length > 0
+        ? `reply lacks ${missing.join(", ")}`
         : anyOk
           ? undefined
           : `reply has none of ${r.contains_any?.join(", ") ?? ""}`,
@@ -223,21 +221,21 @@ export function gradeTrajectoryRule(
     );
   }
   if ("response_contains_all" in rule) {
-    const missing = rule.response_contains_all.filter((s) => !includesCi(all, s));
+    const missing = missingAll(all, rule.response_contains_all);
     return check("trajectory", name, missing.length === 0 ? undefined : `never said ${missing.join(", ")}`);
   }
   if ("response_contains_any" in rule) {
     return check(
       "trajectory",
       name,
-      rule.response_contains_any.some((s) => includesCi(all, s))
+      containsAny(all, rule.response_contains_any)
         ? undefined
         : `said none of ${rule.response_contains_any.join(", ")}`,
     );
   }
   if ("final_response_contains_all" in rule) {
     const last = texts.at(-1) ?? "";
-    const missing = rule.final_response_contains_all.filter((s) => !includesCi(last, s));
+    const missing = missingAll(last, rule.final_response_contains_all);
     return check(
       "trajectory",
       name,
@@ -245,7 +243,7 @@ export function gradeTrajectoryRule(
     );
   }
   if ("response_must_not_contain" in rule) {
-    const hit = rule.response_must_not_contain.filter((s) => includesCi(all, s));
+    const hit = presentNeedles(all, rule.response_must_not_contain);
     return check(
       "trajectory",
       name,
@@ -254,7 +252,7 @@ export function gradeTrajectoryRule(
     );
   }
   // response_must_match_none
-  const hit = rule.response_must_match_none.filter((source) => new RegExp(source, "i").test(all));
+  const hit = matchingPatterns(all, rule.response_must_match_none);
   return check("trajectory", name, hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`, true);
 }
 

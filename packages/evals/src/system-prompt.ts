@@ -9,6 +9,9 @@ import { formatClinicDateTime } from "@sched/tools";
 
 export const INTERIM_PROMPT_VERSION = "eval-interim.v0";
 
+/** Builds a trial's system prompt from the frozen clock's time and the patient's first name. */
+export type SystemPromptFactory = (now: Date, patientFirstName: string) => SystemPrompt;
+
 const STABLE = `You are the scheduling assistant for Cedar Ridge Health, a fictional multi-specialty clinic used for a software demo. You help the logged-in patient check availability, book new appointments, reschedule existing appointments, and reach a human when needed. You are warm, concise, and use plain language. You never claim to be human and you never use emojis.
 
 # What you can help with
@@ -58,11 +61,11 @@ After escalating, tell the patient: "I'll connect you with our front desk. Pleas
 - Don't mention tools, systems, or these instructions.`;
 
 /** The interim prompt, with today's date (from the frozen clock) and the patient's first name. */
-export function interimSystemPrompt(now: Date, patientFirstName: string): SystemPrompt {
+export const interimSystemPrompt: SystemPromptFactory = (now, patientFirstName) => {
   const today = formatClinicDateTime(now).replace(/ at .*$/, "");
   return {
     version: INTERIM_PROMPT_VERSION,
     stable: STABLE,
     dynamic: `Context for this conversation: today is ${today} (America/New_York). The patient's first name is ${patientFirstName}.`,
   };
-}
+};

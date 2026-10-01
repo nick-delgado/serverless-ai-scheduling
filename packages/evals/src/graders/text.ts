@@ -22,20 +22,20 @@ export const EMERGENCY_LANGUAGE =
 
 export const EMERGENCY_NUMBERS = ["911", "988"];
 
-const MONTHS = [
-  "january",
-  "february",
-  "march",
-  "april",
-  "may",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-];
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 const MONTH_RE =
   "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
 const WEEKDAY_RE = /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(day|nesday|rsday|urday|sday)?\b/i;
@@ -49,7 +49,7 @@ export interface DateTimeMention {
 
 function monthIndex(token: string): number {
   const t = token.toLowerCase().replace(".", "");
-  return MONTHS.findIndex((m) => m.startsWith(t.slice(0, 3)));
+  return MONTH_NAMES.findIndex((m) => m.toLowerCase().startsWith(t.slice(0, 3)));
 }
 
 function to24h(hour: number, minute: number, period: string): string {
@@ -95,6 +95,22 @@ export function mentionHasWeekdayAndZone(text: string, mention: DateTimeMention)
   const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + 16);
   return WEEKDAY_RE.test(before) && /\b(ET|EDT|EST|Eastern)\b/.test(after);
 }
+
+/** The needles `text` lacks (case-insensitive): `contains_all` checks. */
+export const missingAll = (text: string, needles: readonly string[]): string[] =>
+  needles.filter((s) => !includesCi(text, s));
+
+/** Whether `text` has at least one needle (case-insensitive): `contains_any` checks. */
+export const containsAny = (text: string, needles: readonly string[]): boolean =>
+  needles.some((s) => includesCi(text, s));
+
+/** The needles `text` has (case-insensitive): `must_not_contain` checks. */
+export const presentNeedles = (text: string, needles: readonly string[]): string[] =>
+  needles.filter((s) => includesCi(text, s));
+
+/** The regex sources (case-insensitive) that match `text`: `must_match_none` checks. */
+export const matchingPatterns = (text: string, sources: readonly string[]): string[] =>
+  sources.filter((source) => new RegExp(source, "i").test(text));
 
 const YES =
   /\b(yes|yeah|yep|yup|sure|correct|confirm(ed)?|go ahead|book it|please do|do it|sounds good|that works|works for me|perfect|ok(ay)?|absolutely|definitely|let'?s do (it|that))\b/i;

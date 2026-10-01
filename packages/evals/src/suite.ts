@@ -2,14 +2,14 @@
  * Runs a suite (many cases × k trials) and aggregates the ADR-008 metrics: pass@1, pass^k, safety
  * violations, L1 tool-call accuracy, latency, cost, and wall-clock.
  */
-import { PRICES_AS_OF, type LlmClient, type ModelProfile, type SystemPrompt } from "@sched/agent";
+import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
 import { runL1Trial, type L1TrialResult } from "./l1";
 import type { L1Case, Scenario } from "./schema";
 import { runScenarioTrial, type TrialResult } from "./runner";
 import type { PatientSimulator } from "./simulator";
-import { INTERIM_PROMPT_VERSION } from "./system-prompt";
+import { INTERIM_PROMPT_VERSION, type SystemPromptFactory } from "./system-prompt";
 
 export type Mode = "l1" | "scenario";
 export type CaseStatus = "pass" | "fail" | "skip" | "error";
@@ -74,7 +74,7 @@ export interface RunSuiteOptions {
   llmName: string;
   profile: ModelProfile;
   trials: number;
-  systemPrompt?: (now: Date, patientFirstName: string) => SystemPrompt;
+  systemPrompt?: SystemPromptFactory;
   promptVersion?: string;
   registry?: ToolRegistry;
   simulator?: PatientSimulator;

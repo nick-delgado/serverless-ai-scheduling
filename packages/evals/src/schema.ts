@@ -36,6 +36,7 @@ export const FixtureName = z.enum(FIXTURE_NAMES);
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 export const Weekday = z.enum(WEEKDAYS);
+export type Weekday = z.infer<typeof Weekday>;
 
 /** `"HH:MM"`, 24-hour. */
 export const HhMm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected "HH:MM" (24-hour)');

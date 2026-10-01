@@ -6,8 +6,7 @@ import type { Appointment, Escalation } from "@sched/contracts";
 import type { InMemorySnapshot } from "@sched/tools";
 
 import type { Count, EndState } from "../schema";
-import { toolCalls, type TranscriptEvent } from "../transcript";
-import { targetSlotOf } from "../environment";
+import { targetSlotOf, toolCalls, type TranscriptEvent } from "../transcript";
 import { matchAppointment } from "./matchers";
 import { check, type GraderResult, type HarnessWrites } from "./types";
 

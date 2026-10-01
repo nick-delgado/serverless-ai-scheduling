@@ -10,7 +10,6 @@ import {
   type LlmClient,
   type LlmMessage,
   type ModelProfile,
-  type SystemPrompt,
 } from "@sched/agent";
 import type { TokenUsage, TurnOutcome } from "@sched/contracts";
 import type { ToolRegistry } from "@sched/tools";
@@ -19,7 +18,7 @@ import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
 import type { Scenario } from "./schema";
 import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
-import { interimSystemPrompt } from "./system-prompt";
+import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
 import { turnEvents, type TranscriptEvent } from "./transcript";
 
 /** The agent configuration under test. */
@@ -27,7 +26,7 @@ export interface AgentUnderTest {
   llm: LlmClient;
   profile: ModelProfile;
   /** Builds the system prompt for a trial. Default: the interim prompt until #16 lands. */
-  systemPrompt?: (now: Date, patientFirstName: string) => SystemPrompt;
+  systemPrompt?: SystemPromptFactory;
   /** Tool handlers. Default: the production `TOOL_REGISTRY`. */
   registry?: ToolRegistry;
 }

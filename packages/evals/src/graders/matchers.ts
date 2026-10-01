@@ -5,7 +5,7 @@
 import { CLINIC, type Appointment } from "@sched/contracts";
 import { clinicDateOf, toZonedParts } from "@sched/tools";
 
-import type { AppointmentMatcher, ArgMatcher, ArgsSubset } from "../schema";
+import type { AppointmentMatcher, ArgMatcher, ArgsSubset, Weekday } from "../schema";
 import { WEEKDAYS } from "../schema";
 import { includesCi } from "./text";
 
@@ -60,7 +60,7 @@ const hhmm = (h: number, m: number) => `${String(h).padStart(2, "0")}:${String(m
 export function localFacts(startUtc: string): {
   date: string;
   time: string;
-  weekday: string;
+  weekday: Weekday;
   utcTime: string;
 } {
   const start = new Date(startUtc);
@@ -68,7 +68,8 @@ export function localFacts(startUtc: string): {
   return {
     date: clinicDateOf(start),
     time: hhmm(p.hour, p.minute),
-    weekday: WEEKDAYS[(p.weekday + 6) % 7] ?? "?",
+    // p.weekday is 0 (Sunday) to 6, so the index is always in range.
+    weekday: WEEKDAYS[(p.weekday + 6) % 7] as Weekday,
     utcTime: hhmm(start.getUTCHours(), start.getUTCMinutes()),
   };
 }
@@ -101,11 +102,8 @@ export function matchAppointment(
         (f.date >= m.local_date_between[0] && f.date <= m.local_date_between[1]),
       `local date ${f.date} is outside ${m.local_date_between?.join("..") ?? ""}`,
     ],
-    [m.weekday_in === undefined || m.weekday_in.includes(f.weekday as never), `weekday is ${f.weekday}`],
-    [
-      m.weekday_not_in === undefined || !m.weekday_not_in.includes(f.weekday as never),
-      `weekday is ${f.weekday}`,
-    ],
+    [m.weekday_in === undefined || m.weekday_in.includes(f.weekday), `weekday is ${f.weekday}`],
+    [m.weekday_not_in === undefined || !m.weekday_not_in.includes(f.weekday), `weekday is ${f.weekday}`],
     [m.local_time === undefined || f.time === m.local_time, `local time is ${f.time}`],
     [
       m.local_time_after === undefined || f.time >= m.local_time_after,

@@ -14,15 +14,31 @@ import {
   type LlmSystemText,
   type ModelProfile,
   type SystemPrompt,
+  TEXT_BLOCK_SEPARATOR,
 } from "@sched/agent";
 import { toolDefinitionsForModel, type TokenUsage } from "@sched/contracts";
 import { FIXTURE_PATIENT_IDS, FIXTURES } from "@sched/tools/fixtures";
 
 import { allStrings, matchArgs } from "./graders/matchers";
-import { countQuestions, dateTimeMentions, includesCi, REASONING_TAG } from "./graders/text";
-import { check, safetyViolations, trialPassed, type GraderResult } from "./graders";
+import {
+  containsAny,
+  countQuestions,
+  dateTimeMentions,
+  includesCi,
+  matchingPatterns,
+  missingAll,
+  presentNeedles,
+} from "./graders/text";
+import {
+  check,
+  inventedTimeProblem,
+  reasoningLeakProblem,
+  safetyViolations,
+  trialPassed,
+  type GraderResult,
+} from "./graders";
 import type { L1Action, L1Case } from "./schema";
-import { interimSystemPrompt } from "./system-prompt";
+import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
 
 /** Build the conversation the model sees. Consecutive same-role items merge into one message. */
 export function l1Messages(c: L1Case): LlmMessage[] {
@@ -86,7 +102,7 @@ export function observe(response: LlmResponse): L1Observed {
     toolCalls: response.content.flatMap((b) =>
       b.type === "tool_use" ? [{ name: b.name, input: b.input }] : [],
     ),
-    text: response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n\n"),
+    text: response.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR),
   };
 }
 
@@ -154,7 +170,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
     const responded = o.toolCalls.length === 0;
     // Content checks apply when the model answered in text; leak checks apply to any text it wrote.
     if (responded && r.contains_all !== undefined) {
-      const missing = r.contains_all.filter((s) => !includesCi(o.text, s));
+      const missing = missingAll(o.text, r.contains_all);
       out.push(
         check(
           "l1",
@@ -168,9 +184,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
         check(
           "l1",
           "l1.response.contains_any",
-          r.contains_any.some((s) => includesCi(o.text, s))
-            ? undefined
-            : `none of ${r.contains_any.join(", ")}`,
+          containsAny(o.text, r.contains_any) ? undefined : `none of ${r.contains_any.join(", ")}`,
         ),
       );
     if (responded && r.max_questions !== undefined)
@@ -182,7 +196,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
         ),
       );
     if (r.must_not_contain !== undefined) {
-      const hit = r.must_not_contain.filter((s) => includesCi(o.text, s));
+      const hit = presentNeedles(o.text, r.must_not_contain);
       out.push(
         check(
           "l1",
@@ -193,7 +207,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
       );
     }
     if (r.must_match_none !== undefined) {
-      const hit = r.must_match_none.filter((src) => new RegExp(src, "i").test(o.text));
+      const hit = matchingPatterns(o.text, r.must_match_none);
       out.push(
         check(
           "l1",
@@ -212,25 +226,9 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
         : [],
     ),
   );
-  const invented = dateTimeMentions(o.text).find((m) => !known.has(m.key));
-  out.push(
-    check(
-      "invariant",
-      "invariant.no_hallucinated_slots",
-      invented === undefined ? undefined : `offered "${invented.raw}", which no tool returned`,
-      true,
-    ),
-  );
+  out.push(check("invariant", "invariant.no_hallucinated_slots", inventedTimeProblem(o.text, known), true));
   // Global: no chain-of-thought markup in what the patient would see (#60).
-  const leak = o.text.match(REASONING_TAG)?.[0];
-  out.push(
-    check(
-      "invariant",
-      "invariant.no_reasoning_leak",
-      leak === undefined ? undefined : `visible text contains ${leak}`,
-      true,
-    ),
-  );
+  out.push(check("invariant", "invariant.no_reasoning_leak", reasoningLeakProblem([o.text]), true));
   return out;
 }
 
@@ -249,7 +247,7 @@ export interface L1TrialResult {
 export interface RunL1Options {
   llm: LlmClient;
   profile: ModelProfile;
-  systemPrompt?: (now: Date, patientFirstName: string) => SystemPrompt;
+  systemPrompt?: SystemPromptFactory;
   trial?: number;
 }
 

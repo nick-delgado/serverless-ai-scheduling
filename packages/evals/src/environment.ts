@@ -31,6 +31,7 @@ import {
 import { FIXTURE_PATIENT_IDS, FIXTURES, type ClinicFixture } from "@sched/tools/fixtures";
 
 import type { L1Case, Scenario, Setup, SetupFault } from "./schema";
+import { targetSlotOf } from "./transcript";
 
 export interface TrialEnvironment {
   patientId: PatientId;
@@ -124,19 +125,6 @@ const FAULT_MESSAGES: Record<ToolErrorCode, [string, string]> = {
   NOT_ALLOWED: ["That action is not allowed.", "Explain what you can do instead."],
   INVALID_INPUT: ["Invalid input.", "Fix the input and call the tool again."],
 };
-
-/** The slot a write call targets, if any. */
-export function targetSlotOf(tool: string, input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
-  const record = input as Record<string, unknown>;
-  const value =
-    tool === "book_appointment"
-      ? record.slot_id
-      : tool === "reschedule_appointment"
-        ? record.new_slot_id
-        : undefined;
-  return typeof value === "string" ? value : undefined;
-}
 
 /**
  * Wrap registered handlers so the configured calls fail with the configured error. Calls are counted per
