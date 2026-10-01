@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
 import { FrozenClock } from "../../src/clock";
+import { RecordingNotifier, type Notifier } from "../../src/notify";
 import {
-  formatEscalationNotice,
-  RecordingNotifier,
-  type EscalationNotice,
-  type Notifier,
-} from "../../src/notify";
-import { createToolExecutor, type ToolContext, type ToolExecutionResult } from "../../src/registry";
+  createToolExecutor,
+  TOOL_REGISTRY,
+  type ToolContext,
+  type ToolExecutionResult,
+  type ToolRegistry,
+} from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import type { Repositories } from "../../src/repos/types";
@@ -76,7 +77,11 @@ const conversation = (conversationId: string, at: string): ConversationMessage[]
     conversationId,
     seq: 3,
     role: "assistant",
-    content: [{ type: "text", text: "Billing is handled by our front desk." }],
+    content: [
+      { type: "text", text: "Billing is handled by our front desk." },
+      { type: "text", text: "   " },
+      { type: "text", text: "I can connect you with them." },
+    ],
     turnId: EXAMPLES.TurnId,
     createdAt: at,
   },
@@ -87,16 +92,15 @@ describe("escalate_to_human", () => {
   let clock: FrozenClock;
   let notifier: RecordingNotifier;
 
-  const firstNotice = (): EscalationNotice => {
-    const notice = notifier.sent[0];
-    if (!notice) throw new Error("expected a notice");
-    return notice;
-  };
-
   const run = (
     patientId: string,
     input: unknown = INPUT,
-    opts: { notifier?: Notifier | null; repos?: Repositories; conversationId?: string } = {},
+    opts: {
+      notifier?: Notifier | null;
+      repos?: Repositories;
+      conversationId?: string;
+      registry?: ToolRegistry;
+    } = {},
   ): Promise<ToolExecutionResult> => {
     const n = opts.notifier === null ? undefined : (opts.notifier ?? notifier);
     const ctx: ToolContext = {
@@ -106,7 +110,7 @@ describe("escalate_to_human", () => {
       repos: opts.repos ?? repos,
       ...(n ? { notifier: n } : {}),
     };
-    return createToolExecutor({ escalate_to_human: escalateToHuman }, ctx).execute({
+    return createToolExecutor(opts.registry ?? { escalate_to_human: escalateToHuman }, ctx).execute({
       id: "toolu_test",
       name: "escalate_to_human",
       input,
@@ -119,6 +123,16 @@ describe("escalate_to_human", () => {
     repos = createInMemoryRepositories({ seed: fixture, clock, ids: sequentialIds() });
     notifier = new RecordingNotifier();
     await repos.conversations.append(MARIA, conversation(CONV, clock.now().toISOString()));
+  });
+
+  it("is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler", async () => {
+    const ctx: ToolContext = { patientId: MARIA, conversationId: CONV, clock, repos, notifier };
+    expect(createToolExecutor(TOOL_REGISTRY, ctx).definitions.map((d) => d.name)).toContain(
+      "escalate_to_human",
+    );
+    const out = outputOf(await run(MARIA, INPUT, { registry: TOOL_REGISTRY }));
+    expect(out).toMatchObject({ phone: CLINIC.phone, hours: CLINIC.hours, already_escalated: false });
+    expect(notifier.sent).toHaveLength(1);
   });
 
   it("records the escalation, notifies staff once, and returns the phone and hours", async () => {
@@ -134,7 +148,7 @@ describe("escalate_to_human", () => {
     expect(notifier.sent[0]).toEqual({
       escalationId: out.escalation_id,
       conversationId: CONV,
-      patientFirstName: "Maria",
+      patient: { firstName: "Maria", lastName: "Santos", dateOfBirth: "1988-04-17" },
       reason: "patient_requested",
       summary: INPUT.summary,
       createdAt: clock.now().toISOString(),
@@ -148,7 +162,7 @@ describe("escalate_to_human", () => {
         { role: "assistant", text: "Let me check your profile first.", createdAt: clock.now().toISOString() },
         {
           role: "assistant",
-          text: "Billing is handled by our front desk.",
+          text: "Billing is handled by our front desk.\nI can connect you with them.",
           createdAt: clock.now().toISOString(),
         },
       ],
@@ -168,7 +182,6 @@ describe("escalate_to_human", () => {
     await run(MARIA);
     const sent = JSON.stringify(notifier.sent);
     expect(sent).not.toMatch(/SECRET_/);
-    expect(formatEscalationNotice(firstNotice()).body).not.toMatch(/SECRET_/);
   });
 
   it("answers a repeat call with already_escalated and no second notification", async () => {
@@ -214,6 +227,27 @@ describe("escalate_to_human", () => {
     expect(notifier.sent).toHaveLength(0);
   });
 
+  it("clips a long notifier error to 500 characters", async () => {
+    notifier.failWith(new Error("x".repeat(1000)));
+    outputOf(await run(MARIA));
+    const stored = await repos.escalations.getForConversation(MARIA, CONV);
+    expect(stored?.notification).toEqual({ status: "FAILED", error: `Error: ${"x".repeat(493)}` });
+  });
+
+  it("records FAILED and still returns the phone and hours when building the notice fails", async () => {
+    const failing: Repositories = {
+      ...repos,
+      patients: { ...repos.patients, get: () => Promise.reject(new Error("profile read failed")) },
+    };
+    const out = outputOf(await run(MARIA, INPUT, { repos: failing }));
+    expect(out).toMatchObject({ phone: CLINIC.phone, hours: CLINIC.hours, already_escalated: false });
+    expect(notifier.sent).toHaveLength(0);
+    expect((await repos.escalations.getForConversation(MARIA, CONV))?.notification).toEqual({
+      status: "FAILED",
+      error: "Error: profile read failed",
+    });
+  });
+
   it("still returns the phone and hours when saving the delivery status fails", async () => {
     const failing: Repositories = {
       ...repos,
@@ -225,14 +259,15 @@ describe("escalate_to_human", () => {
     const out = outputOf(await run(MARIA, INPUT, { repos: failing }));
     expect(out).toMatchObject({ phone: CLINIC.phone, already_escalated: false });
     expect(notifier.sent).toHaveLength(1);
+    // The record stays PENDING, which operators can see.
+    expect((await repos.escalations.getForConversation(MARIA, CONV))?.notification).toEqual({
+      status: "PENDING",
+    });
   });
 
   it("sends a notice without a name when the patient has no profile", async () => {
     outputOf(await run(UNKNOWN, INPUT, { conversationId: OTHER_CONV }));
-    expect(notifier.sent[0]).toMatchObject({ patientFirstName: null, transcript: [] });
-    expect(formatEscalationNotice(firstNotice()).subject).toBe(
-      "Escalation: Patient asked for a person (a patient)",
-    );
+    expect(notifier.sent[0]).toMatchObject({ patient: null, transcript: [] });
   });
 
   it("rejects invalid input and records nothing", async () => {
@@ -267,7 +302,10 @@ describe("escalate_to_human", () => {
     it("never sends another patient's messages to staff", async () => {
       // Walter's context names Maria's (not yet escalated) conversation id: the transcript reads as empty.
       outputOf(await run(WALTER));
-      expect(notifier.sent[0]).toMatchObject({ patientFirstName: "Walter", transcript: [] });
+      expect(notifier.sent[0]).toMatchObject({
+        patient: { firstName: "Walter", lastName: "Haines", dateOfBirth: "1955-02-11" },
+        transcript: [],
+      });
       expect(JSON.stringify(notifier.sent)).not.toMatch(/about my bill|Maria/);
     });
   });
