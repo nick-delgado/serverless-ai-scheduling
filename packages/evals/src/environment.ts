@@ -1,8 +1,8 @@
 /**
  * One isolated world per trial (ADR-008): in-memory repositories seeded from the scenario's fixture plus
  * its `setup` overrides, a FrozenClock at the scenario's `clock`, sequential ids, and a tool executor
- * bound to the scenario's patient (the JWT stand-in, CLAUDE.md rule 1) with fault injection applied.
- * Nothing is shared between trials.
+ * bound to the scenario's patient (the JWT stand-in, CLAUDE.md rule 1) with fault injection applied, and a
+ * `RecordingNotifier` for staff emails. Nothing is shared between trials.
  */
 import {
   Appointment,
@@ -26,6 +26,7 @@ import {
   type ToolExecutor,
   type ToolHandler,
   type ToolRegistry,
+  RecordingNotifier,
 } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, FIXTURES, type ClinicFixture } from "@sched/tools/fixtures";
 
@@ -42,6 +43,8 @@ export interface TrialEnvironment {
   before: InMemorySnapshot;
   /** Every fault that fired, in order. */
   faultsFired: FiredFault[];
+  /** Staff notices `escalate_to_human` sent this trial (`failWith` makes delivery fail). */
+  notifier: RecordingNotifier;
   /** Makes deterministic UUIDs (conversation and turn ids). */
   uuid: () => string;
 }
@@ -103,9 +106,14 @@ function seedWithSetup(fixture: ClinicFixture, setup: Setup | undefined, created
   return { ...fixture, slots: [...slots.values()], appointments };
 }
 
+/**
+ * Error text for faults with no real cause in the world (an `INTERNAL` outage, say). A
+ * `slot_taken_by_other_patient` fault makes the cause real instead, so the production handler answers
+ * with its own message and hint.
+ */
 const FAULT_MESSAGES: Record<ToolErrorCode, [string, string]> = {
   SLOT_UNAVAILABLE: [
-    "That slot was just booked by someone else.",
+    "That time is no longer available.",
     "Apologize and offer other options from check_availability.",
   ],
   INTERNAL: [
@@ -133,7 +141,8 @@ export function targetSlotOf(tool: string, input: unknown): string | undefined {
 /**
  * Wrap registered handlers so the configured calls fail with the configured error. Calls are counted per
  * tool when they reach the handler (valid input). `slot_taken_by_other_patient` books the requested slot
- * for another fixture patient first, so later reads agree that it's gone.
+ * for another fixture patient first, so later reads agree that it's gone, then lets the real handler run:
+ * it finds the slot taken and answers with production's own error text.
  */
 export function withFaults(
   registry: ToolRegistry,
@@ -164,8 +173,11 @@ export function withFaults(
           if (result.ok) {
             fired.takenSlotId = slotId;
             fired.takenAppointmentId = result.appointment.appointmentId;
+            options.fired.push(fired);
+            return handler(input, ctx);
           }
         }
+        // The slot wasn't open to take: the real handler would answer something else, so fake the error.
       }
       options.fired.push(fired);
       const [message, hint] = FAULT_MESSAGES[fault.error];
@@ -213,7 +225,8 @@ export async function createTrialEnvironment(
     otherPatientId,
     fired: faultsFired,
   });
-  const executor = createToolExecutor(registry, { patientId, conversationId, clock, repos });
+  const notifier = new RecordingNotifier();
+  const executor = createToolExecutor(registry, { patientId, conversationId, clock, repos, notifier });
 
   return {
     patientId,
@@ -224,6 +237,7 @@ export async function createTrialEnvironment(
     fixture,
     before: repos.snapshot(),
     faultsFired,
+    notifier,
     uuid,
   };
 }
