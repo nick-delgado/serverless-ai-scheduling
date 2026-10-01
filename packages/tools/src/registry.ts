@@ -43,6 +43,7 @@ import { getPatientProfile } from "./tools/get_patient_profile";
 import { bookAppointment } from "./tools/book_appointment";
 
 // #22 reschedule_appointment
+import { rescheduleAppointment } from "./tools/reschedule_appointment";
 
 // #23 escalate_to_human
 
@@ -117,6 +118,7 @@ export const TOOL_REGISTRY: ToolRegistry = {
   // #21 book_appointment
   book_appointment: bookAppointment,
   // #22 reschedule_appointment
+  reschedule_appointment: rescheduleAppointment,
   // #23 escalate_to_human
 };
 
