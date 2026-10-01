@@ -5,8 +5,8 @@
  * - "Upcoming" means the appointment starts at or after `ctx.clock.now()`; anything that started earlier is
  *   past. Every status is returned (a CANCELLED upcoming appointment is still useful: "did my cancellation
  *   go through?"); the model reads `status`.
- * - Sorted by start time, ascending (the repo already orders by start; sorted again so the tool doesn't
- *   depend on it).
+ * - In start-time order, ties by appointment id: AP-2 (`appointments.listForPatient`) returns that order in
+ *   both repositories, and the filter keeps it.
  * - An empty list is a success, not NOT_FOUND. A patient with no profile also gets `[]`, which reveals nothing.
  * - `reason` is the patient's own stored text: returned as data, never spliced into a message (rule 5).
  */
@@ -30,9 +30,7 @@ export const getMyAppointments: ToolHandler<"get_my_appointments"> = async (inpu
   const nowMs = ctx.clock.now().getTime();
   const all = await ctx.repos.appointments.listForPatient(ctx.patientId);
 
-  const selected = all
-    .filter((a) => input.include_past || Date.parse(a.startUtc) >= nowMs)
-    .sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  const selected = all.filter((a) => input.include_past || Date.parse(a.startUtc) >= nowMs);
 
   // One read per distinct provider. A missing provider is a broken invariant (appointments reference seeded
   // providers), so it throws and the executor reports INTERNAL rather than inventing a name.

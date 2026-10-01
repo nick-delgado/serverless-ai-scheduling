@@ -1,5 +1,5 @@
 /**
- * get_patient_profile (FR-037): the logged-in patient's name and preferred provider.
+ * get_patient_profile (FR-033, FR-037): the logged-in patient's name and preferred provider.
  * Identity comes from ctx.patientId (the verified JWT), never from input (CLAUDE.md rule 1).
  * Only what the output schema asks for is returned: no date of birth or other PII (ADR-009).
  */
