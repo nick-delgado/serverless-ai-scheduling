@@ -230,28 +230,28 @@ export const TOOLS = {
   get_my_appointments: {
     name: "get_my_appointments",
     description:
-      "List the logged-in patient's appointments (upcoming only unless include_past is true). The patient's identity is applied automatically; never ask for or pass a patient ID.",
+      "List the logged-in patient's own appointments, upcoming only unless include_past is true. Use it to answer questions about their bookings (\"When is my next appointment?\") and to get the appointment_id before rescheduling. Check each status: only BOOKED appointments will take place, so never present a CANCELLED or COMPLETED one as an upcoming visit. Quote start_local verbatim. The patient's identity is applied automatically; never ask for or pass a patient ID.",
     input: GetMyAppointmentsInput,
     output: GetMyAppointmentsOutput,
   },
   get_patient_profile: {
     name: "get_patient_profile",
     description:
-      "Get the logged-in patient's first and last name and preferred provider, if any. The patient's identity is applied automatically.",
+      "Get the logged-in patient's first and last name and their preferred provider, to greet them by name or to resolve \"my usual doctor\". preferred_provider is null when they have none. The patient's identity is applied automatically; never ask for or pass a patient ID.",
     input: GetPatientProfileInput,
     output: GetPatientProfileOutput,
   },
   book_appointment: {
     name: "book_appointment",
     description:
-      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. If the slot was just taken, it returns a SLOT_UNAVAILABLE error; offer other times.",
+      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint.",
     input: BookAppointmentInput,
     output: BookAppointmentOutput,
   },
   reschedule_appointment: {
     name: "reschedule_appointment",
     description:
-      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability.",
+      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. INVALID_INPUT saying the appointment is already at that time, after a retry, means the move already succeeded.",
     input: RescheduleAppointmentInput,
     output: RescheduleAppointmentOutput,
   },
