@@ -36,6 +36,8 @@ import { checkAvailability } from "./tools/check_availability";
 import { findProviders } from "./tools/find_providers";
 
 // #20 get_my_appointments, get_patient_profile
+import { getMyAppointments } from "./tools/get_my_appointments";
+import { getPatientProfile } from "./tools/get_patient_profile";
 
 // #21 book_appointment
 
@@ -109,6 +111,8 @@ export const TOOL_REGISTRY: ToolRegistry = {
   find_providers: findProviders,
   check_availability: checkAvailability,
   // #20 get_my_appointments, get_patient_profile
+  get_my_appointments: getMyAppointments,
+  get_patient_profile: getPatientProfile,
   // #21 book_appointment
   // #22 reschedule_appointment
   // #23 escalate_to_human

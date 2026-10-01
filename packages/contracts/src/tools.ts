@@ -230,14 +230,14 @@ export const TOOLS = {
   get_my_appointments: {
     name: "get_my_appointments",
     description:
-      "List the logged-in patient's appointments (upcoming only unless include_past is true). The patient's identity is applied automatically; never ask for or pass a patient ID.",
+      "List the logged-in patient's own appointments, upcoming only unless include_past is true. Use it to answer questions about their bookings (\"When is my next appointment?\") and to get the appointment_id before rescheduling. Check each status: only BOOKED appointments will take place, so never present a CANCELLED or COMPLETED one as an upcoming visit. Quote start_local verbatim. The patient's identity is applied automatically; never ask for or pass a patient ID.",
     input: GetMyAppointmentsInput,
     output: GetMyAppointmentsOutput,
   },
   get_patient_profile: {
     name: "get_patient_profile",
     description:
-      "Get the logged-in patient's first and last name and preferred provider, if any. The patient's identity is applied automatically.",
+      "Get the logged-in patient's first and last name and their preferred provider, to greet them by name or to resolve \"my usual doctor\". preferred_provider is null when they have none. The patient's identity is applied automatically; never ask for or pass a patient ID.",
     input: GetPatientProfileInput,
     output: GetPatientProfileOutput,
   },
