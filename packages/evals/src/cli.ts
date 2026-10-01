@@ -1,6 +1,9 @@
 /**
  * `npm run evals -- --suite smoke|full --mode l1|scenario --profile <name> --trials <k>`
  *
+ * `--mode` defaults to `l1` until the simulator (#31) makes scenarios runnable; #34 switches it (owner
+ * decision on PR #71, ADR-008 amendment).
+ *
  * Live runs call Bedrock (cost real money): every call goes through the shared per-model rate limiter
  * with 429 backoff, a budget guard stops the run at `--max-cost`, and the estimated cost is printed
  * before the first call. Results: `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}`

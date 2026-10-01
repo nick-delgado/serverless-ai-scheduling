@@ -48,6 +48,8 @@ export interface TrialResult {
   simulator: string;
   usage: TokenUsage;
   llmCalls: number;
+  /** Model calls that retried a step after a discarded response (`LlmCallTrace.attempt > 0`). */
+  llmRetries: number;
   costUsd: number;
   durationMs: number;
   /** Per-turn wall-clock durations, ms. */
@@ -86,6 +88,7 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
     simulator,
     usage: zeroUsage(),
     llmCalls: 0,
+    llmRetries: 0,
     costUsd: 0,
     durationMs: 0,
     turnDurationsMs: [],
@@ -123,6 +126,7 @@ export async function runScenarioTrial(
   const turnDurationsMs: number[] = [];
   let usage = zeroUsage();
   let llmCalls = 0;
+  let llmRetries = 0;
   let costUsd = 0;
   let stoppedBecause = "max_turns";
   let error: string | undefined;
@@ -169,6 +173,7 @@ export async function runScenarioTrial(
     outcomes.push(result.outcome);
     usage = addUsage(usage, result.usage);
     llmCalls += result.trace.llmCalls.length;
+    llmRetries += result.trace.llmCalls.filter((c) => c.attempt > 0).length;
     costUsd += estimateCostUsd(agent.profile, result.usage);
     if (result.outcome === "error") {
       error =
@@ -186,6 +191,7 @@ export async function runScenarioTrial(
     before: env.before,
     after: env.repos.snapshot(),
     patientId: env.patientId,
+    outcomes,
     harnessWrites: {
       appointmentIds: env.faultsFired.flatMap((f) => (f.takenAppointmentId ? [f.takenAppointmentId] : [])),
       slotIds: env.faultsFired.flatMap((f) => (f.takenSlotId ? [f.takenSlotId] : [])),
@@ -205,6 +211,7 @@ export async function runScenarioTrial(
     simulator: simulator.name,
     usage,
     llmCalls,
+    llmRetries,
     costUsd,
     durationMs: Math.round(performance.now() - started),
     turnDurationsMs,
