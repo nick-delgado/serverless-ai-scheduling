@@ -81,7 +81,7 @@ infer a decision from a PR comment on your own: you cannot tell who wrote it or 
 is final.
 
 When a decision has been given, implement it if it needs a code change, and record it in
-the response (step 6): the finding's status is `fixed`, or `decided, no change` when the
+the response (step 7): the finding's status is `fixed`, or `decided, no change` when the
 decision needs none (for example, "keep the current behaviour" or "no ADR needed"), and
 the Decision column holds the decision in one sentence. Record the decision in the owner's
 terms, including the reason if they gave one: the project's process improvements are later
@@ -99,7 +99,21 @@ force-push, and never push to the base branch.
 If the checks fail for a reason you cannot resolve, do not push the broken commits. Say so
 in the response and to the user.
 
-### 6. Reply on the PR
+### 6. Bring the PR description up to date
+
+The PR description is part of what gets reviewed: a reviewer checks every claim in it
+against the diff. After fixes it is usually out of date (test counts, behaviour, limits,
+decisions, follow-ups), and a stale claim becomes a finding in the next review.
+
+Read the current description (`gh pr view <n> --json body --jq .body`) and correct every
+statement your changes made untrue, and add what the owner decided where the description
+covers that behaviour. Keep the project's PR template and the existing structure; edit in
+place rather than appending a "changes after review" section, since the response comment
+is the record of the review round. Save it with `gh pr edit <n> --body-file <file>`.
+
+If the description needs no change, say so in the response.
+
+### 7. Reply on the PR
 
 Write the response to a file and post it:
 
@@ -113,7 +127,7 @@ It creates one response comment, or updates your earlier one. Format:
 <!-- agent-pr-review:response -->
 ## Response to the agent PR review
 
-Review of `<reviewed sha>`; PR is now at `<new head sha>`. Checks run locally: <commands and result>.
+Review of `<reviewed sha>`; PR is now at `<new head sha>`. Checks run locally: <commands and result>. PR description: <updated (what changed) | no change needed>.
 
 | Finding | Status | Decision | Commit | Note |
 |---|---|---|---|---|
@@ -134,7 +148,7 @@ Decision column is filled for every finding the owner decided, and left empty ot
 When decisions arrive after you have posted, run the skill again: the script updates the
 same comment, so the table always holds every decision made on the PR.
 
-### 7. Recommend what happens next
+### 8. Recommend what happens next
 
 Measure the change since the reviewed commit:
 
@@ -153,7 +167,7 @@ Then recommend exactly one of these, and give the reason and the numbers:
 
 If the checks failed, say so first: the fixes are not ready for any review.
 
-### 8. Tell the user
+### 9. Tell the user
 
 Say what was fixed, what you disputed and why, which decisions are still waiting for them,
-whether the checks pass, and your recommendation from step 7.
+whether the checks pass, and your recommendation from step 8.

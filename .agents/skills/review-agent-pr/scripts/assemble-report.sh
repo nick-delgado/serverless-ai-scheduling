@@ -209,7 +209,8 @@ build_report() {
   for r in $reviewers; do
     f="$run/findings/$r.md"
     if [ -s "$f" ]; then
-      echo "| $(label "$r") | $(h3 "$f" "Checks performed" | rows) | $(h3 "$f" "Searches run" | rows) | $(h2 "$f" "3. Not reviewed" | items) |"
+      checks=$(($(h3 "$f" "Checks performed" | rows) + $(h3 "$f" "Behaviour coverage" | rows) + $(h3 "$f" "Spec traceability" | rows)))
+      echo "| $(label "$r") | $checks | $(h3 "$f" "Searches run" | rows) | $(h2 "$f" "3. Not reviewed" | items) |"
     else
       echo "| $(label "$r") | did not run | | |"
     fi

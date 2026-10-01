@@ -75,19 +75,24 @@ minor unless it is an acceptance criterion (then major).
   failed, is pending or does not exist, state that in the ledger. Do not diagnose the
   failure.
 
-## Required extra output
+## Required: the behaviour coverage table
 
-After the Findings section, under the heading `### Behaviour coverage`:
+This table is your main record: one row per behaviour from step 1. Put it at the end of the
+Findings section (after the last finding, or after `No findings.`), under the exact heading
+`### Behaviour coverage`. A review without it is incomplete, and a script checks for it.
 
 ```markdown
-| Behaviour | Source | Test | Would fail if broken? |
+| Behaviour | Source | Test | Would fail if broken? How you know |
 |---|---|---|---|
-| CSV export escapes commas | `src/export/csv.ts:30` | `csv.test.ts:14` | yes |
+| CSV export escapes commas | `src/export/csv.ts:30` | `csv.test.ts:14` | yes: dropping the quoting leaves `a,b` unquoted and the exact-string assertion fails |
 | Export honours active filters | R2 | none | — (TEST-1) |
 ```
+
+"Yes" alone is not an answer: say what break you imagined and why the test catches it.
 
 ## Ledger requirements
 
 - "Sources read": every test file opened, and the runner configuration.
-- "Checks performed": one row per behaviour, and one row per modified or deleted test file
-  for the weakened-verification check.
+- "Checks performed": one row per modified or deleted test file for the weakened-verification
+  check, and one per convention or execution check from step 6. Do not repeat the behaviours
+  here: they are the rows of the behaviour coverage table.

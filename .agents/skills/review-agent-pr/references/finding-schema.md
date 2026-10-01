@@ -109,6 +109,11 @@ failed: the reader uses this section to decide how far to trust the review.
 | `grep -rn "formatCurrency" src/` | look for an existing equivalent of the new `toMoney` helper | 3 |
 ```
 
+Some briefs require extra tables (spec alignment: `### Spec traceability` and `### Unrequested
+changes`; test adequacy: `### Behaviour coverage`). They go at the end of section 1, under
+exactly those headings. A script checks every output for its required headings, and an
+incomplete one is sent back.
+
 ## 3. Not reviewed
 
 List everything in your remit that you did not or could not check, with the reason: a file

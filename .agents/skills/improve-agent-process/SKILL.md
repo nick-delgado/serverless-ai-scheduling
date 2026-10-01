@@ -91,6 +91,7 @@ Decisions matter here in two ways:
 | A new skill | Take it only when the cause recurs and the guidance is a multi-step procedure. Flag it for explicit approval. |
 | A recorded owner decision that settles a rule beyond one PR (step 4) | Take it, even from one review: the owner has already decided. Edit the existing rule rather than adding one. |
 | Dependent on a decision the owner has not made | Do not take it. List the decision the owner needs to make. |
+| `harness-change`: a change to `review-agent-pr`, `address-pr-review` or this skill | Never apply it here: those are installed copies of the agent-review-harness skills. List it for the user to raise with the harness's maintainers. |
 | `no-action`, low confidence, or addressing only nits | Drop it. |
 
 When a guardrail and a prose rule address the same cause, take the guardrail and drop the
