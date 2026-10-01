@@ -116,3 +116,49 @@ describe("RateLimitedLlmClient", () => {
     ).toBe(false);
   });
 });
+
+describe("rate-limit defaults and edges", () => {
+  it("runs at 90% of the quota by default", async () => {
+    const timer = fakeTimer();
+    const limiter = new RateLimiter({ timer });
+    await limiter.acquire("openai.gpt-oss-20b-1:0");
+    await limiter.acquire("openai.gpt-oss-20b-1:0");
+    expect(timer.now()).toBe(667); // 90 RPM, not 100: one token every 666.7 ms
+  });
+
+  it("retries a 5xx recognised only by its status code", () => {
+    for (const error of [
+      Object.assign(new Error("bad gateway"), { status: 502 }),
+      Object.assign(new Error("unavailable"), { $metadata: { httpStatusCode: 503 } }),
+      Object.assign(new Error("odd"), { statusCode: 500 }),
+    ])
+      expect(isRetryable(error), error.message).toBe(true);
+    expect(isRetryable(Object.assign(new Error("not found"), { status: 404 }))).toBe(false);
+    expect(isRetryable(null)).toBe(false);
+  });
+
+  it("caps each backoff at 60 s by default", async () => {
+    const timer = fakeTimer();
+    const delays: number[] = [];
+    const errors = Array.from({ length: 6 }, () => ({ error: throttle() }));
+    const client = new RateLimitedLlmClient(new ScriptedLlmClient([...errors, scriptedText("ok")]), {
+      limiter: new RateLimiter({ timer, rpmFor: () => 60_000 }),
+      random: () => 0.999_999,
+      onRetry: ({ delayMs }) => delays.push(delayMs),
+    });
+    await client.streamMessage(request("m"));
+    expect(delays).toEqual([2000, 4000, 8000, 16_000, 32_000, 60_000]); // 64 s would be next, capped
+  });
+
+  it("hands out tokens to concurrent callers in arrival order", async () => {
+    const timer = fakeTimer();
+    const bucket = new TokenBucket(10, { timer }); // one token every 6 s
+    const got: [number, number][] = [];
+    await Promise.all([0, 1, 2].map((i) => bucket.take().then(() => got.push([i, timer.now()]))));
+    expect(got).toEqual([
+      [0, 0],
+      [1, 6000],
+      [2, 12_000],
+    ]);
+  });
+});

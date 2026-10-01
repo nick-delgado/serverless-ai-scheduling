@@ -1,20 +1,29 @@
 /**
- * Suite metrics (ADR-008): pass@1, pass^k, tool-call accuracy, safety violations, the budget guard, and
- * the markdown summary, over L1 cases with a scripted model.
+ * Suite metrics (ADR-008): pass@1, pass^k, tool-call accuracy, safety violations, errored cases, model
+ * retries, the budget guard, and the markdown summary, in L1 and scenario mode with a scripted model.
  */
 import {
   estimateCostUsd,
   MODEL_PROFILES,
   ScriptedLlmClient,
+  scriptedMalformed,
   scriptedText,
   scriptedToolUse,
   type ScriptedStep,
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
-import { loadScenarios, markdownSummary, runSuite, summarize, type L1Case } from "../src";
+import {
+  interimSystemPrompt,
+  loadScenarios,
+  markdownSummary,
+  runSuite,
+  summarize,
+  type L1Case,
+  type TrialResult,
+} from "../src";
 
-const { l1 } = loadScenarios();
+const { l1, scenarios } = loadScenarios();
 const cases = ["l1-crisis-988", "l1-emergency-911", "l1-book-after-explicit-yes"].map((id) => {
   const c = l1.find((x) => x.id === id);
   if (c === undefined) throw new Error(`no L1 case ${id}`);
@@ -84,10 +93,122 @@ describe("runSuite / summarize", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
-    const report = await suite(STEPS, { maxCostUsd: perCall * 2.5 }); // three calls, then stop
+    const budget = perCall * 2.5;
+    const report = await suite(STEPS, { maxCostUsd: budget }); // three calls, then stop
     expect(report.cases.map((c) => c.trials.length)).toEqual([2, 1, 0]);
-    expect(report.cases[2]?.status).toBe("skip");
-    expect(report.maxCostUsd).toBe(perCall * 2.5);
+    expect(report.maxCostUsd).toBe(budget);
+    // The cut is reported, not just applied (TEST-105 decision): partly-run and unrun cases say so.
+    const [full, partial, unrun] = report.cases;
+    expect(full?.budgetStopped).toBeUndefined();
+    expect(partial).toMatchObject({ status: "pass", passHatK: false, budgetStopped: true });
+    expect(partial?.reason).toBe(`budget guard ($${String(budget)} reached) after 1 of 2 trial(s)`);
+    expect(unrun).toMatchObject({ status: "skip", budgetStopped: true });
+    expect(unrun?.reason).toMatch(/^budget guard .* after 0 of 2 trial\(s\)$/);
+    expect(report.summary.budgetStopped).toBe(2);
+    const md = markdownSummary(report);
+    expect(md).toContain("· budget guard stopped 2 case(s)");
+    expect(md).toMatch(/\| l1-book-after-explicit-yes \| skip \| – \| budget guard /);
+  });
+
+  it("an errored trial makes the case `error`, counts in summary.errored, and is left out of accuracy", async () => {
+    const report = await runSuite([cases[2]], {
+      mode: "l1",
+      suite: "test",
+      llm: new ScriptedLlmClient([scriptedText("Booked!"), { error: new Error("throttled") }]),
+      llmName: "scripted",
+      profile,
+      trials: 2,
+    });
+    expect(report.cases[0]?.trials.map((t) => t.status)).toEqual(["fail", "error"]);
+    expect(report.cases[0]?.status).toBe("error"); // error outranks fail
+    expect(report.summary).toMatchObject({ errored: 1, failed: 0, toolCallAccuracy: 0 });
+    const ok = await runSuite([cases[2]], {
+      mode: "l1",
+      suite: "test",
+      llm: new ScriptedLlmClient([BOOK, { error: new Error("throttled") }]),
+      llmName: "scripted",
+      profile,
+      trials: 2,
+    });
+    expect(ok.summary.toolCallAccuracy).toBe(1); // 1 of 1 graded trial, not 1 of 2
+  });
+
+  it("the report's promptVersion comes from the system prompt it ran with", async () => {
+    const custom = (now: Date, name: string) => ({ ...interimSystemPrompt(now, name), version: "custom.v7" });
+    const report = await runSuite([cases[0]], {
+      mode: "l1",
+      suite: "test",
+      llm: new ScriptedLlmClient([scriptedText("Please call or text 988 now.")]),
+      llmName: "scripted",
+      profile,
+      trials: 1,
+      systemPrompt: custom,
+    });
+    expect(report.promptVersion).toBe("custom.v7");
+    expect((await suite(STEPS)).promptVersion).toBe("eval-interim.v0");
+  });
+
+  it("scenario mode: skips stop after one trial, retries are summed, the simulator is recorded", async () => {
+    const pick = (id: string) => {
+      const s = scenarios.find((x) => x.id === id);
+      if (s === undefined) throw new Error(`no scenario ${id}`);
+      return s;
+    };
+    const report = await runSuite(
+      [pick("safety-emergency-chest-pain-911"), pick("book-derm-next-week-afternoon")],
+      {
+        mode: "scenario",
+        suite: "test",
+        llm: new ScriptedLlmClient([
+          scriptedMalformed(),
+          scriptedMalformed(), // trial 1: one malformed retry
+          scriptedText("That could be an emergency. Please call 911 right now."), // trial 2
+        ]),
+        llmName: "scripted",
+        profile,
+        trials: 2,
+      },
+    );
+    expect(report.simulator).toBe("script-only");
+    const [emergency, unscripted] = report.cases;
+    expect(emergency?.trials.map((t) => t.status)).toEqual(["fail", "pass"]);
+    expect(unscripted).toMatchObject({ status: "skip" });
+    expect(unscripted?.trials).toHaveLength(1); // a skip reason holds for every trial
+    expect(report.summary).toMatchObject({ ran: 1, skipped: 1, llmRetries: 1 });
+    expect(report.summary.toolCallAccuracy).toBeUndefined();
+    expect(markdownSummary(report)).toContain("· model retries 1");
+  });
+
+  it("scenario latency comes from per-turn durations, not whole-trial time", () => {
+    const trial: TrialResult = {
+      trial: 1,
+      status: "pass",
+      graders: [],
+      safetyViolations: 0,
+      events: [],
+      turns: 3,
+      outcomes: ["completed", "completed", "completed"],
+      simulator: "queued",
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      llmCalls: 5,
+      llmRetries: 2,
+      costUsd: 0,
+      durationMs: 5000,
+      turnDurationsMs: [10, 20, 30],
+    };
+    const s = summarize("scenario", [
+      {
+        id: "a",
+        category: "book",
+        tags: [],
+        status: "pass",
+        passRate: 1,
+        passHatK: true,
+        trials: [trial],
+      },
+    ]);
+    expect(s.latencyMs).toEqual({ p50: 20, p95: 30 });
+    expect(s.llmRetries).toBe(2);
   });
 
   it("latency percentiles come from the trials that ran", () => {

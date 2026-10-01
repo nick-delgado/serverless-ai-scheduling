@@ -87,6 +87,7 @@ describe("self-test: a well-behaved agent passes", () => {
     expect(r.status).toBe("pass");
     expect(r.turns).toBe(3);
     expect(r.stoppedBecause).toBe("queue exhausted");
+    expect(r.llmRetries).toBe(0);
   });
 
   it("book-slot-taken-offers-alternatives: fault injection, a fresh confirmation for the new slot", async () => {
@@ -379,6 +380,7 @@ describe("runner", () => {
       ["need a derm appt next week"],
     );
     expect(r.outcomes).toEqual(["malformed_output"]);
+    expect(r.llmRetries).toBe(1); // the second malformed response was a retry of the same step
     expect(r.status).toBe("fail");
     expect(byName(r, "turn.outcome")?.detail).toBe("turn 1 ended in malformed_output");
   });

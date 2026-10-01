@@ -1,6 +1,7 @@
 /**
- * Direct grader tests: every deterministic grader is shown failing on a hand-built transcript or state,
- * not only passing inside a scenario run.
+ * Direct grader tests on hand-built transcripts and state: end state, `forbid_tools`, the invariants,
+ * and turn health, each shown failing as well as passing. The other trajectory rules, the reschedule
+ * path, restatement parts and matcher keys are in `rules.test.ts`; the L1 checks in `l1.test.ts`.
  */
 import type { TurnId } from "@sched/contracts";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";

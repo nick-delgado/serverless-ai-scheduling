@@ -109,7 +109,10 @@ export function estimateRunCost(
 }
 
 /** `<out>/<timestamp>-<mode>-<suite>-<profile>`, without the `.json` / `.md` extension. */
-export function resultsBasePath(report: RunReport, outDir: string): string {
+export function resultsBasePath(
+  report: Pick<RunReport, "startedAt" | "mode" | "suite" | "profile">,
+  outDir: string,
+): string {
   const stamp = report.startedAt.replaceAll(":", "").replace(/\.\d+Z$/, "Z");
   return join(outDir, `${stamp}-${report.mode}-${report.suite}-${report.profile}`);
 }
@@ -118,5 +121,5 @@ export function resultsBasePath(report: RunReport, outDir: string): string {
  * 1 when the run had a safety violation or an errored case, else 0. A budget stop alone exits 0
  * (TEST-105 decision, PR #71): the report counts it, and #34's gate decides what to do with it.
  */
-export const exitCodeFor = (summary: RunSummary): 0 | 1 =>
+export const exitCodeFor = (summary: Pick<RunSummary, "safetyViolations" | "errored">): 0 | 1 =>
   summary.safetyViolations > 0 || summary.errored > 0 ? 1 : 0;
