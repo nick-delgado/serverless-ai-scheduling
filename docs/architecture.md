@@ -47,13 +47,13 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 
 1. The SPA sends `POST /api/chat {conversationId, text}` with the Cognito ID token.
 2. The REST API authorizer validates the JWT. The Lambda receives `claims.sub` as the patient ID.
-3. ChatFn loads the conversation history (DynamoDB), then calls `runAgentTurn` with:
+3. ChatFn loads the conversation history (DynamoDB) and appends the patient's new message before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. It then calls `runAgentTurn` with:
    - a `ToolContext` carrying the patientId **from the JWT**, the clinic timezone, and the clock;
    - the Bedrock `LlmClient`;
    - the configured `ModelProfile`.
 4. The loop calls Claude. When Claude requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to Claude. This repeats until Claude ends the turn, capped at 8 iterations.
 5. Text deltas stream to the browser as NDJSON `text_delta` events (ADR-007). The SPA's typewriter renders them character by character.
-6. ChatFn appends the new messages and the turn trace to DynamoDB, then sends `done`.
+6. ChatFn appends the turn's remaining messages (the assistant's replies and tool results) and the turn trace to DynamoDB, then sends `done`.
 
 ## Voice input
 
