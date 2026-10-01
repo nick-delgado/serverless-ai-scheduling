@@ -86,10 +86,11 @@ description ("adds validation", "all endpoints covered", "tests added", "no brea
 changes"), check it against the diff. A claim the diff does not support is an `overclaim`
 finding, major.
 
-## Required extra output
+## Required: the traceability tables
 
-Put this table directly after the Findings section, under the heading
-`### Spec traceability`. The report publishes it as is.
+Put this table at the end of the Findings section (after the last finding, or after `No
+findings.`), under the exact heading `### Spec traceability`. The report publishes it as
+is. A review without it is incomplete, and a script checks for it.
 
 ```markdown
 | Req | Requirement (quoted) | Source | Status | Evidence |
@@ -104,5 +105,6 @@ changed, finding ID), or `None.`
 ## Ledger requirements
 
 - "Sources read": every spec and direction source, including each issue comment thread.
-- "Checks performed": one row per requirement, one per diff file for the scope check, one
-  per direction source, one per PR-description claim.
+- "Checks performed": one row per diff file for the scope check, one per direction source,
+  one per PR-description claim. Do not repeat the requirements here: they are the rows of
+  the traceability table.

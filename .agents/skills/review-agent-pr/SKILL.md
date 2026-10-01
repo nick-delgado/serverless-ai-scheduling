@@ -183,10 +183,17 @@ to skim.
 the order above, writing each output file before starting the next. Record
 `isolation: none (sequential, shared context)` in the run metadata so the reader knows.
 
-When the reviewers finish, check that each output file exists and follows the schema,
-including the extra table its brief requires (`### Spec traceability` and `### Unrequested
-changes` from spec alignment, `### Behaviour coverage` from test adequacy). Send a reviewer
-back to finish when its output is missing a section or has findings without evidence.
+When the reviewers finish, check their outputs:
+
+```sh
+<SKILL_DIR>/scripts/check-outputs.sh "$RUN_DIR"
+```
+
+It lists any reviewer whose output is missing or lacks a required section, including the
+extra tables some briefs require. Send that reviewer back to finish (continue the same
+subagent if your runtime allows; otherwise spawn a fresh one with the same prompt and the
+list of what is missing), and run the check again. Also send back a reviewer whose findings
+lack evidence.
 
 ## Phase 5: Verification
 
