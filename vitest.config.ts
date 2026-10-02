@@ -4,6 +4,6 @@ import { defineConfig } from "vitest/config";
 // and `npm test -w <package>` runs one package.
 export default defineConfig({
   test: {
-    projects: ["packages/*", "services/*", "apps/*"],
+    projects: ["packages/*", "services/*", "apps/*", "scripts"],
   },
 });
