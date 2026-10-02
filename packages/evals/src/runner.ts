@@ -18,7 +18,13 @@ import { errorReason } from "./util";
 import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
 import type { Scenario } from "./schema";
-import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
+import {
+  scriptOnlySimulator,
+  SimulatorError,
+  type PatientSimulator,
+  type RecordedSimulatorTurn,
+  type SimulatorCost,
+} from "./simulator";
 import { firstNameOf, promptFor, type SystemPromptFactory } from "./system-prompt";
 import { assistantTexts, turnEvents, type TranscriptEvent } from "./transcript";
 
@@ -48,11 +54,18 @@ export interface TrialResult {
   /** Why the conversation ended (simulator stop reason, `max_turns`, or an error). */
   stoppedBecause?: string;
   simulator: string;
+  /** What the simulator said each turn after the script (and its stop), for replay (#31). */
+  simulatorTurns: RecordedSimulatorTurn[];
+  /** The agent's token usage. */
   usage: TokenUsage;
+  /** The agent's model calls. */
   llmCalls: number;
   /** Model calls that retried a step after a discarded response (`LlmCallTrace.attempt > 0`). */
   llmRetries: number;
+  /** Estimated cost of the whole conversation: the agent's calls plus the simulator's. */
   costUsd: number;
+  /** The simulator's share of the conversation: tokens, model calls and cost (#31). */
+  simulatorCost: SimulatorCost;
   durationMs: number;
   /** Per-turn wall-clock durations, ms. */
   turnDurationsMs: number[];
@@ -89,10 +102,12 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
     turns: 0,
     outcomes: [],
     simulator,
+    simulatorTurns: [],
     usage: zeroUsage(),
     llmCalls: 0,
     llmRetries: 0,
     costUsd: 0,
+    simulatorCost: { usage: zeroUsage(), costUsd: 0, llmCalls: 0 },
     durationMs: 0,
     turnDurationsMs: [],
   };
@@ -131,6 +146,14 @@ export async function runScenarioTrial(
   let llmCalls = 0;
   let llmRetries = 0;
   let costUsd = 0;
+  const simulatorCost: SimulatorCost = { usage: zeroUsage(), costUsd: 0, llmCalls: 0 };
+  const simulatorTurns: RecordedSimulatorTurn[] = [];
+  const addSimulatorCost = (cost: SimulatorCost | undefined) => {
+    if (cost === undefined) return;
+    simulatorCost.usage = addUsage(simulatorCost.usage, cost.usage);
+    simulatorCost.costUsd += cost.costUsd;
+    simulatorCost.llmCalls += cost.llmCalls;
+  };
   let stoppedBecause = "max_turns";
   let error: string | undefined;
   const started = performance.now();
@@ -144,16 +167,29 @@ export async function runScenarioTrial(
       message = scripted;
       scriptStep = turn;
     } else {
-      const next = await simulator.next({
-        scenario,
-        events,
-        turn,
-        lastAssistantText: assistantTexts(events).at(-1) ?? "",
-      });
+      let next;
+      try {
+        next = await simulator.next({
+          scenario,
+          trial,
+          events,
+          turn,
+          lastAssistantText: assistantTexts(events).at(-1) ?? "",
+        });
+      } catch (simError) {
+        // A simulator failure is the harness's, not the agent's: `error`, never `fail` (#31).
+        if (simError instanceof SimulatorError) addSimulatorCost(simError.cost);
+        error = `simulator: ${errorReason(simError)}`;
+        stoppedBecause = "error";
+        break;
+      }
+      addSimulatorCost(next.cost);
       if ("stop" in next) {
+        simulatorTurns.push({ turn, stop: next.stop });
         stoppedBecause = next.stop;
         break;
       }
+      simulatorTurns.push({ turn, message: next.message });
       message = next.message;
     }
 
@@ -209,10 +245,12 @@ export async function runScenarioTrial(
     outcomes,
     stoppedBecause,
     simulator: simulator.name,
+    simulatorTurns,
     usage,
     llmCalls,
     llmRetries,
-    costUsd,
+    costUsd: costUsd + simulatorCost.costUsd,
+    simulatorCost,
     durationMs: Math.round(performance.now() - started),
     turnDurationsMs,
   };

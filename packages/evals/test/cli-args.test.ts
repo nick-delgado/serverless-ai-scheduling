@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   CliArgError,
   estimateRunCost,
+  EXPECTED_SIMULATED_TURNS,
   exitCodeFor,
   loadScenarios,
   parseCliArgs,
@@ -24,10 +25,11 @@ const profile = MODEL_PROFILES["gpt-oss-20b"];
 
 describe("parseCliArgs", () => {
   it("defaults to the L1 smoke suite, one trial, a $1 budget", () => {
-    expect(parseCliArgs([], OUT)).toEqual({
+    expect(parseCliArgs([], OUT, {})).toEqual({
       suite: "smoke",
       mode: "l1",
       profile: MODEL_PROFILES["sonnet-4.6"],
+      simulatorProfile: MODEL_PROFILES["sonnet-4.6"],
       trials: 1,
       filters: [],
       maxCostUsd: 1,
@@ -42,6 +44,8 @@ describe("parseCliArgs", () => {
         "--suite=full",
         "--mode=scenario",
         "--profile=nova-pro",
+        "--simulator-profile=haiku-4.5",
+        "--replay=/r.json",
         "--trials=3",
         "--filter= book , safety ,",
         "--max-cost=0.5",
@@ -54,6 +58,8 @@ describe("parseCliArgs", () => {
       suite: "full",
       mode: "scenario",
       profile: MODEL_PROFILES["nova-pro"],
+      simulatorProfile: MODEL_PROFILES["haiku-4.5"],
+      replay: "/r.json",
       trials: 3,
       filters: ["book", "safety"],
       maxCostUsd: 0.5,
@@ -69,6 +75,7 @@ describe("parseCliArgs", () => {
     [["--mode=both"], "--mode must be l1 or scenario, got both"],
     [["--max-cost=0"], "--max-cost must be a positive number of USD"],
     [["--max-cost=abc"], "--max-cost must be a positive number of USD"],
+    [["--replay=/r.json"], "--replay needs --mode scenario"],
   ])("rejects %j", (argv, message) => {
     expect(() => parseCliArgs(argv, OUT)).toThrow(new CliArgError(message));
   });
@@ -103,6 +110,27 @@ describe("selectCases", () => {
   });
 });
 
+describe("parseCliArgs: the simulator's profile (#31)", () => {
+  it("comes from SIMULATOR_MODEL_PROFILE when the flag is absent, and the flag wins over it", () => {
+    const env = { SIMULATOR_MODEL_PROFILE: "nova-2-lite" };
+    expect(parseCliArgs([], OUT, env).simulatorProfile).toBe(MODEL_PROFILES["nova-2-lite"]);
+    expect(parseCliArgs(["--simulator-profile=gpt-oss-120b"], OUT, env).simulatorProfile).toBe(
+      MODEL_PROFILES["gpt-oss-120b"],
+    );
+  });
+
+  it("is independent of the agent's --profile", () => {
+    expect(parseCliArgs(["--profile=nova-pro"], OUT, {}).simulatorProfile).toBe(MODEL_PROFILES["sonnet-4.6"]);
+  });
+
+  it("rejects an unknown or unentitled profile as a usage error", () => {
+    expect(() => parseCliArgs(["--simulator-profile=sonnet-5"], OUT, {})).toThrow(CliArgError);
+    expect(() => parseCliArgs([], OUT, { SIMULATOR_MODEL_PROFILE: "gpt-9" })).toThrow(
+      /^--simulator-profile: .*Unknown .*"gpt-9"/,
+    );
+  });
+});
+
 describe("estimateRunCost", () => {
   it("scales with trials and leaves out cases that will skip", () => {
     const l1 = selectCases(loaded, parseCliArgs(["--filter=l1-emergency-911"], OUT));
@@ -114,7 +142,7 @@ describe("estimateRunCost", () => {
       parseCliArgs(["--mode=scenario", "--filter=book-derm-next-week"], OUT),
     );
     expect(unscripted).toHaveLength(1);
-    expect(estimateRunCost(unscripted, profile, 1)).toBe(0); // needs the simulator (#31), so it won't run
+    expect(estimateRunCost(unscripted, profile, 1)).toBe(0); // script-only: it needs a simulator, so it won't run
   });
 
   it("a scripted scenario costs 3 calls per scripted turn per trial (2e22f79/TEST-301)", () => {
@@ -128,6 +156,38 @@ describe("estimateRunCost", () => {
     expect(estimateRunCost([s], profile, 1)).toBeCloseTo(3 * call, 12);
     const twoTurns = { ...s, script: [...(s.script ?? []), "ok, calling now"] };
     expect(estimateRunCost([twoTurns], profile, 2)).toBeCloseTo(3 * call * 2 * 2, 12);
+  });
+
+  describe("with a simulator (#31)", () => {
+    const usage = (inputTokens: number, outputTokens: number) => ({
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    const agentCall = estimateCostUsd(profile, usage(4000, 400));
+    const simProfile = MODEL_PROFILES["haiku-4.5"];
+    const simCall = estimateCostUsd(simProfile, usage(1500, 150));
+    const llm = { kind: "llm", profile: simProfile } as const;
+
+    it("an unscripted scenario runs the expected simulated turns, each with one simulator call", () => {
+      const s = scenario("book-derm-next-week-afternoon"); // max_turns 12, no script
+      const turns = EXPECTED_SIMULATED_TURNS;
+      expect(s.max_turns).toBeGreaterThan(turns);
+      expect(estimateRunCost([s], profile, 2, llm)).toBeCloseTo((3 * agentCall + simCall) * turns * 2, 12);
+    });
+
+    it("turns are capped by max_turns, and scripted turns cost no simulator call", () => {
+      const s = scenario("safety-emergency-chest-pain-911"); // max_turns 4, one scripted turn
+      expect(s.max_turns).toBeLessThan(1 + EXPECTED_SIMULATED_TURNS);
+      expect(estimateRunCost([s], profile, 1, llm)).toBeCloseTo(3 * agentCall * 4 + simCall * 3, 12);
+    });
+
+    it("a replay calls no simulator model; a surface: api scenario still skips", () => {
+      const s = scenario("safety-emergency-chest-pain-911");
+      expect(estimateRunCost([s], profile, 1, { kind: "replay" })).toBeCloseTo(3 * agentCall * 4, 12);
+      expect(estimateRunCost([scenario("safety-conversation-id-ownership")], profile, 1, llm)).toBe(0);
+    });
   });
 });
 

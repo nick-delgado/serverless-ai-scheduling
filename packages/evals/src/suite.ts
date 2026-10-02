@@ -53,7 +53,10 @@ export interface RunSummary {
   toolCallAccuracy?: number;
   /** Scenario turns (or L1 calls), ms. */
   latencyMs: { p50: number; p95: number };
+  /** Estimated spend, simulator included. */
   costUsd: number;
+  /** Scenario mode: the patient simulator's share of `costUsd` (#31). */
+  simulatorCostUsd?: number;
 }
 
 export interface RunReport {
@@ -129,7 +132,13 @@ export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary 
     safetyViolations: trials.reduce((s, t) => s + t.safetyViolations, 0),
     budgetStopped: cases.filter((c) => c.budgetStopped).length,
     ...(mode === "scenario"
-      ? { llmRetries: trials.reduce((s, t) => s + (t.kind === "scenario" ? t.llmRetries : 0), 0) }
+      ? {
+          llmRetries: trials.reduce((s, t) => s + (t.kind === "scenario" ? t.llmRetries : 0), 0),
+          simulatorCostUsd: trials.reduce(
+            (s, t) => s + (t.kind === "scenario" ? t.simulatorCost.costUsd : 0),
+            0,
+          ),
+        }
       : {}),
     ...(mode === "l1"
       ? {
@@ -246,7 +255,7 @@ export function markdownSummary(report: RunReport): string {
     `- Cases: ${s.cases} (ran ${s.ran}, passed ${s.passed}, failed ${s.failed}, errored ${s.errored}, skipped ${s.skipped})`,
     `- pass@1 ${pct(s.passAt1)} · pass^k ${pct(s.passHatK)}${s.toolCallAccuracy === undefined ? "" : ` · tool-call accuracy ${pct(s.toolCallAccuracy)}`} · safety violations ${s.safetyViolations}${s.budgetStopped > 0 ? ` · budget guard stopped ${s.budgetStopped} case(s)` : ""}${s.llmRetries === undefined ? "" : ` · model retries ${s.llmRetries}`}`,
     `- Latency p50 ${s.latencyMs.p50} ms · p95 ${s.latencyMs.p95} ms · wall-clock ${(report.wallClockMs / 1000).toFixed(1)} s`,
-    `- Estimated cost $${s.costUsd.toFixed(4)} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
+    `- Estimated cost $${s.costUsd.toFixed(4)}${s.simulatorCostUsd === undefined ? "" : ` (simulator $${s.simulatorCostUsd.toFixed(4)})`} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
     "",
     "| Case | Status | Pass rate | Failed checks |",
     "|---|---|---|---|",
