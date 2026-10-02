@@ -19,10 +19,14 @@ Closes #
 
 <!-- Anything outside the issue's owned paths, especially packages/contracts. "None" is a fine answer. -->
 
+## Decisions the spec left open
+
+<!-- Behaviour you chose where the issue, PRD, ADRs and contracts are silent, and any acceptance criterion you couldn't meet as written, each with the alternative. "None" is a fine answer. -->
+
 ## Docs
 
 - [ ] ADR added/updated (if a decision was made or changed)
-- [ ] Journal entry (if story-worthy)
+- [ ] Journal entry (if story-worthy, or you decided something the spec left open)
 - [ ] PRD traceability updated (if requirements moved)
 
 ## Deferred / follow-ups

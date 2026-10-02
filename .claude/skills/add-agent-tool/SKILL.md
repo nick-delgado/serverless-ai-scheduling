@@ -55,11 +55,11 @@ If the contract is wrong or missing something, change it there, but know what th
 
 File: `packages/tools/src/tools/<tool_name>.ts` (snake_case, matching the tool name and the issue's owned paths). Export one `ToolHandler<"tool_name">` named in camelCase.
 
-**Use only what `ToolContext` gives you:** `ctx.patientId`, `ctx.conversationId`, `ctx.clock`, `ctx.repos`. No imports of AWS SDKs, `process.env`, `new Date()`, `Date.now()`, or module-level state. This is what lets the eval harness run the real handler against in-memory repos at a frozen instant (rule 3). If a tool needs a new dependency (the `Notifier` for escalate_to_human), add it to the context through an injected interface with an in-memory fake, and call out the `ToolContext` change in the PR, since every tool and both callers share it.
+**Use only what `ToolContext` gives you:** `ctx.patientId`, `ctx.conversationId`, `ctx.clock`, `ctx.repos`. No imports of AWS SDKs, `process.env`, argument-less `new Date()` or `Date.now()` (anything that reads the real clock; parsing a stored timestamp with `new Date(iso)` is fine), or module-level state. This is what lets the eval harness run the real handler against in-memory repos at a frozen instant (rule 3). If a tool needs a new dependency (the `Notifier` for escalate_to_human), add it to the context through an injected interface with an in-memory fake, and call out the `ToolContext` change in the PR, since every tool and both callers share it.
 
 **Identity.** Every patient-owned read or write uses `ctx.patientId`. Repos return `null` (or `*_NOT_FOUND`) for another patient's records, so a cross-patient attempt looks exactly like "doesn't exist". Keep it that way in your messages: say "No appointment with that ID for you", never "That appointment belongs to someone else". Confirming existence leaks information.
 
-**Writes are atomic.** Booking and rescheduling go through `appointments.book` / `appointments.reschedule`, which are one transaction each (rule 2). Don't read a slot, decide, then write. The repo's conditional write is the check. Tool-level rules that need "now" (for example "can't book a slot in the past") belong in the handler, using `ctx.clock.now()`, and run *before* the write.
+**Writes are atomic.** Booking and rescheduling go through `appointments.book` / `appointments.reschedule`, which are one transaction each (rule 2). Don't read a slot, decide, then write. The repo's conditional write is the check. Tool-level rules that need "now" (for example "can't book a slot in the past") belong in the handler, using `ctx.clock.now()`, and run *before* the write but *after* the patient's own retry check: a patient who already holds the slot gets it back even if it has started (ADR-004 "first checks"; the full order is in `book_appointment.ts`'s header).
 
 **Map every repo outcome to a result.** Expected outcomes are typed results, not throws. Map them with `toolOk(output)` or `toolFail(code, message, hint)`:
 
@@ -89,6 +89,7 @@ Cover, at minimum:
 | Not found | Unknown ID, or a patient with no data → `NOT_FOUND` with a `hint` |
 | Invalid input | A schema violation → `INVALID_INPUT` (one case is enough; the contract tests own the rest) |
 | Cross-patient | An extra `patient_id` is rejected; another patient's IDs read as `NOT_FOUND`; and **nothing changed** (`repos.snapshot()` before/after) |
+| Missing reference | A record pointing at a missing provider (stub the read to return `null`) → `INTERNAL` with nothing written, or the degraded output the handler documents |
 | Tool-specific edges | Below |
 
 Tool-specific edges worth a test each:
@@ -105,13 +106,13 @@ In `packages/tools/src/registry.ts`, each tool issue owns its two anchor comment
 
 ## 5. The model-facing description
 
-The description lives in `TOOLS[name].description` (contracts). The tool issues' acceptance criteria say "reviewed against these guidelines". Review it; edit it only if it fails one, as a minimal, called-out contracts change.
+The description lives in `TOOLS[name].description` (contracts). The tool issues' acceptance criteria say "reviewed against these guidelines". Review it against each guideline below and say in the PR which it meets. If it fails one, fix it in the same PR, as a minimal, called-out contracts change (update the contracts snapshot).
 
 - **What it's for and when to use it**, in the first sentence. "Use it to resolve a provider the patient mentions into a provider_id."
 - **What it returns** and which fields to quote verbatim (`start_local`).
 - **Rules the model must follow:** confirm-before-write for `book_appointment` / `reschedule_appointment` ("only after the patient has explicitly confirmed provider, date, time, and reason"); where IDs must come from ("slot_id must come from check_availability in this conversation"); "never ask for or pass a patient ID"; what an error means and what to do.
 - **Concise.** A few sentences. Parameter-level detail goes in the schema's `.describe()`, not the description.
-- **Stable wording.** Definitions are prompt-cached and evals are baselined against them. Don't tweak prose casually, don't interpolate anything that changes per request (dates, names), and do reword only with an eval run.
+- **Stable wording.** Definitions are prompt-cached and evals are baselined against them. Don't tweak prose casually, don't interpolate anything that changes per request (dates, names), and reword a description that already meets every guideline only with an eval run.
 - **Model-agnostic.** Plain instructions that any model (Claude, Nova, gpt-oss via Converse) can follow. No provider-specific tags or features.
 
 The description is advice to the model. The handler must still enforce every rule it states that can be enforced in code. "Only book slot_ids check_availability returned" is advice; "the slot exists, is OPEN, and is in the future" is code.
@@ -121,21 +122,21 @@ The description is advice to the model. The handler must still enforce every rul
 Unit tests prove the handler is right; evals prove the model uses it right (ADR-008). For each tool, add or reference at least one **L1** case (given this conversation state, the next call is this tool with these args), plus the L2/L3 scenarios that exercise it:
 
 - `packages/evals/scenarios/<category>/<id>.yaml` (categories: book, reschedule, availability, escalate, clarify, safety), `fixture: clinic-default`, `patient: pat-*`, clock `2026-10-05T13:00:00Z`.
-- #33 (S7-04) is authoring about 40 scenarios in parallel and owns that directory. Check what exists first (`ls packages/evals/scenarios`, its README coverage table). If your case is already covered, reference its id in the PR. If not, and the scenario schema has landed (#30), add it. Otherwise, list the case in the PR body and comment it on #33.
+- Scenarios live in `packages/evals/scenarios/` (see its README coverage table). If your case is already covered, reference its id in the PR; if not, add it. If you can't add it in this PR, list it on #80, the open eval follow-up issue.
 - Good trajectory checks for tools: `must_call_before: [check_availability, book_appointment]`, `must_confirm_before: <write tool>`, and no invented IDs. A safety case for every read tool: the patient asks for someone else's data.
 
 ## 7. Definition of done
 
-- [ ] Handler in `packages/tools/src/tools/<name>.ts`, using only `ToolContext`; no `patient_id` in input; no `new Date()` or AWS imports
+- [ ] Handler in `packages/tools/src/tools/<name>.ts`, using only `ToolContext`; no `patient_id` in input; no clock reads outside `ctx.clock`, no AWS imports
 - [ ] Every repo outcome mapped to `toolOk` / `toolFail` with a useful `hint`; no internals or cross-patient existence leaked
 - [ ] Clinic-local times via `formatClinicDateTime`, with the weekday; DST-safe
 - [ ] Tests via `createToolExecutor`: happy, not-found, invalid input, cross-patient (with snapshot unchanged), tool-specific edges
 - [ ] Import and entry under the tool's anchors in `TOOL_REGISTRY`, nothing else touched
 - [ ] Description reviewed against section 5; any contracts change minimal and called out
-- [ ] L1 case added or listed for #33
+- [ ] L1 case added, referenced, or listed on #80
 - [ ] `npm run lint && npm run typecheck && npm test` passes at the repo root
 - [ ] Eval smoke suite run with no regression, numbers in the PR. If `npm run evals` doesn't exist yet (#30), say so in the PR
-- [ ] Journal entry (via `dev-journal`) if something surprised you
+- [ ] Journal entry (via `dev-journal`) if you decided something the spec left open, or something surprised you
 
 ## Debugging a tool
 
