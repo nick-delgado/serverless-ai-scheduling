@@ -2,7 +2,7 @@
  * Negative tests for the loader's file checks and the schema refinements: a broken scenario file must be
  * reported, never loaded or silently dropped.
  */
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +12,12 @@ import { L1Case, loadScenarios, Scenario, ScenarioLoadError, SCENARIOS_DIR } fro
 import { l1Case, scenario } from "./helpers";
 
 const GOOD = join(SCENARIOS_DIR, "book", "book-derm-next-week-afternoon.yaml");
+
+/** The good scenario's YAML with its id and category replaced. */
+const goodAs = (id: string, category = "book"): string =>
+  readFileSync(GOOD, "utf8")
+    .replace(/^id: .*$/m, `id: ${id}`)
+    .replace(/^category: .*$/m, `category: ${category}`);
 
 let dirs: string[] = [];
 afterEach(() => {
@@ -81,12 +87,45 @@ describe("loader", () => {
     expect(found.some((p) => p.startsWith("book/broken.yaml: YAML parse error"))).toBe(true);
     expect(found.some((p) => p.startsWith("book/empty.yaml: "))).toBe(true);
   });
+
+  it("returns cases sorted by id across folders (8c21660/TEST-203)", () => {
+    const dir = scenariosDir({
+      "book/aa-one.yaml": goodAs("aa-one"),
+      "book/zz-one.yaml": goodAs("zz-one"),
+      "escalate/bb-two.yaml": goodAs("bb-two", "escalate"),
+      "escalate/yy-two.yaml": goodAs("yy-two", "escalate"),
+    });
+    expect(loadScenarios(dir).scenarios.map((s) => s.id)).toEqual(["aa-one", "bb-two", "yy-two", "zz-one"]);
+  });
+
+  it("reads only .yaml files (8c21660/TEST-203)", () => {
+    const dir = scenariosDir({
+      "book/book-derm-next-week-afternoon.yaml": { from: GOOD },
+      "book/README.md": "id: [not a scenario",
+      "book/draft.yml": "id: [not a scenario",
+    });
+    expect(loadScenarios(dir).scenarios.map((s) => s.id)).toEqual(["book-derm-next-week-afternoon"]);
+  });
+
+  it("names the file and the field path of a schema error, or (root) (8c21660/TEST-203)", () => {
+    const dir = scenariosDir({
+      "book/book-derm-next-week-afternoon.yaml": goodAs("book-derm-next-week-afternoon").replace(
+        /^tags: .*$/m,
+        "tags: [smoke, 7]",
+      ),
+      "book/scalar.yaml": "just a string\n",
+    });
+    const found = problems(dir);
+    expect(found).toContainEqual(
+      expect.stringMatching(/^book\/book-derm-next-week-afternoon\.yaml: tags\.1: /),
+    );
+    expect(found).toContainEqual(expect.stringMatching(/^book\/scalar\.yaml: \(root\): /));
+  });
 });
 
 describe("schema refinements", () => {
-  const base = loadScenarios().scenarios.find((s) => s.id === "book-derm-next-week-afternoon");
-  const l1 = loadScenarios().l1.find((c) => c.id === "l1-emergency-911");
-  if (base === undefined || l1 === undefined) throw new Error("fixture scenarios missing");
+  const base = scenario("book-derm-next-week-afternoon");
+  const l1 = l1Case("l1-emergency-911");
 
   it("surface: api needs a request", () => {
     expect(Scenario.safeParse({ ...base, surface: "api" }).success).toBe(false);
@@ -177,5 +216,25 @@ describe("schema: strictness and contract checks", () => {
   it("rejects an L1 context that ends with the assistant", () => {
     const c = l1Case("l1-emergency-911");
     expect(L1Case.safeParse({ ...c, context: [...c.context, { assistant: "ok" }] }).success).toBe(false);
+  });
+
+  it("rejects an L1 context that ends with a tool call (8c21660/TEST-202)", () => {
+    const c = l1Case("l1-emergency-911");
+    const call = { tool_call: { tool: "get_my_appointments", args: {} } };
+    expect(L1Case.safeParse({ ...c, context: [...c.context, call] }).success).toBe(false);
+    const answered = { tool_result: { tool: "get_my_appointments", result: { appointments: [] } } };
+    expect(L1Case.safeParse({ ...c, context: [...c.context, call, answered] }).success).toBe(true);
+  });
+
+  it.each([
+    ["a non-kebab id", { id: "Book_Derm" }],
+    ["an id with a trailing dash", { id: "book-derm-" }],
+    ["a covers entry with a two-digit FR", { covers: ["FR-30"] }],
+    ["a covers entry that is no FR, NFR or ADR rule", { covers: ["PRD-030"] }],
+  ])("rejects %s (8c21660/TEST-204)", (_what, patch) => {
+    expect(Scenario.safeParse({ ...base, ...patch }).success).toBe(false);
+    expect(
+      Scenario.safeParse({ ...base, id: "book-derm", covers: ["FR-030", "adr8.no-patient-id"] }).success,
+    ).toBe(true);
   });
 });
