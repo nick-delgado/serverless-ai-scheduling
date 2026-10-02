@@ -42,6 +42,12 @@ export function matchArgs(subset: ArgsSubset, actual: unknown, path = "args"): s
   return undefined;
 }
 
+/** `undefined` when any of `inputs` contains `subset`; otherwise the first input's mismatch. */
+export function firstArgMismatch(subset: ArgsSubset, inputs: readonly unknown[]): string | undefined {
+  const problems = inputs.map((input) => matchArgs(subset, input));
+  return problems.includes(undefined) ? undefined : problems[0];
+}
+
 /** Every string anywhere inside a value (keys included), for "must not appear" checks. */
 export function allStrings(value: unknown, out: string[] = []): string[] {
   if (typeof value === "string") out.push(value);

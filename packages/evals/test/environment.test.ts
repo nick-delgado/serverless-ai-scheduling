@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createTrialEnvironment, loadScenarios, type Scenario } from "../src";
+import { productionInternalError } from "./helpers";
 
 const { scenarios } = loadScenarios();
 const scenario = (id: string): Scenario => {
@@ -57,6 +58,18 @@ describe("fault injection", () => {
       },
     });
     expect(env.faultsFired).toEqual([{ tool: "book_appointment", call: 1, error: "SLOT_UNAVAILABLE" }]);
+  });
+});
+
+describe("injected INTERNAL faults say what production says (2e22f79/SMELL-202 decision)", () => {
+  it("the harness's INTERNAL text equals the executor's error for a handler that throws", async () => {
+    const env = await createTrialEnvironment(scenario("escalate-repeated-failure")); // book_appointment: all INTERNAL
+    const injected = await env.executor.execute({
+      id: "t1",
+      name: "book_appointment",
+      input: { slot_id: OPEN_SLOT, reason: "lingering cold" },
+    });
+    expect(injected).toEqual({ ok: false, error: { error: await productionInternalError() } });
   });
 });
 

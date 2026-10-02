@@ -23,6 +23,7 @@ import {
   type Scenario,
   type TrialResult,
 } from "../src";
+import { productionInternalError } from "./helpers";
 
 const { scenarios } = loadScenarios();
 const scenario = (id: string): Scenario => {
@@ -321,7 +322,7 @@ describe("runner", () => {
     expect(r.reason).toContain("throttled");
   });
 
-  it("fault call: all fails every call to the tool, with the harness's INTERNAL text", async () => {
+  it("fault call: all fails every call to the tool, with production's INTERNAL text", async () => {
     const book = (slot: string) =>
       scriptedToolUse([{ name: "book_appointment", input: { slot_id: slot, reason: "lingering cold" } }]);
     const r = await run(
@@ -334,8 +335,10 @@ describe("runner", () => {
       ],
       ["yes book it", "yes"],
     );
-    const errors = r.events.flatMap((e) => (e.kind === "tool_call" ? [e.error?.code] : []));
-    expect(errors).toEqual(["INTERNAL", "INTERNAL"]);
+    const errors = r.events.flatMap((e) => (e.kind === "tool_call" ? [e.error] : []));
+    // The model sees the message and hint; the hint drives escalate-repeated-failure (2e22f79/TEST-204).
+    const internal = await productionInternalError();
+    expect(errors).toEqual([internal, internal]);
   });
 
   it("stops at max_turns", async () => {
