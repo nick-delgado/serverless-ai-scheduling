@@ -37,8 +37,15 @@ For each finding, in every findings file:
      lies inside the scope, the answer is **yes**.
    - If the fix requires changing something outside it (a contract, a shared file,
      pre-existing code the task did not allow the PR to touch), the answer is **no**. Do
-     not reject the finding: keep it, set its action to `for the owner` (step 8) and cap
-     the severity at minor.
+     not reject the finding. Then decide who should settle it (step 8):
+     - The edit outside the scope is small and self-contained, and this PR is the natural
+       place for it (a doc line this PR made stale, a one-line shared-file change the PR's
+       work implies): the owner may simply allow it, so its action is `needs owner
+       decision`, with options "(a) let this PR make the edit, disclosed as a shared-file
+       change" and "(b) leave it for a follow-up issue", and a recommendation. The
+       severity stays as graded.
+     - Otherwise (a contract redesign, other work's code, anything larger): its action is
+       `for the owner`, and the severity is capped at minor.
    - A finding with one fix inside the scope and another outside it is a **yes**: the PR
      could have done the in-scope one.
 5. **Is it already machine-enforced?** If the manifest lists a linter, type checker or CI
@@ -53,6 +60,11 @@ For each finding, in every findings file:
    - "Scope creep": is the change needed for a requirement to work?
    - "Swallowed error" or "needless defence": is there a caller or a documented contract
      that makes it necessary?
+   - **Already settled?** On a re-review, check the finding against the previous reports,
+     the owner's decisions and the agent's responses (`<RUN_DIR>/previous/`). If an earlier
+     round settled it (see "Things already settled" in the finding schema), reject it with
+     the reason "settled in `<commit>/<ID>`", unless it is a blocker or a major behaviour
+     defect.
 7. **Is the severity right?** Keep the reviewer's severity unless a row of the severity
    table or the boundary cases in the finding schema says otherwise. To change it, quote
    that row. If the facts you verified changed (part of the claim fell away), re-grade
@@ -60,7 +72,18 @@ For each finding, in every findings file:
    reviewer's level, not to change it.
 8. **Who acts on it?** Settle the "Action" field, using the table in the finding schema.
    The authoring agent will fix everything marked `fix now` without asking, so be strict:
-   - `for the owner` when step 4 answered no.
+   - **On a re-review, first place the finding** (see "Re-reviews" in the finding schema):
+     set "Changed since the last review" from `<RUN_DIR>/changed-lines.txt` (yes if any
+     line it cites is in a changed range). A finding in unchanged code that is not a
+     blocker or a major behaviour defect gets the action `noticed`, whatever else applies.
+     On a first review, write `first review`.
+   - `for the owner` or `needs owner decision` when step 4 answered no, as it says.
+   - Never `fix now` for a change to rules: what agents or contributors should do, in
+     instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), skills, agent definitions,
+     templates or CI configuration. The authoring agent is not allowed to make those; they
+     are process work for the cause analysis, or `for the owner`. A correction of a fact in
+     such a file that this PR made untrue (a command, a path, a "coming later" note) is not
+     a rule change and is treated like any other edit.
    - `needs owner decision` when the right outcome is not settled by the spec, a documented
      rule or the code: two sources conflict, the spec is silent on the behaviour, or the
      suggested fix begins with "decide", "confirm" or "ask". If the finding also has a part
@@ -70,7 +93,9 @@ For each finding, in every findings file:
 
 Then, across all files:
 
-9. **Deduplicate.** Merge two findings only when they point at the same code and the same
+9. **Deduplicate.** When a reviewer ran in parts, two parts may report one problem from
+   either side (the duplicate in part 1 and the original in part 2); treat them like any
+   other pair. Merge two findings only when they point at the same code and the same
    fix would resolve both: keep one, keep the clearest evidence, and list the other ID as
    merged into it. The same problem at several locations is one finding with several
    locations. Two findings that share a cause but need different fixes (the code and the
@@ -87,13 +112,22 @@ Then, across all files:
       exists? Do two findings' fixes touch the same code, conflict, or make each other
       unnecessary? Then make them consistent and say so in each. Rewrite what falls short.
     - **Done when:** present and checkable.
-    - **Options:** two to four real alternatives, each with its consequence. Add the one the
-      reviewer missed, including "keep as is" when the code as written is a defensible
-      choice, and drop the ones nobody would take.
+    - **Options:** two to four real alternatives, each with its consequence and its scope
+      label (within the issue, or what it adds beyond it). Add the one the reviewer missed,
+      including "keep as is" when the code as written is a defensible choice and "open a
+      follow-up issue" when an option adds scope, and drop the ones nobody would take.
     - **Recommendation:** make your own judgement, from the spec, the direction documents
       and the owner's earlier decisions in the manifest, not from the reviewer's draft or
-      the authoring agent's choice. Cite the source. If the sources do not favour any
-      option, say so and recommend the cheapest to reverse.
+      the authoring agent's choice. Cite the source. Recommend the option within the
+      issue's scope unless the spec requires more. On a re-review, never recommend new
+      behaviour or a refactor of working, tested code unless it fixes a defect. Do not read
+      the owner's answer to one question as a preference on another. If the sources do not
+      favour any option, say so and recommend the cheapest to reverse.
+    - **The class, and the next round:** where a fix addresses one instance of a pattern,
+      name the other instances in the PR. Rewrite suggestions that would plant the next
+      finding (see the finding schema).
+    - **Nits:** on a re-review, keep at most five nits in all, the ones that matter most;
+      reject the rest with the reason "nit cap".
 
     Note in the finding's "Verification" field what you changed.
 
@@ -180,10 +214,13 @@ fields added:>
 
 | ID | Severity | Action | Location | Problem | Suggested fix |
 |---|---|---|---|---|---|
-<one row per confirmed minor finding and nit whose action is `fix now` or `for the owner`;
-one sentence per cell, the last cell holding the suggested fix and, after "Done when:", its
-check; "None." if there are none. Findings that need the owner's decision are not in this
-table: the report shows each of them in full, whatever its severity.>
+<one row per confirmed minor finding and nit whose action is `fix now` or `for the owner`,
+and one per finding whose action is `noticed`, whatever its severity (at most ten
+`noticed` rows: keep the ten that matter most and add a last row "… and <n> more noticed in
+unchanged code", with `noticed` in its Action cell); one sentence per cell, the last cell
+holding the suggested fix and, after "Done when:", its check; "None." if there are none.
+Findings that need the owner's decision are not in this table: the report shows each of
+them in full, whatever its severity.>
 
 ## Rejected findings
 
@@ -203,6 +240,19 @@ table: the report shows each of them in full, whatever its severity.>
 | ID | Before (severity, action) | Agent's response | Status now | Evidence |
 |---|---|---|---|---|
 <one row per previous finding; or the single line "No previous review.">
+
+## Convergence
+
+<on a re-review, this table; on a first review, the single line "First review.">
+
+| | This round | Previous round |
+|---|---|---|
+| Findings in changed code (blocking) | <n> | — |
+| Findings in unchanged code (blocking: blockers and major behaviour defects) | <n> | — |
+| Noticed in unchanged code (not blocking) | <n> | — |
+| Confirmed findings in all | <n> | <n, from the previous report> |
+| Blockers and majors | <n> | <n> |
+| Previous findings resolved | <n> of <n> | — |
 
 ## Verification summary
 
@@ -226,7 +276,9 @@ so use exactly these `##` and `###` headings, in this order, and no other `##` h
   the full blocks above remain the record.
 - Under "Reviewer tables", copy each reviewer's table of that name, corrected where a
   rejection or adjustment changes a row. Write `Not produced.` under a heading whose
-  reviewer supplied no table.
+  reviewer supplied no table. When a reviewer ran in parts (`findings/<name>--<k>.md`),
+  combine the parts' tables into one, and in the verification summary give the reviewer one
+  row with the parts' totals.
 - Every `path:line` you write, including in copied tables, must be a line of the file in
   `<RUN_DIR>/worktree`, never a position in `diff.patch`. A script checks every citation in
   this file after you finish, and invalid ones are sent back to you.

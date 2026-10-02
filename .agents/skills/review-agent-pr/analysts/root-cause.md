@@ -104,6 +104,9 @@ For each cause or pattern worth acting on, write a concrete proposal. Rules:
 - **Keep instruction files lean.** Every added line costs attention on every future task.
   Do not propose a rule for a one-off or a nit. Say so when the right action is no action.
 - **State the expected effect and the cost**, including what the change could make worse.
+- **Read the harness that ran.** When a cause may lie in a harness skill, read the
+  installed copy (`<SKILL_DIR>` and its sibling skill directories), not a copy the project
+  may have committed under `.agents/skills/` or `.claude/skills/`, which can be older.
 - **Harness skills are not the project's to change.** The skills `review-agent-pr`,
   `address-pr-review` and `improve-agent-process` come from the agent-review-harness
   repository and are installed copies; an edit in the project would be overwritten on the

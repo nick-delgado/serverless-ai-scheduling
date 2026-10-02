@@ -23,6 +23,10 @@ Write an atomic, numbered list:
   quote.
 - Include acceptance criteria, constraints ("must not change the public API"), and explicit
   non-goals ("out of scope: pagination").
+- On a re-review, the owner's decisions listed in the manifest are requirements too. Give
+  each its own row, with the source `decision <commit>/<ID>`, and say whether it stays
+  within the issue or adds to it. The traceability table then shows how much the decisions
+  have added.
 - Where the spec is ambiguous or silent on something the implementation had to decide, add
   it as an open question `Q1`, `Q2`, ... Do not resolve it yourself.
 
@@ -85,7 +89,8 @@ disagree: state the question and the options, and recommend one, as the finding 
 Agents often describe what they intended rather than what they did. For each claim in the PR
 description ("adds validation", "all endpoints covered", "tests added", "no breaking
 changes"), check it against the diff. A claim the diff does not support is an `overclaim`
-finding, major.
+finding, major. A broad claim ("all endpoints covered") counts once, however many cases it
+misses.
 
 ## Required: the traceability tables
 
