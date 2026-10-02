@@ -6,7 +6,7 @@
 import { TEXT_BLOCK_SEPARATOR, type LlmMessage } from "@sched/agent";
 import { ToolError, type ContentBlock, type ToolCallTrace } from "@sched/contracts";
 
-import { isRecord } from "./graders/matchers";
+import { isRecord } from "./util";
 import { isWriteTool, type WriteTool } from "./schema";
 
 export type TranscriptEvent =

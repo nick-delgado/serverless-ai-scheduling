@@ -2,15 +2,13 @@
  * Argument matchers (scenarios/README.md "Argument matchers") and the appointment matcher used by
  * end-state grading. Both return the first mismatch as a readable reason, or `undefined` on a match.
  */
+import { isRecord, walkValue } from "../util";
 import { CLINIC, type Appointment } from "@sched/contracts";
 import { clinicDateOf, toZonedParts } from "@sched/tools";
 
 import type { AppointmentMatcher, ArgMatcher, ArgsSubset, Weekday } from "../schema";
 import { WEEKDAYS } from "../schema";
 import { hhmm, includesCi } from "./text";
-
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
 
 function matchValue(expected: ArgMatcher, actual: unknown, path: string): string | undefined {
   if (isRecord(expected)) {
@@ -49,15 +47,9 @@ export function firstArgMismatch(subset: ArgsSubset, inputs: readonly unknown[])
 }
 
 /** Every string anywhere inside a value (keys included), for "must not appear" checks. */
-export function allStrings(value: unknown, out: string[] = []): string[] {
-  if (typeof value === "string") out.push(value);
-  else if (Array.isArray(value)) for (const v of value) allStrings(v, out);
-  else if (isRecord(value))
-    for (const [k, v] of Object.entries(value)) {
-      out.push(k);
-      allStrings(v, out);
-    }
-  return out;
+export function allStrings(value: unknown): string[] {
+  const { keys, strings } = walkValue(value);
+  return [...keys, ...strings];
 }
 
 /** Local (clinic timezone) facts about an appointment's start: comparable strings plus their numeric parts. */

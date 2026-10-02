@@ -16,7 +16,8 @@ import {
   type ToolCallEvent,
   type TranscriptEvent,
 } from "../transcript";
-import { firstArgMismatch, isRecord, localFacts } from "./matchers";
+import { isRecord } from "../util";
+import { firstArgMismatch, localFacts } from "./matchers";
 import {
   containsAny,
   countQuestions,
