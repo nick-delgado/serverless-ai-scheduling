@@ -57,6 +57,15 @@ describe("trajectory rules fail on what they target", () => {
     expect(grade(rule, [esc(), esc()]).detail).toBe("escalate_to_human called 2 times (max 1)");
   });
 
+  it("two max_calls rules get distinct names (0135cf3/SMELL-5)", () => {
+    expect(grade({ max_calls: { escalate_to_human: 1 } }, []).name).toBe(
+      "trajectory.max_calls(escalate_to_human)",
+    );
+    expect(grade({ max_calls: { book_appointment: 2 } }, []).name).toBe(
+      "trajectory.max_calls(book_appointment)",
+    );
+  });
+
   it("max_questions_per_turn", () => {
     const rule = { max_questions_per_turn: 1 } satisfies TrajectoryRule;
     expect(grade(rule, [assistant("Which day?")]).status).toBe("pass");
@@ -158,7 +167,25 @@ describe("trajectory rules fail on what they target", () => {
 });
 
 describe("reschedule_appointment goes through the write-safety graders (new_slot_id)", () => {
-  const offer = call("check_availability", {}, { output: { slots: [{ slot_id: OKAFOR_THU_1400 }] } });
+  const offer = call(
+    "check_availability",
+    {},
+    {
+      output: {
+        truncated: false,
+        slots: [
+          {
+            slot_id: OKAFOR_THU_1400,
+            provider_id: "prov_okafor",
+            provider_name: "Dr. Samuel Okafor",
+            specialty: "dermatology",
+            start_utc: "2026-10-15T18:00:00Z",
+            start_local: "Thursday, October 15, 2026 at 2:00 PM ET",
+          },
+        ],
+      },
+    },
+  );
   const restate = assistant(
     "To confirm: move it to Dr. Samuel Okafor, Thursday, October 15 at 2:00 PM ET. OK?",
   );

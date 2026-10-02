@@ -54,10 +54,14 @@ function monthIndex(token: string): number {
   return MONTH_NAMES.findIndex((m) => m.toLowerCase().startsWith(t.slice(0, 3)));
 }
 
+/** `HH:MM`, zero-padded, 24-hour. */
+export const hhmm = (h: number, m: number): string =>
+  `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
 function to24h(hour: number, minute: number, period: string): string {
   const pm = period.toLowerCase().startsWith("p");
   const h = (hour % 12) + (pm ? 12 : 0);
-  return `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return hhmm(h, minute);
 }
 
 /**

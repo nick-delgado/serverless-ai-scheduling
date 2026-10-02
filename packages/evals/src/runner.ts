@@ -19,7 +19,7 @@ import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from 
 import type { Scenario } from "./schema";
 import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
 import { promptFor, type SystemPromptFactory } from "./system-prompt";
-import { turnEvents, type TranscriptEvent } from "./transcript";
+import { assistantTexts, turnEvents, type TranscriptEvent } from "./transcript";
 
 /** The agent configuration under test. */
 export interface AgentUnderTest {
@@ -145,12 +145,11 @@ export async function runScenarioTrial(
       message = scripted;
       scriptStep = turn;
     } else {
-      const lastAssistant = events.filter((e) => e.kind === "assistant").at(-1);
       const next = await simulator.next({
         scenario,
         events,
         turn,
-        lastAssistantText: lastAssistant?.kind === "assistant" ? lastAssistant.text : "",
+        lastAssistantText: assistantTexts(events).at(-1) ?? "",
       });
       if ("stop" in next) {
         stoppedBecause = next.stop;

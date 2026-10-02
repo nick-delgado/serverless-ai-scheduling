@@ -10,7 +10,7 @@ import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { runScenarioTrial, type TrialResult, type TrialStatus } from "./runner";
-import type { PatientSimulator } from "./simulator";
+import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
 import { promptFor, type SystemPromptFactory } from "./system-prompt";
 
 export const MODES = ["l1", "scenario"] as const;
@@ -214,7 +214,7 @@ export async function runSuite(
     promptVersion: promptFor(options.systemPrompt, startedAt, undefined).version,
     pricesAsOf: PRICES_AS_OF,
     trialsPerCase: options.trials,
-    ...(options.mode === "scenario" ? { simulator: options.simulator?.name ?? "script-only" } : {}),
+    ...(options.mode === "scenario" ? { simulator: (options.simulator ?? scriptOnlySimulator).name } : {}),
     llm: options.llmName,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
@@ -248,7 +248,7 @@ export function markdownSummary(report: RunReport): string {
         ...(c.reason === undefined ? [] : [c.reason]),
         ...c.trials.flatMap((t) => [
           ...t.graders.filter((g) => g.status === "fail").map((g) => `${g.name}: ${g.detail ?? ""}`),
-          ...("reason" in t && t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
+          ...(t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
         ]),
       ]),
     ];

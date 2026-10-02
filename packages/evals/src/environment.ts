@@ -39,7 +39,6 @@ export interface TrialEnvironment {
   clock: FrozenClock;
   repos: InMemoryRepositories;
   executor: ToolExecutor;
-  fixture: ClinicFixture;
   /** State right after seeding, before the agent runs. */
   before: InMemorySnapshot;
   /** Every fault that fired, in order. */
@@ -73,9 +72,6 @@ export function uuidSequence(prefix = 0): () => string {
     return `${block}-0000-4000-8000-${String(n).padStart(12, "0")}`;
   };
 }
-
-export const patientIdFor = (alias: keyof typeof FIXTURE_PATIENT_IDS): PatientId =>
-  FIXTURE_PATIENT_IDS[alias];
 
 /** Apply `setup.appointments` to the seed: each slot becomes BOOKED by a new BOOKED appointment. */
 function seedWithSetup(fixture: ClinicFixture, setup: Setup | undefined, createdAt: string): ClinicFixture {
@@ -205,7 +201,7 @@ export async function createTrialEnvironment(
     await repos.conversations.append(owner, messages);
   }
 
-  const patientId = patientIdFor(scenario.patient);
+  const patientId = FIXTURE_PATIENT_IDS[scenario.patient];
   const conversationId = uuid();
   const otherPatientId = Object.values(FIXTURE_PATIENT_IDS).find((id) => id !== patientId) ?? patientId;
   const faultsFired: FiredFault[] = [];
@@ -222,7 +218,6 @@ export async function createTrialEnvironment(
     clock,
     repos,
     executor,
-    fixture,
     before: repos.snapshot(),
     faultsFired,
     notifier,

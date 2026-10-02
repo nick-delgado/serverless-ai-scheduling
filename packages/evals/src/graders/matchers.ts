@@ -7,7 +7,7 @@ import { clinicDateOf, toZonedParts } from "@sched/tools";
 
 import type { AppointmentMatcher, ArgMatcher, ArgsSubset, Weekday } from "../schema";
 import { WEEKDAYS } from "../schema";
-import { includesCi } from "./text";
+import { hhmm, includesCi } from "./text";
 
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -59,8 +59,6 @@ export function allStrings(value: unknown, out: string[] = []): string[] {
     }
   return out;
 }
-
-const hhmm = (h: number, m: number) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
 /** Local (clinic timezone) facts about an appointment's start: comparable strings plus their numeric parts. */
 export function localFacts(startUtc: string): {

@@ -13,6 +13,8 @@
  * Invariants a file lists beyond the core set are graded deterministically where a deterministic check
  * exists; the rest are judge dimensions (#32) and are reported as skipped here.
  */
+import { CheckAvailabilityOutput } from "@sched/contracts";
+
 import { diffState } from "./end-state";
 import type { Invariant } from "../schema";
 import { isWriteTool } from "../schema";
@@ -66,8 +68,8 @@ function offeredSlotsBefore(events: readonly TranscriptEvent[], index: number): 
   const ids = new Set<string>();
   for (const e of events.slice(0, index))
     if (e.kind === "tool_call" && e.ok && e.name === "check_availability") {
-      const slots = (e.output as { slots?: { slot_id?: unknown }[] } | undefined)?.slots ?? [];
-      for (const s of slots) if (typeof s.slot_id === "string") ids.add(s.slot_id);
+      const output = CheckAvailabilityOutput.safeParse(e.output);
+      if (output.success) for (const s of output.data.slots) ids.add(s.slot_id);
     }
   return ids;
 }

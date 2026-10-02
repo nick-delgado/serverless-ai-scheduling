@@ -134,7 +134,9 @@ function ruleName(rule: TrajectoryRule): string {
               value !== null &&
               "after_script_step" in value
             ? `step ${String(value.after_script_step)}`
-            : "";
+            : typeof value === "object" && value !== null
+              ? Object.keys(value).join(",") // max_calls: the tools it caps
+              : "";
   return `trajectory.${key}${arg ? `(${arg})` : ""}`;
 }
 

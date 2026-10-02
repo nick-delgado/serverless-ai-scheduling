@@ -11,6 +11,7 @@ import {
   type LlmMessage,
   type LlmRequest,
   type LlmResponse,
+  type LlmStopReason,
   type LlmSystemText,
   type ModelProfile,
   type SystemPrompt,
@@ -93,7 +94,7 @@ export function l1Request(c: L1Case, profile: ModelProfile, system: SystemPrompt
 
 /** What the model did next. */
 export interface L1Observed {
-  stopReason: string;
+  stopReason: LlmStopReason;
   toolCalls: { name: string; input: unknown }[];
   text: string;
 }

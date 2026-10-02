@@ -28,6 +28,7 @@ import {
   selectCases,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
+import { errorReason } from "./runner";
 import { rateLimited } from "./rate-limit";
 import { markdownSummary, runSuite } from "./suite";
 
@@ -64,7 +65,7 @@ async function main(): Promise<void> {
 
   const llm = rateLimited(new ConverseLlmClient({ maxAttempts: 1 }), {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
-      console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${(error as Error).name})`),
+      console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
   const report = await runSuite(cases, {
     mode,
@@ -83,7 +84,7 @@ async function main(): Promise<void> {
                 .map((g) => g.name)
                 .join(", ")}`
             : ""
-        }${"reason" in t && t.reason ? `  (${t.reason})` : ""}`,
+        }${t.reason ? `  (${t.reason})` : ""}`,
       ),
   });
   report.rateLimit = { ...llm.stats };

@@ -14,12 +14,16 @@ export interface Timer {
   sleep(ms: number, signal?: AbortSignal): Promise<void>;
 }
 
+/** The abort reason as an Error (an AbortSignal's reason is `any`). */
+const abortError = (signal: AbortSignal): Error =>
+  signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason));
+
 export const realTimer: Timer = {
   now: () => Date.now(),
   sleep: (ms, signal) =>
     new Promise((resolve, reject) => {
       if (signal?.aborted) {
-        reject(signal.reason as Error);
+        reject(abortError(signal));
         return;
       }
       const t = setTimeout(resolve, ms);
@@ -27,7 +31,7 @@ export const realTimer: Timer = {
         "abort",
         () => {
           clearTimeout(t);
-          reject(signal.reason as Error);
+          reject(abortError(signal));
         },
         { once: true },
       );
@@ -46,28 +50,26 @@ export function defaultRpmFor(modelId: string): number {
   return 10;
 }
 
-/** A classic token bucket: `capacity` tokens, refilled continuously at `ratePerMinute`. */
+/** A token bucket holding one token, refilled continuously at `ratePerMinute` (no bursts). */
 export class TokenBucket {
   readonly #ratePerMs: number;
-  readonly #capacity: number;
   readonly #timer: Timer;
   #tokens: number;
   #last: number;
   /** Serializes waiters so tokens are handed out in arrival order. */
   #queue: Promise<void> = Promise.resolve();
 
-  constructor(ratePerMinute: number, options: { capacity?: number; timer?: Timer } = {}) {
+  constructor(ratePerMinute: number, options: { timer?: Timer } = {}) {
     if (!(ratePerMinute > 0)) throw new RangeError(`ratePerMinute must be > 0, got ${ratePerMinute}`);
     this.#ratePerMs = ratePerMinute / 60_000;
-    this.#capacity = Math.max(1, options.capacity ?? 1);
     this.#timer = options.timer ?? realTimer;
-    this.#tokens = this.#capacity;
+    this.#tokens = 1;
     this.#last = this.#timer.now();
   }
 
   #refill(): void {
     const now = this.#timer.now();
-    this.#tokens = Math.min(this.#capacity, this.#tokens + (now - this.#last) * this.#ratePerMs);
+    this.#tokens = Math.min(1, this.#tokens + (now - this.#last) * this.#ratePerMs);
     this.#last = now;
   }
 
@@ -136,22 +138,29 @@ const TRANSIENT_NAMES = new Set([
   "ModelStreamErrorException",
 ]);
 
+/** A field of an unknown error value, if it is an object that has it. */
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null && key in value
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+
 function statusOf(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const e = error as { $metadata?: { httpStatusCode?: unknown }; statusCode?: unknown; status?: unknown };
-  const status = e.$metadata?.httpStatusCode ?? e.statusCode ?? e.status;
+  const status =
+    field(field(error, "$metadata"), "httpStatusCode") ??
+    field(error, "statusCode") ??
+    field(error, "status");
   return typeof status === "number" ? status : undefined;
 }
 
 /** A 429 / throttling error (retry after a wait). */
 export function isThrottle(error: unknown): boolean {
-  const name = (error as { name?: unknown } | null)?.name;
+  const name = field(error, "name");
   return (typeof name === "string" && THROTTLE_NAMES.has(name)) || statusOf(error) === 429;
 }
 
 /** Worth retrying: throttling, or a transient 5xx from the service. */
 export function isRetryable(error: unknown): boolean {
-  const name = (error as { name?: unknown } | null)?.name;
+  const name = field(error, "name");
   const status = statusOf(error);
   return (
     isThrottle(error) ||

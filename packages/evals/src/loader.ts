@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import type { z } from "zod";
 
-import { L1Case, Scenario } from "./schema";
+import { isL1Case, L1Case, Scenario } from "./schema";
 
 export const SCENARIOS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "scenarios");
 
@@ -52,11 +52,10 @@ export function loadScenarios(dir: string = SCENARIOS_DIR): LoadedScenarios {
       try {
         doc = parse(readFileSync(path, "utf8"));
       } catch (error) {
-        problems.push(`${file}: YAML parse error: ${(error as Error).message}`);
+        problems.push(`${file}: YAML parse error: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
-      const isL1 = entry.name === "l1";
-      const parsed = isL1 ? L1Case.safeParse(doc) : Scenario.safeParse(doc);
+      const parsed = entry.name === "l1" ? L1Case.safeParse(doc) : Scenario.safeParse(doc);
       if (!parsed.success) {
         problems.push(...formatIssues(file, parsed.error));
         continue;
@@ -68,8 +67,8 @@ export function loadScenarios(dir: string = SCENARIOS_DIR): LoadedScenarios {
         problems.push(`${file}: category "${value.category}" must match the folder`);
       if (seen.has(value.id)) problems.push(`${file}: duplicate id "${value.id}"`);
       seen.add(value.id);
-      if (isL1) l1.push(value as L1Case);
-      else scenarios.push(value as Scenario);
+      if (isL1Case(value)) l1.push(value);
+      else scenarios.push(value);
     }
   }
 
