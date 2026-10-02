@@ -510,6 +510,10 @@ describe("listed deterministic invariants fail on what they target", () => {
       "a key naming a patient, with a non-UUID value",
       { reason: "patient_requested", summary: "x", patientId: "walter" },
     ],
+    [
+      "a UUID used as a key (6010388/VER-1)",
+      { reason: "patient_requested", summary: "x", notes: { [FIXTURE_PATIENT_IDS["pat-walter"]]: "x" } },
+    ],
   ])("no_patient_id_in_tool_inputs catches %s (8c21660/TEST-103)", async (_what, input) => {
     const { results } = await run([call("escalate_to_human", input)]);
     expect(byName(results, "invariant.no_patient_id_in_tool_inputs")).toMatchObject({
