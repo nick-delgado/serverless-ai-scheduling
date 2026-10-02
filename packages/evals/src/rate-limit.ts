@@ -7,7 +7,14 @@
  * given another limiter. The SDK's own retries should be off (`maxAttempts: 1`) so a retry also waits for
  * a token instead of bypassing the bucket.
  */
-import type { LlmCallOptions, LlmClient, LlmRequest, LlmResponse, LlmStreamHandlers } from "@sched/agent";
+import {
+  MODEL_PROFILES,
+  type LlmCallOptions,
+  type LlmClient,
+  type LlmRequest,
+  type LlmResponse,
+  type LlmStreamHandlers,
+} from "@sched/agent";
 
 export interface Timer {
   now(): number;
@@ -39,15 +46,14 @@ export const realTimer: Timer = {
 };
 
 /**
- * On-demand requests per minute this account gets, by model family (quota figures as of 2026-09-29, #34
- * and spike S-1c). Claude is at 10 RPM until the increase in #49 lands.
+ * The account's requests per minute for a Bedrock model ID, from its model profile (`ModelProfile.rpm`,
+ * the one source of truth; owner decision on PR #71, 2e22f79/SMELL-301). An ID no profile has throws,
+ * so a new model can't silently run at a guessed rate.
  */
 export function defaultRpmFor(modelId: string): number {
-  if (modelId.includes("anthropic.claude")) return 10;
-  if (modelId.includes("gpt-oss")) return 100;
-  if (modelId.includes("nova-pro")) return 25;
-  if (modelId.includes("nova")) return 20;
-  return 10;
+  const profile = Object.values(MODEL_PROFILES).find((p) => p.modelId === modelId);
+  if (profile === undefined) throw new Error(`no model profile for ${modelId}: add one with its rpm`);
+  return profile.rpm;
 }
 
 /** A token bucket holding one token, refilled continuously at `ratePerMinute` (no bursts). */

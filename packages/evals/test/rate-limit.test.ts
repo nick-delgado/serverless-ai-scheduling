@@ -1,4 +1,4 @@
-import { ScriptedLlmClient, scriptedText, type LlmRequest } from "@sched/agent";
+import { MODEL_PROFILES, ScriptedLlmClient, scriptedText, type LlmRequest } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -62,6 +62,13 @@ describe("RateLimiter", () => {
     expect(timer.now()).toBe(600); // 100 RPM
   });
 
+  it("reads the quota from the model profile, and refuses a model no profile has (2e22f79/SMELL-301)", () => {
+    for (const p of Object.values(MODEL_PROFILES)) expect(defaultRpmFor(p.modelId), p.name).toBe(p.rpm);
+    expect(() => defaultRpmFor("us.amazon.nova-micro-v1:0")).toThrow(
+      /no model profile for us\.amazon\.nova-micro-v1:0/,
+    );
+  });
+
   it("uses the account quotas from CLAUDE.md", () => {
     expect(defaultRpmFor("us.anthropic.claude-haiku-4-5-20251001-v1:0")).toBe(10);
     expect(defaultRpmFor("us.amazon.nova-pro-v1:0")).toBe(25);
@@ -95,12 +102,14 @@ describe("RateLimitedLlmClient", () => {
     });
     await expect(
       new RateLimitedLlmClient(new ScriptedLlmClient([{ error: denied }]), { limiter }).streamMessage(
-        request("m"),
+        request("openai.gpt-oss-20b-1:0"),
       ),
     ).rejects.toBe(denied);
     const always = new ScriptedLlmClient([{ error: throttle() }, { error: throttle() }]);
     await expect(
-      new RateLimitedLlmClient(always, { limiter, maxRetries: 1 }).streamMessage(request("m")),
+      new RateLimitedLlmClient(always, { limiter, maxRetries: 1 }).streamMessage(
+        request("openai.gpt-oss-20b-1:0"),
+      ),
     ).rejects.toMatchObject({
       name: "ThrottlingException",
     });
