@@ -6,13 +6,15 @@ import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
 import { runL1Trial, type L1TrialResult } from "./l1";
+import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { runScenarioTrial, type TrialResult, type TrialStatus } from "./runner";
 import type { PatientSimulator } from "./simulator";
 import { promptFor, type SystemPromptFactory } from "./system-prompt";
 
-export type Mode = "l1" | "scenario";
+export const MODES = ["l1", "scenario"] as const;
+export type Mode = (typeof MODES)[number];
 export type CaseStatus = TrialStatus;
 
 export interface CaseResult {
@@ -57,7 +59,7 @@ export interface RunSummary {
 export interface RunReport {
   schemaVersion: 1;
   mode: Mode;
-  suite: string;
+  suite: Suite;
   profile: string;
   modelId: string;
   promptVersion: string;
@@ -77,7 +79,7 @@ export interface RunReport {
 
 export interface RunSuiteOptions {
   mode: Mode;
-  suite: string;
+  suite: Suite;
   llm: LlmClient;
   /** Label for the results file: `converse`, `scripted`, ... */
   llmName: string;

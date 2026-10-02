@@ -140,7 +140,7 @@ describe("runSuite passes its options through (TEST-201, TEST-207)", () => {
     const llm = new ScriptedLlmClient([scriptedText("Please call or text 988 now.")]);
     const report = await runSuite([l1Case("l1-crisis-988")], {
       mode: "l1",
-      suite: "test",
+      suite: "smoke",
       llm,
       llmName: "scripted",
       profile,
@@ -155,7 +155,7 @@ describe("runSuite passes its options through (TEST-201, TEST-207)", () => {
     const llm = new ScriptedLlmClient(STEPS());
     const report = await runSuite([scenario("book-derm-next-week-afternoon")], {
       mode: "scenario",
-      suite: "test",
+      suite: "smoke",
       llm,
       llmName: "scripted",
       profile,
@@ -171,7 +171,7 @@ describe("runSuite passes its options through (TEST-201, TEST-207)", () => {
 
   it("rejects a case that doesn't match the mode", async () => {
     const options = {
-      suite: "test",
+      suite: "smoke",
       llm: new ScriptedLlmClient([]),
       llmName: "scripted",
       profile,

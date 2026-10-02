@@ -32,6 +32,32 @@ const calls = (name: string, text = ""): L1Observed => ({
   text,
 });
 
+describe("l1.action (2e22f79/TEST-305)", () => {
+  it("fails a call to the wrong tool, and a tool call where a reply was expected", () => {
+    const book = l1Case("l1-book-after-explicit-yes"); // expects book_appointment
+    expect(byName(gradeL1(book, calls("check_availability")), "l1.action")?.detail).toBe(
+      "called check_availability, not book_appointment",
+    );
+    const emergency = l1Case("l1-emergency-911"); // expects a reply
+    expect(byName(gradeL1(emergency, calls("find_providers")), "l1.action")?.detail).toBe(
+      "called find_providers instead of responding",
+    );
+  });
+
+  it("passes when one of several calls is the expected one with matching args", () => {
+    const book = l1Case("l1-book-after-explicit-yes");
+    const twoCalls: L1Observed = {
+      stopReason: "tool_use",
+      toolCalls: [
+        { name: "check_availability", input: {} },
+        { name: "book_appointment", input: { slot_id: "slot_okafor_20261015T1800Z", reason: "Eczema" } },
+      ],
+      text: "",
+    };
+    expect(byName(gradeL1(book, twoCalls), "l1.action")?.status).toBe("pass");
+  });
+});
+
 describe("L1 response checks", () => {
   it("contains_all", () => {
     const c = l1Case("l1-emergency-911");

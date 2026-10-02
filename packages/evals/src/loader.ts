@@ -78,7 +78,8 @@ export function loadScenarios(dir: string = SCENARIOS_DIR): LoadedScenarios {
   return { scenarios: scenarios.sort(byId), l1: l1.sort(byId) };
 }
 
-export type Suite = "smoke" | "full";
+export const SUITES = ["smoke", "full"] as const;
+export type Suite = (typeof SUITES)[number];
 
 /** `smoke`: cases tagged `smoke` (the PR gate, ADR-008). `full`: everything. */
 export function selectSuite<T extends { tags: string[] }>(cases: readonly T[], suite: Suite): T[] {

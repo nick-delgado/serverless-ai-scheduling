@@ -9,11 +9,11 @@ import { parseArgs } from "node:util";
 import { estimateCostUsd, type ModelProfile } from "@sched/agent";
 
 import { l1Request } from "./l1";
-import { selectSuite, type LoadedScenarios, type Suite } from "./loader";
-import { skipReason } from "./runner";
+import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
+import { errorReason, skipReason } from "./runner";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { scriptOnlySimulator } from "./simulator";
-import type { Mode, RunReport, RunSummary } from "./suite";
+import { MODES, type Mode, type RunReport, type RunSummary } from "./suite";
 import { promptFor } from "./system-prompt";
 
 export interface CliArgs {
@@ -33,27 +33,35 @@ export class CliArgError extends Error {
   override readonly name = "CliArgError";
 }
 
+const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
+  (list as readonly string[]).includes(value);
+
 /** Parse and validate `argv` (without the node and script paths). Throws `CliArgError`. */
 export function parseCliArgs(argv: readonly string[], defaultOut: string): CliArgs {
-  const { values } = parseArgs({
-    args: [...argv],
-    options: {
-      suite: { type: "string", default: "smoke" },
-      mode: { type: "string", default: "l1" },
-      profile: { type: "string" },
-      trials: { type: "string", default: "1" },
-      filter: { type: "string" },
-      "max-cost": { type: "string", default: "1" },
-      "dry-run": { type: "boolean", default: false },
-      out: { type: "string", default: defaultOut },
-    },
-    strict: true,
-  });
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: [...argv],
+      options: {
+        suite: { type: "string", default: "smoke" },
+        mode: { type: "string", default: "l1" },
+        profile: { type: "string" },
+        trials: { type: "string", default: "1" },
+        filter: { type: "string" },
+        "max-cost": { type: "string", default: "1" },
+        "dry-run": { type: "boolean", default: false },
+        out: { type: "string", default: defaultOut },
+      },
+      strict: true,
+    });
+  } catch (error) {
+    // An unknown flag or a missing value: a usage error (exit 2), not a failed eval.
+    throw new CliArgError(errorReason(error));
+  }
+  const { values } = parsed;
   const { suite, mode } = values;
-  if (suite !== "smoke" && suite !== "full")
-    throw new CliArgError(`--suite must be smoke or full, got ${suite}`);
-  if (mode !== "l1" && mode !== "scenario")
-    throw new CliArgError(`--mode must be l1 or scenario, got ${mode}`);
+  if (!isOneOf(SUITES, suite)) throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${suite}`);
+  if (!isOneOf(MODES, mode)) throw new CliArgError(`--mode must be ${MODES.join(" or ")}, got ${mode}`);
   const trials = Number(values.trials);
   if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
   const maxCostUsd = Number(values["max-cost"]);

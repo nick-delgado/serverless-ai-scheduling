@@ -4,13 +4,20 @@
  * test sends the same conversation through the real `runAgentTurn` and checks that the two requests
  * agree, so a field the loop adds later can't silently go missing from L1.
  */
-import { MODEL_PROFILES, runAgentTurn, ScriptedLlmClient, scriptedText, type LlmRequest } from "@sched/agent";
+import {
+  MODEL_PROFILES,
+  runAgentTurn,
+  ScriptedLlmClient,
+  scriptedText,
+  scriptedToolUse,
+  type LlmRequest,
+} from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
-import { createTrialEnvironment, interimSystemPrompt, l1Messages, l1Request, loadScenarios } from "../src";
+import { createTrialEnvironment, interimSystemPrompt, l1Messages, l1Request, type L1Case } from "../src";
+import { l1Case } from "./helpers";
 
-const c = loadScenarios().l1.find((x) => x.id === "l1-emergency-911");
-if (c === undefined) throw new Error("no L1 case l1-emergency-911");
+const c = l1Case("l1-emergency-911");
 
 /** Messages without cache points: the one known difference (below). */
 const withoutCachePoints = (request: LlmRequest) =>
@@ -60,3 +67,44 @@ describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
     });
   },
 );
+
+describe("l1Request renders tool calls and results like the agent loop (2e22f79/TEST-304)", () => {
+  it("the loop's second request equals L1's for the same tool call and result", async () => {
+    const profile = MODEL_PROFILES["sonnet-4.6"];
+    const base = l1Case("l1-lookup-next-appointment"); // Maria: "When's my next appointment?"
+    const env = await createTrialEnvironment(base);
+    const system = interimSystemPrompt(env.clock.now(), "Maria");
+    const first = base.context[0];
+    if (first === undefined || !("patient" in first)) throw new Error("case must open with the patient");
+
+    // The loop calls the real get_my_appointments; L1 is given the same call and the result it returned.
+    const llm = new ScriptedLlmClient([
+      scriptedToolUse([{ id: "tooluse_l1_001", name: "get_my_appointments", input: {} }]),
+      scriptedText("ok"),
+    ]);
+    await runAgentTurn({
+      history: [],
+      userMessage: first.patient,
+      system,
+      executor: env.executor,
+      llm,
+      profile,
+      clock: env.clock,
+      conversationId: env.conversationId,
+      turnId: env.uuid(),
+    });
+    const loop = llm.requests[1];
+    const result = loop?.messages.at(-1)?.content.find((b) => b.type === "tool_result");
+    if (loop === undefined || result?.type !== "tool_result") throw new Error("the loop sent no tool result");
+
+    const withCall: L1Case = {
+      ...base,
+      context: [
+        first,
+        { tool_call: { tool: "get_my_appointments", args: {} } },
+        { tool_result: { tool: "get_my_appointments", result: JSON.parse(result.content) as unknown } },
+      ],
+    };
+    expect(withoutCachePoints(l1Request(withCall, profile, system))).toEqual(withoutCachePoints(loop));
+  });
+});

@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 
-import { MODEL_PROFILES } from "@sched/agent";
+import { estimateCostUsd, MODEL_PROFILES } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -16,6 +16,7 @@ import {
   resultsBasePath,
   selectCases,
 } from "../src";
+import { scenario } from "./helpers";
 
 const OUT = "/tmp/evals-results";
 const loaded = loadScenarios();
@@ -73,7 +74,8 @@ describe("parseCliArgs", () => {
   });
 
   it("rejects unknown flags", () => {
-    expect(() => parseCliArgs(["--trails=2"], OUT)).toThrow();
+    expect(() => parseCliArgs(["--trails=2"], OUT)).toThrow(CliArgError);
+    expect(() => parseCliArgs(["--suite"], OUT)).toThrow(CliArgError); // a flag without its value
   });
 });
 
@@ -105,6 +107,19 @@ describe("estimateRunCost", () => {
     );
     expect(unscripted).toHaveLength(1);
     expect(estimateRunCost(unscripted, profile, 1)).toBe(0); // needs the simulator (#31), so it won't run
+  });
+
+  it("a scripted scenario costs 3 calls per scripted turn per trial (2e22f79/TEST-301)", () => {
+    const s = scenario("safety-emergency-chest-pain-911"); // one scripted turn
+    const call = estimateCostUsd(profile, {
+      inputTokens: 4000,
+      outputTokens: 400,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+    expect(estimateRunCost([s], profile, 1)).toBeCloseTo(3 * call, 12);
+    const twoTurns = { ...s, script: [...(s.script ?? []), "ok, calling now"] };
+    expect(estimateRunCost([twoTurns], profile, 2)).toBeCloseTo(3 * call * 2 * 2, 12);
   });
 });
 

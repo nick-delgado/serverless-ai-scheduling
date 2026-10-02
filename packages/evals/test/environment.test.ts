@@ -3,9 +3,10 @@
  * slot can't be taken) and setup validation.
  */
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
-import { createTrialEnvironment, type Scenario } from "../src";
-import { productionInternalError, scenario } from "./helpers";
+import { createTrialEnvironment, uuidSequence, type Scenario } from "../src";
+import { MARIA_APPT, productionInternalError, scenario } from "./helpers";
 
 // book-slot-taken-offers-alternatives: the 1st valid book_appointment hits slot_taken_by_other_patient.
 const SLOT_TAKEN = "book-slot-taken-offers-alternatives";
@@ -63,6 +64,71 @@ describe("injected INTERNAL faults say what production says (2e22f79/SMELL-202 d
       input: { slot_id: OPEN_SLOT, reason: "lingering cold" },
     });
     expect(injected).toEqual({ ok: false, error: { error: await productionInternalError() } });
+  });
+});
+
+describe("fault injection: later calls and reschedules (2e22f79/TEST-206)", () => {
+  const withFaults = (faults: NonNullable<Scenario["setup"]>["faults"]): Scenario => {
+    const base = scenario("book-derm-next-week-afternoon"); // Maria
+    return { ...base, setup: { ...base.setup, faults } };
+  };
+
+  it("`call: 2` lets the first valid call through and fails the second", async () => {
+    const env = await createTrialEnvironment(
+      withFaults([{ tool: "book_appointment", call: 2, error: "INTERNAL" }]),
+    );
+    const book = (id: string, slot: string) =>
+      env.executor.execute({ id, name: "book_appointment", input: { slot_id: slot, reason: "mole check" } });
+    expect((await book("t1", "slot_okafor_20261015T1800Z")).ok).toBe(true);
+    expect(await book("t2", "slot_okafor_20261015T1830Z")).toEqual({
+      ok: false,
+      error: { error: await productionInternalError() },
+    });
+    expect(env.faultsFired).toEqual([{ tool: "book_appointment", call: 2, error: "INTERNAL" }]);
+  });
+
+  it("slot_taken_by_other_patient on reschedule takes the new slot, and the real handler answers", async () => {
+    const env = await createTrialEnvironment(
+      withFaults([
+        {
+          tool: "reschedule_appointment",
+          call: 1,
+          error: "SLOT_UNAVAILABLE",
+          effect: "slot_taken_by_other_patient",
+        },
+      ]),
+    );
+    const newSlot = "slot_okafor_20261015T1800Z";
+    const result = await env.executor.execute({
+      id: "t1",
+      name: "reschedule_appointment",
+      input: { appointment_id: MARIA_APPT, new_slot_id: newSlot },
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        error: {
+          code: "SLOT_UNAVAILABLE",
+          message: expect.stringContaining("The original appointment is unchanged") as unknown,
+        },
+      },
+    });
+    expect(env.faultsFired).toEqual([
+      expect.objectContaining({ tool: "reschedule_appointment", call: 1, takenSlotId: newSlot }),
+    ]);
+    const maria = env.repos.snapshot().appointments.find((a) => a.appointmentId === MARIA_APPT);
+    expect(maria?.slotId).toBe("slot_lee_20261013T1830Z"); // unchanged
+  });
+});
+
+describe("uuidSequence (2e22f79/TEST-209)", () => {
+  it("makes deterministic v4-shaped UUIDs, one counter per trial prefix", () => {
+    const next = uuidSequence(3);
+    expect([next(), next()]).toEqual([
+      "00000003-0000-4000-8000-000000000001",
+      "00000003-0000-4000-8000-000000000002",
+    ]);
+    expect(z.uuid().safeParse(uuidSequence(12)()).success).toBe(true);
   });
 });
 

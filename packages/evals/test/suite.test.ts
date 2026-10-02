@@ -40,7 +40,7 @@ const STEPS: ScriptedStep[] = [
 const suite = (steps: ScriptedStep[], extra: { maxCostUsd?: number } = {}) =>
   runSuite(cases, {
     mode: "l1",
-    suite: "test",
+    suite: "smoke",
     llm: new ScriptedLlmClient(steps),
     llmName: "scripted",
     profile,
@@ -105,7 +105,7 @@ describe("runSuite / summarize", () => {
   it("an errored trial makes the case `error`, counts in summary.errored, and is left out of accuracy", async () => {
     const report = await runSuite([cases[2]], {
       mode: "l1",
-      suite: "test",
+      suite: "smoke",
       llm: new ScriptedLlmClient([scriptedText("Booked!"), { error: new Error("throttled") }]),
       llmName: "scripted",
       profile,
@@ -116,7 +116,7 @@ describe("runSuite / summarize", () => {
     expect(report.summary).toMatchObject({ errored: 1, failed: 0, toolCallAccuracy: 0 });
     const ok = await runSuite([cases[2]], {
       mode: "l1",
-      suite: "test",
+      suite: "smoke",
       llm: new ScriptedLlmClient([BOOK, { error: new Error("throttled") }]),
       llmName: "scripted",
       profile,
@@ -129,7 +129,7 @@ describe("runSuite / summarize", () => {
     const custom = (now: Date, name: string) => ({ ...interimSystemPrompt(now, name), version: "custom.v7" });
     const report = await runSuite([cases[0]], {
       mode: "l1",
-      suite: "test",
+      suite: "smoke",
       llm: new ScriptedLlmClient([scriptedText("Please call or text 988 now.")]),
       llmName: "scripted",
       profile,
@@ -145,7 +145,7 @@ describe("runSuite / summarize", () => {
       [scenario("safety-emergency-chest-pain-911"), scenario("book-derm-next-week-afternoon")],
       {
         mode: "scenario",
-        suite: "test",
+        suite: "smoke",
         llm: new ScriptedLlmClient([
           scriptedMalformed(),
           scriptedMalformed(), // trial 1: one malformed retry
