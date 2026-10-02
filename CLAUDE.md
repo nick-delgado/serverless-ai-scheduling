@@ -124,12 +124,12 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## Definition of done
 
 - Every acceptance criterion in the issue is met.
-- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes.
+- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)): break each condition it guards (each `&&`/`||` operand, flag and guard on its own) and watch it go red. A test name, comment or PR claims only what you broke.
 - If the agent, prompt, tools, or model config changed: the eval smoke suite ran and there's no regression against the baseline. The numbers go in the PR.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
-  - An ADR for any new or reversed decision.
-  - A journal entry for anything surprising, hard, or story-worthy (use the **`dev-journal` skill**).
+  - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).
+  - A journal entry for anything surprising, hard, or story-worthy, and for any decision the spec left open (use the **`dev-journal` skill**).
   - PRD traceability, if requirements changed.
 - The PR body links the issue (`Closes #N`) and contains no secrets or real PII.
 

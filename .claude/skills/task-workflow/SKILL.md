@@ -69,12 +69,13 @@ Worktrees let several agents build and test at the same time without stepping on
    - atomic bookings;
    - injected dependencies;
    - append-only history.
-3. **The ADRs and PRD requirements the issue cites.** If the issue conflicts with an ADR, stop and ask. Don't silently pick one.
+3. **The ADRs and PRD requirements the issue cites.** If the issue conflicts with an ADR, the PRD, `packages/contracts` or a skill, stop and ask. Don't silently pick one. If you can't ask, take the reading that satisfies both, and list it under "Decisions the spec left open" in the PR.
 
 ## 5. Implement inside your owned paths
 
 - Only modify the paths the issue lists. Shared files (root `package.json`, `tsconfig`, `packages/contracts`) sometimes need small edits. Keep those minimal and **call them out in the PR**. A schema change in `packages/contracts` affects every stream.
 - If the work clearly needs files outside your paths, comment on the issue and ask the user instead of expanding scope.
+- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke.
 - Commit in small, meaningful steps using Conventional Commits that reference the issue, e.g. `feat(tools): add book_appointment transaction (#23)`. End commit messages with the attribution lines from the session's system reminder, if there are any.
 
 ## 6. Prove it's done
@@ -85,7 +86,7 @@ Run the issue's verification commands, then the CLAUDE.md **definition of done**
 - [ ] `npm run lint && npm run typecheck && npm test` passes.
 - [ ] If you touched the agent, prompts, tools, or model config: `npm run evals -- --suite smoke` shows no regression against the baseline. Put the numbers in the PR.
 - [ ] If you touched infra: `sam validate --lint` passes, and it's deployed to `dev` (or the PR says why not).
-- [ ] Docs: an ADR for any new or changed decision, PRD traceability if requirements moved, and a journal entry if something was story-worthy (see step 8).
+- [ ] Docs: an ADR for any new or changed significant technical decision, PRD traceability if requirements moved, and a journal entry if something was story-worthy or you decided something the spec left open (see step 8).
 - [ ] No secrets, real PII, or credentials anywhere in the diff.
 
 If something fails and you can't fix it within scope, report what failed, with the output. Don't open a PR that claims success.
