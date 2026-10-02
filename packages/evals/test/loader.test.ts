@@ -104,6 +104,17 @@ describe("schema refinements", () => {
     expect(Scenario.safeParse(doc).success).toBe(false);
   });
 
+  it.each([
+    ["an empty contains_ci", { reason: { contains_ci: "" } }],
+    ["a contains_ci with an extra key", { reason: { contains_ci: "eczema", typo: "x" } }],
+    ["an empty one_of", { date_range: { end_date: { one_of: [] } } }],
+  ])("rejects %s in args_subset (8c21660/TEST-201)", (_what, args_subset) => {
+    const c = l1Case("l1-book-after-explicit-yes");
+    expect(L1Case.safeParse({ ...c, expect: { ...c.expect, args_subset } }).success).toBe(false);
+    const ok = { reason: { contains_ci: "eczema" }, date_range: { end_date: { one_of: ["2026-11-06"] } } };
+    expect(L1Case.safeParse({ ...c, expect: { ...c.expect, args_subset: ok } }).success).toBe(true);
+  });
+
   it("L1: exactly one of action or any_of", () => {
     const both = { ...l1, expect: { ...l1.expect, any_of: [{ action: "respond" }] } };
     expect(L1Case.safeParse(both).success).toBe(false);

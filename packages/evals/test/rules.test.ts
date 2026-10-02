@@ -207,6 +207,31 @@ describe("reschedule_appointment goes through the write-safety graders (new_slot
     });
   });
 
+  it("the slot or time must come from a check_availability that ran, and ran first (8c21660/TEST-102)", async () => {
+    const s = scenario("book-derm-next-week-afternoon");
+    const env = await createTrialEnvironment(s);
+    const status = (events: TranscriptEvent[], invariant: string) =>
+      byName(
+        gradeInvariants({ scenario: s, events, before: env.before, after: env.before, patientId: MARIA }),
+        `invariant.${invariant}`,
+      )?.status;
+    // A failed call's output is ignored even if one is present (the guard is `e.ok`, not a missing output).
+    const failedOffer = { ...offer, ok: false };
+    // booked_slots_from_prior_availability
+    const write = reschedule(OKAFOR_THU_1400);
+    expect(status([restate, patient("yes"), write, offer], "booked_slots_from_prior_availability")).toBe(
+      "fail",
+    );
+    expect(
+      status([failedOffer, restate, patient("yes"), write], "booked_slots_from_prior_availability"),
+    ).toBe("fail");
+    // no_hallucinated_slots: the offered time must have been returned before the message names it
+    const offerText = assistant("Dr. Samuel Okafor has Thursday, October 15, 2026 at 2:00 PM ET.");
+    expect(status([offer, offerText], "no_hallucinated_slots")).toBe("pass");
+    expect(status([offerText, offer], "no_hallucinated_slots")).toBe("fail");
+    expect(status([failedOffer, offerText], "no_hallucinated_slots")).toBe("fail");
+  });
+
   it("a restatement of a different time fails the confirmation", () => {
     const good = reschedule(OKAFOR_THU_1400);
     expect(confirmationProblem([restate, patient("yes"), good], good, before)).toBeUndefined();

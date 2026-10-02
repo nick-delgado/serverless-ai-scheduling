@@ -78,7 +78,12 @@ export const ArgMatcher: z.ZodType<ArgMatcher> = z.lazy(() =>
     z.null(),
     z.strictObject({ one_of: z.array(z.unknown()).min(1) }),
     z.strictObject({ contains_ci: z.string().min(1) }),
-    z.record(z.string(), ArgMatcher),
+    // A nested subset. It may not carry a matcher key: `{contains_ci: ""}` or `{contains_ci: "x", typo: 1}`
+    // would otherwise land here and be read as a (weakened) matcher by the grader.
+    z.record(z.string(), ArgMatcher).refine((r) => !("one_of" in r) && !("contains_ci" in r), {
+      message:
+        "Malformed matcher: `one_of` needs a non-empty list, `contains_ci` a non-empty string, and nothing else",
+    }),
   ]),
 );
 export const ArgsSubset = z.record(z.string(), ArgMatcher);
