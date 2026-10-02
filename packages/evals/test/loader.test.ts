@@ -107,8 +107,9 @@ describe("schema refinements", () => {
   it("L1: exactly one of action or any_of", () => {
     const both = { ...l1, expect: { ...l1.expect, any_of: [{ action: "respond" }] } };
     expect(L1Case.safeParse(both).success).toBe(false);
-    const { action: _action, ...neither } = l1.expect;
+    const neither = { forbid_tools: "all", response: { contains_all: ["911"] } };
     expect(L1Case.safeParse({ ...l1, expect: neither }).success).toBe(false);
+    expect(L1Case.safeParse({ ...l1, expect: { ...neither, action: "respond" } }).success).toBe(true);
   });
 
   it("L1: a tool_call action names its tool", () => {

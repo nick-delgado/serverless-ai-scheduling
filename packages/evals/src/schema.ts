@@ -341,11 +341,14 @@ export const L1ContextItem = z.union([
 ]);
 export type L1ContextItem = z.infer<typeof L1ContextItem>;
 
-export const L1Action = z.strictObject({
-  action: z.enum(["tool_call", "respond"]),
-  tool: ToolName.optional(),
+const RespondAction = z.strictObject({ action: z.literal("respond") });
+const ToolCallAction = z.strictObject({
+  action: z.literal("tool_call"),
+  tool: ToolName,
   args_subset: ArgsSubset.optional(),
 });
+/** One acceptable next action: a text reply, or a call to `tool` (with arguments containing `args_subset`). */
+export const L1Action = z.discriminatedUnion("action", [RespondAction, ToolCallAction]);
 export type L1Action = z.infer<typeof L1Action>;
 
 export const L1ResponseChecks = z.strictObject({
@@ -357,25 +360,37 @@ export const L1ResponseChecks = z.strictObject({
 });
 export type L1ResponseChecks = z.infer<typeof L1ResponseChecks>;
 
-export const L1Expect = z
-  .strictObject({
-    action: L1Action.shape.action.optional(),
-    tool: ToolName.optional(),
-    args_subset: ArgsSubset.optional(),
-    any_of: z.array(L1Action).min(1).optional(),
-    /** `all`: the next action must be text only. */
-    forbid_tools: z.union([z.literal("all"), z.array(ToolName).min(1)]).optional(),
-    /** Strings that must not appear anywhere in any tool argument. */
-    forbid_arg_values: strings.optional(),
-    response: L1ResponseChecks.optional(),
-  })
-  .refine((e) => (e.action === undefined) !== (e.any_of === undefined), {
-    message: "Give exactly one of `action` or `any_of`",
-  })
-  .refine((e) => e.action === undefined || e.action === "respond" || e.tool !== undefined, {
-    message: "action: tool_call needs a tool",
-  });
+const L1Checks = {
+  /** `all`: the next action must be text only. */
+  forbid_tools: z.union([z.literal("all"), z.array(ToolName).min(1)]).optional(),
+  /** Strings that must not appear anywhere in any tool argument. */
+  forbid_arg_values: strings.optional(),
+  response: L1ResponseChecks.optional(),
+};
+/**
+ * The expected next action, written inline (`action: respond`, or `action: tool_call` with its `tool`)
+ * or as `any_of` a list of actions, plus the checks that apply whatever the model did.
+ */
+export const L1Expect = z.union([
+  RespondAction.extend(L1Checks).strict(),
+  ToolCallAction.extend(L1Checks).strict(),
+  z.strictObject({ any_of: z.array(L1Action).min(1), ...L1Checks }),
+]);
 export type L1Expect = z.infer<typeof L1Expect>;
+
+/** The acceptable next actions of an expectation, whichever way it was written. */
+export function expectedActions(e: L1Expect): L1Action[] {
+  if ("any_of" in e) return e.any_of;
+  return e.action === "respond"
+    ? [{ action: "respond" }]
+    : [
+        {
+          action: "tool_call",
+          tool: e.tool,
+          ...(e.args_subset === undefined ? {} : { args_subset: e.args_subset }),
+        },
+      ];
+}
 
 export const L1Case = z
   .strictObject({
@@ -397,9 +412,6 @@ export const L1Case = z
           ctx.addIssue({ code: "custom", path: ["context", i], message: `result: ${parsed.error.message}` });
       }
     }
-    for (const option of c.expect.any_of ?? [])
-      if (option.action === "tool_call" && option.tool === undefined)
-        ctx.addIssue({ code: "custom", path: ["expect", "any_of"], message: "tool_call needs a tool" });
     const last = c.context.at(-1);
     if (last !== undefined && ("assistant" in last || "tool_call" in last))
       ctx.addIssue({

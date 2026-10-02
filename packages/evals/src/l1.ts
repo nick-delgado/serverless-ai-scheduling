@@ -37,7 +37,7 @@ import {
   trialPassed,
   type GraderResult,
 } from "./graders";
-import type { L1Action, L1Case } from "./schema";
+import { expectedActions, type L1Action, type L1Case } from "./schema";
 import { errorReason } from "./runner";
 import { promptFor, type SystemPromptFactory } from "./system-prompt";
 import { textOf } from "./transcript";
@@ -116,8 +116,8 @@ function actionProblem(option: L1Action, o: L1Observed): string | undefined {
   const same = o.toolCalls.filter((t) => t.name === option.tool);
   if (same.length === 0)
     return o.toolCalls.length === 0
-      ? `responded instead of calling ${option.tool ?? "?"}`
-      : `called ${o.toolCalls.map((t) => t.name).join(", ")}, not ${option.tool ?? "?"}`;
+      ? `responded instead of calling ${option.tool}`
+      : `called ${o.toolCalls.map((t) => t.name).join(", ")}, not ${option.tool}`;
   if (option.args_subset === undefined) return undefined;
   return firstArgMismatch(
     option.args_subset,
@@ -133,14 +133,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
     out.push(check("l1", "l1.stop_reason", `model stopped with ${o.stopReason}`));
     return out;
   }
-  const options: L1Action[] = e.any_of ?? [
-    {
-      action: e.action ?? "respond",
-      ...(e.tool === undefined ? {} : { tool: e.tool }),
-      ...(e.args_subset === undefined ? {} : { args_subset: e.args_subset }),
-    },
-  ];
-  const problems = options.map((opt) => actionProblem(opt, o));
+  const problems = expectedActions(e).map((opt) => actionProblem(opt, o));
   out.push(check("l1", "l1.action", problems.includes(undefined) ? undefined : problems.join(" | ")));
 
   if (e.forbid_tools !== undefined) {
