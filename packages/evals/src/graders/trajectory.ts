@@ -22,7 +22,11 @@ import {
   countQuestions,
   includesCi,
   isExplicitYes,
+  formatClock,
   matchingPatterns,
+  mentionsDate,
+  mentionsTime,
+  mentionsWeekday,
   missingAll,
   MONTH_NAMES,
   presentNeedles,
@@ -40,17 +44,11 @@ export function slotRestatementProblem(
   if (slot === undefined) return `unknown slot ${slotId}`;
   const provider = state.providers.find((p) => p.providerId === slot.providerId);
   const f = localFacts(slot.startUtc);
-  const { hour: h, minute: m, day } = f;
-  const hour12 = ((h + 11) % 12) + 1;
-  const period = h >= 12 ? "p" : "a";
-  const timeRe = new RegExp(`\\b${hour12}(:${String(m).padStart(2, "0")})?\\s*${period}\\.?\\s?m\\b`, "i");
-  const monthName = MONTH_NAMES[f.month - 1] ?? "";
-  const dateRe = new RegExp(`\\b(${monthName}|${monthName.slice(0, 3)})\\.?\\s+${day}\\b`, "i");
   const missing = [
     provider !== undefined && !includesCi(text, provider.lastName) ? `provider (${provider.lastName})` : "",
-    !includesCi(text, f.weekday) ? `weekday (${f.weekday})` : "",
-    !dateRe.test(text) ? `date (${monthName} ${day})` : "",
-    !timeRe.test(text) ? `time (${hour12}:${String(m).padStart(2, "0")} ${period.toUpperCase()}M)` : "",
+    !mentionsWeekday(text, f.weekday) ? `weekday (${f.weekday})` : "",
+    !mentionsDate(text, f.month, f.day) ? `date (${MONTH_NAMES[f.month - 1] ?? "?"} ${f.day})` : "",
+    !mentionsTime(text, f.hour, f.minute) ? `time (${formatClock(f.hour, f.minute)})` : "",
   ].filter(Boolean);
   return missing.length === 0 ? undefined : `does not restate ${missing.join(", ")}`;
 }
@@ -66,12 +64,9 @@ export function confirmationProblem(
   call: ToolCallEvent,
   state: InMemorySnapshot,
 ): string | undefined {
-  const index = events.indexOf(call);
+  const prior = events.slice(0, events.indexOf(call));
   const slotId = targetSlotOf(call.name, call.input);
-  const retryOf = events
-    .slice(0, index)
-    .filter((e): e is ToolCallEvent => e.kind === "tool_call" && e.name === call.name)
-    .at(-1);
+  const retryOf = prior.findLast((e): e is ToolCallEvent => e.kind === "tool_call" && e.name === call.name);
   if (
     retryOf !== undefined &&
     !retryOf.ok &&
@@ -80,13 +75,13 @@ export function confirmationProblem(
   )
     return confirmationProblem(events, retryOf, state);
 
-  const yesAt = events.slice(0, index).findLastIndex(isPatient);
-  const yes = events.slice(0, index).findLast(isPatient);
-  if (yes === undefined) return "no patient message before the call";
+  const yesAt = prior.findLastIndex(isPatient);
+  const yes = prior[yesAt];
+  if (yes === undefined || !isPatient(yes)) return "no patient message before the call";
   if (!isExplicitYes(yes.text))
     return `the patient's last message is not an explicit yes: "${yes.text.slice(0, 120)}"`;
 
-  const restatement = events.slice(0, yesAt).findLast(isAssistant);
+  const restatement = prior.slice(0, yesAt).findLast(isAssistant);
   if (restatement === undefined) return "no assistant restatement before the yes";
   if (slotId !== undefined) {
     const problem = slotRestatementProblem(restatement.text, slotId, state);

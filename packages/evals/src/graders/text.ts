@@ -87,6 +87,35 @@ export function dateTimeMentions(text: string): DateTimeMention[] {
   return out;
 }
 
+/** Whether `text` names `weekday` (`Mon`…`Sun`), as a whole word in any spelling WEEKDAY_RE knows. */
+export function mentionsWeekday(text: string, weekday: string): boolean {
+  const want = weekday.slice(0, 3).toLowerCase();
+  return [...text.matchAll(new RegExp(WEEKDAY_RE.source, "gi"))].some(
+    (m) => (m[1] ?? "").slice(0, 3).toLowerCase() === want,
+  );
+}
+
+/** Whether `text` names the date `month` (1-12) `day`: "October 15", "Oct. 15th", "Sept 3". */
+export function mentionsDate(text: string, month: number, day: number): boolean {
+  return [...text.matchAll(new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, "gi"))].some(
+    ([, name = "", d = ""]) => monthIndex(name) === month - 1 && Number(d) === day,
+  );
+}
+
+/**
+ * Whether `text` names the clock time `hour`:`minute` (24-hour) as "h:mm AM/PM", or as "h AM/PM" only
+ * when it is on the hour: "2 PM" is 14:00, never 14:30.
+ */
+export function mentionsTime(text: string, hour: number, minute: number): boolean {
+  return [...text.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s?m\b/gi)].some(
+    ([, h = "", m, period = ""]) => to24h(Number(h), Number(m ?? 0), period) === hhmm(hour, minute),
+  );
+}
+
+/** "2:30 PM" for 14:30. */
+export const formatClock = (hour: number, minute: number): string =>
+  `${((hour + 11) % 12) + 1}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
+
 /** Times written as `h:mm AM/PM`, with their positions. */
 export function clockTimes(text: string): { raw: string; index: number }[] {
   return [...text.matchAll(/\b\d{1,2}:\d{2}\s*[ap]\.?\s?m\.?/gi)].map((m) => ({ raw: m[0], index: m.index }));

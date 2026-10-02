@@ -255,8 +255,39 @@ describe("confirmation: each part of the restatement is required", () => {
     ["weekday", FULL.replace("Thursday, ", ""), "weekday (Thu)"],
     ["date", FULL.replace("October 15 ", ""), "date (October 15)"],
     ["time", FULL.replace("2:00 PM", "2:30 PM"), "time (2:00 PM)"],
+    ["weekday (only inside a word: Arthur)", FULL.replace("Thursday, ", "for Arthur, "), "weekday (Thu)"],
   ])("fails without the %s", (_part, text, missing) => {
     expect(problem(text)).toBe(`the restatement does not restate ${missing}`);
+  });
+
+  it("accepts ordinals and abbreviations the shared recognisers know (8c21660/SMELL-101)", () => {
+    expect(problem(FULL.replace("October 15", "October 15th"))).toBeUndefined();
+    expect(problem(FULL.replace("Thursday, October 15", "Thu, Oct. 15"))).toBeUndefined();
+    expect(problem(FULL.replace("2:00 PM", "2 PM"))).toBeUndefined(); // on the hour: minutes may be left out
+  });
+
+  it("'month' isn't a Monday (8c21660/SMELL-101)", () => {
+    const monday = call("book_appointment", { slot_id: "slot_okafor_20261012T1800Z", reason: "mole check" });
+    const restated =
+      "To confirm: Dr. Samuel Okafor, this month, October 12 at 2:00 PM ET, for a mole check. OK?";
+    expect(confirmationProblem([assistant(restated), patient("Yes."), monday], monday, before)).toBe(
+      "the restatement does not restate weekday (Mon)",
+    );
+  });
+
+  it("a bare hour doesn't confirm a half-hour slot (8c21660/TEST-101)", () => {
+    const halfPast = call("book_appointment", { slot_id: OKAFOR_THU_1430, reason: "mole check" });
+    const restated = FULL.replace("2:00 PM", "2 PM");
+    expect(confirmationProblem([assistant(restated), patient("Yes."), halfPast], halfPast, before)).toBe(
+      "the restatement does not restate time (2:30 PM)",
+    );
+  });
+
+  it("needs a patient message and a restatement before it (8c21660/TEST-105)", () => {
+    expect(confirmationProblem([book], book, before)).toBe("no patient message before the call");
+    expect(confirmationProblem([patient("Yes."), book], book, before)).toBe(
+      "no assistant restatement before the yes",
+    );
   });
 
   it("fails without the visit reason", () => {
