@@ -188,10 +188,18 @@ export const BookAppointmentOutput = z.strictObject({
   already_booked: z.boolean(),
 });
 
-export const RescheduleAppointmentOutput = z.strictObject({
-  appointment: AppointmentSummary,
-  previous_start_local: LocalTimeText,
-});
+export const RescheduleAppointmentOutput = z
+  .strictObject({
+    appointment: AppointmentSummary,
+    /** The time before the move; null when nothing moved (`already_rescheduled`). */
+    previous_start_local: LocalTimeText.nullable(),
+    /** True when the appointment was already at the requested slot (an idempotent retry); nothing changed. */
+    already_rescheduled: z.boolean(),
+  })
+  .refine((o) => o.already_rescheduled === (o.previous_start_local === null), {
+    message: "previous_start_local is null exactly when already_rescheduled is true",
+    path: ["previous_start_local"],
+  });
 
 export const EscalateToHumanOutput = z.strictObject({
   escalation_id: EscalationId,
@@ -251,14 +259,14 @@ export const TOOLS = {
   reschedule_appointment: {
     name: "reschedule_appointment",
     description:
-      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. INVALID_INPUT saying the appointment is already at that time, after a retry, means the move already succeeded.",
+      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. already_rescheduled: true means the appointment was already at that time (for example, after a retry) and nothing changed; previous_start_local is then null, so confirm the time instead of moving it again.",
     input: RescheduleAppointmentInput,
     output: RescheduleAppointmentOutput,
   },
   escalate_to_human: {
     name: "escalate_to_human",
     description:
-      "Hand the conversation to front-desk staff: records the escalation and emails staff your summary plus the transcript. Use it when the patient asks for a person, after two failed attempts, when the patient is frustrated, or for out-of-scope requests. Use it at most once per conversation, then give the patient the phone number and hours it returns.",
+      "Hand the conversation to front-desk staff: records the escalation and notifies staff with your summary and the transcript. Use it when the patient asks for a person, after two failed attempts, when the patient is frustrated, or for out-of-scope requests. Use it at most once per conversation, then give the patient the phone number and hours it returns.",
     input: EscalateToHumanInput,
     output: EscalateToHumanOutput,
   },

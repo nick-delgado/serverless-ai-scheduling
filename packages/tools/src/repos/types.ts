@@ -172,13 +172,18 @@ export interface AppointmentRepo {
   reschedule(command: RescheduleCommand): Promise<RescheduleResult>;
 }
 
+/**
+ * The reschedule failures a tool answers as errors. SAME_SLOT is not one: reschedule_appointment answers a
+ * retry into the slot the appointment already holds as a success (`already_rescheduled`, #88).
+ */
+export type RescheduleErrorReason = Exclude<RescheduleFailureReason, "SAME_SLOT">;
+
 /** Suggested ToolError code for each repository failure, so every tool maps them the same way. */
-export const TOOL_ERROR_CODE_FOR: Record<BookFailureReason | RescheduleFailureReason, ToolErrorCode> = {
+export const TOOL_ERROR_CODE_FOR: Record<BookFailureReason | RescheduleErrorReason, ToolErrorCode> = {
   SLOT_NOT_FOUND: "NOT_FOUND",
   SLOT_UNAVAILABLE: "SLOT_UNAVAILABLE",
   APPOINTMENT_NOT_FOUND: "NOT_FOUND",
   APPOINTMENT_NOT_BOOKED: "NOT_ALLOWED",
-  SAME_SLOT: "INVALID_INPUT",
   CONFLICT: "INTERNAL",
 };
 

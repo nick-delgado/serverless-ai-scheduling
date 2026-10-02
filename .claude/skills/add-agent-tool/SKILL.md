@@ -67,7 +67,7 @@ File: `packages/tools/src/tools/<tool_name>.ts` (snake_case, matching the tool n
 - `message` says what happened, in plain words, with no internals (no table keys, stack traces, or raw IDs the patient never saw). Max 300 chars.
 - `hint` says what the model should do next: "Call check_availability again and offer other times", "Ask the patient which appointment they mean; call get_my_appointments to list them". A good hint is the difference between a recovery and an apology loop.
 - Let genuinely unexpected failures throw. The executor turns them into `INTERNAL` and logs the cause.
-- Return success for idempotent retries (`alreadyBooked`, `alreadyEscalated`) instead of an error. The model retries more than you'd expect.
+- Return success for idempotent retries (`already_booked`, `already_rescheduled`, `already_escalated`) instead of an error. The model retries more than you'd expect.
 
 **Times.** Store and compare UTC; show clinic-local. Every time the model might say out loud goes in a `*_local` field formatted with `formatClinicDateTime(startUtc)` from `src/clock.ts` ("Tuesday, October 13, 2026 at 2:30 PM ET"). The weekday is included on purpose: models are bad at computing weekdays from dates, and a wrong weekday in a confirmation is a real booking error. Date inputs are clinic-local days; convert with `clinicDateRangeUtc` / `zonedTimeToUtc`, which handle DST (the fixture window crosses Nov 1, 2026). Never do offset math by hand.
 
@@ -97,7 +97,7 @@ Tool-specific edges worth a test each:
 - **find_providers / check_availability:** empty result is success with `[]`, not an error; `time_of_day` boundary at 12:00 PM ET; the DST boundary (a slot on Nov 2 shows EST); truncation at the limit; specialty+day uses the sparse-index path (`listOpenBySpecialtyAndDay`).
 - **get_my_appointments:** upcoming vs past split by `ctx.clock.now()` (advance the clock to prove it); `include_past` default.
 - **book_appointment:** already-booked slot → `SLOT_UNAVAILABLE` with an alternatives hint; same patient retries → `already_booked: true` and one appointment in the snapshot; slot in the past; two concurrent calls (`Promise.all`) → exactly one booking.
-- **reschedule_appointment:** another patient's appointment → `NOT_FOUND` and both slots unchanged; CANCELLED appointment → `NOT_ALLOWED`; `SAME_SLOT`; new slot taken → nothing changed (all-or-nothing).
+- **reschedule_appointment:** another patient's appointment → `NOT_FOUND` and both slots unchanged; CANCELLED appointment → `NOT_ALLOWED`; a retry into the slot it already holds → `already_rescheduled: true` and nothing changed, even after the new time has started; new slot taken → nothing changed (all-or-nothing).
 - **escalate_to_human:** second call → `already_escalated: true` and the notifier called once; notifier failure still records the escalation and still returns the phone/hours.
 
 ## 4. Register it

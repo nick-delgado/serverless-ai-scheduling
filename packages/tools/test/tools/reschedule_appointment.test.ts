@@ -9,10 +9,11 @@ import {
   TOOL_REGISTRY,
   type ToolContext,
   type ToolExecutionResult,
+  type ToolExecutorOptions,
 } from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
-import type { Repositories, RescheduleFailureReason } from "../../src/repos/types";
+import { TOOL_ERROR_CODE_FOR, type Repositories, type RescheduleErrorReason } from "../../src/repos/types";
 import { rescheduleAppointment } from "../../src/tools/reschedule_appointment";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
@@ -63,9 +64,10 @@ describe("reschedule_appointment", () => {
     patientId: string,
     input: unknown,
     withRepos: Repositories = repos,
+    options: ToolExecutorOptions = {},
   ): Promise<ToolExecutionResult> => {
     const ctx = contextFor(patientId, withRepos);
-    return createToolExecutor({ reschedule_appointment: rescheduleAppointment }, ctx).execute({
+    return createToolExecutor({ reschedule_appointment: rescheduleAppointment }, ctx, options).execute({
       id: "toolu_test",
       name: "reschedule_appointment",
       input,
@@ -115,6 +117,7 @@ describe("reschedule_appointment", () => {
         reason: "Mole check",
       },
       previous_start_local: "Tuesday, October 13, 2026 at 2:30 PM ET",
+      already_rescheduled: false,
     });
 
     // One transaction: old slot released, new slot held by the same appointment, still one appointment.
@@ -263,6 +266,23 @@ describe("reschedule_appointment", () => {
       );
     });
 
+    // The status check comes before the same-slot answer: a cancelled or completed appointment "retried"
+    // into its own slot is still not movable, not already_rescheduled.
+    it.each([
+      ["cancelled", DANIEL, DANIEL_CANCELLED],
+      ["completed", WALTER, WALTER_COMPLETED],
+    ])(
+      "NOT_ALLOWED for a %s appointment moved into the slot it held",
+      async (_status, patientId, appointmentId) => {
+        const appointment = await repos.appointments.get(patientId, appointmentId);
+        if (!appointment) throw new Error(`fixture is missing ${appointmentId}`);
+        await expectFailureChangesNothing(
+          () => move(patientId, appointmentId, appointment.slotId),
+          "NOT_ALLOWED",
+        );
+      },
+    );
+
     it("NOT_ALLOWED for a new slot in the past, even though it is OPEN", async () => {
       expect(slotOf(LEE_OCT_5_8AM)).toMatchObject({ status: "OPEN" });
       const error = await expectFailureChangesNothing(
@@ -288,28 +308,82 @@ describe("reschedule_appointment", () => {
       expect(error.message).toMatch(/passed/);
     });
 
-    it("INVALID_INPUT for the slot it already holds, pointing out a retry already succeeded", async () => {
-      const error = await expectFailureChangesNothing(
-        () => move(MARIA, MARIA_APPT, MARIA_SLOT),
-        "INVALID_INPUT",
-      );
-      expect(error.hint).toMatch(/already succeeded/);
+    it("answers already_rescheduled for the slot it already holds, changing nothing", async () => {
+      const before = repos.snapshot();
+      expect(outputOf(await move(MARIA, MARIA_APPT, MARIA_SLOT))).toEqual({
+        appointment: {
+          appointment_id: MARIA_APPT,
+          provider_id: "prov_lee",
+          provider_name: "Dr. Priya Lee",
+          specialty: "dermatology",
+          start_utc: "2026-10-13T18:30:00Z",
+          start_local: "Tuesday, October 13, 2026 at 2:30 PM ET",
+          status: "BOOKED",
+          reason: "Mole check",
+        },
+        previous_start_local: null,
+        already_rescheduled: true,
+      });
+      expect(repos.snapshot()).toEqual(before);
     });
 
-    it("a retried call after success changes nothing more", async () => {
-      outputOf(await move(MARIA, MARIA_APPT, LEE_NOV_2_10AM_EST));
-      await expectFailureChangesNothing(() => move(MARIA, MARIA_APPT, LEE_NOV_2_10AM_EST), "INVALID_INPUT");
+    it("a retried call after success answers already_rescheduled and changes nothing more", async () => {
+      expect(outputOf(await move(MARIA, MARIA_APPT, LEE_NOV_2_10AM_EST)).already_rescheduled).toBe(false);
+      const before = repos.snapshot();
+      const retry = outputOf(await move(MARIA, MARIA_APPT, LEE_NOV_2_10AM_EST));
+      expect(retry).toMatchObject({ previous_start_local: null, already_rescheduled: true });
+      expect(retry.appointment.start_local).toBe("Monday, November 2, 2026 at 10:00 AM ET");
+      expect(repos.snapshot()).toEqual(before);
     });
 
-    it("a retry after the new time has started still says the move already succeeded", async () => {
+    it("a retry after the new time has started still answers already_rescheduled", async () => {
       outputOf(await move(MARIA, MARIA_APPT, OKAFOR_OCT_14_9AM));
       clock.set("2026-10-14T13:05:00Z"); // five minutes into the new slot
-      const error = await expectFailureChangesNothing(
-        () => move(MARIA, MARIA_APPT, OKAFOR_OCT_14_9AM),
-        "INVALID_INPUT",
+      const before = repos.snapshot();
+      const retry = outputOf(await move(MARIA, MARIA_APPT, OKAFOR_OCT_14_9AM));
+      expect(retry).toMatchObject({ already_rescheduled: true, appointment: { provider_id: "prov_okafor" } });
+      expect(repos.snapshot()).toEqual(before);
+    });
+
+    it("INTERNAL when the appointment already at the requested slot names a missing provider", async () => {
+      const stubbed: Repositories = {
+        ...repos,
+        providers: { ...repos.providers, get: () => Promise.resolve(null) },
+      };
+      const before = repos.snapshot();
+      const causes: unknown[] = [];
+      const result = await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: MARIA_SLOT }, stubbed, {
+        onInternalError: (error) => causes.push(error),
+      });
+      expect(errorOf(result).code).toBe("INTERNAL");
+      // The handler's own guard, not a TypeError from reading a null provider.
+      expect(String(causes[0])).toMatch(/references unknown provider prov_lee/);
+      expect(repos.snapshot()).toEqual(before);
+    });
+
+    it("INTERNAL when the repository reports SAME_SLOT but the appointment can no longer be read", async () => {
+      const realGet = repos.appointments.get;
+      let reads = 0;
+      const stubbed: Repositories = {
+        ...repos,
+        appointments: {
+          ...repos.appointments,
+          // The first read (before the write) finds it; the re-read after SAME_SLOT does not.
+          get: (patientId, appointmentId) =>
+            reads++ === 0 ? realGet(patientId, appointmentId) : Promise.resolve(null),
+          reschedule: () => Promise.resolve({ ok: false, reason: "SAME_SLOT" }),
+        },
+      };
+      const causes: unknown[] = [];
+      const result = await run(
+        MARIA,
+        { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST },
+        stubbed,
+        { onInternalError: (error) => causes.push(error) },
       );
-      expect(error.message).not.toMatch(/passed/);
-      expect(error.hint).toMatch(/already succeeded/);
+      expect(errorOf(result).code).toBe("INTERNAL");
+      // The handler's own guard, not a TypeError from reading a null appointment.
+      expect(String(causes[0])).toMatch(/vanished after SAME_SLOT/);
     });
 
     it("INTERNAL for a slot whose provider is missing, before anything is written", async () => {
@@ -326,6 +400,37 @@ describe("reschedule_appointment", () => {
       expect(errorOf(result).code).toBe("INTERNAL");
       expect(repos.snapshot()).toEqual(before);
     });
+  });
+
+  it("parallel duplicate moves by the same patient: one move, the rest already_rescheduled", async () => {
+    const results = (await Promise.all([1, 2, 3].map(() => move(MARIA, MARIA_APPT, LEE_NOV_2_10AM_EST)))).map(
+      outputOf,
+    );
+    expect(results.filter((r) => !r.already_rescheduled)).toHaveLength(1);
+    for (const r of results)
+      expect(r.appointment.start_local).toBe("Monday, November 2, 2026 at 10:00 AM ET");
+    expect(slotOf(LEE_NOV_2_10AM_EST)).toMatchObject({ status: "BOOKED", appointmentId: MARIA_APPT });
+    expect(slotOf(MARIA_SLOT)).toMatchObject({ status: "OPEN" });
+    expect(await repos.appointments.listForPatient(MARIA)).toHaveLength(1);
+  });
+
+  it("answers already_rescheduled when the repository reports SAME_SLOT (a concurrent retry moved it first)", async () => {
+    const realReschedule = repos.appointments.reschedule;
+    const stubbed: Repositories = {
+      ...repos,
+      appointments: {
+        ...repos.appointments,
+        reschedule: async (command) => {
+          await realReschedule(command); // the other call's move lands first...
+          return { ok: false, reason: "SAME_SLOT" }; // ...so this one finds the appointment already there
+        },
+      },
+    };
+    const out = outputOf(
+      await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST }, stubbed),
+    );
+    expect(out).toMatchObject({ previous_start_local: null, already_rescheduled: true });
+    expect(out.appointment.start_local).toBe("Monday, November 2, 2026 at 10:00 AM ET");
   });
 
   it("of two concurrent moves into one slot, exactly one wins and the loser keeps its original time", async () => {
@@ -346,14 +451,17 @@ describe("reschedule_appointment", () => {
   describe("maps every repository failure reason", () => {
     // Some reasons can't be reached through the fixture (CONFLICT is DynamoDB-only; the pre-checks catch
     // others first), so stub the repo's answer to prove each still maps to a code and a next step.
-    const cases: [RescheduleFailureReason, ToolError["error"]["code"]][] = [
+    const cases: [RescheduleErrorReason, ToolError["error"]["code"]][] = [
       ["APPOINTMENT_NOT_FOUND", "NOT_FOUND"],
       ["APPOINTMENT_NOT_BOOKED", "NOT_ALLOWED"],
-      ["SAME_SLOT", "INVALID_INPUT"],
       ["SLOT_NOT_FOUND", "NOT_FOUND"],
       ["SLOT_UNAVAILABLE", "SLOT_UNAVAILABLE"],
       ["CONFLICT", "INTERNAL"],
     ];
+    it("has no error code for SAME_SLOT, which is answered as a success", () => {
+      expect(Object.keys(TOOL_ERROR_CODE_FOR)).not.toContain("SAME_SLOT");
+    });
+
     it.each(cases)("%s → %s with a hint", async (reason, code) => {
       const stubbed: Repositories = {
         ...repos,

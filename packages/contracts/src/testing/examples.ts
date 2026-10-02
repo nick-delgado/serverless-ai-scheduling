@@ -233,6 +233,7 @@ export const EXAMPLES = {
       start_local: "Thursday, October 15, 2026 at 10:00 AM ET",
     },
     previous_start_local: START_LOCAL,
+    already_rescheduled: false,
   } satisfies In<"RescheduleAppointmentOutput">,
   EscalateToHumanOutput: {
     escalation_id: ESCALATION_ID,
