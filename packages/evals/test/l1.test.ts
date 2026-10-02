@@ -223,6 +223,16 @@ describe("L1 runs: rendering, the request, grading the next action", () => {
     expect(JSON.stringify(req)).not.toContain(FIXTURE_PATIENT_IDS[c.patient]);
   });
 
+  it("by default prompts with the case's clock and the patient's first name (8c21660/TEST-303)", async () => {
+    const c = l1Case("l1-emergency-911"); // Walter, clock Mon Oct 5 2026 9:00 AM EDT
+    const llm = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
+    await runL1Trial(c, { llm, profile });
+    const system = (llm.requests[0]?.system ?? []).flatMap((b) => (b.type === "text" ? [b.text] : []));
+    expect(system.join("\n")).toContain(
+      "today is Monday, October 5, 2026 (America/New_York). The patient's first name is Walter.",
+    );
+  });
+
   it("passes the expected tool call and fails a plain reply", async () => {
     const c = l1Case("l1-book-after-explicit-yes");
     const good = await runL1Trial(c, {
