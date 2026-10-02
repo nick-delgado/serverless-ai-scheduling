@@ -27,7 +27,11 @@ function returning a constant, the condition inverted, the branch removed. If th
 still pass, it is hollow.
 
 - No test at all: `untested-behaviour`. Major for a behaviour the spec asked for, minor for
-  incidental code.
+  incidental code. An entry point, CLI, handler or wiring that implements a requirement is
+  not incidental, however thin.
+- Ask "would it fail if broken?" of each part, not the whole line: each condition of a
+  compound check, each operand of a comparison, each flag. A test that catches the deleted
+  line but not a wrong half of an `&&` is a `missing-case`.
 - A test exists but would not fail: `hollow-test`. Major when the test's name or the PR
   description claims the coverage it does not give; minor when the test is merely weak and
   claims no more than it checks.

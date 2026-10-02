@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.02"
+  harness-version: "2026.10.02.1"
 ---
 
 # Address a PR review
@@ -84,8 +84,10 @@ Take them in order (blockers and majors first). For each finding:
    - Already fixed by a later commit: record it as `already fixed`, with the commit.
 2. **Fix it** the way the project does things: read the project's instruction files and
    use its skills, as for any other change. Make the smallest change that resolves the
-   finding. When the finding is about a test, make the test able to fail: break the line it
-   is about, see the test fail, then restore it.
+   finding. When the finding is about a test, make the test able to fail: break what it is
+   about, see the test fail, then restore it. Break each part on its own: every condition
+   of a compound check, every operand of a comparison, every flag or option. A test that
+   fails when the whole line is deleted can still pass when one half of an `&&` is wrong.
    - **Fix the class, not just the instance.** If the finding is one case of a pattern
      (one missing case among similar ones, one parser rule among several), search the PR's
      own changes for the same mistake and fix every instance, testing each.
@@ -139,8 +141,16 @@ rows, so a decision that clarifies a rule should read as that rule. Name finding
 reviewed commit (`d34b6df/SPEC-1`) in the response's summary text, since IDs restart in
 every review round.
 
-Without a decision, the status is `waiting for decision`. Do not write decisions anywhere
-else: not on the tracking issue, not in docs or skills.
+Without a decision, the status is `waiting for decision`.
+
+The response's Decision column is the review's record of a decision. Do not turn a decision
+into a rule in instruction files or skills, and do not post it on the tracking issue: that
+is process work for `improve-agent-process`. But where the project's own rules ask for a
+decision to be recorded (a journal entry, an ADR, a changelog line, a comment in the code),
+record it there too, as part of implementing it.
+
+A decision implemented in code is a behaviour change like any other: give it a test that
+fails without it.
 
 ### 5. Ask the owner, once
 

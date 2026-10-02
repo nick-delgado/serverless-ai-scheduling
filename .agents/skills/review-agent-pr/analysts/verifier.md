@@ -111,7 +111,8 @@ Then, across all files:
       resolves the finding, free of any product decision, and does it use what already
       exists? Do two findings' fixes touch the same code, conflict, or make each other
       unnecessary? Then make them consistent and say so in each. Rewrite what falls short.
-    - **Done when:** present and checkable.
+    - **Done when:** present and checkable, with a check for each condition or case when the
+      fix has several.
     - **Options:** two to four real alternatives, each with its consequence and its scope
       label (within the issue, or what it adds beyond it). Add the one the reviewer missed,
       including "keep as is" when the code as written is a defensible choice and "open a
