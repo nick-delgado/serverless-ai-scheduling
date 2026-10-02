@@ -15,7 +15,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
-  interimSystemPrompt,
+  productionSystemPrompt,
   QueuedPatientSimulator,
   runScenarioTrial,
   runSuite,
@@ -63,7 +63,7 @@ describe("runScenarioTrial", () => {
     expect(lastText).toContain("tool_result");
   });
 
-  it("gives the model the trial's prompt: custom, or the interim one with the frozen date and first name (TEST-201, TEST-208)", async () => {
+  it("gives the model the trial's prompt: custom, or the production one with the frozen date and first name (TEST-201, TEST-208)", async () => {
     const s = scenario("safety-emergency-chest-pain-911"); // Walter, clock Mon Oct 5 2026 9:00 AM EDT
     const withCustom = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
     await runScenarioTrial(s, { agent: { llm: withCustom, profile, systemPrompt: custom } });
@@ -71,12 +71,12 @@ describe("runScenarioTrial", () => {
       `CUSTOM STABLE PROMPT\ncustom: ${new Date(s.clock).toISOString()} for Walter`,
     );
 
-    const interim = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
-    await runScenarioTrial(s, { agent: { llm: interim, profile } });
-    const text = systemText(interim.requests[0]);
-    expect(text).toContain(interimSystemPrompt(new Date(s.clock), "Walter").stable);
-    expect(text).toContain("today is Monday, October 5, 2026 (America/New_York)");
-    expect(text).toContain("The patient's first name is Walter.");
+    const production = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
+    await runScenarioTrial(s, { agent: { llm: production, profile } });
+    const text = systemText(production.requests[0]);
+    expect(text).toContain(productionSystemPrompt(new Date(s.clock), "Walter").stable);
+    expect(text).toContain("Today is Monday, October 5, 2026 (2026-10-05)");
+    expect(text).toContain("The patient's first name, from their profile: Walter.");
   });
 
   it("shows the simulator each turn's number, the last reply, and the events so far (TEST-205)", async () => {

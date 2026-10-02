@@ -1,10 +1,11 @@
 /**
- * The system prompt the harness gives the agent until the real one lands (S3-02, #16). It is the S-1
- * spike's production-sized draft (`spikes/s1-bedrock-tool-latency/fixture.ts`), so live runs have
- * realistic size and rules. When #16 merges, pass its prompt as `RunSuiteOptions.systemPrompt` /
- * `AgentUnderTest.systemPrompt` (or make it this module's default) and bump the version, so results are comparable only within one prompt version.
+ * The system prompt the harness gives the agent. The default is the production prompt from `@sched/agent`
+ * (`buildSystemPrompt`, currently `system.v1`, #16), so eval results and the chat handler use the same
+ * prompt. The interim prompt (`eval-interim.v0`, the S-1 spike's draft from
+ * `spikes/s1-bedrock-tool-latency/fixture.ts`) stays exported for before/after comparisons. Results are
+ * comparable only within one prompt version, which every report records.
  */
-import type { SystemPrompt } from "@sched/agent";
+import { buildSystemPrompt, type SystemPrompt } from "@sched/agent";
 import { formatClinicDateTime } from "@sched/tools";
 
 export const INTERIM_PROMPT_VERSION = "eval-interim.v0";
@@ -70,12 +71,22 @@ export const interimSystemPrompt: SystemPromptFactory = (now, patientFirstName) 
   };
 };
 
-/** The prompt a run uses: `factory` (default: the interim prompt) at `now`, for `firstName` (default "there"). */
+/** The production prompt (`buildSystemPrompt` from `@sched/agent`) as a factory. */
+export const productionSystemPrompt: SystemPromptFactory = (now, patientFirstName) =>
+  buildSystemPrompt({ now, patientFirstName });
+
+/**
+ * The prompt a run uses: `factory` (default: the production prompt) at `now`, for `firstName`. Without a
+ * first name the production prompt says it isn't known; the interim prompt gets "there".
+ */
 export const promptFor = (
   factory: SystemPromptFactory | undefined,
   now: Date,
   firstName: string | undefined,
-): SystemPrompt => (factory ?? interimSystemPrompt)(now, firstName ?? "there");
+): SystemPrompt =>
+  factory === undefined
+    ? buildSystemPrompt({ now, ...(firstName === undefined ? {} : { patientFirstName: firstName }) })
+    : factory(now, firstName ?? "there");
 
 /** A patient's first name for the prompt's greeting, looked up the same way in every mode. */
 export const firstNameOf = (
