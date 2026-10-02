@@ -160,3 +160,13 @@ Other invariants a file lists are graded deterministically where a marker exists
   | nova-pro | 16/22 | 77% | $0.0232 | 57 s |
 
   Neither run was throttled.
+
+## Amendment (2026-10-02): the patient simulator (#31)
+
+- **Model:** the simulator's model is a model profile, not a fixed model ID. This account isn't entitled to Sonnet 5, so the default is `sonnet-4.6`, switchable with `--simulator-profile` or `SIMULATOR_MODEL_PROFILE`, independently of the agent's `--profile`. It uses the same rate-limited client as the agent, so the two share one per-model quota.
+- **What it sees:** the scenario's persona, goal and hidden facts (system prompt), and the visible conversation only (patient and assistant text), never tool calls or tool results.
+- **Reply protocol:** plain text, model-agnostic. A reply is either the next patient message or a stop marker alone (`[[STOP:goal_achieved]]`, `gave_up`, `escalated`). A reply that mixes the two is rejected.
+- **Guards:** before a reply is sent, deterministic checks reject one that copies 8 or more consecutive words of the goal or a hidden fact (a quoted line inside a fact is something the patient says, so it may go out as written), names a fact's snake_case key, speaks as the assistant (a speaker label, tool names or tool-call syntax, or phrases like "I've booked you"), or talks about the role-play. A rejected reply is never sent: the model is asked again with the problems listed, 3 calls at most, and then the trial is `error`, not `fail`.
+- **Escalation stop:** after a successful `escalate_to_human`, the patient may send 2 more messages, then the simulator stops as `escalated` without calling the model.
+- **Accounting:** each trial records its simulator's turns, tokens, calls and cost. `costUsd` is the whole conversation, agent plus simulator, so the budget guard sees both. The summary also reports the simulator's share.
+- **Replay:** `--replay <results.json>` replays the recorded simulator turns by scenario, trial and turn number, with no simulator calls. A turn the recording doesn't have stops the run with `replay exhausted`.

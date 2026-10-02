@@ -24,6 +24,7 @@ import {
   type PatientSimulator,
   type RecordedSimulatorTurn,
   type SimulatorCost,
+  type SimulatorTurn,
 } from "./simulator";
 import { firstNameOf, promptFor, type SystemPromptFactory } from "./system-prompt";
 import { assistantTexts, turnEvents, type TranscriptEvent } from "./transcript";
@@ -89,6 +90,8 @@ const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
   cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
   cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
 });
+
+const rejectedOf = (turn: SimulatorTurn) => (turn.rejected === undefined ? {} : { rejected: turn.rejected });
 
 function skipped(trial: number, reason: string, simulator: string): TrialResult {
   return {
@@ -185,11 +188,11 @@ export async function runScenarioTrial(
       }
       addSimulatorCost(next.cost);
       if ("stop" in next) {
-        simulatorTurns.push({ turn, stop: next.stop });
+        simulatorTurns.push({ turn, stop: next.stop, ...rejectedOf(next) });
         stoppedBecause = next.stop;
         break;
       }
-      simulatorTurns.push({ turn, message: next.message });
+      simulatorTurns.push({ turn, message: next.message, ...rejectedOf(next) });
       message = next.message;
     }
 

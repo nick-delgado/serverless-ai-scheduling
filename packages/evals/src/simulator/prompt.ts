@@ -25,12 +25,16 @@ export const stopMarker = (reason: SimulatorStopReason): string => `[[STOP:${rea
 /** Matches any stop marker, valid reason or not, so a malformed one is rejected instead of sent. */
 export const STOP_MARKER_PATTERN = /\[\[\s*STOP\s*:?\s*([A-Za-z_ -]*)\]\]/i;
 
-/** A hidden fact's value as prompt text (YAML values are usually strings, but the schema allows any). */
+/**
+ * A hidden fact's value as prompt text. YAML values are usually strings, but the schema allows any. A
+ * list of strings is a list of options (`[Tue, Thu]`) or of lines to say (`follow_ups`): a multi-word
+ * item is shown in quotes, so it reads, and is checked (`verbatimLeaks`), as a line the patient says.
+ */
 export const factText = (value: unknown): string =>
   typeof value === "string"
     ? value
     : Array.isArray(value) && value.every((v) => typeof v === "string")
-      ? value.join(", ")
+      ? value.map((v) => (/\s/.test(v.trim()) ? `"${v.trim()}"` : v)).join(", ")
       : JSON.stringify(value);
 
 /** The simulator's system prompt for one scenario. Stable for the whole conversation. */

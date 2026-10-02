@@ -22,6 +22,7 @@ import type { TokenUsage } from "@sched/contracts";
 import {
   SimulatorError,
   type PatientSimulator,
+  type RejectedReply,
   type SimulatorContext,
   type SimulatorCost,
   type SimulatorTurn,
@@ -130,7 +131,7 @@ export class LlmPatientSimulator implements PatientSimulator {
     const { scenario } = context;
     const system = simulatorSystemPrompt(scenario);
     const cost: SimulatorCost = { usage: zeroUsage(), costUsd: 0, llmCalls: 0 };
-    const rejected: { reply: string; problems: string[] }[] = [];
+    const rejected: RejectedReply[] = [];
 
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
       const response = await this.#llm.streamMessage({
@@ -169,8 +170,9 @@ export class LlmPatientSimulator implements PatientSimulator {
         response.stopReason === "end_turn"
           ? parseReply(text, scenario)
           : { kind: "invalid", problems: [`the model stopped with ${response.stopReason}`] };
-      if (parsed.kind === "message") return { message: parsed.message, cost };
-      if (parsed.kind === "stop") return { stop: parsed.reason, cost };
+      const seen = rejected.length === 0 ? {} : { rejected };
+      if (parsed.kind === "message") return { message: parsed.message, cost, ...seen };
+      if (parsed.kind === "stop") return { stop: parsed.reason, cost, ...seen };
       rejected.push({ reply: text, problems: parsed.problems });
     }
     throw new SimulatorError(

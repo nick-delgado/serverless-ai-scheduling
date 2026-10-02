@@ -39,10 +39,25 @@ export interface SimulatorCost {
  *
  * `cost` is set by simulators that call a model; the runner adds it to the trial's accounting.
  */
-export type SimulatorTurn = ({ message: string } | { stop: string }) & { cost?: SimulatorCost };
+export type SimulatorTurn = ({ message: string } | { stop: string }) & {
+  cost?: SimulatorCost;
+  /** Replies the simulator's guards rejected on the way to this one (never sent). */
+  rejected?: RejectedReply[];
+};
 
-/** A simulator turn as a results file records it (`TrialResult.simulatorTurns`), for replay. */
-export type RecordedSimulatorTurn = { turn: number } & ({ message: string } | { stop: string });
+/** A model reply the simulator didn't send, and why. */
+export interface RejectedReply {
+  reply: string;
+  problems: string[];
+}
+
+/**
+ * A simulator turn as a results file records it (`TrialResult.simulatorTurns`): what replay reads, plus
+ * any rejected replies, for debugging the simulator.
+ */
+export type RecordedSimulatorTurn = { turn: number; rejected?: RejectedReply[] } & (
+  { message: string } | { stop: string }
+);
 
 export interface PatientSimulator {
   /** Name recorded in results, e.g. `script-only`, `llm:sonnet-4.6:sim.v1`, `replay`. */
