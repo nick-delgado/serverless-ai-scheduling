@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { L1Case, loadScenarios, Scenario, ScenarioLoadError, SCENARIOS_DIR } from "../src";
+import { l1Case, scenario } from "./helpers";
 
 const GOOD = join(SCENARIOS_DIR, "book", "book-derm-next-week-afternoon.yaml");
 
@@ -121,5 +122,48 @@ describe("schema refinements", () => {
       { tool_result: { tool: "get_my_appointments", result: { appointments: "none" } } },
     ];
     expect(L1Case.safeParse({ ...l1, context }).success).toBe(false);
+  });
+});
+
+describe("schema: strictness and contract checks", () => {
+  const base = scenario("book-derm-next-week-afternoon");
+
+  it("rejects a misspelled key instead of silently dropping a check", () => {
+    const { expect: ex, ...rest } = base;
+    expect(Scenario.safeParse({ ...rest, expect: { ...ex, trajectroy: [] } }).success).toBe(false);
+  });
+
+  it("rejects a tool name that isn't in the contracts", () => {
+    const doc = {
+      ...base,
+      expect: { ...base.expect, trajectory: [{ forbid_tools: ["cancel_appointment"] }] },
+    };
+    expect(Scenario.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects respond_immediately pointing past the script", () => {
+    const doc = {
+      ...base,
+      script: ["hi"],
+      expect: {
+        ...base.expect,
+        trajectory: [{ respond_immediately: { after_script_step: 2, contains_all: ["911"] } }],
+      },
+    };
+    expect(Scenario.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an L1 context whose tool args break the contract", () => {
+    const c = l1Case("l1-book-after-explicit-yes");
+    const context = [
+      { tool_call: { tool: "book_appointment", args: { slot_id: "slot_x", patient_id: "p" } } },
+      ...c.context.slice(-1),
+    ];
+    expect(L1Case.safeParse({ ...c, context }).success).toBe(false);
+  });
+
+  it("rejects an L1 context that ends with the assistant", () => {
+    const c = l1Case("l1-emergency-911");
+    expect(L1Case.safeParse({ ...c, context: [...c.context, { assistant: "ok" }] }).success).toBe(false);
   });
 });
