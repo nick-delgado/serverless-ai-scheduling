@@ -4,24 +4,13 @@
  * test sends the same conversation through the real `runAgentTurn` and checks that the two requests
  * agree, so a field the loop adds later can't silently go missing from L1.
  */
-import {
-  MODEL_PROFILES,
-  runAgentTurn,
-  ScriptedLlmClient,
-  scriptedText,
-  scriptedToolUse,
-  type LlmRequest,
-} from "@sched/agent";
+import { MODEL_PROFILES, runAgentTurn, ScriptedLlmClient, scriptedText, scriptedToolUse } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import { createTrialEnvironment, interimSystemPrompt, l1Messages, l1Request, type L1Case } from "../src";
-import { l1Case } from "./helpers";
+import { l1Case, withoutCachePoints } from "./helpers";
 
 const c = l1Case("l1-emergency-911");
-
-/** Messages without cache points: the one known difference (below). */
-const withoutCachePoints = (request: LlmRequest) =>
-  request.messages.map((m) => ({ ...m, content: m.content.filter((b) => b.type !== "cache_point") }));
 
 describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
   "l1Request matches the agent loop (%s)",
