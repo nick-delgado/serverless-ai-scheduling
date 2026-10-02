@@ -16,7 +16,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ConverseLlmClient, resolveModelProfile } from "@sched/agent";
+import { ConverseLlmClient } from "@sched/agent";
 
 import {
   caseSkipReason,
@@ -47,8 +47,7 @@ async function main(): Promise<void> {
     if (error instanceof CliArgError) fail(error.message);
     throw error;
   }
-  const { mode, suite, trials, maxCostUsd } = args;
-  const profile = resolveModelProfile(args.profile);
+  const { mode, suite, trials, maxCostUsd, profile } = args;
   const cases = selectCases(loadScenarios(), args);
   if (cases.length === 0) fail("no cases match");
 

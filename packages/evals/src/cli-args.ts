@@ -6,7 +6,7 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import { estimateCostUsd, type ModelProfile } from "@sched/agent";
+import { estimateCostUsd, resolveModelProfile, type ModelProfile } from "@sched/agent";
 
 import { l1Request } from "./l1";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
@@ -19,8 +19,8 @@ import { promptFor } from "./system-prompt";
 export interface CliArgs {
   suite: Suite;
   mode: Mode;
-  /** Model profile name; `undefined` means the development default. */
-  profile: string | undefined;
+  /** The resolved `--profile` (default: the development default profile). */
+  profile: ModelProfile;
   trials: number;
   filters: string[];
   maxCostUsd: number;
@@ -35,6 +35,15 @@ export class CliArgError extends Error {
 
 const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
   (list as readonly string[]).includes(value);
+
+/** `--profile`, resolved: an unknown or unentitled name is a usage error (exit 2), not a failed eval. */
+function resolveProfile(name: string | undefined): ModelProfile {
+  try {
+    return resolveModelProfile(name);
+  } catch (error) {
+    throw new CliArgError(`--profile: ${errorReason(error)}`);
+  }
+}
 
 /** Parse and validate `argv` (without the node and script paths). Throws `CliArgError`. */
 export function parseCliArgs(argv: readonly string[], defaultOut: string): CliArgs {
@@ -69,7 +78,7 @@ export function parseCliArgs(argv: readonly string[], defaultOut: string): CliAr
   return {
     suite,
     mode,
-    profile: values.profile,
+    profile: resolveProfile(values.profile),
     trials,
     filters:
       values.filter

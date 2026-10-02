@@ -27,7 +27,7 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([], OUT)).toEqual({
       suite: "smoke",
       mode: "l1",
-      profile: undefined,
+      profile: MODEL_PROFILES["sonnet-4.6"],
       trials: 1,
       filters: [],
       maxCostUsd: 1,
@@ -53,7 +53,7 @@ describe("parseCliArgs", () => {
     expect(args).toEqual({
       suite: "full",
       mode: "scenario",
-      profile: "nova-pro",
+      profile: MODEL_PROFILES["nova-pro"],
       trials: 3,
       filters: ["book", "safety"],
       maxCostUsd: 0.5,
@@ -71,6 +71,14 @@ describe("parseCliArgs", () => {
     [["--max-cost=abc"], "--max-cost must be a positive number of USD"],
   ])("rejects %j", (argv, message) => {
     expect(() => parseCliArgs(argv, OUT)).toThrow(new CliArgError(message));
+  });
+
+  it.each([
+    ["--profile=sonet-4.6", /^--profile: Error: Unknown AGENT_MODEL_PROFILE "sonet-4\.6"/],
+    ["--profile=opus-5", /^--profile: Error: AGENT_MODEL_PROFILE "opus-5" .* is not entitled/],
+  ])("rejects %s as a usage error (8c21660/SPEC-1)", (flag, message) => {
+    expect(() => parseCliArgs([flag], OUT)).toThrow(CliArgError);
+    expect(() => parseCliArgs([flag], OUT)).toThrow(message);
   });
 
   it("rejects unknown flags", () => {
