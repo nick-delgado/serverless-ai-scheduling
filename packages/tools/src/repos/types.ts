@@ -178,7 +178,7 @@ export const TOOL_ERROR_CODE_FOR: Record<BookFailureReason | RescheduleFailureRe
   SLOT_UNAVAILABLE: "SLOT_UNAVAILABLE",
   APPOINTMENT_NOT_FOUND: "NOT_FOUND",
   APPOINTMENT_NOT_BOOKED: "NOT_ALLOWED",
-  SAME_SLOT: "INVALID_INPUT",
+  SAME_SLOT: "INVALID_INPUT", // reschedule_appointment answers SAME_SLOT as a success (`already_rescheduled`)
   CONFLICT: "INTERNAL",
 };
 

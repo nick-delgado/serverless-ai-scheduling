@@ -9,9 +9,11 @@
  *   listed below; availability, status and ownership are decided by the repo's conditional write.
  * - Checks, in order:
  *   1. The appointment must be the patient's and BOOKED.
- *   2. A retry of a move that already happened (the appointment already holds the new slot) answers
- *      SAME_SLOT, whose hint says the move succeeded, before any clock rule: once the new time has started,
- *      "can't be moved" would tell the patient they lost an appointment they hold (PR #67 review, STD-3).
+ *   2. A retry of a move that already happened (the appointment already holds the new slot) is a success
+ *      with `already_rescheduled: true` and `previous_start_local: null`, like `already_booked` (owner
+ *      decision, #88). It's answered before any clock rule: once the new time has started, "can't be
+ *      moved" would tell the patient they lost an appointment they hold (PR #67 review, STD-3). The repo's
+ *      own SAME_SLOT, from a concurrent retry that lost the race, gets the same answer.
  *   3. Clock rules (tool-level, need ctx.clock): an appointment that has already started can't be moved,
  *      and the new slot must start after now.
  *   4. The new slot must be in the same specialty (owner decision, PR #67 review SPEC-2): a different kind
@@ -47,8 +49,11 @@ const BOOK_NEW_HINT =
 const AVAILABILITY_HINT =
   "Call check_availability, offer the patient one of the returned times, and use that slot_id after they confirm.";
 
+/** The repository failures that are answered as errors. SAME_SLOT is a success (`already_rescheduled`). */
+type FailureReason = Exclude<RescheduleFailureReason, "SAME_SLOT">;
+
 /** Message and hint for each repository failure. The code comes from TOOL_ERROR_CODE_FOR. */
-const FAILURE_TEXT: Record<RescheduleFailureReason, { message: string; hint: string }> = {
+const FAILURE_TEXT: Record<FailureReason, { message: string; hint: string }> = {
   APPOINTMENT_NOT_FOUND: {
     message: "No appointment with that ID was found for you. Nothing was changed.",
     hint: LIST_HINT,
@@ -56,10 +61,6 @@ const FAILURE_TEXT: Record<RescheduleFailureReason, { message: string; hint: str
   APPOINTMENT_NOT_BOOKED: {
     message: "That appointment is cancelled or completed, so it can't be moved. Nothing was changed.",
     hint: BOOK_NEW_HINT,
-  },
-  SAME_SLOT: {
-    message: "The appointment is already at that time. Nothing was changed.",
-    hint: "If you just rescheduled it, the move already succeeded: confirm the time with the patient. Otherwise ask for a different time.",
   },
   SLOT_NOT_FOUND: {
     message: "That new time slot doesn't exist. The original appointment is unchanged.",
@@ -75,18 +76,35 @@ const FAILURE_TEXT: Record<RescheduleFailureReason, { message: string; hint: str
   },
 };
 
-const fail = (reason: RescheduleFailureReason): ToolHandlerResult<"reschedule_appointment"> =>
+const fail = (reason: FailureReason): ToolHandlerResult<"reschedule_appointment"> =>
   toolFail(TOOL_ERROR_CODE_FOR[reason], FAILURE_TEXT[reason].message, FAILURE_TEXT[reason].hint);
 
 export const rescheduleAppointment: ToolHandler<"reschedule_appointment"> = async (input, ctx) => {
   const now = ctx.clock.now().getTime();
+
+  // The appointment already at the requested slot: nothing to move, so report it as it stands.
+  const alreadyThere = async (
+    appointment: Appointment,
+  ): Promise<ToolHandlerResult<"reschedule_appointment">> => {
+    const provider = await ctx.repos.providers.get(appointment.providerId);
+    if (!provider) {
+      throw new Error(
+        `Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`,
+      );
+    }
+    return toolOk({
+      appointment: toAppointmentSummary(appointment, provider),
+      previous_start_local: null,
+      already_rescheduled: true,
+    });
+  };
 
   // Scoped to the context patient: someone else's appointment is null, exactly like an unknown ID.
   const current = await ctx.repos.appointments.get(ctx.patientId, input.appointment_id);
   if (!current) return fail("APPOINTMENT_NOT_FOUND");
   if (current.status !== "BOOKED") return fail("APPOINTMENT_NOT_BOOKED");
   // A retry after a successful move: answer before the clock rules, which the new time may now break.
-  if (current.slotId === input.new_slot_id) return fail("SAME_SLOT");
+  if (current.slotId === input.new_slot_id) return alreadyThere(current);
   if (Date.parse(current.startUtc) <= now) {
     return toolFail(
       "NOT_ALLOWED",
@@ -136,10 +154,17 @@ export const rescheduleAppointment: ToolHandler<"reschedule_appointment"> = asyn
     appointmentId: input.appointment_id,
     newSlotId: input.new_slot_id,
   });
-  if (!result.ok) return fail(result.reason);
+  if (!result.ok) {
+    if (result.reason !== "SAME_SLOT") return fail(result.reason);
+    // A concurrent retry moved it first: re-read the appointment, now at the requested slot.
+    const moved = await ctx.repos.appointments.get(ctx.patientId, input.appointment_id);
+    if (!moved) throw new Error(`Appointment ${input.appointment_id} vanished after SAME_SLOT`);
+    return alreadyThere(moved);
+  }
 
   return toolOk({
     appointment: toAppointmentSummary(result.appointment, provider),
     previous_start_local: formatClinicDateTime(result.previous.startUtc),
+    already_rescheduled: false,
   });
 };
