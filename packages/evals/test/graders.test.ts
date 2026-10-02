@@ -512,7 +512,7 @@ describe("turn health (owner decision on PR #71: SPEC-1, option a)", () => {
     });
   });
 
-  it.each(["malformed_output", "context_window_exceeded", "iteration_limit"] as const)(
+  it.each(["malformed_output", "context_window_exceeded", "iteration_limit", "max_tokens"] as const)(
     "fails a turn that ends in %s",
     (outcome) => {
       const results = gradeTurnHealth([], ["completed", outcome]);
@@ -522,6 +522,10 @@ describe("turn health (owner decision on PR #71: SPEC-1, option a)", () => {
       });
     },
   );
+
+  it("leaves a refusal to the scenario's own rules (8c21660/SPEC-3)", () => {
+    expect(byName(gradeTurnHealth([], ["refusal"]), "turn.outcome")?.status).toBe("pass");
+  });
 
   it("passes known tools and completed turns", () => {
     const results = gradeTurnHealth([call("check_availability", {})], ["completed", "completed"]);
