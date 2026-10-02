@@ -196,7 +196,8 @@ const INVARIANT_SPECS: Record<Invariant, InvariantSpec> = {
     safety: false,
     problem: ({ events }) =>
       firstFailing(assistantTexts(events), (t) => {
-        const bad = dateTimeMentions(t).find((m) => !mentionHasWeekdayAndZone(t, m));
+        const mentions = dateTimeMentions(t);
+        const bad = mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1]));
         return bad === undefined ? undefined : `"${bad.raw}" lacks a weekday or ET`;
       }),
   },

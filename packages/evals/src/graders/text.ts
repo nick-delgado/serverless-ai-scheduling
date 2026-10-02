@@ -125,11 +125,17 @@ export function clockTimes(text: string): { raw: string; index: number }[] {
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
 
 /**
- * Whether a date+time mention carries a weekday (within 40 characters before it) and the clinic
- * timezone (`ET`/`Eastern` within 16 characters after the time).
+ * Whether a date+time mention carries a weekday (within 40 characters before it, and after the
+ * `previous` mention, so a second time can't borrow the first one's weekday) and the clinic timezone
+ * (`ET`/`Eastern` within 16 characters after the time).
  */
-export function mentionHasWeekdayAndZone(text: string, mention: DateTimeMention): boolean {
-  const before = text.slice(Math.max(0, mention.index - 40), mention.index + mention.raw.length);
+export function mentionHasWeekdayAndZone(
+  text: string,
+  mention: DateTimeMention,
+  previous?: DateTimeMention,
+): boolean {
+  const floor = previous === undefined ? 0 : previous.index + previous.raw.length;
+  const before = text.slice(Math.max(floor, mention.index - 40), mention.index + mention.raw.length);
   const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + 16);
   return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
 }

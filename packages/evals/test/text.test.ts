@@ -60,4 +60,16 @@ describe("mentionHasWeekdayAndZone (2e22f79/TEST-104)", () => {
     expect(has("Thursday, October 15 at 2:00 PM")).toBe(false); // no zone
     expect(has("October 15 at 2:00 PM ET")).toBe(false); // no weekday
   });
+
+  it("a second time doesn't borrow the first one's weekday (8c21660/TEST-104)", () => {
+    const text = "Thursday, October 15 at 2:00 PM ET or October 16 at 3:00 PM ET";
+    const [first, second] = dateTimeMentions(text);
+    if (first === undefined || second === undefined) throw new Error("expected two mentions");
+    expect(mentionHasWeekdayAndZone(text, first)).toBe(true);
+    expect(mentionHasWeekdayAndZone(text, second, first)).toBe(false);
+    const both = "Thursday, October 15 at 2:00 PM ET or Friday, October 16 at 3:00 PM ET";
+    const [a, b] = dateTimeMentions(both);
+    if (a === undefined || b === undefined) throw new Error("expected two mentions");
+    expect(mentionHasWeekdayAndZone(both, b, a)).toBe(true);
+  });
 });
