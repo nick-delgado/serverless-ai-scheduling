@@ -14,7 +14,7 @@ import { skipReason } from "./runner";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { scriptOnlySimulator } from "./simulator";
 import type { Mode, RunReport, RunSummary } from "./suite";
-import { interimSystemPrompt } from "./system-prompt";
+import { promptFor } from "./system-prompt";
 
 export interface CliArgs {
   suite: Suite;
@@ -101,7 +101,7 @@ export function estimateRunCost(
   for (const c of cases) {
     if (caseSkipReason(c) !== undefined) continue;
     if (isL1Case(c)) {
-      const req = l1Request(c, profile, interimSystemPrompt(new Date(c.clock), "Patient"));
+      const req = l1Request(c, profile, promptFor(undefined, new Date(c.clock), undefined));
       estimate += cost(Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
     } else estimate += cost(4000, 400) * 3 * (c.script?.length ?? 0) * trials;
   }

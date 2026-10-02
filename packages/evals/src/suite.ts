@@ -10,7 +10,7 @@ import type { RateLimitStats } from "./rate-limit";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { runScenarioTrial, type TrialResult, type TrialStatus } from "./runner";
 import type { PatientSimulator } from "./simulator";
-import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
+import { promptFor, type SystemPromptFactory } from "./system-prompt";
 
 export type Mode = "l1" | "scenario";
 export type CaseStatus = TrialStatus;
@@ -209,7 +209,7 @@ export async function runSuite(
     suite: options.suite,
     profile: options.profile.name,
     modelId: options.profile.modelId,
-    promptVersion: (options.systemPrompt ?? interimSystemPrompt)(startedAt, "Patient").version,
+    promptVersion: promptFor(options.systemPrompt, startedAt, undefined).version,
     pricesAsOf: PRICES_AS_OF,
     trialsPerCase: options.trials,
     ...(options.mode === "scenario" ? { simulator: options.simulator?.name ?? "script-only" } : {}),

@@ -1,4 +1,3 @@
-import type { TurnOutcome } from "@sched/contracts";
 import type { InMemorySnapshot } from "@sched/tools";
 
 import type { Scenario } from "../schema";
@@ -26,8 +25,6 @@ export interface GradingInput {
   after: InMemorySnapshot;
   /** The logged-in patient's UUID. */
   patientId: string;
-  /** How each turn ended, in order (`turn.outcome`). */
-  outcomes?: readonly TurnOutcome[];
   /** Writes the harness itself made mid-run (fault injection), excluded from the end-state diff. */
   harnessWrites?: HarnessWrites;
 }

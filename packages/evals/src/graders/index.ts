@@ -2,6 +2,8 @@ import { gradeEndState } from "./end-state";
 import { gradeInvariants } from "./invariants";
 import { gradeTrajectory } from "./trajectory";
 import { gradeTurnHealth } from "./turn";
+import type { TurnOutcome } from "@sched/contracts";
+
 import type { GraderResult, GradingInput } from "./types";
 
 export * from "./end-state";
@@ -13,12 +15,12 @@ export * from "./turn";
 export * from "./types";
 
 /** Every deterministic grader for one multi-turn trial: end state, trajectory rules, turn health, invariants. */
-export function gradeScenario(input: GradingInput): GraderResult[] {
+export function gradeScenario(input: GradingInput & { outcomes: readonly TurnOutcome[] }): GraderResult[] {
   const { scenario, events, before } = input;
   return [
     ...gradeEndState(input),
     ...gradeTrajectory(scenario.expect.trajectory, events, before),
-    ...gradeTurnHealth(events, input.outcomes ?? []),
+    ...gradeTurnHealth(events, input.outcomes),
     ...gradeInvariants(input),
   ];
 }

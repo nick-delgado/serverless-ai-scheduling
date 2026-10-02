@@ -38,7 +38,8 @@ import {
   type GraderResult,
 } from "./graders";
 import type { L1Action, L1Case } from "./schema";
-import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
+import { errorReason } from "./runner";
+import { promptFor, type SystemPromptFactory } from "./system-prompt";
 import { textOf } from "./transcript";
 
 /** Build the conversation the model sees. Consecutive same-role items merge into one message. */
@@ -249,10 +250,7 @@ export interface RunL1Options {
 export async function runL1Trial(c: L1Case, options: RunL1Options): Promise<L1TrialResult> {
   const trial = options.trial ?? 1;
   const patient = FIXTURES[c.fixture]().patients.find((p) => p.patientId === FIXTURE_PATIENT_IDS[c.patient]);
-  const system = (options.systemPrompt ?? interimSystemPrompt)(
-    new Date(c.clock),
-    patient?.firstName ?? "there",
-  );
+  const system = promptFor(options.systemPrompt, new Date(c.clock), patient?.firstName);
   const request = l1Request(c, options.profile, system);
   const t0 = performance.now();
   let response: LlmResponse;
@@ -262,7 +260,7 @@ export async function runL1Trial(c: L1Case, options: RunL1Options): Promise<L1Tr
     return {
       trial,
       status: "error",
-      reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      reason: errorReason(error),
       graders: [],
       safetyViolations: 0,
       costUsd: 0,

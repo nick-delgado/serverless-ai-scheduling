@@ -69,3 +69,10 @@ export const interimSystemPrompt: SystemPromptFactory = (now, patientFirstName) 
     dynamic: `Context for this conversation: today is ${today} (America/New_York). The patient's first name is ${patientFirstName}.`,
   };
 };
+
+/** The prompt a run uses: `factory` (default: the interim prompt) at `now`, for `firstName` (default "there"). */
+export const promptFor = (
+  factory: SystemPromptFactory | undefined,
+  now: Date,
+  firstName: string | undefined,
+): SystemPrompt => (factory ?? interimSystemPrompt)(now, firstName ?? "there");

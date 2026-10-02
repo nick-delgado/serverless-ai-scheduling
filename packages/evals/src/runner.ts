@@ -18,7 +18,7 @@ import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
 import type { Scenario } from "./schema";
 import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
-import { interimSystemPrompt, type SystemPromptFactory } from "./system-prompt";
+import { promptFor, type SystemPromptFactory } from "./system-prompt";
 import { turnEvents, type TranscriptEvent } from "./transcript";
 
 /** The agent configuration under test. */
@@ -30,6 +30,10 @@ export interface AgentUnderTest {
   /** Tool handlers. Default: the production `TOOL_REGISTRY`. */
   registry?: ToolRegistry;
 }
+
+/** How a model or transport error is recorded on an `error` trial: `Name: message`. */
+export const errorReason = (error: unknown): string =>
+  error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 
 export type TrialStatus = "pass" | "fail" | "skip" | "error";
 
@@ -117,8 +121,8 @@ export async function runScenarioTrial(
     trial,
     ...(agent.registry === undefined ? {} : { registry: agent.registry }),
   });
-  const firstName = env.before.patients.find((p) => p.patientId === env.patientId)?.firstName ?? "there";
-  const system = (agent.systemPrompt ?? interimSystemPrompt)(env.clock.now(), firstName);
+  const firstName = env.before.patients.find((p) => p.patientId === env.patientId)?.firstName;
+  const system = promptFor(agent.systemPrompt, env.clock.now(), firstName);
 
   const history: LlmMessage[] = [];
   const events: TranscriptEvent[] = [];
@@ -176,10 +180,7 @@ export async function runScenarioTrial(
     llmRetries += result.trace.llmCalls.filter((c) => c.attempt > 0).length;
     costUsd += estimateCostUsd(agent.profile, result.usage);
     if (result.outcome === "error") {
-      error =
-        result.error instanceof Error
-          ? `${result.error.name}: ${result.error.message}`
-          : String(result.error);
+      error = errorReason(result.error);
       stoppedBecause = "error";
       break;
     }

@@ -6,6 +6,9 @@
 import { TEXT_BLOCK_SEPARATOR, type LlmMessage } from "@sched/agent";
 import { ToolError, type ContentBlock, type ToolCallTrace } from "@sched/contracts";
 
+import { isRecord } from "./graders/matchers";
+import { isWriteTool, type WriteTool } from "./schema";
+
 export type TranscriptEvent =
   | {
       kind: "patient";
@@ -103,16 +106,16 @@ export const assistantTexts = (events: readonly TranscriptEvent[]): string[] =>
 export const patientTexts = (events: readonly TranscriptEvent[]): string[] =>
   events.flatMap((e) => (e.kind === "patient" ? [e.text] : []));
 
+/** The input field naming the slot each write tool takes. A new write tool needs an entry to typecheck. */
+const WRITE_SLOT_FIELD: Record<WriteTool, string> = {
+  book_appointment: "slot_id",
+  reschedule_appointment: "new_slot_id",
+};
+
 /** The slot a write call targets, if any. */
 export function targetSlotOf(tool: string, input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
-  const record = input as Record<string, unknown>;
-  const value =
-    tool === "book_appointment"
-      ? record.slot_id
-      : tool === "reschedule_appointment"
-        ? record.new_slot_id
-        : undefined;
+  if (!isWriteTool(tool) || !isRecord(input)) return undefined;
+  const value = input[WRITE_SLOT_FIELD[tool]];
   return typeof value === "string" ? value : undefined;
 }
 
