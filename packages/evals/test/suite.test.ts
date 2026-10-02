@@ -133,7 +133,7 @@ describe("runSuite / summarize", () => {
     expect(ok.summary.toolCallAccuracy).toBe(1); // 1 of 1 graded trial, not 1 of 2
   });
 
-  it("the report's promptVersion comes from the system prompt it ran with", async () => {
+  it("the report's promptVersion is the version the prompt factory builds (runner.test checks the trials get that prompt)", async () => {
     const custom = (now: Date, name: string) => ({ ...interimSystemPrompt(now, name), version: "custom.v7" });
     const report = await runSuite([cases[0]], {
       mode: "l1",

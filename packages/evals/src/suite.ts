@@ -154,7 +154,7 @@ export async function runSuite(
   const systemPrompt = options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt };
   const runTrial = (c: Scenario | L1Case, trial: number): Promise<TrialResult | L1TrialResult> => {
     if (isL1Case(c) !== (options.mode === "l1"))
-      throw new Error(`${c.id} is not a ${options.mode === "l1" ? "L1 case" : "scenario"}`);
+      throw new Error(`${c.id} is not ${options.mode === "l1" ? "an L1 case" : "a scenario"}`);
     return isL1Case(c)
       ? runL1Trial(c, { llm: options.llm, profile: options.profile, trial, ...systemPrompt })
       : runScenarioTrial(c, {
