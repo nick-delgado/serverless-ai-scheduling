@@ -3,7 +3,7 @@
  *
  * | Item | PK | SK | Attributes |
  * |---|---|---|---|
- * | Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`, `expiresAt` = day + 2 days |
+ * | Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`, `expiresAt` = two days after the day ends (UTC) |
  * | Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `trace` (JSON string), `expiresAt` = start + 30 days |
  *
  * Neither prefix collides with an existing query: patient queries use `APPT#`/`CONV#`, conversation

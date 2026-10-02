@@ -24,3 +24,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-01 | [A retried booking must find the appointment it already made, even after the slot starts](2026-10-01-a-retry-must-find-the-booking-it-made.md) | 4. Teaching the agent to schedule |
 | 2026-10-01 | [A reschedule moves the same visit: same specialty, and no back door to a closed panel](2026-10-01-a-reschedule-keeps-the-kind-of-visit.md) | 4. Teaching the agent to schedule |
 | 2026-10-02 | [Every write tool now answers a repeat with success, and escalation stops promising an email](2026-10-02-every-write-tool-answers-a-repeat-with-success.md) | 4. Teaching the agent to schedule |
+| 2026-10-02 | [The first real Cognito sub wasn't a UUID, and every live chat turn was a 401](2026-10-02-the-first-real-sub-was-not-a-uuid.md) | 4. Teaching the agent to schedule |
