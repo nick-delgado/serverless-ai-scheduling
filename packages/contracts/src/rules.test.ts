@@ -6,7 +6,7 @@ import { ChatRequest } from "./api";
 import { IsoDate, IsoDateTimeUtc } from "./primitives";
 import { Slot } from "./domain";
 import { RescheduleAppointmentOutput } from "./tools";
-import { makeSlotId, messageIdForSeq, parseSlotId, toCanonicalUtc } from "./ids";
+import { PatientId, makeSlotId, messageIdForSeq, parseSlotId, toCanonicalUtc } from "./ids";
 import {
   ChatStreamEvent,
   ChatStreamEventList,
@@ -155,5 +155,23 @@ describe("contracts v1.1 (#60)", () => {
       { type: "text_delta", text: "\n\nDr. Lee is free." },
     ];
     expect(C.visibleText(events)).toBe("Let me check.\n\nDr. Lee is free.");
+  });
+});
+
+describe("PatientId (the Cognito sub)", () => {
+  it("accepts a real Cognito sub shape, which isn't always an RFC 9562 UUID", () => {
+    // Synthetic, with the shape seen on the dev pool (#17): version digit 7, variant digit d.
+    expect(PatientId.safeParse("0192f4c1-3a7b-7c2d-d4e5-f60718293a4b").success).toBe(true);
+    expect(PatientId.safeParse(EXAMPLES.PatientId).success).toBe(true);
+  });
+
+  it.each([
+    "",
+    "not-a-uuid",
+    "0192f4c1-3a7b-7c2d-d4e5-f60718293a4",
+    "0192f4c1-3a7b-7c2d-d4e5-f60718293a4g",
+    "../PATIENT#x",
+  ])("rejects %j", (value) => {
+    expect(PatientId.safeParse(value).success).toBe(false);
   });
 });
