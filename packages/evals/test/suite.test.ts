@@ -13,7 +13,14 @@ import {
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
-import { interimSystemPrompt, markdownSummary, runSuite, summarize, type TrialResult } from "../src";
+import {
+  interimSystemPrompt,
+  markdownSummary,
+  runSuite,
+  summarize,
+  type RateLimitStats,
+  type TrialResult,
+} from "../src";
 import { l1Case, scenario } from "./helpers";
 
 const cases = [
@@ -37,7 +44,10 @@ const STEPS: ScriptedStep[] = [
   scriptedText("Booked!"), // booking #2: wrong action
 ];
 
-const suite = (steps: ScriptedStep[], extra: { maxCostUsd?: number } = {}) =>
+const suite = (
+  steps: ScriptedStep[],
+  extra: { maxCostUsd?: number; rateLimit?: { readonly stats: RateLimitStats } } = {},
+) =>
   runSuite(cases, {
     mode: "l1",
     suite: "smoke",
@@ -168,6 +178,7 @@ describe("runSuite / summarize", () => {
 
   it("scenario latency comes from per-turn durations, not whole-trial time", () => {
     const trial: TrialResult = {
+      kind: "scenario",
       trial: 1,
       status: "pass",
       graders: [],
@@ -200,6 +211,7 @@ describe("runSuite / summarize", () => {
 
   it("latency percentiles come from the trials that ran", () => {
     const trial = (durationMs: number) => ({
+      kind: "l1" as const,
       trial: 1,
       status: "pass" as const,
       graders: [],
@@ -226,5 +238,16 @@ describe("runSuite / summarize", () => {
     expect(md).toContain("pass@1 67% · pass^k 33% · tool-call accuracy 83% · safety violations 1");
     expect(md).toMatch(/\| l1-emergency-911 \| fail \| 50% \| invariant\.no_reasoning_leak: /);
     expect(md).toMatch(/\| l1-book-after-explicit-yes \| fail \| 50% \| l1\.action: responded instead/);
+  });
+
+  it("the report snapshots the rate limiter's stats when it is given one (8c21660/SMELL-405)", async () => {
+    const stats: RateLimitStats = { calls: 7, retries: 1, throttles: 1 };
+    const report = await suite(STEPS, { rateLimit: { stats } });
+    stats.calls = 99; // a later call on the shared limiter doesn't change a finished report
+    expect(report.rateLimit).toEqual({ calls: 7, retries: 1, throttles: 1 });
+    expect(markdownSummary(report)).toContain(" · 7 calls, 1 retries, 1 throttled");
+    const without = await suite(STEPS);
+    expect(without.rateLimit).toBeUndefined();
+    expect(markdownSummary(without)).not.toContain("throttled");
   });
 });

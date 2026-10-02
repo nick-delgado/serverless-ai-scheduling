@@ -76,3 +76,9 @@ export const promptFor = (
   now: Date,
   firstName: string | undefined,
 ): SystemPrompt => (factory ?? interimSystemPrompt)(now, firstName ?? "there");
+
+/** A patient's first name for the prompt's greeting, looked up the same way in every mode. */
+export const firstNameOf = (
+  patients: readonly { patientId: string; firstName: string }[],
+  patientId: string,
+): string | undefined => patients.find((p) => p.patientId === patientId)?.firstName;

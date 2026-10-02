@@ -21,7 +21,12 @@ import {
   ToolErrorCode,
   ToolName,
 } from "@sched/contracts";
-import { FIXTURE_PATIENT_IDS, FIXTURES, type FixturePatientAlias } from "@sched/tools/fixtures";
+import {
+  FIXTURE_PATIENT_IDS,
+  FIXTURES,
+  type FixtureName as KnownFixture,
+  type FixturePatientAlias,
+} from "@sched/tools/fixtures";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------------------------
@@ -31,7 +36,7 @@ import { z } from "zod";
 const PATIENT_ALIASES = Object.keys(FIXTURE_PATIENT_IDS) as [FixturePatientAlias, ...FixturePatientAlias[]];
 export const PatientAlias = z.enum(PATIENT_ALIASES);
 
-const FIXTURE_NAMES = Object.keys(FIXTURES) as [keyof typeof FIXTURES, ...(keyof typeof FIXTURES)[]];
+const FIXTURE_NAMES = Object.keys(FIXTURES) as [KnownFixture, ...KnownFixture[]];
 export const FixtureName = z.enum(FIXTURE_NAMES);
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;

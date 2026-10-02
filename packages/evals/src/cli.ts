@@ -28,9 +28,9 @@ import {
   selectCases,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
-import { errorReason } from "./runner";
+import { errorReason } from "./util";
 import { rateLimited } from "./rate-limit";
-import { markdownSummary, runSuite } from "./suite";
+import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
@@ -74,19 +74,12 @@ async function main(): Promise<void> {
     profile,
     trials,
     maxCostUsd,
+    rateLimit: llm,
     onTrial: (id, t) =>
       console.log(
-        `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms${
-          t.status === "fail"
-            ? `  ${t.graders
-                .filter((g) => g.status === "fail")
-                .map((g) => g.name)
-                .join(", ")}`
-            : ""
-        }${t.reason ? `  (${t.reason})` : ""}`,
+        `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,
       ),
   });
-  report.rateLimit = { ...llm.stats };
 
   mkdirSync(args.out, { recursive: true });
   const base = resultsBasePath(report, args.out);

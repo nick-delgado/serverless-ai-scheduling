@@ -5,7 +5,7 @@
 import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
-import { runL1Trial, type L1TrialResult } from "./l1";
+import { L1_ACTION, runL1Trial, type L1TrialResult } from "./l1";
 import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
@@ -91,6 +91,8 @@ export interface RunSuiteOptions {
   simulator?: PatientSimulator;
   /** Stop starting new trials once estimated spend reaches this (USD); the trial in flight can go over. */
   maxCostUsd?: number;
+  /** Counters of the rate-limited client, read into the report when the run ends. */
+  rateLimit?: { readonly stats: RateLimitStats };
   /** Progress callback, one line per trial. */
   onTrial?: (id: string, trial: TrialResult | L1TrialResult) => void;
 }
@@ -113,7 +115,7 @@ export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary 
   const latencies =
     mode === "l1"
       ? trials.map((t) => t.durationMs)
-      : trials.flatMap((t) => ("turnDurationsMs" in t ? t.turnDurationsMs : []));
+      : trials.flatMap((t) => (t.kind === "scenario" ? t.turnDurationsMs : []));
   const l1Trials = trials.filter((t) => t.status !== "error" && t.graders.length > 0);
   return {
     cases: cases.length,
@@ -127,14 +129,14 @@ export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary 
     safetyViolations: trials.reduce((s, t) => s + t.safetyViolations, 0),
     budgetStopped: cases.filter((c) => c.budgetStopped).length,
     ...(mode === "scenario"
-      ? { llmRetries: trials.reduce((s, t) => s + ("llmRetries" in t ? t.llmRetries : 0), 0) }
+      ? { llmRetries: trials.reduce((s, t) => s + (t.kind === "scenario" ? t.llmRetries : 0), 0) }
       : {}),
     ...(mode === "l1"
       ? {
           toolCallAccuracy:
             l1Trials.length === 0
               ? 0
-              : l1Trials.filter((t) => t.graders.some((g) => g.name === "l1.action" && g.status === "pass"))
+              : l1Trials.filter((t) => t.graders.some((g) => g.name === L1_ACTION && g.status === "pass"))
                   .length / l1Trials.length,
         }
       : {}),
@@ -220,10 +222,17 @@ export async function runSuite(
     finishedAt: finishedAt.toISOString(),
     wallClockMs: Math.round(performance.now() - t0),
     ...(options.maxCostUsd === undefined ? {} : { maxCostUsd: options.maxCostUsd }),
+    ...(options.rateLimit === undefined ? {} : { rateLimit: { ...options.rateLimit.stats } }),
     summary: summarize(options.mode, results),
     cases: results,
   };
 }
+
+/** What went wrong in a trial: each failed grader as `name: detail`, then the trial's reason, if any. */
+export const failedChecks = (t: TrialResult | L1TrialResult): string[] => [
+  ...t.graders.filter((g) => g.status === "fail").map((g) => `${g.name}: ${g.detail ?? ""}`),
+  ...(t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
+];
 
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 
@@ -244,13 +253,7 @@ export function markdownSummary(report: RunReport): string {
   ];
   for (const c of report.cases) {
     const failed = [
-      ...new Set([
-        ...(c.reason === undefined ? [] : [c.reason]),
-        ...c.trials.flatMap((t) => [
-          ...t.graders.filter((g) => g.status === "fail").map((g) => `${g.name}: ${g.detail ?? ""}`),
-          ...(t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
-        ]),
-      ]),
+      ...new Set([...(c.reason === undefined ? [] : [c.reason]), ...c.trials.flatMap(failedChecks)]),
     ];
     lines.push(
       `| ${c.id} | ${c.status} | ${c.status === "skip" ? "–" : pct(c.passRate)} | ${failed.join("<br>").replaceAll("|", "\\|").slice(0, 400)} |`,

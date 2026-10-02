@@ -14,11 +14,12 @@ import {
 import type { TokenUsage, TurnOutcome } from "@sched/contracts";
 import type { ToolRegistry } from "@sched/tools";
 
+import { errorReason } from "./util";
 import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
 import type { Scenario } from "./schema";
 import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
-import { promptFor, type SystemPromptFactory } from "./system-prompt";
+import { firstNameOf, promptFor, type SystemPromptFactory } from "./system-prompt";
 import { assistantTexts, turnEvents, type TranscriptEvent } from "./transcript";
 
 /** The agent configuration under test. */
@@ -31,13 +32,10 @@ export interface AgentUnderTest {
   registry?: ToolRegistry;
 }
 
-/** How a model or transport error is recorded on an `error` trial: `Name: message`. */
-export const errorReason = (error: unknown): string =>
-  error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-
 export type TrialStatus = "pass" | "fail" | "skip" | "error";
 
 export interface TrialResult {
+  kind: "scenario";
   trial: number;
   status: TrialStatus;
   /** Why a trial was skipped or errored. */
@@ -81,6 +79,7 @@ const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
 
 function skipped(trial: number, reason: string, simulator: string): TrialResult {
   return {
+    kind: "scenario",
     trial,
     status: "skip",
     reason,
@@ -121,7 +120,7 @@ export async function runScenarioTrial(
     trial,
     ...(agent.registry === undefined ? {} : { registry: agent.registry }),
   });
-  const firstName = env.before.patients.find((p) => p.patientId === env.patientId)?.firstName;
+  const firstName = firstNameOf(env.before.patients, env.patientId);
   const system = promptFor(agent.systemPrompt, env.clock.now(), firstName);
 
   const history: LlmMessage[] = [];
@@ -199,6 +198,7 @@ export async function runScenarioTrial(
   });
   const passed = trialPassed(graders);
   return {
+    kind: "scenario",
     trial,
     status: error !== undefined ? "error" : passed ? "pass" : "fail",
     ...(error === undefined ? {} : { reason: error }),

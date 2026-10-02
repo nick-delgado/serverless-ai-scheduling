@@ -10,7 +10,8 @@ import { estimateCostUsd, resolveModelProfile, type ModelProfile } from "@sched/
 
 import { l1Request } from "./l1";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
-import { errorReason, skipReason } from "./runner";
+import { skipReason } from "./runner";
+import { errorReason } from "./util";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { scriptOnlySimulator } from "./simulator";
 import { MODES, type Mode, type RunReport, type RunSummary } from "./suite";

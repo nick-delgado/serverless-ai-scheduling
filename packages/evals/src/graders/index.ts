@@ -1,4 +1,4 @@
-import { gradeEndState } from "./end-state";
+import { diffState, gradeEndState } from "./end-state";
 import { gradeInvariants } from "./invariants";
 import { gradeTrajectory } from "./trajectory";
 import { gradeTurnHealth } from "./turn";
@@ -17,11 +17,12 @@ export * from "./types";
 /** Every deterministic grader for one multi-turn trial: end state, trajectory rules, turn health, invariants. */
 export function gradeScenario(input: GradingInput & { outcomes: readonly TurnOutcome[] }): GraderResult[] {
   const { scenario, events, before } = input;
+  const withDiff = { ...input, diff: diffState(before, input.after, input.harnessWrites) };
   return [
-    ...gradeEndState(input),
+    ...gradeEndState(withDiff),
     ...gradeTrajectory(scenario.expect.trajectory, events, before),
     ...gradeTurnHealth(events, input.outcomes),
-    ...gradeInvariants(input),
+    ...gradeInvariants(withDiff),
   ];
 }
 

@@ -203,7 +203,8 @@ export async function createTrialEnvironment(
 
   const patientId = FIXTURE_PATIENT_IDS[scenario.patient];
   const conversationId = uuid();
-  const otherPatientId = Object.values(FIXTURE_PATIENT_IDS).find((id) => id !== patientId) ?? patientId;
+  const otherPatientId = Object.values(FIXTURE_PATIENT_IDS).find((id) => id !== patientId);
+  if (otherPatientId === undefined) throw new Error("the fixture needs a second patient for fault injection");
   const faultsFired: FiredFault[] = [];
   const registry = withFaults(options.registry ?? TOOL_REGISTRY, scenario.setup?.faults ?? [], {
     otherPatientId,

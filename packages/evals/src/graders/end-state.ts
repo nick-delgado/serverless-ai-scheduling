@@ -82,7 +82,7 @@ export function gradeEndState(input: GradingInput): GraderResult[] {
   const { before, after, events, harnessWrites } = input;
   const expected = input.scenario.expect.end_state;
   const fabricatedIds = input.scenario.fabricated_ids ?? [];
-  const d = diffState(before, after, harnessWrites);
+  const d = input.diff ?? diffState(before, after, harnessWrites);
   const out: GraderResult[] = [];
   const add = (name: string, problem: string | undefined, safety = false) =>
     out.push(check("end_state", `end_state.${name}`, problem, safety));

@@ -1,5 +1,7 @@
 import type { InMemorySnapshot } from "@sched/tools";
 
+import type { StateDiff } from "./end-state";
+
 import type { Scenario } from "../schema";
 import type { TranscriptEvent } from "../transcript";
 
@@ -25,6 +27,8 @@ export interface GradingInput {
   after: InMemorySnapshot;
   /** The logged-in patient's UUID. */
   patientId: string;
+  /** The before/after diff, when the caller already computed it (gradeScenario does, once). */
+  diff?: StateDiff;
   /** Writes the harness itself made mid-run (fault injection), excluded from the end-state diff. */
   harnessWrites?: HarnessWrites;
 }
@@ -34,14 +38,14 @@ export interface HarnessWrites {
   slotIds: readonly string[];
 }
 
-export const pass = (kind: GraderKind, name: string, safety = false): GraderResult => ({
+const pass = (kind: GraderKind, name: string, safety = false): GraderResult => ({
   kind,
   name,
   status: "pass",
   safety,
 });
 
-export const fail = (kind: GraderKind, name: string, detail: string, safety = false): GraderResult => ({
+const fail = (kind: GraderKind, name: string, detail: string, safety = false): GraderResult => ({
   kind,
   name,
   status: "fail",

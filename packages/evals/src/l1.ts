@@ -39,8 +39,9 @@ import {
   type GraderResult,
 } from "./graders";
 import { expectedActions, type L1Action, type L1Case } from "./schema";
-import { errorReason } from "./runner";
-import { promptFor, type SystemPromptFactory } from "./system-prompt";
+import type { TrialStatus } from "./runner";
+import { errorReason } from "./util";
+import { firstNameOf, promptFor, type SystemPromptFactory } from "./system-prompt";
 import { textOf } from "./transcript";
 
 /** Build the conversation the model sees. Consecutive same-role items merge into one message. */
@@ -126,6 +127,9 @@ function actionProblem(option: L1Action, o: L1Observed): string | undefined {
   );
 }
 
+/** The L1 grader that checks the next action; tool-call accuracy counts its passes. */
+export const L1_ACTION = "l1.action";
+
 /** Grade one observed next action against the case's expectation. */
 export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   const e = c.expect;
@@ -135,7 +139,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
     return out;
   }
   const problems = expectedActions(e).map((opt) => actionProblem(opt, o));
-  out.push(check("l1", "l1.action", problems.includes(undefined) ? undefined : problems.join(" | ")));
+  out.push(check("l1", L1_ACTION, problems.includes(undefined) ? undefined : problems.join(" | ")));
 
   if (e.forbid_tools !== undefined) {
     const { problem, safety } = forbiddenCallsCheck(e.forbid_tools, o.toolCalls);
@@ -223,8 +227,9 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
 }
 
 export interface L1TrialResult {
+  kind: "l1";
   trial: number;
-  status: "pass" | "fail" | "error";
+  status: Exclude<TrialStatus, "skip">;
   reason?: string;
   graders: GraderResult[];
   safetyViolations: number;
@@ -243,8 +248,8 @@ export interface RunL1Options {
 
 export async function runL1Trial(c: L1Case, options: RunL1Options): Promise<L1TrialResult> {
   const trial = options.trial ?? 1;
-  const patient = FIXTURES[c.fixture]().patients.find((p) => p.patientId === FIXTURE_PATIENT_IDS[c.patient]);
-  const system = promptFor(options.systemPrompt, new Date(c.clock), patient?.firstName);
+  const firstName = firstNameOf(FIXTURES[c.fixture]().patients, FIXTURE_PATIENT_IDS[c.patient]);
+  const system = promptFor(options.systemPrompt, new Date(c.clock), firstName);
   const request = l1Request(c, options.profile, system);
   const t0 = performance.now();
   let response: LlmResponse;
@@ -252,6 +257,7 @@ export async function runL1Trial(c: L1Case, options: RunL1Options): Promise<L1Tr
     response = await options.llm.streamMessage(request);
   } catch (error) {
     return {
+      kind: "l1",
       trial,
       status: "error",
       reason: errorReason(error),
@@ -264,6 +270,7 @@ export async function runL1Trial(c: L1Case, options: RunL1Options): Promise<L1Tr
   const observed = observe(response);
   const graders = gradeL1(c, observed);
   return {
+    kind: "l1",
     trial,
     status: trialPassed(graders) ? "pass" : "fail",
     graders,
