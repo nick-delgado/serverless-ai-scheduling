@@ -29,7 +29,7 @@ import type { Appointment, AppointmentSummary, Provider } from "@sched/contracts
 
 import { formatClinicDateTime } from "../clock";
 import { toolFail, toolOk, type ToolHandler, type ToolHandlerResult } from "../registry";
-import { TOOL_ERROR_CODE_FOR, type RescheduleFailureReason } from "../repos/types";
+import { TOOL_ERROR_CODE_FOR, type RescheduleErrorReason } from "../repos/types";
 
 const toAppointmentSummary = (a: Appointment, provider: Provider): AppointmentSummary => ({
   appointment_id: a.appointmentId,
@@ -49,11 +49,8 @@ const BOOK_NEW_HINT =
 const AVAILABILITY_HINT =
   "Call check_availability, offer the patient one of the returned times, and use that slot_id after they confirm.";
 
-/** The repository failures that are answered as errors. SAME_SLOT is a success (`already_rescheduled`). */
-type FailureReason = Exclude<RescheduleFailureReason, "SAME_SLOT">;
-
 /** Message and hint for each repository failure. The code comes from TOOL_ERROR_CODE_FOR. */
-const FAILURE_TEXT: Record<FailureReason, { message: string; hint: string }> = {
+const FAILURE_TEXT: Record<RescheduleErrorReason, { message: string; hint: string }> = {
   APPOINTMENT_NOT_FOUND: {
     message: "No appointment with that ID was found for you. Nothing was changed.",
     hint: LIST_HINT,
@@ -76,7 +73,7 @@ const FAILURE_TEXT: Record<FailureReason, { message: string; hint: string }> = {
   },
 };
 
-const fail = (reason: FailureReason): ToolHandlerResult<"reschedule_appointment"> =>
+const fail = (reason: RescheduleErrorReason): ToolHandlerResult<"reschedule_appointment"> =>
   toolFail(TOOL_ERROR_CODE_FOR[reason], FAILURE_TEXT[reason].message, FAILURE_TEXT[reason].hint);
 
 export const rescheduleAppointment: ToolHandler<"reschedule_appointment"> = async (input, ctx) => {
@@ -123,7 +120,7 @@ export const rescheduleAppointment: ToolHandler<"reschedule_appointment"> = asyn
     );
   }
 
-  // Resolved before the write, so a successful move never ends in INTERNAL (and a retry in SAME_SLOT).
+  // Resolved before the write, so a successful move never ends in INTERNAL.
   const provider = await ctx.repos.providers.get(slot.providerId);
   if (!provider) throw new Error(`Slot ${slot.slotId} references unknown provider ${slot.providerId}`);
 
