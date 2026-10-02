@@ -98,7 +98,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
   - **Development default:** `sonnet-4.6` (`us.anthropic.claude-sonnet-4-6`).
   - Also callable: `haiku-4.5` (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), `nova-2-lite` (`us.amazon.nova-2-lite-v1:0`), `nova-pro` (`us.amazon.nova-pro-v1:0`), `gpt-oss-120b` (`openai.gpt-oss-120b-1:0`), `gpt-oss-20b` (`openai.gpt-oss-20b-1:0`).
   - **Not entitled:** `opus-5` and `sonnet-5` stay defined but resolving them throws; AWS denied access ("not available for this account"), and the proprietary GPT-5.x models are blocked the same way.
-  - Model choice is config, not code (ADR-010); the M3 eval matrix picks the default. Pace bulk calls to quota: Claude 10 RPM, Nova 2 Lite 20, Nova Pro 25, gpt-oss 100.
+  - Model choice is config, not code (ADR-010); the M3 eval matrix picks the default. Pace bulk calls to each profile's `rpm` (`packages/agent/src/profiles.ts`), the account quota.
 - Eval runs call Bedrock and cost real money. Say what a run will cost before starting a full matrix run.
 
 ## How work flows

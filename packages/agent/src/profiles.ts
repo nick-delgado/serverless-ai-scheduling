@@ -76,8 +76,9 @@ export interface ModelProfile {
   readonly fallback: ModelProfileName;
   readonly pricing: ModelPricing;
   /**
-   * On-demand requests per minute this account gets for the model (quotas as of 2026-09-29; CLAUDE.md).
-   * Live callers pace to it, e.g. the eval harness's rate limiter.
+   * On-demand requests per minute this account gets for the model (from the account's Service Quotas,
+   * as of 2026-09-29). The one source of truth: update it here. Live callers pace to it, e.g. the eval
+   * harness's rate limiter.
    */
   readonly rpm: number;
 }
