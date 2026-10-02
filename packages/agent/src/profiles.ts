@@ -75,6 +75,12 @@ export interface ModelProfile {
   /** Profile for the single client-side retry after a refusal (Bedrock has no server-side fallbacks). */
   readonly fallback: ModelProfileName;
   readonly pricing: ModelPricing;
+  /**
+   * On-demand requests per minute this account gets for the model (from the account's Service Quotas,
+   * as of 2026-09-29). The one source of truth: update it here. Live callers pace to it, e.g. the eval
+   * harness's rate limiter.
+   */
+  readonly rpm: number;
 }
 
 /**
@@ -106,6 +112,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "sonnet-4.6": {
     name: "sonnet-4.6",
+    rpm: 10,
     modelId: "us.anthropic.claude-sonnet-4-6",
     family: "anthropic.claude",
     entitled: true,
@@ -124,6 +131,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "haiku-4.5": {
     name: "haiku-4.5",
+    rpm: 10,
     modelId: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     family: "anthropic.claude",
     entitled: true,
@@ -142,6 +150,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "nova-2-lite": {
     name: "nova-2-lite",
+    rpm: 20,
     modelId: "us.amazon.nova-2-lite-v1:0",
     family: "amazon.nova",
     entitled: true,
@@ -160,6 +169,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "nova-pro": {
     name: "nova-pro",
+    rpm: 25,
     modelId: "us.amazon.nova-pro-v1:0",
     family: "amazon.nova",
     entitled: true,
@@ -181,6 +191,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "gpt-oss-120b": {
     name: "gpt-oss-120b",
+    rpm: 100,
     modelId: "openai.gpt-oss-120b-1:0",
     family: "openai.gpt-oss",
     entitled: true,
@@ -197,6 +208,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
   /** OpenAI gpt-oss-20b: the smallest and cheapest profile. Same settings as gpt-oss-120b. */
   "gpt-oss-20b": {
     name: "gpt-oss-20b",
+    rpm: 100,
     modelId: "openai.gpt-oss-20b-1:0",
     family: "openai.gpt-oss",
     entitled: true,
@@ -216,6 +228,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "sonnet-5": {
     name: "sonnet-5",
+    rpm: 10,
     modelId: "us.anthropic.claude-sonnet-5",
     family: "anthropic.claude",
     entitled: false,
@@ -234,6 +247,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
    */
   "opus-5": {
     name: "opus-5",
+    rpm: 10,
     modelId: "us.anthropic.claude-opus-5",
     family: "anthropic.claude",
     entitled: false,
