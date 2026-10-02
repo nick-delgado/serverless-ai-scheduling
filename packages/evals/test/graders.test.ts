@@ -14,45 +14,21 @@ import {
   gradeTrajectoryRule,
   gradeTurnHealth,
   INVARIANTS,
-  loadScenarios,
   SKIPPED_INVARIANTS,
   type AppointmentMatcher,
   type EndState,
   type GraderResult,
   type Invariant,
   type Scenario,
-  type ToolCallEvent,
   type TrajectoryRule,
   type TranscriptEvent,
 } from "../src";
+import { byName, call, MARIA, MARIA_APPT, scenario, WALTER_APPT } from "./helpers";
 
-const { scenarios } = loadScenarios();
-const scenario = (id: string): Scenario => {
-  const s = scenarios.find((x) => x.id === id);
-  if (s === undefined) throw new Error(`no scenario ${id}`);
-  return s;
-};
-const byName = (results: readonly GraderResult[], name: string): GraderResult | undefined =>
-  results.find((r) => r.name === name);
-
-const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
-const WALTER_APPT = "appt_01JBX8C4D5E6F7G8H9J0K1M2N3";
-const MARIA_APPT = "appt_01JBX7Q2M3N4P5R6S7T8V9W0XY"; // Dr. Lee, Tue Oct 13 2:30 PM ET
 // Dr. Okafor, Thursday Oct 15: 15:30Z is 11:30 AM EDT, 16:00Z is 12:00 PM EDT.
 const OKAFOR_THU_1130 = "slot_okafor_20261015T1530Z";
 const OKAFOR_THU_1200 = "slot_okafor_20261015T1600Z";
 const OKAFOR_MON_1200 = "slot_okafor_20261012T1600Z";
-
-const call = (name: string, input: unknown, extra: Partial<ToolCallEvent> = {}): ToolCallEvent => ({
-  kind: "tool_call",
-  turn: 1,
-  id: `t_${name}`,
-  name,
-  known: true,
-  input,
-  ok: true,
-  ...extra,
-});
 
 /** A fresh world for Maria, plus helpers that make real writes to it. */
 async function world() {

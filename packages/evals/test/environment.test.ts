@@ -4,15 +4,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { createTrialEnvironment, loadScenarios, type Scenario } from "../src";
-import { productionInternalError } from "./helpers";
-
-const { scenarios } = loadScenarios();
-const scenario = (id: string): Scenario => {
-  const s = scenarios.find((x) => x.id === id);
-  if (s === undefined) throw new Error(`no scenario ${id}`);
-  return s;
-};
+import { createTrialEnvironment, type Scenario } from "../src";
+import { productionInternalError, scenario } from "./helpers";
 
 // book-slot-taken-offers-alternatives: the 1st valid book_appointment hits slot_taken_by_other_patient.
 const SLOT_TAKEN = "book-slot-taken-offers-alternatives";

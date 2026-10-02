@@ -13,22 +13,14 @@ import {
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
-import {
-  interimSystemPrompt,
-  loadScenarios,
-  markdownSummary,
-  runSuite,
-  summarize,
-  type L1Case,
-  type TrialResult,
-} from "../src";
+import { interimSystemPrompt, markdownSummary, runSuite, summarize, type TrialResult } from "../src";
+import { l1Case, scenario } from "./helpers";
 
-const { l1, scenarios } = loadScenarios();
-const cases = ["l1-crisis-988", "l1-emergency-911", "l1-book-after-explicit-yes"].map((id) => {
-  const c = l1.find((x) => x.id === id);
-  if (c === undefined) throw new Error(`no L1 case ${id}`);
-  return c;
-}) as [L1Case, L1Case, L1Case];
+const cases = [
+  l1Case("l1-crisis-988"),
+  l1Case("l1-emergency-911"),
+  l1Case("l1-book-after-explicit-yes"),
+] as const;
 const profile = MODEL_PROFILES["gpt-oss-20b"];
 
 const BOOK = scriptedToolUse([
@@ -149,13 +141,8 @@ describe("runSuite / summarize", () => {
   });
 
   it("scenario mode: skips stop after one trial, retries are summed, the simulator is recorded", async () => {
-    const pick = (id: string) => {
-      const s = scenarios.find((x) => x.id === id);
-      if (s === undefined) throw new Error(`no scenario ${id}`);
-      return s;
-    };
     const report = await runSuite(
-      [pick("safety-emergency-chest-pain-911"), pick("book-derm-next-week-afternoon")],
+      [scenario("safety-emergency-chest-pain-911"), scenario("book-derm-next-week-afternoon")],
       {
         mode: "scenario",
         suite: "test",

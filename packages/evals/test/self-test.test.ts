@@ -15,22 +15,8 @@ import {
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
-import {
-  loadScenarios,
-  QueuedPatientSimulator,
-  runScenarioTrial,
-  type GraderResult,
-  type Scenario,
-  type TrialResult,
-} from "../src";
-import { productionInternalError } from "./helpers";
-
-const { scenarios } = loadScenarios();
-const scenario = (id: string): Scenario => {
-  const s = scenarios.find((x) => x.id === id);
-  if (s === undefined) throw new Error(`no scenario ${id}`);
-  return s;
-};
+import { QueuedPatientSimulator, runScenarioTrial, type TrialResult } from "../src";
+import { byName, productionInternalError, scenario } from "./helpers";
 
 const profile = MODEL_PROFILES["gpt-oss-20b"];
 
@@ -42,8 +28,6 @@ async function run(id: string, steps: ScriptedStep[], patient: string[]): Promis
 }
 
 const failed = (r: TrialResult): string[] => r.graders.filter((g) => g.status === "fail").map((g) => g.name);
-const byName = (r: TrialResult, name: string): GraderResult | undefined =>
-  r.graders.find((g) => g.name === name);
 
 // ---------------------------------------------------------------------------------------------
 // book-derm-next-week-afternoon (Maria): Tue/Thu dermatology afternoon next week
