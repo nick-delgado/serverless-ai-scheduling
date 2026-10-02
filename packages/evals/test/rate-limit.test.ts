@@ -5,20 +5,21 @@ import {
   defaultRpmFor,
   isRetryable,
   isThrottle,
-  RateLimitedLlmClient,
+  rateLimited,
   RateLimiter,
   TokenBucket,
   type Timer,
 } from "../src";
 
-/** A virtual clock: `sleep` advances time instead of waiting. */
+/** A virtual clock: `sleep` advances time instead of waiting, and rejects at once on an aborted signal. */
 function fakeTimer(): Timer & { sleeps: number[] } {
   let now = 0;
   const sleeps: number[] = [];
   return {
     sleeps,
     now: () => now,
-    sleep: (ms) => {
+    sleep: (ms, signal) => {
+      if (signal?.aborted) return Promise.reject(new Error("aborted"));
       sleeps.push(ms);
       now += ms;
       return Promise.resolve();
@@ -49,6 +50,20 @@ describe("TokenBucket", () => {
     for (let i = 0; i < 4; i++) await bucket.take();
     expect(timer.now()).toBe(18_000);
   });
+
+  it("an aborted wait rejects without blocking the callers after it (8c21660/TEST-405)", async () => {
+    const timer = fakeTimer();
+    const bucket = new TokenBucket(10, { timer });
+    await bucket.take(); // the first token is free; the next one needs a 6 s wait
+    const aborted = AbortSignal.abort();
+    await expect(bucket.take(aborted)).rejects.toThrow("aborted");
+    await bucket.take();
+    expect(timer.now()).toBe(6000);
+  });
+
+  it.each([0, -1, Number.NaN])("refuses a rate of %d per minute (8c21660/TEST-405)", (rate) => {
+    expect(() => new TokenBucket(rate)).toThrow(RangeError);
+  });
 });
 
 describe("RateLimiter", () => {
@@ -69,11 +84,15 @@ describe("RateLimiter", () => {
     );
   });
 
-  it("uses the account quotas from CLAUDE.md", () => {
-    expect(defaultRpmFor("us.anthropic.claude-haiku-4-5-20251001-v1:0")).toBe(10);
-    expect(defaultRpmFor("us.amazon.nova-pro-v1:0")).toBe(25);
-    expect(defaultRpmFor("us.amazon.nova-2-lite-v1:0")).toBe(20);
-    expect(defaultRpmFor("openai.gpt-oss-120b-1:0")).toBe(100);
+  it.each([
+    ["sonnet-4.6", 10],
+    ["haiku-4.5", 10],
+    ["nova-2-lite", 20],
+    ["nova-pro", 25],
+    ["gpt-oss-120b", 100],
+    ["gpt-oss-20b", 100],
+  ] as const)("paces %s at the account quota of %i RPM (8c21660/TEST-403)", (name, rpm) => {
+    expect(defaultRpmFor(MODEL_PROFILES[name].modelId)).toBe(rpm);
   });
 });
 
@@ -81,7 +100,7 @@ describe("RateLimitedLlmClient", () => {
   it("retries a 429 with backoff, drawing a fresh token each attempt", async () => {
     const timer = fakeTimer();
     const inner = new ScriptedLlmClient([{ error: throttle() }, { error: throttle() }, scriptedText("ok")]);
-    const client = new RateLimitedLlmClient(inner, {
+    const client = rateLimited(inner, {
       limiter: new RateLimiter({ timer, utilization: 1 }),
       baseDelayMs: 1000,
       random: () => 0,
@@ -93,6 +112,18 @@ describe("RateLimitedLlmClient", () => {
     expect(timer.sleeps).toEqual([500, 100, 1000]);
   });
 
+  it("counts a 5xx as a retry but not as a throttle (8c21660/TEST-404)", async () => {
+    const timer = fakeTimer();
+    const unavailable = Object.assign(new Error("unavailable"), {
+      name: "ServiceUnavailableException",
+      $metadata: { httpStatusCode: 503 },
+    });
+    const inner = new ScriptedLlmClient([{ error: unavailable }, { error: throttle() }, scriptedText("ok")]);
+    const client = rateLimited(inner, { limiter: new RateLimiter({ timer }), random: () => 0 });
+    await client.streamMessage(request("openai.gpt-oss-20b-1:0"));
+    expect(client.stats).toEqual({ calls: 3, retries: 2, throttles: 1 });
+  });
+
   it("does not retry a non-retryable error, and gives up after maxRetries", async () => {
     const timer = fakeTimer();
     const limiter = new RateLimiter({ timer });
@@ -101,15 +132,13 @@ describe("RateLimitedLlmClient", () => {
       $metadata: { httpStatusCode: 403 },
     });
     await expect(
-      new RateLimitedLlmClient(new ScriptedLlmClient([{ error: denied }]), { limiter }).streamMessage(
+      rateLimited(new ScriptedLlmClient([{ error: denied }]), { limiter }).streamMessage(
         request("openai.gpt-oss-20b-1:0"),
       ),
     ).rejects.toBe(denied);
     const always = new ScriptedLlmClient([{ error: throttle() }, { error: throttle() }]);
     await expect(
-      new RateLimitedLlmClient(always, { limiter, maxRetries: 1 }).streamMessage(
-        request("openai.gpt-oss-20b-1:0"),
-      ),
+      rateLimited(always, { limiter, maxRetries: 1 }).streamMessage(request("openai.gpt-oss-20b-1:0")),
     ).rejects.toMatchObject({
       name: "ThrottlingException",
     });
@@ -150,7 +179,7 @@ describe("rate-limit defaults and edges", () => {
     const timer = fakeTimer();
     const delays: number[] = [];
     const errors = Array.from({ length: 6 }, () => ({ error: throttle() }));
-    const client = new RateLimitedLlmClient(new ScriptedLlmClient([...errors, scriptedText("ok")]), {
+    const client = rateLimited(new ScriptedLlmClient([...errors, scriptedText("ok")]), {
       limiter: new RateLimiter({ timer, rpmFor: () => 60_000 }),
       random: () => 0.999_999,
       onRetry: ({ delayMs }) => delays.push(delayMs),
