@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   CheckAvailabilityInput,
@@ -51,6 +52,17 @@ describe("tool registry", () => {
 
   it.each(TOOL_NAMES)("%s has a substantive model-facing description", (name) => {
     expect(TOOLS[name].description.length).toBeGreaterThan(80);
+  });
+
+  // The add-agent-tool guideline "what it returns, and which fields to quote verbatim", as a check.
+  const returnsStartLocal = TOOL_NAMES.filter((name) =>
+    JSON.stringify(z.toJSONSchema(TOOLS[name].output)).includes('"start_local"'),
+  );
+  it("finds the tools whose output carries start_local", () => {
+    expect(returnsStartLocal.length).toBeGreaterThan(0);
+  });
+  it.each(returnsStartLocal)("%s tells the model to quote start_local", (name) => {
+    expect(TOOLS[name].description).toMatch(/start_local/);
   });
 
   it("matches the committed snapshot (model-facing changes show up in PR diffs)", () => {

@@ -1,6 +1,6 @@
 /**
- * The executor side of the agent/tools seam, exercised with dummy handlers registered only here
- * (the production TOOL_REGISTRY stays empty until #19–#23 land).
+ * The executor side of the agent/tools seam, exercised with dummy handlers registered only here,
+ * plus one check that the production TOOL_REGISTRY registers every tool.
  */
 import { TOOL_NAMES, ToolError, toolDefinitionsForModel, type PatientId } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
@@ -106,13 +106,9 @@ describe("tool executor", () => {
       );
     });
 
-    it("is empty for the (still empty) production registry, whose keys are all tool names", () => {
-      expect(Object.keys(TOOL_REGISTRY).every((k) => (TOOL_NAMES as readonly string[]).includes(k))).toBe(
-        true,
-      );
-      expect(createToolExecutor(TOOL_REGISTRY, ctx).definitions.length).toBe(
-        Object.keys(TOOL_REGISTRY).length,
-      );
+    it("registers every tool in TOOL_NAMES in the production registry, so the model is offered all of them", () => {
+      expect(Object.keys(TOOL_REGISTRY).sort()).toEqual([...TOOL_NAMES].sort());
+      expect(createToolExecutor(TOOL_REGISTRY, ctx).definitions.map((d) => d.name)).toEqual([...TOOL_NAMES]);
     });
 
     it("is frozen", () => {
