@@ -15,7 +15,10 @@ if [ "$#" -ne 0 ]; then
 fi
 
 # The tracking issue is the oldest open issue carrying the label.
-issue="$(gh issue list --label "$LABEL" --state open --limit 100 --json number --jq 'map(.number) | min // empty')"
+issue="$(
+  gh api --paginate "repos/{owner}/{repo}/issues?labels=${LABEL}&state=open&per_page=100" \
+    --jq '.[] | select(.pull_request | not) | .number' | sort -n | head -n 1
+)"
 
 if [ -z "$issue" ]; then
   echo "No open issue labelled '$LABEL' in this repository: no reviews have logged process findings yet." >&2
@@ -23,7 +26,7 @@ if [ -z "$issue" ]; then
 fi
 
 echo "tracking-issue: $issue"
-echo "url: $(gh issue view "$issue" --json url --jq '.url')"
+echo "url: $(gh api "repos/{owner}/{repo}/issues/${issue}" --jq '.html_url')"
 
 log="$(
   gh api --paginate "repos/{owner}/{repo}/issues/${issue}/comments" \
@@ -36,7 +39,7 @@ printf '%s\n' "$log"
 prs="$(printf '%s\n' "$log" | sed -n 's/^<!-- agent-pr-review:process pr=\([0-9][0-9]*\)\( sha=[0-9a-f]*\)\{0,1\} -->$/\1/p' | sort -un)"
 
 for pr in $prs; do
-  state="$(gh pr view "$pr" --json state --jq '.state' 2>/dev/null || echo "unknown")"
+  state="$(gh api "repos/{owner}/{repo}/pulls/${pr}" --jq 'if .merged_at then "merged" else .state end' 2>/dev/null || echo "unknown")"
   printf '\n======== decisions and fixes on PR #%s (%s) ========\n' "$pr" "$state"
   response="$(
     gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \

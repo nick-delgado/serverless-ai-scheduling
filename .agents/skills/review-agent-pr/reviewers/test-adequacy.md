@@ -31,6 +31,10 @@ still pass, it is hollow.
 - A test exists but would not fail: `hollow-test`. Major when the test's name or the PR
   description claims the coverage it does not give; minor when the test is merely weak and
   claims no more than it checks.
+- A **broad** claim ("every rule has a test that fails", "all paths covered") that the
+  tests do not fully support is one finding about the claim, not one major per uncovered
+  case: grade each uncovered case on its own as a `missing-case` (see the boundary cases in
+  the finding schema).
 
 ### 3. Look for hollow tests
 

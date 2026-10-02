@@ -3,8 +3,13 @@
 #
 # Usage: check-outputs.sh <run-dir>
 #
-# Prints one line per reviewer: ok, or the sections it is missing. Exits 1 when any
-# reviewer output is missing or incomplete; send that reviewer back to finish.
+# A reviewer writes findings/<name>.md, or, when a large PR is split into parts,
+# findings/<name>--<k>.md for each part k (and no unsplit file). Every file needs the
+# sections; a part's finding IDs must be numbered from k*100+1 so that parts never share an
+# ID.
+#
+# Prints one line per output file: ok, or what is wrong. Exits 1 when anything is missing
+# or wrong; send that reviewer (or part) back to finish.
 
 set -euo pipefail
 
@@ -25,23 +30,53 @@ required() {
   esac
 }
 
-for reviewer in standards code-smells spec-alignment test-adequacy; do
-  file="$dir/$reviewer.md"
-  if [ ! -s "$file" ]; then
-    echo "$reviewer: output missing ($file)"
-    status=1
-    continue
-  fi
-  missing=""
+check_file() {
+  local reviewer="$1" file="$2" part="${3:-}" problems="" heading id n low high
   while IFS= read -r heading; do
-    grep -qxF "$heading" "$file" || missing="$missing
-  $heading"
+    grep -qxF "$heading" "$file" || problems="$problems
+  missing section: $heading"
   done < <(required "$reviewer")
-  if [ -n "$missing" ]; then
-    echo "$reviewer: missing sections:$missing"
+  if [ -n "$part" ]; then
+    low=$((part * 100 + 1))
+    high=$((part * 100 + 99))
+    while IFS= read -r id; do
+      n="${id##*-}"
+      n="${n%%[a-z]*}"
+      if [ "$n" -lt "$low" ] || [ "$n" -gt "$high" ]; then
+        problems="$problems
+  finding $id is outside this part's range ($low to $high)"
+      fi
+    done < <(grep -oE '^### [A-Z]+-[0-9]+[a-z]?:' "$file" | sed 's/^### //; s/:$//')
+  fi
+  if [ -n "$problems" ]; then
+    echo "$(basename "$file"):$problems"
     status=1
   else
-    echo "$reviewer: ok"
+    echo "$(basename "$file"): ok"
+  fi
+}
+
+for reviewer in standards code-smells spec-alignment test-adequacy; do
+  whole="$dir/$reviewer.md"
+  parts="$(ls "$dir/$reviewer--"*.md 2>/dev/null || true)"
+  if [ -n "$parts" ] && [ -e "$whole" ]; then
+    echo "$reviewer: both an unsplit output and parts exist; keep one or the other"
+    status=1
+  fi
+  if [ -n "$parts" ]; then
+    while IFS= read -r f; do
+      part="$(basename "$f" .md)"
+      part="${part##*--}"
+      case "$part" in
+        '' | *[!0-9]*) echo "$(basename "$f"): the part must be a number (<name>--<k>.md)"; status=1; continue ;;
+      esac
+      check_file "$reviewer" "$f" "$part"
+    done <<< "$parts"
+  elif [ -s "$whole" ]; then
+    check_file "$reviewer" "$whole"
+  else
+    echo "$reviewer: output missing ($whole)"
+    status=1
   fi
 done
 

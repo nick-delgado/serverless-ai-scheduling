@@ -31,9 +31,11 @@ Confirmed findings after verification (<reported> reported, <confirmed> confirme
 | Spec alignment | | | | |
 | Test adequacy | | | | |
 
-By action: <n> to fix now, <n> waiting for the owner's decision, <n> for the owner.
+By action: <n> to fix now, <n> waiting for the owner's decision, <n> for the owner<, <n> noticed in unchanged code (not blocking), on a re-review>.
 
-<On a re-review:> Previous review of `<sha>`: <n> resolved, <n> still present, <n> decided, <n> for the owner, <n> withdrawn.
+<On a re-review:> Round <k>. Previous review of `<sha>`: <n> resolved, <n> still present, <n> decided, <n> for the owner, <n> withdrawn. This round: <n> blocking findings in changed code and <n> in unchanged code, against <n> confirmed last round.
+
+<If any owner decision added scope beyond the issue:> Added by owner decisions so far: <the decisions, as `<commit>/<ID>`, and what each added>.
 
 Why these issues arose, and proposed changes to the project's agent setup: <URL of the tracking-issue comment, or "not analysed (no findings above nit)">
 ```
@@ -50,6 +52,7 @@ the verification summary in `verified.md`; do not recount by hand.
 - Isolation: <parallel subagents with fresh context | none (sequential, shared context)>
 - Tests, linters and builds were not run by this review; CI status is reported as found.
 - Line citations: <the summary line from check-citations.sh>
+- Harness version: <`metadata.harness-version` from the frontmatter of the review-agent-pr SKILL.md that ran>
 - <Anything that did not complete: a reviewer that failed, a phase skipped, and why.>
 ```
 
@@ -61,15 +64,22 @@ the verification summary in `verified.md`; do not recount by hand.
 | **Changes recommended** | no blocker, at least one confirmed major |
 | **Acceptable** | only minor findings and nits, or none |
 
-Findings whose action is `for the owner` do not count toward the verdict. Findings that
-need the owner's decision do.
+Findings whose action is `for the owner` or `noticed` do not count toward the verdict.
+Findings that need the owner's decision do.
+
+**The stopping rule.** On a re-review, `noticed` findings never block, so the verdict
+depends only on changed code and on serious defects anywhere. When a re-review finds no
+blocker, no major in changed code and no major behaviour defect in unchanged code, the
+verdict is **Acceptable**, and the remaining minors, nits and noticed items are follow-ups,
+not a reason for another round. Say so in the summary: "No further review round is
+needed."
 
 Add `— limited review` to the verdict when spec alignment was not reviewable or a reviewer
 could not complete. The verdict is a recommendation to the human who merges.
 
 ## What the script assembles
 
-### The report (`assemble-report.sh <RUN_DIR> report <full head sha>`)
+### The report (`assemble-report.sh <RUN_DIR> report <full head sha>`, written to `report-01.md`, `report-02.md`, ...)
 
 | Section | Taken from |
 |---|---|
@@ -77,6 +87,8 @@ could not complete. The verdict is a recommendation to the human who merges.
 | Fix now | `verified.md`: confirmed findings and minor-table rows whose action is `fix now` |
 | Needs the owner's decision | the same, for `needs owner decision` |
 | For the owner (no action in this PR) | the same, for `for the owner` |
+| Noticed in unchanged code (re-review only, not blocking) | minor-table rows whose action is `noticed` |
+| Convergence (re-review only) | `verified.md` → Convergence |
 | Previous findings (re-review only) | `verified.md` → Previous findings |
 | Spec alignment (traceability, unrequested changes) | `verified.md` → Reviewer tables |
 | Evidence of review: counts of checks, searches and skipped items per reviewer | `findings/*.md` |
@@ -99,11 +111,19 @@ work by them.
 
 ## Length
 
-GitHub limits a comment to 65,536 characters. The script keeps each output under 60,000:
+GitHub limits a comment to 65,536 characters. Nothing in the report is trimmed to fit:
 
-1. It builds the report with the full check tables.
-2. If that is too long, it leaves the check tables out and says so in the run metadata. The
-   per-reviewer counts, the "Not reviewed" list and the rejected findings always stay.
-3. If an output is still too long, it fails and prints the size of each section. Shorten
-   the largest section in its source file and run it again. Never shorten blocker or major
-   findings, the "Not reviewed" list, or the rejected findings.
+- **The report** is split into as many comments as it needs, each under 60,000 characters.
+  It splits only between units: a section, a finding, a collapsed `<details>` block, or the
+  minor-findings table. A part that starts inside a section repeats the section heading
+  with "(continued)". A unit too large for one comment on its own (a very long table) is
+  split between lines, repeating the table's header and reopening its `<details>` block.
+- **Each part's first line** is `<!-- agent-pr-review:report sha=<reviewed commit>
+  run=<run id> part=<k>/<n> -->`. Part 1 says the review is in n parts; every later part
+  starts with "Agent PR review of `<sha>`: part k of n"; every part but the last ends with
+  "Continued in part k+1 of n". The scripts that read reports (`get-reports.sh`, used by
+  `get-review.sh` and `get-previous.sh`) join the parts of a run in order, and skip a
+  report with a part missing, with a warning.
+- **The process findings** must fit in one comment. If they do not, the script fails and
+  prints the size of each section: shorten the proposals in `root-cause.md` (see the
+  analyst's length rules) and run it again.

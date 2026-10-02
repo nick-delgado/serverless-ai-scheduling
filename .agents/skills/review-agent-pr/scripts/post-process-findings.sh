@@ -48,12 +48,16 @@ if [ "$chars" -gt "$MAX_CHARS" ]; then
 fi
 
 # The tracking issue is the oldest open issue carrying the label.
-issue="$(gh issue list --label "$LABEL" --state open --limit 100 --json number --jq 'map(.number) | min // empty')"
+issue="$(
+  gh api --paginate "repos/{owner}/{repo}/issues?labels=${LABEL}&state=open&per_page=100" \
+    --jq '.[] | select(.pull_request | not) | .number' | sort -n | head -n 1
+)"
 
 if [ -z "$issue" ]; then
-  gh label create "$LABEL" --force \
-    --description "Why AI agents produced review findings, and proposed fixes to docs, skills and guardrails" \
-    --color "5319E7" > /dev/null
+  # Create the label unless it exists (the API answers 422 when it does).
+  gh api --method POST "repos/{owner}/{repo}/labels" -f name="$LABEL" -f color="5319E7" \
+    -f description="Why AI agents produced review findings, and proposed fixes to docs, skills and guardrails" \
+    > /dev/null 2>&1 || true
   body_file="$(mktemp)"
   trap 'rm -f "$body_file"' EXIT
   cat > "$body_file" <<'EOF'
@@ -64,7 +68,8 @@ Each comment covers one reviewed PR: the inferred cause of each finding, the pat
 
 Nothing here is applied automatically. The `improve-agent-process` skill reads this log across reviews and opens one batched pull request with the changes worth making.
 EOF
-  url="$(gh issue create --title "$ISSUE_TITLE" --label "$LABEL" --body-file "$body_file")"
+  url="$(gh api --method POST "repos/{owner}/{repo}/issues" -f title="$ISSUE_TITLE" \
+    -f "labels[]=$LABEL" -F "body=@${body_file}" --jq '.html_url')"
   issue="${url##*/}"
   echo "created tracking issue $url"
 fi
