@@ -188,13 +188,18 @@ export const BookAppointmentOutput = z.strictObject({
   already_booked: z.boolean(),
 });
 
-export const RescheduleAppointmentOutput = z.strictObject({
-  appointment: AppointmentSummary,
-  /** The time before the move; null when nothing moved (`already_rescheduled`). */
-  previous_start_local: LocalTimeText.nullable(),
-  /** True when the appointment was already at the requested slot (an idempotent retry); nothing changed. */
-  already_rescheduled: z.boolean(),
-});
+export const RescheduleAppointmentOutput = z
+  .strictObject({
+    appointment: AppointmentSummary,
+    /** The time before the move; null when nothing moved (`already_rescheduled`). */
+    previous_start_local: LocalTimeText.nullable(),
+    /** True when the appointment was already at the requested slot (an idempotent retry); nothing changed. */
+    already_rescheduled: z.boolean(),
+  })
+  .refine((o) => o.already_rescheduled === (o.previous_start_local === null), {
+    message: "previous_start_local is null exactly when already_rescheduled is true",
+    path: ["previous_start_local"],
+  });
 
 export const EscalateToHumanOutput = z.strictObject({
   escalation_id: EscalationId,

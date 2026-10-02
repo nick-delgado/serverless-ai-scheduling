@@ -5,6 +5,7 @@ import * as C from "./index";
 import { ChatRequest } from "./api";
 import { IsoDate, IsoDateTimeUtc } from "./primitives";
 import { Slot } from "./domain";
+import { RescheduleAppointmentOutput } from "./tools";
 import { makeSlotId, messageIdForSeq, parseSlotId, toCanonicalUtc } from "./ids";
 import {
   ChatStreamEvent,
@@ -66,6 +67,15 @@ describe("domain rules", () => {
 
   it("a slot must end after it starts", () => {
     expect(Slot.safeParse({ ...EXAMPLES.Slot, endUtc: EXAMPLES.Slot.startUtc }).success).toBe(false);
+  });
+
+  it("a reschedule answer has no previous time exactly when it is already_rescheduled", () => {
+    const moved = EXAMPLES.RescheduleAppointmentOutput;
+    const parse = (o: object) => RescheduleAppointmentOutput.safeParse({ ...moved, ...o }).success;
+    expect(parse({})).toBe(true); // a real move, with its previous time
+    expect(parse({ previous_start_local: null, already_rescheduled: true })).toBe(true); // a retry
+    expect(parse({ previous_start_local: null, already_rescheduled: false })).toBe(false);
+    expect(parse({ already_rescheduled: true })).toBe(false);
   });
 });
 
