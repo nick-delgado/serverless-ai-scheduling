@@ -27,7 +27,7 @@ One block per finding. If there are none, write `No findings.` under the heading
 
 <for "fix now" and "for the owner":>
 - **Suggested fix:** <the direction of the fix: what to change and where, naming the existing function, pattern, helper or doc to use>
-- **Done when:** <the observable that shows it is fixed: the test that now fails on the defect, the claim that is now true, the line that is gone>
+- **Done when:** <the observable that shows it is fixed: the test that now fails on the defect, the claim that is now true, the line that is gone. Where the fix has several conditions or cases, name the check for each>
 
 <for "needs owner decision", instead of the two fields above:>
 - **Decision needed:** <the question, in one sentence the owner can answer without reading the code>
@@ -35,6 +35,7 @@ One block per finding. If there are none, write `No findings.` under the heading
   - (a) <option>: <what changes, what it costs, whether it is easy to reverse>. Scope: within the issue | adds <behaviour or files> beyond the issue
   - (b) <option>: <...>. Scope: <...>
   - (c) <...: two to four options; include "keep as is" when it is a real option, and "open a follow-up issue" when an option would add scope>
+  <For a decision about how inputs are classified or matched, each option says what happens to the mixed and boundary cases (an input that fits two categories, an empty value, the exact limit).>
 - **Recommendation:** (<letter>), because <the reason, tied to the spec, the project's direction documents, consistency with existing behaviour, or cost and reversibility; cite the source>
 ```
 
@@ -58,7 +59,7 @@ way:
 | A broad claim ("every rule has a test that fails", "all paths are covered") that the tests do not fully support | one finding for the claim, fixed by correcting the claim or adding the tests; major only if a behaviour the spec asked for is untested. Each uncovered case is not a separate major: grade it on its own as a missing case |
 | A test that is weak or incomplete but claims no more than it checks | minor |
 | A behaviour the spec asked for with no test at all | major |
-| Incidental code with no test | minor |
+| Incidental code with no test | minor. Code is incidental only if no acceptance criterion or spec requirement depends on it: an entry point, CLI, handler or wiring that implements a requirement is not incidental, however thin |
 | A spec requirement contradicted as written, even when the PR discloses it | major (disclosure goes in "Why it matters"; it does not lower the severity) |
 | A decision the spec left open, made sensibly and easy to reverse | minor |
 | A deviation supported only by precedent, with no written rule | minor at most |
