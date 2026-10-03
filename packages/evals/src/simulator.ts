@@ -1,32 +1,17 @@
 /**
- * The patient side of a multi-turn run. The LLM patient simulator (persona + goal + hidden facts) is
- * #31; the runner only needs this interface. Scripted turns (`script`) are sent by the runner before the
- * simulator is consulted, so red-team payloads are byte-identical on every run (#33).
+ * The patient side of a multi-turn run (ADR-008). The runner only needs the `PatientSimulator` interface.
+ * Scripted turns (`script`) are sent by the runner before the simulator is consulted, so red-team payloads
+ * are byte-identical on every run (#33).
+ *
+ * Implementations:
+ * - `scriptOnlySimulator`: nothing beyond the script (unscripted scenarios skip);
+ * - `QueuedPatientSimulator`: fixed messages, for tests;
+ * - `LlmPatientSimulator` (`simulator/llm.ts`, #31): an LLM plays the persona toward the goal;
+ * - `ReplayPatientSimulator` (`simulator/replay.ts`, #31): replays the turns a results file recorded.
+ *
+ * The shared types and `SimulatorError` live in `simulator/types.ts`, re-exported here.
  */
-import type { Scenario } from "./schema";
-import type { TranscriptEvent } from "./transcript";
-
-export interface SimulatorContext {
-  scenario: Scenario;
-  /** Everything so far, in order. */
-  events: readonly TranscriptEvent[];
-  /** The 1-based number of the patient turn about to be sent. */
-  turn: number;
-  /** The assistant's visible text from the last turn ("" before the first). */
-  lastAssistantText: string;
-}
-
-/**
- * - `message`: the next patient message.
- * - `stop`: end the conversation (goal met, patient gave up, escalated, …). ADR-008 stop conditions.
- */
-export type SimulatorTurn = { message: string } | { stop: string };
-
-export interface PatientSimulator {
-  /** Name recorded in results, e.g. `script-only`, `llm:sonnet-4.6` (#31). */
-  readonly name: string;
-  next(context: SimulatorContext): Promise<SimulatorTurn>;
-}
+import type { PatientSimulator, SimulatorTurn } from "./simulator/types";
 
 /** Sends nothing beyond the scenario's `script`: the run ends when the script does. */
 export const scriptOnlySimulator: PatientSimulator = {
@@ -48,3 +33,9 @@ export class QueuedPatientSimulator implements PatientSimulator {
     return Promise.resolve(message === undefined ? { stop: "queue exhausted" } : { message });
   }
 }
+
+export * from "./simulator/guards";
+export * from "./simulator/llm";
+export * from "./simulator/prompt";
+export * from "./simulator/replay";
+export * from "./simulator/types";

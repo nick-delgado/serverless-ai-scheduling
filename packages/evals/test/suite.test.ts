@@ -187,10 +187,16 @@ describe("runSuite / summarize", () => {
       turns: 3,
       outcomes: ["completed", "completed", "completed"],
       simulator: "queued",
+      simulatorTurns: [],
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       llmCalls: 5,
       llmRetries: 2,
       costUsd: 0,
+      simulatorCost: {
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        costUsd: 0,
+        llmCalls: 0,
+      },
       durationMs: 5000,
       turnDurationsMs: [10, 20, 30],
     };

@@ -60,7 +60,7 @@ Evals (ADR-008; live runs call Bedrock and cost money, so try `--dry-run` first 
 
 ```bash
 npm run evals -- --suite smoke --mode l1 --profile sonnet-4.6 --trials 1          # single-turn L1 cases (the default mode)
-npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; unscripted ones skip until #31
+npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; an LLM plays the patient (--simulator-profile or SIMULATOR_MODEL_PROFILE, default sonnet-4.6), so it costs more than L1
 ```
 
 Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
