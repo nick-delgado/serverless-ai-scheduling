@@ -113,7 +113,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
   - 1 location: 400 Cedar Ridge Pkwy (fictional).
   - Specialties: family medicine, pediatrics, dermatology, cardiology, physical therapy.
   - 8 providers. Visits are 30 min.
-- **Escalation message:** "I'll connect you with our front desk. Please call **1-800-555-0199** (Mon–Fri, 8 AM–5 PM ET). I've also sent them a summary of our conversation so you won't have to repeat yourself."
+- **Escalation message:** "I'll connect you with our front desk. Please call **1-800-555-0199** (Mon–Fri, 8 AM–5 PM ET). I've passed a summary of our conversation to them." Said only after `escalate_to_human` succeeds. It never promises an email or a callback, because the staff notification can fail and is retried separately (#88).
 
 ## 6. Non-functional requirements
 

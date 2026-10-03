@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-014, FR-030…FR-034, FR-037, NFR-004, NFR-008, ADR-001, ADR-009, issues #5, #13, #56
-- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation))
+- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces))
 
 ## Context
 
@@ -111,3 +111,14 @@ The decision above stands: single table, same keys, and the same booking transac
 - The escalation record doesn't check that the conversation exists or belongs to the caller. Its `conversationId` comes from the handler, which has already loaded that conversation through the owned read.
 - **GSI1 is eventually consistent on the real table** (#5 raised this). Right after a booking, AP-5 can still list the slot for a short while. That's safe: booking is conditioned on the base-table item (`status = OPEN`), so a stale listing ends in `SLOT_UNAVAILABLE`, never a double booking. AP-4 uses a consistent base-table query. DynamoDB Local updates GSIs synchronously, so the contract suite can't observe this lag.
 
+
+## Amendment (2026-10-02): turn counters and traces
+
+The chat handler (#17) adds two item types for ADR-009's daily turn cap and FR-051's per-turn trace. Both live in `services/api` (`lib/dynamo-turn-store.ts`), not in the tools' repositories, because no tool reads them.
+
+| Entity | PK | SK | Notes |
+|---|---|---|---|
+| Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`; `UpdateItem` `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap`, so concurrent turns can't overshoot; `expiresAt` = two days after the day ends (UTC) |
+| Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `outcome`, the `TurnTrace` as an opaque JSON string; `PutItem` with `attribute_not_exists(PK)`; `expiresAt` = turn start + 30 days |
+
+Neither prefix collides with an existing query: patient queries use `APPT#` and `CONV#`, conversation reads use `MSG#`, and the escalation is the fixed `ESC` key. Traces hold tool inputs (patient free text), so they stay out of CloudWatch (ADR-009).

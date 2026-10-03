@@ -5,7 +5,7 @@ A throwaway page that proves the path end to end:
 2. `POST /api/chat` on the same origin, with `Authorization: <ID token>`.
 3. The NDJSON reply rendered as each `text_delta` arrives (`fetch` + `ReadableStream`).
 
-It's deliberately bare: no React, no typewriter smoothing, no session restore. **Delete this folder** when S5-01 (#24) ships the real SPA, along with `amazon-cognito-identity-js` in `apps/web/package.json` if the SPA uses Amplify Auth (ADR-005).
+It's deliberately bare: no React, no typewriter smoothing, no session restore. The SPA shell (S5-01, #24) has no sign-in yet, so this page stays as the only way to exercise the deployed path. **Delete this folder** when the real login lands (S1-02, #25), along with `amazon-cognito-identity-js` in `apps/web/package.json` if the SPA uses Amplify Auth (ADR-005).
 
 ## Build and upload
 

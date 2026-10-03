@@ -1,0 +1,101 @@
+/*
+ * Design tokens (S5-01, #24). Components use these custom properties, never raw colors.
+ *
+ * Light is the default. Dark follows the OS (prefers-color-scheme) unless the page pins a theme with
+ * <html data-theme="light|dark">. The two dark blocks must stay identical; tokens.test.ts checks that,
+ * and checks every text/background pair against WCAG 2.2 AA (NFR-005).
+ */
+:root {
+  color-scheme: light;
+
+  --color-bg: #f6f7f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #ecefeb;
+  --color-text: #1b2420;
+  --color-text-muted: #4a5750;
+  --color-border: #d3dad5;
+  --color-border-strong: #6f7d75;
+  --color-accent: #1d6a4d;
+  --color-accent-hover: #155239;
+  --color-on-accent: #ffffff;
+  --color-focus: #1c5ccc;
+  --color-notice-bg: #fff3d1;
+  --color-notice-text: #573d00;
+  --color-notice-border: #c99a2e;
+  --color-danger: #b02a20;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-bg: #111614;
+    --color-surface: #1a211e;
+    --color-surface-muted: #232c28;
+    --color-text: #e6ebe8;
+    --color-text-muted: #a7b3ac;
+    --color-border: #34403b;
+    --color-border-strong: #7f8e86;
+    --color-accent: #72cfa2;
+    --color-accent-hover: #93dcb8;
+    --color-on-accent: #0c1f16;
+    --color-focus: #8db4ff;
+    --color-notice-bg: #3a2e0c;
+    --color-notice-text: #ffe2a0;
+    --color-notice-border: #8a6c1e;
+    --color-danger: #ff8f84;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #111614;
+  --color-surface: #1a211e;
+  --color-surface-muted: #232c28;
+  --color-text: #e6ebe8;
+  --color-text-muted: #a7b3ac;
+  --color-border: #34403b;
+  --color-border-strong: #7f8e86;
+  --color-accent: #72cfa2;
+  --color-accent-hover: #93dcb8;
+  --color-on-accent: #0c1f16;
+  --color-focus: #8db4ff;
+  --color-notice-bg: #3a2e0c;
+  --color-notice-text: #ffe2a0;
+  --color-notice-border: #8a6c1e;
+  --color-danger: #ff8f84;
+}
+
+/* Theme-independent tokens */
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --line-height: 1.5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  --focus-ring-width: 3px;
+  --content-max-width: 48rem;
+
+  --motion-duration: 150ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0ms;
+  }
+}
