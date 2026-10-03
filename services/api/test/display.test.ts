@@ -147,6 +147,13 @@ describe("toDisplayMessages", () => {
     ]);
   });
 
+  it("joins a patient message's text blocks the same way", () => {
+    seq = 0;
+    expect(toDisplayMessages([msg("user", [text("Hi"), toolResult, text("again")])])).toEqual([
+      { id: "msg_000000", role: "patient", text: "Hi\n\nagain", createdAt: "2026-10-05T13:00:00.000Z" },
+    ]);
+  });
+
   it("returns nothing for no messages", () => {
     expect(toDisplayMessages([])).toEqual([]);
   });

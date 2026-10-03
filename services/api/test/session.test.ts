@@ -15,7 +15,7 @@ import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
 import type { LogEntry } from "../src";
-import { sessionGreeting } from "../src/lib/greeting";
+import { nextUpcomingAppointment, sessionGreeting } from "../src/lib/greeting";
 import { handleSession, isEmptySessionBody, sessionProxyHandler, type SessionDeps } from "../src/lib/session";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
@@ -128,6 +128,16 @@ describe("greeting", () => {
     });
     const after = setup("2026-10-07T21:00:00Z");
     expect((await ok(after.deps, DANIEL)).upcomingAppointment).toBeNull();
+  });
+
+  it("picks the earliest of several upcoming BOOKED appointments", () => {
+    const { appointments } = buildClinicFixture();
+    const booked = appointments.filter((a) => a.status === "BOOKED");
+    // listForPatient's order: ascending by start.
+    const sorted = [...booked].sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+    expect(sorted.length).toBeGreaterThan(2);
+    const now = new Date(Date.parse(sorted[0]?.startUtc ?? "") + 1);
+    expect(nextUpcomingAppointment(sorted, now)).toEqual(sorted[1]);
   });
 
   it("skips a past COMPLETED appointment and finds the BOOKED one after it", async () => {
