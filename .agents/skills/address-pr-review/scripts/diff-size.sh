@@ -1,33 +1,57 @@
 #!/usr/bin/env bash
-# Measure a change between two commits, separating source from tests and other files.
+# Measure how much a PR's own changes moved between two of its commits, separating source
+# from tests and other files.
 #
-# Usage: diff-size.sh <from-commit> <to-commit> [<repo-dir>]
+# Usage: diff-size.sh <from-commit> <to-commit> [<repo-dir>] [<base-branch>]
+#
+# Compares the PR's own diff at <to-commit> (from its merge base with the base branch) with
+# its own diff at <from-commit>. Lines the PR adds now but did not add then, and lines it
+# added then but no longer does, are the change. Changes that came in from the base branch
+# (by merging it into the PR, or by a rebase) do not count.
 #
 # Prints, one per line:
-#   source <added> <deleted> <changed>   source files (not tests, docs, generated or lock files)
-#   tests <added> <deleted> <changed>    test files and snapshots
-#   other <added> <deleted> <changed>    docs, configuration, lock and generated files
-#   new-source <path> <lines>            each source file added between the two commits
-#   pr-source <lines>                    source lines added by the whole PR at <to-commit>,
-#                                        measured from its merge base with the default branch
-#                                        (only when origin/HEAD or origin/main is known)
+#   source <new> <dropped> <changed>   source files (not tests, docs, generated or lock files)
+#   tests <new> <dropped> <changed>    test files and snapshots
+#   other <new> <dropped> <changed>    docs, configuration, lock and generated files
+#   new-source <path> <lines>          each source file the PR adds now but did not then
+#   pr-source <lines>                  source lines the PR adds at <to-commit>
+#   base-moved <commits>               commits the base branch gained between the two
 #
 # The same script ships with the review-agent-pr and address-pr-review skills; keep the two
 # copies identical.
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-  echo "usage: $(basename "$0") <from-commit> <to-commit> [<repo-dir>]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 4 ]; then
+  echo "usage: $(basename "$0") <from-commit> <to-commit> [<repo-dir>] [<base-branch>]" >&2
   exit 2
 fi
 
 from="$1"
 to="$2"
 repo="${3:-.}"
+base="${4:-}"
 
-# Classify a path: test, other or source.
-classify='
+if [ -z "$base" ]; then
+  base="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)"
+  [ -n "$base" ] || base="main"
+fi
+git -C "$repo" fetch -q origin "$base" 2>/dev/null || true
+git -C "$repo" cat-file -e "${from}^{commit}" 2>/dev/null || git -C "$repo" fetch -q origin "$from" 2>/dev/null || true
+
+# The base: the remote branch, or (for checking an old PR after the fact) any commit.
+if git -C "$repo" rev-parse --verify --quiet "origin/$base^{commit}" > /dev/null; then
+  base_ref="origin/$base"
+else
+  base_ref="$base"
+fi
+base_to="$(git -C "$repo" merge-base "$base_ref" "$to")"
+base_from="$(git -C "$repo" merge-base "$base_ref" "$from")"
+
+{
+  git -C "$repo" diff --no-color -U0 "$base_from" "$from" | sed 's/^/OLD/'
+  git -C "$repo" diff --no-color -U0 "$base_to" "$to" | sed 's/^/NEW/'
+} | awk '
   function kind(p) {
     if (p ~ /(^|\/)(test|tests|__tests__|spec|specs|e2e|fixtures|__snapshots__)\// ||
         p ~ /\.(test|spec)\.[A-Za-z0-9]+$/ || p ~ /_test\.[A-Za-z0-9]+$/ ||
@@ -36,26 +60,25 @@ classify='
         p ~ /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|go\.sum|Cargo\.lock|poetry\.lock)$/ ||
         p ~ /(^|\/)(dist|build|vendor|node_modules|generated|gen)\// || p ~ /(^|\/)\./ ) return "other"
     return "source"
-  }'
-
-git -C "$repo" diff --numstat "$from" "$to" | awk -F'\t' "$classify"'
-  $1 != "-" { k = kind($3); add[k] += $1; del[k] += $2 }
+  }
+  /^OLD\+\+\+ / { ofile = substr($0, 10); oldfiles[ofile] = 1; next }
+  /^OLD\+/ { old[ofile SUBSEP substr($0, 5)]++; next }
+  /^OLD/ { next }
+  /^NEW\+\+\+ / { file = substr($0, 10); next }
+  /^NEW\+/ {
+    k = kind(file)
+    if (k == "source") prsource++
+    key = file SUBSEP substr($0, 5)
+    if (old[key] > 0) old[key]--; else { added[k]++; if (!(file in oldfiles)) newfile[file]++ }
+    next
+  }
   END {
+    for (key in old) if (old[key] > 0) { split(key, parts, SUBSEP); dropped[kind(parts[1])] += old[key] }
     split("source tests other", ks, " ")
-    for (i = 1; i <= 3; i++) printf "%s %d %d %d\n", ks[i], add[ks[i]], del[ks[i]], add[ks[i]] + del[ks[i]]
-  }'
+    for (i = 1; i <= 3; i++) printf "%s %d %d %d\n", ks[i], added[ks[i]], dropped[ks[i]], added[ks[i]] + dropped[ks[i]]
+    for (f in newfile) if (kind(f) == "source") printf "new-source %s %d\n", f, newfile[f]
+    printf "pr-source %d\n", prsource
+  }
+'
 
-git -C "$repo" diff --numstat --diff-filter=A "$from" "$to" | awk -F'\t' "$classify"'
-  $1 != "-" && kind($3) == "source" { printf "new-source %s %d\n", $3, $1 }'
-
-base_ref=""
-for ref in origin/HEAD origin/main origin/master; do
-  if git -C "$repo" rev-parse --verify --quiet "$ref" > /dev/null; then base_ref="$ref"; break; fi
-done
-if [ -n "$base_ref" ]; then
-  base="$(git -C "$repo" merge-base "$base_ref" "$to" 2>/dev/null || true)"
-  if [ -n "$base" ]; then
-    git -C "$repo" diff --numstat "$base" "$to" | awk -F'\t' "$classify"'
-      $1 != "-" && kind($3) == "source" { n += $1 } END { printf "pr-source %d\n", n }'
-  fi
-fi
+echo "base-moved $(git -C "$repo" rev-list --count "$base_from..$base_to")"
