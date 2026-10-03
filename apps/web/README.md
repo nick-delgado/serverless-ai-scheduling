@@ -15,10 +15,20 @@ npm test -w apps/web             # Vitest + Testing Library (jsdom), MSW in Node
 | `src/app/` | Routes, layout, disclaimer banner, error and not-found pages | S5-01 (#24) |
 | `src/styles/` | Design tokens (light/dark) and base styles | S5-01 (#24) |
 | `src/mocks/` | MSW mock API: handlers, fixtures, options | S5-01 (#24) |
-| `src/pages/Login*`, `src/auth/` | Login and auth state | S1-02 (#25) |
+| `src/pages/Login*`, `src/auth/` | Login, auth state, the `/chat` guard, sign-out | S1-02 (#25) |
 | `src/chat/` | Chat page, stream client, typewriter | S5-02 (#26), S5-03 (#27) |
 | `src/voice/` | Voice overlay and transcriber | S6-01 (#28) |
-| `src/skeleton/` | The walking-skeleton page (#7), with its own build; see its README | removed with #25 |
+
+## Sign-in
+
+Amplify Auth with Cognito only (ADR-005): `src/auth/` wraps `signIn`, `signOut` and `fetchAuthSession` in an `AuthService`, `AuthProvider` exposes the state (`loading`, `signedIn`, `signedOut`) through `useAuth()`, and `RequireAuth` guards `/chat`. `/` goes to `/chat`, so a signed-out visitor lands on `/login`.
+
+- **Tokens** stay in local storage (Amplify's default), so a reload keeps the patient signed in. ID and access tokens last 60 minutes; Amplify refreshes them with the refresh token (`GetTokensFromRefreshToken`) when they are within 5 s of expiry. Sign-out revokes the refresh token and clears storage.
+- **API clients** take `getIdToken` from `src/auth` as their token getter and send `Authorization: <ID token>`. It returns `undefined` when signed out and rejects on transient errors.
+- **Errors never say whether a username exists** (FR-001): a wrong password and an unknown user get the same message.
+- **Config** is build-time: `VITE_USER_POOL_ID` and `VITE_SPA_CLIENT_ID` (see `.env.example`; values from SSM `/sched/<env>/auth/...`). The dev server and tests fall back to the Cognito mock when neither is set; production builds don't.
+
+**The Cognito mock** (`src/mocks/cognito.ts`) answers Amplify's calls to `cognito-idp.us-east-1.amazonaws.com` for the mock app client only; other clients pass through to the network. It checks passwords with real SRP math (`src/mocks/srp.ts`), so only the right password signs in. Users (`src/mocks/cognitoUsers.ts`): `maria.santos` signs in, `new.patient` must set a new password (which this page doesn't offer). Both use the mock-only `MOCK_PASSWORD` from that file. In tests, `configureCognitoMock({ tokenLifetimeSeconds, fault })`, `expireCognitoSessions()` and `cognitoMockStats()` drive it; call `resetCognitoMock()` and `localStorage.clear()` between tests.
 
 ## The mock API
 

@@ -16,6 +16,7 @@ import {
 } from "@sched/contracts";
 import { http, HttpResponse } from "msw";
 
+import { cognitoHandlers } from "./cognito";
 import { REPLIES, RESTORE_CONVERSATION_ID, SAMPLE_USAGE, SESSIONS } from "./fixtures";
 import type { MockApiOptions } from "./options";
 
@@ -178,5 +179,5 @@ export function createMockApi(getOptions: () => MockApiOptions): MockApi {
     return ndjsonStream([...reply.events, done], options.eventIntervalMs, request.signal);
   });
 
-  return { handlers: [session, chat], reset };
+  return { handlers: [session, chat, ...cognitoHandlers], reset };
 }

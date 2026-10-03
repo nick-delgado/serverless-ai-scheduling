@@ -2,10 +2,12 @@ import { CLINIC } from "@sched/contracts";
 import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router";
 
+import { SignOutButton } from "../auth/SignOutButton";
 import { DisclaimerBanner } from "./DisclaimerBanner";
 
 /**
- * The shell every route renders inside: skip link, header (disclaimer + clinic name), and a <main>
+ * The shell every route renders inside: skip link, header (disclaimer, clinic name, and sign-out for
+ * a signed-in patient), and a <main>
  * that scrolls on its own so the header stays in view (pages that need a fixed composer, like chat,
  * can fill it with a flex column).
  */
@@ -32,6 +34,7 @@ export function Layout() {
         <div className="app-brand">
           <span className="app-brand__name">{CLINIC.name}</span>
           <span className="app-brand__tagline">Scheduling assistant</span>
+          <SignOutButton />
         </div>
       </header>
       <main id="main" className="app-main" ref={mainRef} tabIndex={-1}>

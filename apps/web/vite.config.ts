@@ -26,7 +26,5 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: { include: [/tokens\.css/] },
-    // The walking-skeleton page has no tests and its own build (src/skeleton/vite.config.ts).
-    exclude: ["**/node_modules/**", "src/skeleton/**"],
   },
 });
