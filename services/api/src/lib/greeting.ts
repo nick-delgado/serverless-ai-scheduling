@@ -14,7 +14,8 @@ import { formatClinicDateTime } from "@sched/tools";
 
 /**
  * `SessionResponse.patient.firstName` when no profile is on file. The contract requires a non-empty name,
- * and the greeting itself says "Hi there!" instead of using it.
+ * and the greeting itself says "Hi there!" instead of using it. A placeholder by the owner's choice on PR
+ * #118; #121 tracks a nullable name, for when the chat page shows it.
  */
 export const NO_PROFILE_FIRST_NAME = "Patient";
 
