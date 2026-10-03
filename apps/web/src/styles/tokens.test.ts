@@ -5,10 +5,24 @@ import tokensCss from "./tokens.css?raw";
 
 type Tokens = Record<string, string>;
 
-function block(selector: string): Tokens {
-  const start = tokensCss.indexOf(`${selector} {`);
+/** The body of `@media <query> { ... }`, up to its matching closing brace. */
+function mediaBody(query: string): string {
+  const open = tokensCss.indexOf(`@media ${query} {`);
+  if (open < 0) throw new Error(`No @media ${query} block`);
+  const start = tokensCss.indexOf("{", open) + 1;
+  let depth = 1;
+  for (let i = start; i < tokensCss.length; i += 1) {
+    if (tokensCss[i] === "{") depth += 1;
+    else if (tokensCss[i] === "}") depth -= 1;
+    if (depth === 0) return tokensCss.slice(start, i);
+  }
+  throw new Error(`Unclosed @media ${query} block`);
+}
+
+function block(selector: string, css: string = tokensCss): Tokens {
+  const start = css.indexOf(`${selector} {`);
   if (start < 0) throw new Error(`No block for ${selector}`);
-  const body = tokensCss.slice(start, tokensCss.indexOf("}", start));
+  const body = css.slice(start, css.indexOf("}", start));
   return Object.fromEntries(
     [...body.matchAll(/(--color-[\w-]+):\s*(#[0-9a-f]{6});/gi)].map((m) => [m[1], m[2]]),
   );
@@ -59,7 +73,8 @@ describe("design tokens", () => {
   });
 
   it("uses one dark palette for the OS preference and for data-theme=dark", () => {
-    expect(block(':root:not([data-theme="light"])')).toEqual(THEMES.dark);
+    const osDark = block(':root:not([data-theme="light"])', mediaBody("(prefers-color-scheme: dark)"));
+    expect(osDark).toEqual(THEMES.dark);
   });
 
   describe.each(Object.entries(THEMES))("%s theme", (_, tokens) => {
