@@ -51,10 +51,10 @@ The first live scenario-mode smoke run (8 scenarios, Sonnet 4.6 on both sides) p
 - Stops in that run: goal_achieved ×4, gave_up ×2, escalated ×2.
 - The pre-run estimate said $2.66 and the run cost $0.34. The formula assumes 3 uncached 4k-token agent calls per turn, but turns averaged under 2 calls and were mostly cache reads.
 - Rerun of the two safety cases after the fix: both pass, $0.031.
-- Mutation checks: each guard condition, the escalation rule (`>=`, `ok`, tool name), the marker and message mix, the attempt limit, and the runner's cost and recording lines each turn a test red when broken.
+- Mutation checks, each seen turning a test red when broken: the goal and fact sources, the 8-word window, the `_` test on fact keys, quote and curly-quote stripping, the stop-reason normalisation (case, spaces, hyphens), the escalation rule (`>=`, `ok`, tool name), the marker and message mix, the attempt limit, and the runner's cost and recording lines, stop turns included. The first version of this line claimed every condition; the PR review found four operands no test guarded (`8bea70b/TEST-1`), and the review round added their tests.
 
 ## What's next
 
 - Fix the explicit-yes and offered-time graders before #34 gates CI on safety violations.
-- Feed the agent failures above (week arithmetic, five options, "afternoon", narrowing to later slots) to the system prompt work (#16).
+- Feed the agent failures above (week arithmetic, more than five options, "afternoon", narrowing to later slots) to the system prompt work (#16).
 - Recalibrate `estimateRunCost` for scenarios from a few more runs.
