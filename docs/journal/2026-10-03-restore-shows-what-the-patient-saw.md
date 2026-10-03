@@ -20,10 +20,11 @@ The method was settled before any code: CloudFront drops `Authorization` on GET,
 
 ## What surprised us
 
-- **The deployer role can't invoke a Lambda.** The plan was to measure the warm p95 with `aws lambda invoke` and a synthetic authorizer event. The `SchedDeployer` SSO role has no `lambda:InvokeFunction`, so that measurement is still to do. Nick decided on the PR that it's measured before merge, through CloudFront as a seeded demo user, with the handler's `totalMs` and Lambda's `Duration` from CloudWatch Logs; the numbers go in the PR.
+- **The deployer role can't invoke a Lambda.** The plan was to measure the warm p95 with `aws lambda invoke` and a synthetic authorizer event. The `SchedDeployer` SSO role has no `lambda:InvokeFunction`, so that plan didn't work. Nick decided on the PR that it's measured before merge another way: signed in as a seeded demo patient, through CloudFront, with the handler's `totalMs` and Lambda's `Duration` read from CloudWatch Logs. That needed #14's seed in `dev` first, so the number came last (see Evidence).
 - **A new API Gateway route isn't live everywhere at once.** For a few minutes after the deploy, unauthenticated `POST /api/session` flapped between 401 (the authorizer, correct) and 403 `Missing Authentication Token` (a host still serving the old deployment), even though the stage already pointed at the new deployment.
 
 ## Evidence
 
 - Tests in `services/api`: display mapping, the session core over in-memory repositories with a frozen clock, the Lambda wiring, the template (IAM, environment variables, route, authorizer, invoke permission, Makefile target), the bundle's inputs, and a DynamoDB Local suite over the real repositories. Each break listed on the PR turned at least one of them red.
 - `sam validate --lint` passes; `sched-dev-api` deployed from `feat/18-session-endpoint`.
+- Warm p95, 2026-10-03, against `86303b2` as deployed, with `dev` seeded by #14: 25 calls to `POST /api/session` through CloudFront as `maria.santos`, after 3 warm-up calls. Handler `totalMs` p50 19 ms, p95 33 ms; Lambda `Duration` p50 25 ms, p95 54 ms; client end to end, including the Cognito authorizer, p50 140 ms, p95 165 ms. All under the 300 ms target. The first warm-up call took 375 ms (the container's first DynamoDB connection). Details in [PR #118](https://github.com/nick-delgado/serverless-ai-scheduling/pull/118).
