@@ -32,7 +32,6 @@ import {
   resultsBasePath,
   selectCases,
   simulatorSetup,
-  type SimulatorSetup,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
@@ -46,14 +45,18 @@ function fail(message: string): never {
   process.exit(2);
 }
 
-async function main(): Promise<void> {
-  let args;
+/** Runs one setup step; a `CliArgError` from it is a usage error (exit 2), anything else is rethrown. */
+function orUsageError<T>(step: () => T): T {
   try {
-    args = parseCliArgs(process.argv.slice(2), RESULTS_DIR);
+    return step();
   } catch (error) {
     if (error instanceof CliArgError) fail(error.message);
     throw error;
   }
+}
+
+async function main(): Promise<void> {
+  const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR));
   const { mode, suite, trials, maxCostUsd, profile } = args;
   const cases = selectCases(loadScenarios(), args);
   if (cases.length === 0) fail("no cases match");
@@ -63,16 +66,12 @@ async function main(): Promise<void> {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
-  let setup: SimulatorSetup;
-  try {
-    setup = simulatorSetup(args, {
+  const setup = orUsageError(() =>
+    simulatorSetup(args, {
       llm,
       readReplay: (path) => JSON.parse(readFileSync(path, "utf8")),
-    });
-  } catch (error) {
-    if (error instanceof CliArgError) fail(error.message);
-    throw error;
-  }
+    }),
+  );
   const { simulator } = setup;
 
   const skips = cases.flatMap((c) => {
