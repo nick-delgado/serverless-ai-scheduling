@@ -12,10 +12,10 @@ S1-01 finished the auth stack. `sched-dev-auth` already had the User Pool and th
 
 **The mapping exists because we can't choose the `sub`.** The API reads the patient ID from the verified token's `sub` (CLAUDE.md rule 1, ADR-005). Cognito generates that value, and nobody can set it. The fixture gives Maria a fixed UUID (`3f6c…9e01`) that the evals rely on, but her deployed patient ID is whatever `sub` Cognito gave her. So `.seed/cognito-users.<env>.json` maps the fixture alias and fixture patient ID to the `sub`, and the data seed (#14) rewrites the fixture's patient IDs from it. In-memory evals keep the fixed IDs.
 
-**Profiles stay with #14 (a decision the spec left open).** ADR-005 says `seed-users.ts` also writes each `PATIENT#<sub>` profile, but the issue gives that to S2-02, and `scripts/seed-data.ts` is #14's path. The agent followed the issue: one script owns Cognito and the other owns the table, with the mapping file between them. The other option was to have this script write the profiles too. Then two scripts would write patient rows.
+**Profiles stay with #14 (a decision the spec left open).** ADR-005 says `seed-users.ts` also writes each `PATIENT#<sub>` profile, but the issue gives that to S2-02, and `scripts/seed-data.ts` is #14's path. The agent followed the issue: one script owns Cognito and the other owns the table, with the mapping file between them. The other option was to have this script write the profiles too. Then two scripts would write patient rows. Nick confirmed the split in the PR review, and ADR-005 now says the same.
 
 **Other choices the spec left open:**
-- Usernames are `<first>.<last>` (`maria.santos`). The users have no email attribute, because the repo is public and recovery is admin-only.
+- Usernames are `<first>.<last>` (`maria.santos`). The users have no email attribute, because the repo is public and recovery is admin-only. Nick kept this format in the PR review.
 - A patient is seeded only when `.env` sets their `DEMO_PASSWORD_<NAME>`. A misspelled variable name is an error, so a typo can't skip a user without anyone noticing. The script checks passwords against the pool's policy before it calls AWS, and errors name the variable, never the value.
 - Running it again is safe. An existing user keeps its `sub`, and its password is reset to the one in `.env`, so changing a demo password means editing `.env` and re-running.
 - The Identity Pool disables the classic flow, so the browser can't ask for a role. It turns on `ServerSideTokenCheck`, so a signed-out user can't get new credentials.
