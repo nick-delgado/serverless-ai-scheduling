@@ -24,6 +24,7 @@ import {
 import type { Clock, Repositories } from "@sched/tools";
 
 import { toDisplayMessages } from "./display";
+import { FAILURES, type ChatFailure } from "./errors";
 import {
   NO_PROFILE_FIRST_NAME,
   nextUpcomingAppointment,
@@ -67,10 +68,16 @@ export function isEmptySessionBody(body: string | null): boolean {
   return typeof json === "object" && json !== null && !Array.isArray(json) && Object.keys(json).length === 0;
 }
 
+/** A chat failure (`errors.ts`) as a buffered `ApiError` response, so both endpoints say the same thing. */
+function asErrorResponse({ httpStatus, event }: ChatFailure): ProxyResult {
+  return errorResponse(httpStatus, event.code, event.message);
+}
+
 export const SESSION_FAILURES = {
-  unauthorized: () => errorResponse(401, "UNAUTHORIZED", "Please sign in again."),
+  unauthorized: () => asErrorResponse(FAILURES.unauthorized()),
+  // The chat text says "The message couldn't be read"; the session call has no message.
   badRequest: () => errorResponse(400, "BAD_REQUEST", "The request couldn't be read."),
-  internal: () => errorResponse(500, "INTERNAL", "Something went wrong on our side."),
+  internal: () => asErrorResponse(FAILURES.internal()),
 } as const;
 
 export async function handleSession(input: SessionInput, deps: SessionDeps): Promise<ProxyResult> {

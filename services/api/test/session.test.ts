@@ -15,6 +15,7 @@ import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
 import type { LogEntry } from "../src";
+import { FAILURES } from "../src/lib/errors";
 import { nextUpcomingAppointment, sessionGreeting } from "../src/lib/greeting";
 import { handleSession, isEmptySessionBody, sessionProxyHandler, type SessionDeps } from "../src/lib/session";
 
@@ -152,9 +153,17 @@ describe("greeting", () => {
     const repos = { ...deps.repos, providers: { ...deps.repos.providers, get: () => Promise.resolve(null) } };
     const { res, json } = await session({ ...deps, repos });
     expect(res.statusCode).toBe(500);
-    expect(ApiError.parse(json).error.code).toBe("INTERNAL");
+    // The same patient-facing text as the chat endpoint's INTERNAL (lib/errors.ts).
+    expect(ApiError.parse(json).error).toEqual({
+      code: "INTERNAL",
+      message: FAILURES.internal().event.message,
+    });
     expect(logs.map((l) => l.msg)).toEqual(["session failed", "session"]);
-    expect(logs[0]).toMatchObject({ errorMessage: "Appointment references unknown provider prov_lee" });
+    expect(logs[0]).toMatchObject({
+      level: "error",
+      requestId: "req-1",
+      errorMessage: "Appointment references unknown provider prov_lee",
+    });
     expect(logs.at(-1)).toMatchObject({ status: 500, requestId: "req-1" });
   });
 });
@@ -355,7 +364,11 @@ describe("request", () => {
     );
     const json: unknown = JSON.parse(res.body);
     expect(res.statusCode).toBe(401);
-    expect(ApiError.parse(json).error.code).toBe("UNAUTHORIZED");
+    // The same patient-facing text as the chat endpoint's UNAUTHORIZED (lib/errors.ts).
+    expect(ApiError.parse(json).error).toEqual({
+      code: "UNAUTHORIZED",
+      message: FAILURES.unauthorized().event.message,
+    });
   });
 
   it("takes the patient from the authorizer's sub and decodes a base64 body", async () => {
