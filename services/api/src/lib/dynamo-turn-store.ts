@@ -11,21 +11,23 @@
  */
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { PutCommand, UpdateCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { TurnTrace } from "@sched/contracts";
+import { TurnTrace, type ConversationId, type PatientId } from "@sched/contracts";
+import { MESSAGE_TTL_DAYS, keys } from "@sched/tools/dynamo";
 
 import type { TurnStore } from "./turn-store";
 
 /** The same retention as conversation messages (ADR-009). */
-export const TRACE_TTL_DAYS = 30;
+export const TRACE_TTL_DAYS = MESSAGE_TTL_DAYS;
 /** Counters outlive their day briefly, so a clock skew around midnight can't reset a cap early. */
 export const COUNTER_TTL_DAYS = 2;
 
 const DAY_S = 24 * 60 * 60;
 
+/** Partition keys come from `@sched/tools/dynamo`'s `keys`, so the prefixes have one definition. */
 export const turnKeys = {
-  dailyTurns: (patientId: string, day: string) => ({ PK: `PATIENT#${patientId}`, SK: `TURNS#${day}` }),
-  trace: (conversationId: string, turnId: string) => ({
-    PK: `CONV#${conversationId}`,
+  dailyTurns: (patientId: PatientId, day: string) => ({ PK: keys.patient(patientId).PK, SK: `TURNS#${day}` }),
+  trace: (conversationId: ConversationId, turnId: string) => ({
+    PK: keys.escalation(conversationId).PK,
     SK: `TRACE#${turnId}`,
   }),
 };
@@ -51,7 +53,9 @@ export function createDynamoTurnStore({ tableName, doc }: DynamoTurnStoreOptions
             ReturnValues: "UPDATED_NEW",
           }),
         );
-        return { ok: true, used: Number(out.Attributes?.turns ?? 1) };
+        const turns = out.Attributes?.turns;
+        if (typeof turns !== "number") throw new Error("Turn counter update returned no turns attribute");
+        return { ok: true, used: turns };
       } catch (error) {
         if (error instanceof ConditionalCheckFailedException) return { ok: false, used: cap };
         throw error;

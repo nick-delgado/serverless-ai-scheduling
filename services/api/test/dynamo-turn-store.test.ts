@@ -1,6 +1,7 @@
 /**
- * The DynamoDB TurnStore's requests, against a fake `send`. The conditional counter is what makes the cap
- * race-free; the live check is the deployed smoke test.
+ * The DynamoDB TurnStore's requests, against a fake `send`. What those requests do in DynamoDB (the cap's
+ * boundary, concurrent calls, the write-once trace) is checked against DynamoDB Local in
+ * `dynamo-turn-store.local.test.ts`.
  */
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
@@ -54,12 +55,19 @@ describe("createDynamoTurnStore", () => {
     expect(command.input).toMatchObject({
       TableName: "t",
       Key: turnKeys.dailyTurns(PATIENT, "2026-10-05"),
+      UpdateExpression: "ADD turns :one SET expiresAt = :exp, entityType = :type",
       ConditionExpression: "attribute_not_exists(turns) OR turns < :cap",
       ExpressionAttributeValues: { ":one": 1, ":cap": 50 },
     });
     expect(command.input.Key).toEqual({ PK: `PATIENT#${PATIENT}`, SK: "TURNS#2026-10-05" });
     // Expires two days after the day ends.
     expect(command.input.ExpressionAttributeValues?.[":exp"]).toBe(Date.parse("2026-10-08T00:00:00Z") / 1000);
+  });
+
+  it("throws instead of guessing when the update returns no turns attribute", async () => {
+    const { doc } = fakeDoc(() => ({}));
+    const store = createDynamoTurnStore({ tableName: "t", doc });
+    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", 50)).rejects.toThrow(/no turns attribute/);
   });
 
   it("refuses when the condition fails", async () => {
