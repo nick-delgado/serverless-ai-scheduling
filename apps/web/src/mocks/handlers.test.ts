@@ -7,7 +7,7 @@ import {
   SessionResponse,
   visibleText,
 } from "@sched/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "./fixtures";
 import { NDJSON_CONTENT_TYPE, ndjsonStream } from "./handlers";
@@ -160,10 +160,14 @@ describe("POST /api/chat", () => {
 
   it("waits eventIntervalMs between events after the first", async () => {
     configureMockApi({ eventIntervalMs: 25, chatReply: "plain" });
-    const { arrivals } = await readEvents(await postChat());
-    expect(arrivals.length).toBeGreaterThan(2);
-    const gaps = arrivals.slice(1).map((t, i) => t - (arrivals[i] ?? t));
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(18);
+    const sent = performance.now();
+    const { events } = await readEvents(await postChat());
+    expect(events.length).toBeGreaterThan(2);
+    // The whole stream can't end sooner than one interval per event after the first, counted from the
+    // request. That lower bound holds however late the reads are; the gap between two arrivals doesn't,
+    // because a late read shrinks the gap after it (#109). 20 ms per 25 ms interval allows for timer
+    // slack. The spacing of each event is checked on `ndjsonStream` itself, with fake timers.
+    expect(performance.now() - sent).toBeGreaterThanOrEqual((events.length - 1) * 20);
   });
 
   // Every response that doesn't wait on the model: the faults that answer before the body is read,
@@ -239,6 +243,27 @@ describe("ndjsonStream", () => {
     expect((await reader.read()).done).toBe(false);
     controller.abort();
     expect((await reader.read()).done).toBe(true);
+  });
+
+  it("sends the first event at once and holds each later one for intervalMs", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      const events = REPLIES.plain.events;
+      const res = ndjsonStream(events, 25, new AbortController().signal);
+      if (!res.body) throw new Error("No body");
+      const reader = res.body.getReader();
+      expect((await reader.read()).done).toBe(false);
+      for (let k = 1; k < events.length; k += 1) {
+        let arrived = false;
+        const next = reader.read().finally(() => (arrived = true));
+        await vi.advanceTimersByTimeAsync(24);
+        expect(arrived, `event ${String(k)} before its interval`).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect((await next).done, `event ${String(k)}`).toBe(false);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
