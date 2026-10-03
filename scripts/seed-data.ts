@@ -218,7 +218,7 @@ export async function readExisting(
   seed: ClinicSeed,
 ): Promise<ExistingItems> {
   const rows = await ownedRows(doc, tableName, seed);
-  const byKey = new Map(rows.map((r) => [`${String(r.PK)}|${String(r.SK)}`, r]));
+  const byKey = new Map(rows.map((r) => [keyString({ PK: String(r.PK), SK: String(r.SK) }), r]));
   const patientCreatedAt = new Map<string, string>();
   for (const p of seed.patients) {
     const createdAt = byKey.get(keyString(keys.patient(p.patientId)))?.createdAt;
@@ -227,22 +227,34 @@ export async function readExisting(
   return { keys: new Set(byKey.keys()), patientCreatedAt };
 }
 
-async function deleteRows(
-  doc: DynamoDBDocumentClient,
+/** Most `BatchWriteItem` calls per batch of 25 deletes before `deleteRows` gives up. */
+export const DELETE_MAX_ATTEMPTS = 8;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Delete `rows` by key in batches of 25, re-sending the deletes DynamoDB returns as unprocessed after
+ * waiting `50 * 2^attempt` ms, at most `DELETE_MAX_ATTEMPTS` calls per batch. `wait` is injectable so tests
+ * don't sleep.
+ */
+export async function deleteRows(
+  doc: Pick<DynamoDBDocumentClient, "send">,
   tableName: string,
   rows: readonly Row[],
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<void> {
   for (let i = 0; i < rows.length; i += 25) {
     let requests: { DeleteRequest: { Key: Row } }[] = rows
       .slice(i, i + 25)
       .map((r) => ({ DeleteRequest: { Key: { PK: r.PK, SK: r.SK } } }));
     for (let attempt = 1; requests.length > 0; attempt++) {
-      if (attempt > 8) throw new Error(`reset: ${requests.length} deletes still unprocessed`);
+      if (attempt > DELETE_MAX_ATTEMPTS)
+        throw new Error(`reset: ${requests.length} deletes still unprocessed`);
       const out = await doc.send(new BatchWriteCommand({ RequestItems: { [tableName]: requests } }));
       requests = (out.UnprocessedItems?.[tableName] ?? []).flatMap((r) =>
         r.DeleteRequest?.Key ? [{ DeleteRequest: { Key: r.DeleteRequest.Key } }] : [],
       );
-      if (requests.length > 0) await new Promise((resolve) => setTimeout(resolve, 50 * 2 ** attempt));
+      if (requests.length > 0) await wait(50 * 2 ** attempt);
     }
   }
 }
@@ -353,13 +365,14 @@ export interface CliDeps {
   /** Prompts on the terminal; absent when there is none. */
   ask?: (question: string) => Promise<string>;
   now?: Date;
-  /** Reads `/sched/<env>/<name>` from SSM. */
-  ssmParam?: (env: string, name: string) => Promise<string>;
+  /** The SSM client for `region` (default: a real `SSMClient`). */
+  ssmClient?: (region: string) => Pick<SSMClient, "send">;
+  /** The DynamoDB client for `region` and the local endpoint, if any (default: `dynamoClientFor`). */
   dynamoClient?: (region: string, endpoint: string | undefined) => DynamoDBClient;
 }
 
-function ssmParamFrom(region: string): (env: string, name: string) => Promise<string> {
-  const ssm = new SSMClient({ region });
+/** A reader of `/sched/<env>/<name>` that throws when the parameter has no value. */
+export function ssmParamFrom(ssm: Pick<SSMClient, "send">): (env: string, name: string) => Promise<string> {
   return async (env, name) => {
     const out = await ssm.send(new GetParameterCommand({ Name: `/sched/${env}/${name}` }));
     if (!out.Parameter?.Value) throw new Error(`SSM /sched/${env}/${name} is empty`);
@@ -367,7 +380,7 @@ function ssmParamFrom(region: string): (env: string, name: string) => Promise<st
   };
 }
 
-function dynamoClientFor(region: string, endpoint: string | undefined): DynamoDBClient {
+export function dynamoClientFor(region: string, endpoint: string | undefined): DynamoDBClient {
   return endpoint
     ? // DynamoDB Local accepts any credentials.
       new DynamoDBClient({
@@ -397,7 +410,7 @@ export async function runCli(
     if (!args.table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
     table = args.table;
   } else {
-    const param = deps.ssmParam ?? ssmParamFrom(region);
+    const param = ssmParamFrom((deps.ssmClient ?? ((r) => new SSMClient({ region: r })))(region));
     table = args.table ?? (await param(args.env, "data/table-name"));
     userPoolId = await param(args.env, "auth/user-pool-id");
   }

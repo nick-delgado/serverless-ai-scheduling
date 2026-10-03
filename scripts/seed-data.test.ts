@@ -15,13 +15,32 @@ import {
   ListTablesCommand,
   waitUntilTableExists,
 } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, PutCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import type { SSMClient } from "@aws-sdk/client-ssm";
+import {
+  type BatchWriteCommandInput,
+  DeleteCommand,
+  type DynamoDBDocumentClient,
+  PutCommand,
+  ScanCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { clinicDateOf } from "@sched/tools";
 import { createDocumentClient, createTableInput, keys } from "@sched/tools/dynamo";
 import { FIXTURE_PATIENT_IDS, type FixturePatientAlias } from "@sched/tools/fixtures";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildDataSeed, loadMapping, parseCliArgs, resetConfirmed, runCli, seedData } from "./seed-data";
+import {
+  buildDataSeed,
+  DELETE_MAX_ATTEMPTS,
+  deleteRows,
+  dynamoClientFor,
+  loadMapping,
+  parseCliArgs,
+  resetConfirmed,
+  runCli,
+  seedData,
+  ssmParamFrom,
+} from "./seed-data";
 import type { UserMapping } from "./seed-users";
 
 const ENDPOINT = process.env.DYNAMODB_ENDPOINT ?? "http://localhost:8000";
@@ -159,6 +178,102 @@ describe("parseCliArgs", () => {
   });
 });
 
+/** A client whose `send` records each command's input and answers with `reply(input, call)`. */
+function fakeClient<C>(reply: (input: Record<string, unknown>, call: number) => unknown) {
+  const sent: Record<string, unknown>[] = [];
+  const client = {
+    send(command: { input: Record<string, unknown> }) {
+      sent.push(command.input);
+      return Promise.resolve(reply(command.input, sent.length));
+    },
+  };
+  return { sent, client: client as unknown as C };
+}
+
+describe("deleteRows", () => {
+  const rows = Array.from({ length: 30 }, (_, i) => ({
+    PK: `PROVIDER#p${String(i)}`,
+    SK: "PROFILE",
+    other: i,
+  }));
+  const deletes = (input: Record<string, unknown>) =>
+    ((input as BatchWriteCommandInput).RequestItems?.t1 ?? []).map((r) => r.DeleteRequest?.Key);
+
+  it("deletes by key in batches of 25 and re-sends only the unprocessed deletes after a wait", async () => {
+    const { sent, client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>((input, call) =>
+      call === 1
+        ? {
+            UnprocessedItems: {
+              t1: [
+                ...((input as BatchWriteCommandInput).RequestItems?.t1 ?? []).slice(3, 5),
+                { PutRequest: { Item: { PK: "x", SK: "y" } } },
+              ],
+            },
+          }
+        : {},
+    );
+    const waits: number[] = [];
+    await deleteRows(client, "t1", rows, async (ms) => void waits.push(ms));
+    expect(sent.map(deletes)).toEqual([
+      rows.slice(0, 25).map((r) => ({ PK: r.PK, SK: r.SK })),
+      rows.slice(3, 5).map((r) => ({ PK: r.PK, SK: r.SK })),
+      rows.slice(25).map((r) => ({ PK: r.PK, SK: r.SK })),
+    ]);
+    expect(waits).toEqual([100]);
+  });
+
+  it(`gives up on a batch after ${String(DELETE_MAX_ATTEMPTS)} calls that leave deletes unprocessed`, async () => {
+    const { sent, client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>((input) => ({
+      UnprocessedItems: { t1: (input as BatchWriteCommandInput).RequestItems?.t1 },
+    }));
+    const waits: number[] = [];
+    await expect(
+      deleteRows(client, "t1", rows.slice(0, 2), async (ms) => void waits.push(ms)),
+    ).rejects.toThrow("reset: 2 deletes still unprocessed");
+    expect(DELETE_MAX_ATTEMPTS).toBe(8);
+    expect(sent).toHaveLength(8);
+    expect(waits).toEqual([100, 200, 400, 800, 1600, 3200, 6400, 12800]);
+  });
+});
+
+describe("ssmParamFrom", () => {
+  it("reads /sched/<env>/<name> and refuses a missing or empty value", async () => {
+    const values: Record<string, unknown> = {
+      "/sched/dev/data/table-name": { Parameter: { Value: "sched-dev-table" } },
+      "/sched/dev/auth/user-pool-id": { Parameter: { Value: "" } },
+      "/sched/dev/none": {},
+    };
+    const { sent, client } = fakeClient<Pick<SSMClient, "send">>((input) => values[String(input.Name)]);
+    const param = ssmParamFrom(client);
+    await expect(param("dev", "data/table-name")).resolves.toBe("sched-dev-table");
+    expect(sent).toEqual([{ Name: "/sched/dev/data/table-name" }]);
+    await expect(param("dev", "auth/user-pool-id")).rejects.toThrow(
+      "SSM /sched/dev/auth/user-pool-id is empty",
+    );
+    await expect(param("dev", "none")).rejects.toThrow("SSM /sched/dev/none is empty");
+  });
+});
+
+describe("dynamoClientFor", () => {
+  it("points at the endpoint with dummy credentials when one is given, else at the region's AWS endpoint", async () => {
+    const local = dynamoClientFor("eu-west-1", "http://localhost:8001");
+    const aws = dynamoClientFor("eu-west-1", undefined);
+    try {
+      expect(await local.config.region()).toBe("eu-west-1");
+      expect(await local.config.endpoint?.()).toMatchObject({ hostname: "localhost", port: 8001 });
+      expect(await local.config.credentials()).toMatchObject({
+        accessKeyId: "local",
+        secretAccessKey: "local",
+      });
+      expect(await aws.config.region()).toBe("eu-west-1");
+      expect(aws.config.endpoint).toBeUndefined();
+    } finally {
+      local.destroy();
+      aws.destroy();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Against DynamoDB Local
 // ---------------------------------------------------------------------------------------------
@@ -227,6 +342,9 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
     return items;
   }
   const byType = (items: Record<string, unknown>[], t: string) => items.filter((i) => i.entityType === t);
+  const sortKey = (i: Record<string, unknown>) => `${String(i.PK)}|${String(i.SK)}`;
+  const sorted = (xs: Record<string, unknown>[]) =>
+    [...xs].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const run = (mapping: UserMapping, now: Date, extra: Partial<Parameters<typeof seedData>[0]> = {}) =>
     seedData({ tableName: table, client, mapping, now, ...extra });
 
@@ -270,9 +388,6 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
     const again = await run(mapping, LATE_EVENING);
     const second = await scan();
     expect(second).toHaveLength(first.length);
-    const sortKey = (i: Record<string, unknown>) => `${String(i.PK)}|${String(i.SK)}`;
-    const sorted = (xs: Record<string, unknown>[]) =>
-      [...xs].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
     expect(sorted(second)).toEqual(sorted(first));
     // Only the profiles are rewritten; no slot or appointment is written again.
     expect(again.written).toBe(8 + 2);
@@ -309,7 +424,10 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
   it("never overwrites a booking made after the seed", async () => {
     const mapping = mappingFor(["pat-maria"]);
     await run(mapping, LATE_EVENING);
-    const open = byType(await scan(), "SLOT").find((s) => s.status === "OPEN");
+    // A slot inside both runs' windows ([Oct 7, Nov 4) and [Oct 8, Nov 5)), so the second run writes it.
+    const open = byType(await scan(), "SLOT").find(
+      (s) => s.status === "OPEN" && clinicDateOf(String(s.startUtc)) >= "2026-10-08",
+    );
     if (!open) throw new Error("no open slot");
     await doc.send(
       new UpdateCommand({
@@ -350,7 +468,7 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
     );
     await expect(run(mapping, NEXT_DAY, { reset: true })).rejects.toThrow(/not confirmed/);
     expect(confirm).toHaveBeenCalledOnce();
-    expect(await scan()).toHaveLength(before.length);
+    expect(sorted(await scan())).toEqual(sorted(before));
   });
 
   it("--reset deletes seed-owned items (old slots, agent bookings) but keeps conversations", async () => {
@@ -380,6 +498,16 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
     expect(fresh).toHaveLength(result.written);
   });
 
+  it("--reset keeps the profile and appointments of patients no longer in the mapping", async () => {
+    await run(mappingFor(["pat-maria", "pat-walter"]), LATE_EVENING);
+    const walterPk = `PATIENT#${SUBS["pat-walter"]}`;
+    const walter = sorted((await scan()).filter((i) => i.PK === walterPk));
+    expect(byType(walter, "PATIENT")).toHaveLength(1);
+    expect(byType(walter, "APPOINTMENT")).toHaveLength(2);
+    await run(mappingFor(["pat-maria"]), LATE_EVENING, { reset: true, confirmReset: async () => true });
+    expect(sorted((await scan()).filter((i) => i.PK === walterPk))).toEqual(walter);
+  });
+
   describe("runCli", () => {
     let dir: string;
     let mappingFile: string;
@@ -390,36 +518,71 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
     });
     afterEach(() => rmSync(dir, { recursive: true, force: true }));
     const local = { DYNAMODB_ENDPOINT: ENDPOINT };
-    const deps = { now: LATE_EVENING, dynamoClient: () => localClient() };
+    /** (region, endpoint) each `dynamoClient` call received; every call gets the local test client. */
+    let clientArgs: [string, string | undefined][];
+    beforeEach(() => {
+      clientArgs = [];
+    });
+    const deps = {
+      now: LATE_EVENING,
+      dynamoClient: (region: string, endpoint: string | undefined) => {
+        clientArgs.push([region, endpoint]);
+        return localClient();
+      },
+    };
+    /** An SSM client stub: records the region and each parameter name; the pool parameter returns `pool`. */
+    const fakeSsm = (pool: string) => {
+      const asked: string[] = [];
+      const regions: string[] = [];
+      const ssmClient = (region: string) => {
+        regions.push(region);
+        return fakeClient<Pick<SSMClient, "send">>((input) => {
+          asked.push(String(input.Name));
+          return { Parameter: { Value: input.Name === "/sched/dev/data/table-name" ? table : pool } };
+        }).client;
+      };
+      return { asked, regions, ssmClient };
+    };
 
     it("locally, needs --table and seeds that table from the --mapping file", async () => {
       await expect(runCli(["--env", "dev"], local)).rejects.toThrow(/pass --table/);
       const out = await runCli(["--env", "dev", "--table", table, "--mapping", mappingFile], local, deps);
       expect(out.skipped).not.toContain("pat-sofia");
       expect(out.baseDate).toBe("2026-10-07"); // the injected clock, not the real one
+      expect(clientArgs).toEqual([["us-east-1", ENDPOINT]]);
       expect((await scan()).some((i) => i.PK === `PATIENT#${SUBS["pat-sofia"]}`)).toBe(true);
     });
 
-    it("on AWS, reads the table name and User Pool from the env's SSM parameters", async () => {
-      const asked: string[] = [];
-      const ssm = (pool: string) => async (env: string, name: string) => {
-        asked.push(`/sched/${env}/${name}`);
-        return name === "data/table-name" ? table : pool;
-      };
+    it("on AWS, reads the table name and User Pool from the env's SSM parameters in us-east-1", async () => {
       const argv = ["--env", "dev", "--mapping", mappingFile];
-      await expect(runCli(argv, {}, { ...deps, ssmParam: ssm("us-east-1_Other") })).rejects.toThrow(
-        /User Pool/,
-      );
+      const other = fakeSsm("us-east-1_Other");
+      await expect(runCli(argv, {}, { ...deps, ssmClient: other.ssmClient })).rejects.toThrow(/User Pool/);
       expect(await scan()).toHaveLength(0);
-      asked.length = 0;
-      await runCli(argv, {}, { ...deps, ssmParam: ssm(POOL) });
-      expect(asked).toEqual(["/sched/dev/data/table-name", "/sched/dev/auth/user-pool-id"]);
+      const ok = fakeSsm(POOL);
+      await runCli(argv, { DYNAMODB_ENDPOINT: "" }, { ...deps, ssmClient: ok.ssmClient });
+      expect(ok.asked).toEqual(["/sched/dev/data/table-name", "/sched/dev/auth/user-pool-id"]);
+      expect(ok.regions).toEqual(["us-east-1"]);
+      expect(clientArgs).toEqual([["us-east-1", undefined]]);
       expect((await scan()).some((i) => i.PK === `PATIENT#${SUBS["pat-sofia"]}`)).toBe(true);
-      asked.length = 0;
+      const flagged = fakeSsm(POOL);
       await expect(
-        runCli([...argv, "--table", "sched-other"], {}, { ...deps, ssmParam: ssm(POOL) }),
+        runCli([...argv, "--table", "sched-other"], {}, { ...deps, ssmClient: flagged.ssmClient }),
       ).rejects.toThrow(/non-existent table|ResourceNotFound|Cannot do operations/);
-      expect(asked).toEqual(["/sched/dev/auth/user-pool-id"]);
+      expect(flagged.asked).toEqual(["/sched/dev/auth/user-pool-id"]);
+    });
+
+    it("uses AWS_REGION for the SSM and DynamoDB clients when it is set", async () => {
+      const ssm = fakeSsm(POOL);
+      await runCli(
+        ["--env", "dev", "--mapping", mappingFile],
+        { AWS_REGION: "eu-west-1" },
+        {
+          ...deps,
+          ssmClient: ssm.ssmClient,
+        },
+      );
+      expect(ssm.regions).toEqual(["eu-west-1"]);
+      expect(clientArgs).toEqual([["eu-west-1", undefined]]);
     });
 
     it("refuses --reset with no terminal and no --confirm, or a wrong --confirm", async () => {
