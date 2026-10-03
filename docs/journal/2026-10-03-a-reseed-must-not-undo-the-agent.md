@@ -31,5 +31,11 @@ The DynamoDB Local tests also failed once out of three runs on a busy machine. E
 
 ## Evidence
 
-- `scripts/seed-data.test.ts`: 19 tests, 11 of them against DynamoDB Local. `npm test`: 1,299 tests passed.
-- 47 breaks to `scripts/seed-data.ts`. Each one turned at least one test red after the two tests above were added.
+- `scripts/seed-data.test.ts`: 25 tests, 13 of them against DynamoDB Local.
+- 47 breaks to `scripts/seed-data.ts` in the first round. Each one turned at least one test red after the two tests above were added.
+- The review of PR #117 found three gaps. The `--reset` delete loop, the SSM reader and the client wiring were checked only by hand. "Never overwrites a booking" booked a slot the second run never wrote, so it couldn't catch an overwrite. The "refuses" test compared only item counts. I made the adapters injectable, added stub tests and a reset test for unmapped patients, and moved the agent-booked slot inside both runs' windows. Then I ran 24 more breaks, and each one turned a test red. They covered the retry, the attempt cap, the backoff, the batch size, the SSM name, the empty-value check, the region default, `AWS_REGION`, the endpoint wiring, the slot filter, the confirmation order, and a reset that deletes unmapped patients.
+
+## What's next
+
+- The first `dev` load. Nick approved a normal run (no `--reset`), and the orchestrator runs it after the review fixes; its counts go in PR #117.
+- For #36 (M3-01): the seeded `dev` window starts on the run date, not the eval base date (2026-10-05), so deployed data matches the in-memory fixture in shape, not in dates or patient IDs.

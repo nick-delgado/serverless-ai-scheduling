@@ -165,7 +165,7 @@ What the data seed writes to the table named by SSM `/sched/<env>/data/table-nam
 - 30-minute slots, Mon–Fri 8 AM–5 PM clinic time, for **4 weeks starting today** (the clinic-local date in America/New_York);
 - a `PATIENT#<sub>` profile for each patient in the mapping, and their fixture appointments. Every fixture patient ID becomes the patient's `sub`. Fixture patients without a mapping row are skipped, with their appointments, and their slots stay open.
 
-Before writing, it checks that the mapping is for this env and for the env's current User Pool (SSM `/sched/<env>/auth/user-pool-id`). If the mapping is missing, stale or malformed, it stops and says to re-run `seed-users.ts`.
+Before writing, it checks that the mapping is for this env and for the env's current User Pool (SSM `/sched/<env>/auth/user-pool-id`). If the mapping is missing, or belongs to another User Pool, it stops and says to run `seed-users.ts` for this env. If the file isn't valid JSON or doesn't have the mapping's shape, it stops and says to fix or remove the file. A mapping for another env, one with no users, or a row whose `fixturePatientId` doesn't match its alias also stops it, with an error naming the problem.
 
 **Re-running is safe.** A normal run only adds what's missing. It never overwrites an existing slot or appointment, including bookings the agent made since. It rewrites the provider and patient profiles with the same content, and a profile keeps its original `createdAt`. On a later day, it extends the window to 4 weeks from that day, and earlier slots stay. A BOOKED fixture appointment is added only if its slot isn't stored yet, so a patient added to the mapping later may get only their past and cancelled visits. Use `--reset` to get the full set.
 
