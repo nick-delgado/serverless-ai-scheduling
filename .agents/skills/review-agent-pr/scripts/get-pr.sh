@@ -11,7 +11,8 @@
 #   commits.txt   the PR's commits, oldest first: short sha, then the full message
 #   diff.patch    the PR's diff
 #   ci.txt        the checks and statuses reported on the head commit
-# Prints a summary: head and base, size, CI state, and the issues the PR says it closes.
+# Prints a summary: head and base, size, whether it can merge, CI state, and the issues the
+# PR says it closes.
 #
 # Only REST calls are used (no GraphQL, no gh pr/issue subcommands), so this also runs where
 # GraphQL is blocked. Run from inside a clone of the PR's repository.
@@ -48,9 +49,23 @@ gh api "repos/{owner}/{repo}/pulls/${pr}" -H "Accept: application/vnd.github.dif
     --jq '.statuses[] | "status\t\(.context)\t\(.state)\t-\t\(.target_url // "")"'
 } > "$run/ci.txt"
 
+# GitHub works out mergeability in the background; ask again for a few seconds if it is
+# not known yet. States: clean, unstable (checks failing), blocked (protection rules),
+# behind (base moved, no conflict), dirty (merge conflict), unknown, draft, has_hooks.
+mergeable=""
+for _ in 1 2 3 4 5; do
+  mergeable="$(pr_field '.mergeable_state // "unknown"')"
+  [ "$mergeable" != "unknown" ] && break
+  sleep 2
+done
+
 ci_state() {
   if [ ! -s "$run/ci.txt" ]; then
-    echo "none reported"
+    if [ "$mergeable" = "dirty" ]; then
+      echo "not run: the PR has a merge conflict, so GitHub could not build the trial merge that pull_request workflows run on"
+    else
+      echo "none reported"
+    fi
     return
   fi
   if awk -F'\t' '($1 == "check" && $4 ~ /^(failure|timed_out|cancelled|action_required|startup_failure)$/) || ($1 == "status" && $3 ~ /^(failure|error)$/) { found = 1 } END { exit !found }' "$run/ci.txt"; then
@@ -76,5 +91,6 @@ echo "state: $(pr_field 'if .merged_at then "merged" else .state end')$(pr_field
 echo "head: $(pr_field '.head.ref') @ ${head_sha}"
 echo "base: $(pr_field '.base.ref') @ $(pr_field '.base.sha')"
 echo "size: $(pr_field '"\(.changed_files) files, +\(.additions) -\(.deletions), \(.commits) commits"')"
+echo "mergeable: ${mergeable}$( [ "$mergeable" = "dirty" ] && echo " (merge conflict with $(pr_field '.base.ref'))")"
 echo "ci: $(ci_state)"
 echo "closes: ${closes:-none found}"

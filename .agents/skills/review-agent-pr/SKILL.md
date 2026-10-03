@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.02.1"
+  harness-version: "2026.10.03.1"
 ---
 
 # Review an agent-authored PR
@@ -80,8 +80,16 @@ head and base, size, CI state, and the issues the description or commits say the
 Confirm that the head commit it prints equals `git -C "$RUN_DIR/worktree" rev-parse HEAD`.
 If it does not, fetch again.
 
-CI state goes into the report as a fact: passing, failing (which checks), pending, or none
-reported. A failing or pending CI does not stop the review.
+CI state goes into the report as a fact: passing, failing (which checks), pending, none
+reported, or not run because of a merge conflict. A failing or pending CI does not stop the
+review.
+
+**A merge conflict stops it.** If `mergeable` is `dirty`, the PR conflicts with its base
+branch: CI has not run on it, and resolving the conflict will change the code. Tell the
+user, recommend bringing the branch up to date first (`address-pr-review` does it), and
+review only if they say to go ahead anyway; if you cannot ask (for example, running as a
+forked review), stop and report the conflict. `behind` (the base moved, no conflict) is
+fine: CI runs on the trial merge, and the review continues.
 
 Then save the previous review, if this is a re-review:
 
@@ -98,17 +106,22 @@ On a re-review, also list the lines changed since the previous reviewed commit (
 `previous-commit` that `get-previous.sh` printed):
 
 ```sh
-<SKILL_DIR>/scripts/changed-lines.sh "$RUN_DIR" <previous commit>
+<SKILL_DIR>/scripts/changed-lines.sh "$RUN_DIR" <previous commit> <base branch>
 ```
 
 It writes `RUN_DIR/changed-lines.txt`. A re-review weighs findings by whether they are in
 changed code (see "Re-reviews" in the finding schema): without that, every round grades the
 whole PR from scratch, finds new things in code it has already passed, and never converges.
-If the previous commit is not in the branch's history (a rebase or force-push), say so in
-the manifest and review as a first review.
 
-CI state goes into the report as a fact: passing, failing (which checks), pending, or none
-configured. A failing or pending CI does not stop the review.
+"Changed" compares the PR's own diff now with its own diff at the previous review, so a
+fix or a conflict resolution counts and changes merged in from the base branch do not:
+those were reviewed in their own PRs. It works after a rebase too. If the previous commit
+cannot be fetched at all, say so in the manifest and review as a first review.
+
+The script also writes `RUN_DIR/base-changes.txt`: what the base branch changed between
+the two reviews. Other PRs merged in that time may have changed code this PR relies on,
+without any conflict in this PR's lines; the verifier checks for that (its "Changes on the
+base branch" section). Name both files in the manifest.
 
 ## Phase 2: Find the spec
 
@@ -346,24 +359,23 @@ phase's subagent if a section is missing) and run it again. Do not write or edit
 
 Follow the phases above with these differences.
 
-- **Phase 1:** run `get-previous.sh` as usual. A re-check needs a previous report of an
-  earlier commit that is an ancestor of the current head
-  (`git -C "$RUN_DIR/worktree" merge-base --is-ancestor <previous sha> HEAD`). If there is
-  no previous report, the head is the commit it reviewed, or the branch was rebased or
-  force-pushed since, tell the user and run a full review instead. Otherwise write the
-  changes since the previous review:
+- **Phase 1:** run `get-previous.sh` and `changed-lines.sh` as usual. A re-check needs a
+  previous report of an earlier commit. If there is none, the head is the commit it
+  reviewed, or the previous commit cannot be fetched, tell the user and run a full review
+  instead. Otherwise write the changes since the previous review:
 
   ```sh
   git -C "$RUN_DIR/worktree" diff <previous sha> HEAD > "$RUN_DIR/recheck.patch"
   ```
 
-  Then measure the change:
+  If the base branch was merged in since, this patch also holds the base branch's changes;
+  `changed-lines.txt` says which lines are the PR's own. Then measure the change:
 
   ```sh
-  <SKILL_DIR>/scripts/diff-size.sh <previous sha> HEAD "$RUN_DIR/worktree"
+  <SKILL_DIR>/scripts/diff-size.sh <previous sha> HEAD "$RUN_DIR/worktree" <base branch>
   ```
 
-  It separates source from tests and other files. Test files do not count: a fix round
+  It measures the PR's own changes only, separating source from tests and other files. Test files do not count: a fix round
   usually adds many tests, and tests are what the re-check reads most closely anyway. A
   re-check is right when the source change is no more than about 300 lines or 20% of the
   PR's source lines (`pr-source`), whichever is larger, and no new source file is over
@@ -375,8 +387,9 @@ Follow the phases above with these differences.
 - **Phase 4:** skipped. `RUN_DIR/findings/` stays empty.
 - **Phase 5:** spawn the verifier as usual, adding one line to its prompt: `This is a
   re-check: there are no reviewer findings. Follow the "Re-check mode" section of your
-  brief. The changes since the previous review are in <RUN_DIR>/recheck.patch. The
-  reviewers' briefs are in <SKILL_DIR>/reviewers/.` Then run
+  brief. The changes since the previous review are in <RUN_DIR>/recheck.patch, and the
+  PR's own changed lines in <RUN_DIR>/changed-lines.txt. The reviewers' briefs are in
+  <SKILL_DIR>/reviewers/.` Then run
   the citation check as usual.
 - **Phase 6:** as usual: it runs when there are confirmed findings above nit.
 - **Phase 7:** as usual. In `report-head.md`, the verdict line reads `## Agent PR review

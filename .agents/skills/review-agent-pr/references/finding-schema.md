@@ -98,7 +98,11 @@ PR from scratch. So on a re-review, findings are weighed by where they are:
   security rule), is actioned as usual: it was missed before and still matters. Anything
   else there (test gaps, smells, conventions, wording, nits) gets the action `noticed`.
 
-A finding is in changed code if any line it cites falls in the changed ranges.
+A finding is in changed code if any line it cites falls in the changed ranges. "Changed"
+means changed in the PR's own diff: a fix, an implemented decision or a conflict
+resolution. Code merged in from the base branch is not this PR's change and is not graded
+here, except where it clashes with the PR (see the verifier's "Changes on the base
+branch").
 
 ### Things already settled
 

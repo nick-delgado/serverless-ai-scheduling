@@ -109,7 +109,8 @@ Then, across all files:
     "Suggestions and options" in the finding schema:
     - **Suggested fix:** check it against the code. Is it correct, the smallest fix that
       resolves the finding, free of any product decision, and does it use what already
-      exists? Do two findings' fixes touch the same code, conflict, or make each other
+      exists? If it adds a constant, type, schema or helper, search for an existing one
+      first and name it in the fix ("import `X` from `path`"), or say that none exists. Do two findings' fixes touch the same code, conflict, or make each other
       unnecessary? Then make them consistent and say so in each. Rewrite what falls short.
     - **Done when:** present and checkable, with a check for each condition or case when the
       fix has several.
@@ -176,6 +177,29 @@ reviewed commit it answers and the commit it produced. They are claims ("fixed",
 "disputed"). Treat them as
 claims to check, not as evidence. For a disputed finding, judge the dispute on the code.
 
+## Changes on the base branch (re-reviews only)
+
+Other PRs may have merged into the base branch since the previous review. Where they
+changed code this PR relies on, the PR can be wrong without a single conflicting line: a
+function it calls now behaves differently, a type gained a case the PR does not handle, a
+helper it duplicates now exists. `<RUN_DIR>/base-changes.txt` lists the files the base
+branch changed between the two reviews.
+
+1. Find the overlap: for each file there, check whether the PR's code imports it, calls
+   into it, extends it, or edits the same area (search the PR's changed files for its
+   module name and exported names). Skip files the PR does not touch or depend on.
+2. For each file that overlaps, read what changed (`git -C <RUN_DIR>/worktree diff
+   <previous base> <current base> -- <file>`, the two merge bases of the base branch with
+   the previous and current PR heads) and judge whether the PR still works with it: renamed
+   or removed names, changed signatures or return values, new cases, changed behaviour, and
+   new code that the PR now duplicates.
+3. A clash is a `VER` finding, category `integration`, in changed code by definition (it is
+   new to this round), and goes through steps 1 to 10. Cite the PR's code and the base
+   change.
+4. Record what you checked in the spot-checks table, one row per overlapping file, so the
+   report shows the check ran even when it found nothing. If nothing overlaps, add one row
+   saying so.
+
 ## Re-check mode
 
 When your prompt says this is a re-check, there are no reviewer findings. The PR was
@@ -183,8 +207,12 @@ reviewed before, and the authoring agent has since changed it; the changes are i
 `<RUN_DIR>/recheck.patch`. Your job is narrower than a review and wider than verification:
 
 1. **Previous findings:** as above, for every finding. This is the main output.
-2. **The changes themselves.** Read every hunk of `recheck.patch` and the code around it at
-   the head. For each hunk, check that it does what the response claims, and look for new
+2. **The changes themselves.** Read the PR's own changed lines, listed in
+   `<RUN_DIR>/changed-lines.txt`, with the code around them at the head; `recheck.patch`
+   shows the same changes as a diff, but if the base branch was merged in since, it also
+   holds the base branch's changes, which are not this PR's and are not re-reviewed here.
+   Conflict resolutions are among the PR's own changed lines: check that each keeps both
+   sides' intent. For each hunk, check that it does what the response claims, and look for new
    problems of the kinds the reviewers' briefs describe: a test that cannot fail the way its
    name says, a weakened check, a stale comment or doc left behind, a change outside the
    task's scope, behaviour the spec or the owner's decisions do not allow. Read the relevant
@@ -192,6 +220,7 @@ reviewed before, and the authoring agent has since changed it; the changes are i
    `VER` finding and goes through steps 1 to 10.
 3. **Spot checks** become the record of step 2: one row per hunk (or group of related
    hunks), with what you checked and the result.
+4. **Changes on the base branch:** as in the section of that name, below.
 
 Write the same output file with the same headings. In the verification summary, give each
 reviewer a row reading `not run (re-check)`, and add a row `Verifier (re-check)` with the
