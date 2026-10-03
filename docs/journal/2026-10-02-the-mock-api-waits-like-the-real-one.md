@@ -32,7 +32,7 @@ The mock had to copy one detail of the real API. The S-2 spike (ADR-007) found t
 
 ## What's next
 
-- A CloudFront Function for SPA deep links on the web stack's default behaviour: #103, before #36 deploys the SPA.
-- Uploading the built assets: the deploy workflow in #41.
+- A CloudFront Function for SPA deep links on the web stack's default behaviour: #99, before #36 deploys the SPA.
+- Uploading the built assets: `scripts/deploy-web.sh` in #100.
 - #25 deletes `src/skeleton/` (now one of its acceptance criteria).
 - #26 builds the chat against this mock; #27 uses its error injection for retry and restore.
