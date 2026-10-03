@@ -3,7 +3,8 @@
  *
  * This entry point exports the transport-free chat turn core and its in-memory helpers, so the eval
  * harness can run the real handler in-process with injected repositories, clock, LLM and notifier (#30).
- * It never loads the AWS SDK: the Lambda wiring lives in `handlers/` and `lib/aws.ts`.
+ * It never loads the DynamoDB SDK: the DynamoDB stores live in `lib/aws.ts`, which only `handlers/`
+ * import. (`@sched/agent` still loads the Bedrock runtime client, for `ConverseLlmClient`.)
  */
 export const PACKAGE_NAME = "@sched/api";
 

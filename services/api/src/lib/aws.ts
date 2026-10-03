@@ -3,7 +3,7 @@
  * one DynamoDB client. Create them once per execution environment (module scope), not per request.
  *
  * Kept out of `index.ts`, so in-process users of the handler core (the eval harness) never load the
- * AWS SDK.
+ * DynamoDB SDK.
  */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import type { Clock } from "@sched/agent";
