@@ -30,8 +30,8 @@ describe("system prompt v1: cache split", () => {
       [
         "# Conversation context",
         "- Today is Monday, October 5, 2026 (2026-10-05) in the clinic's timezone, America/New_York (ET).",
-        "- This week: Monday, October 5 to Friday, October 9 (2026-10-05 to 2026-10-09).",
-        "- Next week: Monday, October 12 to Friday, October 16 (2026-10-12 to 2026-10-16).",
+        "- This week: Monday, October 5 (2026-10-05), Tuesday, October 6 (2026-10-06), Wednesday, October 7 (2026-10-07), Thursday, October 8 (2026-10-08), Friday, October 9 (2026-10-09).",
+        "- Next week: Monday, October 12 (2026-10-12), Tuesday, October 13 (2026-10-13), Wednesday, October 14 (2026-10-14), Thursday, October 15 (2026-10-15), Friday, October 16 (2026-10-16).",
         "- The patient's first name, from their profile: Maria.",
       ].join("\n"),
     );
@@ -40,19 +40,20 @@ describe("system prompt v1: cache split", () => {
   it("uses the clinic-local date, not the UTC one (10 PM ET Friday is already Saturday in UTC)", () => {
     const dynamic = systemPromptV1({ now: new Date("2026-10-10T02:00:00Z") }).dynamic;
     expect(dynamic).toContain("Today is Friday, October 9, 2026 (2026-10-09)");
-    expect(dynamic).toContain("Next week: Monday, October 12 to Friday, October 16");
+    expect(dynamic).toContain("Next week: Monday, October 12 (2026-10-12),");
   });
 
   it("on a weekend, next week is the coming Monday to Friday", () => {
     const dynamic = systemPromptV1({ now: new Date("2026-10-11T16:00:00Z") }).dynamic; // Sun Oct 11
-    expect(dynamic).toContain("This week: Monday, October 5 to Friday, October 9");
-    expect(dynamic).toContain("Next week: Monday, October 12 to Friday, October 16");
+    expect(dynamic).toContain("This week: Monday, October 5 (2026-10-05),");
+    expect(dynamic).toContain("Next week: Monday, October 12 (2026-10-12),");
+    expect(dynamic).toContain("Friday, October 16 (2026-10-16).");
   });
 
   it("weeks stay Monday-based across the DST change (Sun Nov 1)", () => {
     const dynamic = systemPromptV1({ now: new Date("2026-10-30T13:00:00Z") }).dynamic; // Fri Oct 30
     expect(dynamic).toContain(
-      "Next week: Monday, November 2 to Friday, November 6 (2026-11-02 to 2026-11-06)",
+      "Next week: Monday, November 2 (2026-11-02), Tuesday, November 3 (2026-11-03), Wednesday, November 4 (2026-11-04), Thursday, November 5 (2026-11-05), Friday, November 6 (2026-11-06).",
     );
   });
 
