@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.03.1"
+  harness-version: "2026.10.03.2"
 ---
 
 # Address a PR review
@@ -58,12 +58,24 @@ the PR's comments one by one. If the PR number was not given, use the open PR wh
 - No report: stop and tell the user.
 - The report's author is not the account `gh` is logged in as: tell the user who wrote it
   and ask before acting on it.
-- **The reviewed commit is not the PR's head** (`match: NO`): the PR changed after the
-  review, so the findings may no longer describe the code. Stop. Tell the user both
-  commits and what came in between (`git log --oneline <reviewed>..<head>` once you have
-  the branch), and ask how to go on: re-review or re-check first, or fix against the
-  current head and check each finding against the current code. Do not go on without an
-  answer, and record the answer in the response.
+- **The reviewed commit is not the PR's head** (`match: NO`): something was pushed after
+  the review. Once you have the branch (step 2), find out whether the PR's own code moved
+  or only its base came in:
+
+  ```sh
+  <SKILL_DIR>/scripts/diff-size.sh <reviewed sha> HEAD . <base branch>
+  ```
+
+  - **Only the base branch came in** (source, tests and other all show 0 changed): someone
+    merged the base into the PR, and the PR's own code is still what was reviewed. Go on.
+    Line numbers in the findings may have shifted; you check each finding against the code
+    anyway. Say in the response that the base was merged in after the review, and use the
+    current head as the commit you worked from.
+  - **The PR's own code changed:** the findings may no longer describe it. Stop. Tell the
+    user both commits and what came in between (`git log --oneline <reviewed>..<head>`),
+    and ask how to go on: re-review or re-check first, or fix against the current head and
+    check each finding against the current code. Do not go on without an answer, and
+    record the answer in the response.
 
 ### 2. Get onto the PR branch
 
