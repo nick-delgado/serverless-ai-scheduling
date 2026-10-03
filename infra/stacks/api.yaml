@@ -2,8 +2,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
   sched-<env>-api: Regional REST API with a Cognito User Pool authorizer and a response-streaming
-  Lambda integration for POST /api/chat (ADR-007). Walking skeleton from M1-05 (#7): the chat
-  function streams one Bedrock reply as NDJSON; S3-03 (#17) swaps in the agent loop.
+  Lambda integration for POST /api/chat (ADR-007). The chat function runs the agent loop (S3-03, #17)
+  over the single table and Bedrock Converse, and streams NDJSON events.
 
 Parameters:
   Env:
@@ -14,6 +14,18 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /sched/bootstrap/permissions-boundary-arn
     Description: Every role in sched-* stacks must carry this boundary (bootstrap stack; ADR-003).
+  AgentModelProfile:
+    Type: String
+    Default: sonnet-4.6
+    # The entitled profiles (packages/agent/src/profiles.ts). The chat role may call all of them, so a
+    # profile switch and every refusal fallback (REFUSAL_FALLBACKS) need no IAM change (ADR-010).
+    AllowedValues: [sonnet-4.6, haiku-4.5, nova-2-lite, nova-pro, gpt-oss-120b, gpt-oss-20b]
+    Description: AGENT_MODEL_PROFILE for the chat function.
+  DailyTurnCap:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: Agent turns per patient per clinic-local day (ADR-009).
 
 Globals:
   Function:
@@ -36,15 +48,15 @@ Globals:
 
 Resources:
   # ---------------------------------------------------------------------------------------------
-  # POST /api/chat: streaming chat handler (walking skeleton)
+  # POST /api/chat: streaming chat handler (agent loop, #17)
   # ---------------------------------------------------------------------------------------------
-  ChatSkeletonLogGroup:
+  ChatLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-chat-skeleton
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-chat
       RetentionInDays: 14
 
-  ChatSkeletonFunction:
+  ChatFunction:
     Type: AWS::Serverless::Function
     Metadata:
       # SAM's esbuild builder can't resolve npm-workspace packages (@sched/contracts), so the
@@ -53,33 +65,58 @@ Resources:
       BuildMethod: makefile
       WorkingDirectory: ../..
     Properties:
-      FunctionName: !Sub sched-${Env}-api-chat-skeleton
-      Description: POST /api/chat walking skeleton (#7). Streams one Bedrock reply as NDJSON events.
+      FunctionName: !Sub sched-${Env}-api-chat
+      Description: POST /api/chat (#17). Runs one agent turn and streams NDJSON ChatStreamEvents.
       CodeUri: ../../services/api
       Handler: index.handler
       MemorySize: 1024
-      # Bounds the whole streamed turn. The SDK's own timeout (60 s) covers the wait for Bedrock.
-      Timeout: 120
+      # Bounds the whole streamed turn (up to 8 model calls, ADR-001). The handler aborts the agent loop
+      # 15 s before this, so it can still store the turn and end the stream with an error event.
+      Timeout: 180
       Environment:
         Variables:
-          # TEMPORARY direct Bedrock call; #17 moves model selection to AGENT_MODEL_PROFILE (ADR-002).
-          MODEL_ID: us.anthropic.claude-sonnet-4-6
+          TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
+          AGENT_MODEL_PROFILE: !Ref AgentModelProfile
+          DAILY_TURN_CAP: !Ref DailyTurnCap
           NODE_OPTIONS: --enable-source-maps
       LoggingConfig:
         LogFormat: JSON
-        LogGroup: !Ref ChatSkeletonLogGroup
+        LogGroup: !Ref ChatLogGroup
       Policies:
         - Version: "2012-10-17"
           Statement:
-            - Sid: InvokeSonnet46ViaUsInferenceProfile
+            # The DynamoDB repositories (#13) and the turn store: item reads, conditional writes, and
+            # TransactWriteItems (authorized per item as Put/Update/ConditionCheck). No Scan, no Delete.
+            - Sid: SingleTableItems
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}/index/*"
+            # Every entitled profile (ADR-010) and therefore every refusal fallback. The US cross-region
+            # inference profiles route to the foundation model in several US regions, hence `bedrock:*`.
+            - Sid: InvokeAgentModels
               Effect: Allow
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource:
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6
-                # The US profile routes to the foundation model in several US regions.
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-pro-v1:0
+                # gpt-oss is called by foundation-model ID, in this region only.
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-120b-1:0
+                - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-20b-1:0
 
   ChatApi:
     Type: AWS::Serverless::Api
@@ -112,7 +149,7 @@ Resources:
               x-amazon-apigateway-integration:
                 type: aws_proxy
                 httpMethod: POST
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${ChatSkeletonFunction.Arn}/response-streaming-invocations
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2021-11-15/functions/${ChatFunction.Arn}/response-streaming-invocations
                 responseTransferMode: STREAM
                 # Streaming integrations may run up to 15 minutes; an agent turn needs well under 5.
                 timeoutInMillis: 300000
@@ -134,7 +171,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt ChatSkeletonFunction.Arn
+      FunctionName: !GetAtt ChatFunction.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/chat
 
@@ -146,7 +183,7 @@ Resources:
     Properties:
       Name: !Sub /sched/${Env}/api/status
       Type: String
-      Value: walking-skeleton
+      Value: agent
 
   RestApiIdParam:
     Type: AWS::SSM::Parameter
@@ -178,4 +215,4 @@ Outputs:
     Description: Direct execute-api URL (the SPA goes through CloudFront at /api/chat instead).
     Value: !Sub https://${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageNameParam.Value}/api/chat
   ChatFunctionName:
-    Value: !Ref ChatSkeletonFunction
+    Value: !Ref ChatFunction

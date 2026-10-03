@@ -1,7 +1,11 @@
 import { z } from "zod";
 
-/** Cognito user `sub`. Patient identity comes from the verified JWT only (CLAUDE.md rule 1). */
-export const PatientId = z.uuid();
+/**
+ * Cognito user `sub`. Patient identity comes from the verified JWT only (CLAUDE.md rule 1).
+ * `z.guid()` (8-4-4-4-12 hex), not `z.uuid()`: real subs aren't always RFC 9562 UUIDs. The dev pool
+ * issued one with version digit 7 and variant digit `d`, which `z.uuid()` rejects (#17).
+ */
+export const PatientId = z.guid();
 export type PatientId = z.infer<typeof PatientId>;
 
 export const ProviderId = z.string().regex(/^prov_[a-z0-9]+(?:_[a-z0-9]+)*$/, "Expected prov_<slug>");
