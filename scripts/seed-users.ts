@@ -89,7 +89,7 @@ export function planDemoUsers(vars: Readonly<Record<string, string | undefined>>
 
   for (const patient of buildClinicFixture().patients) {
     const alias = aliasByPatientId.get(patient.patientId);
-    if (!alias) continue;
+    if (!alias) throw new Error(`Fixture patient ${patient.patientId} has no alias in FIXTURE_PATIENT_IDS`);
     const name = passwordVar(alias);
     known.add(name);
     const password = vars[name];
@@ -204,6 +204,14 @@ export function mergeMapping(
   return { env: target.env, userPoolId: target.userPoolId, updatedAt: now.toISOString(), users };
 }
 
+/** The `sub` of a decoded ID token; throws unless it is an ID token (`token_use: id`) with a string `sub`. */
+export function idTokenSub(claims: Readonly<Record<string, unknown>>, username: string): string {
+  if (claims.token_use !== "id" || typeof claims.sub !== "string") {
+    throw new Error(`unexpected ID token claims for ${username}`);
+  }
+  return claims.sub;
+}
+
 /** USER_SRP_AUTH as the user; resolves with the verified-session ID token's `sub`. */
 export async function srpSignInSub(
   pool: { userPoolId: string; clientId: string },
@@ -218,10 +226,11 @@ export async function srpSignInSub(
   return new Promise((resolve, reject) => {
     user.authenticateUser(new AuthenticationDetails({ Username: username, Password: password }), {
       onSuccess: (session) => {
-        const claims = session.getIdToken().decodePayload() as Record<string, unknown>;
-        if (claims.token_use !== "id" || typeof claims.sub !== "string") {
-          reject(new Error(`unexpected ID token claims for ${username}`));
-        } else resolve(claims.sub);
+        try {
+          resolve(idTokenSub(session.getIdToken().decodePayload(), username));
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
       },
       onFailure: (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))),
       newPasswordRequired: () => reject(new Error(`${username} still needs a new password`)),
@@ -235,12 +244,65 @@ export function mappingPath(env: string): string {
   return join(repoRoot, ".seed", `cognito-users.${env}.json`);
 }
 
-function readMapping(path: string): UserMapping | undefined {
+function isSeededUser(value: unknown): value is SeededUser {
+  if (typeof value !== "object" || value === null) return false;
+  const u = value as Record<string, unknown>;
+  return (
+    typeof u.alias === "string" &&
+    Object.hasOwn(FIXTURE_PATIENT_IDS, u.alias) &&
+    typeof u.fixturePatientId === "string" &&
+    typeof u.username === "string" &&
+    typeof u.sub === "string"
+  );
+}
+
+function isUserMapping(value: unknown): value is UserMapping {
+  if (typeof value !== "object" || value === null) return false;
+  const m = value as Record<string, unknown>;
+  return (
+    typeof m.env === "string" &&
+    typeof m.userPoolId === "string" &&
+    typeof m.updatedAt === "string" &&
+    Array.isArray(m.users) &&
+    m.users.every(isSeededUser)
+  );
+}
+
+/**
+ * The previous mapping at `path`, or undefined when there is none yet. A file that exists but cannot
+ * be read, parsed or recognised throws (naming the path), so its rows are never silently overwritten.
+ */
+export function readMapping(path: string): UserMapping | undefined {
+  let text: string;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as UserMapping;
-  } catch {
-    return undefined;
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new Error(`Cannot read the user mapping ${path}`, { cause: err });
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`The user mapping ${path} is not valid JSON; fix or remove it`, { cause: err });
+  }
+  if (!isUserMapping(parsed)) {
+    throw new Error(`The user mapping ${path} does not have the expected shape; fix or remove it`);
+  }
+  return parsed;
+}
+
+/** Reads the previous mapping at `path`, merges this run's rows into it, and writes it back (mode 600). */
+export function updateMappingFile(
+  path: string,
+  target: { env: string; userPoolId: string },
+  seeded: readonly SeededUser[],
+  now: Date,
+): UserMapping {
+  const mapping = mergeMapping(readMapping(path), target, seeded, now);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(mapping, null, 2)}\n`, { mode: 0o600 });
+  return mapping;
 }
 
 async function main(): Promise<void> {
@@ -275,9 +337,7 @@ async function main(): Promise<void> {
   );
 
   const path = mappingPath(env);
-  mkdirSync(dirname(path), { recursive: true });
-  const mapping = mergeMapping(readMapping(path), { env, userPoolId }, seeded, new Date());
-  writeFileSync(path, `${JSON.stringify(mapping, null, 2)}\n`, { mode: 0o600 });
+  const mapping = updateMappingFile(path, { env, userPoolId }, seeded, new Date());
   console.log(`Wrote ${relative(process.cwd(), path)} (${mapping.users.length} user(s))`);
 
   if (values.verify) {
