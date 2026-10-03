@@ -30,4 +30,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-02 | [System prompt v1: Sonnet goes to 66 of 66, and Nova Pro shows what a prompt can't fix](2026-10-02-system-prompt-v1.md) | 4. Teaching the agent to schedule |
 | 2026-10-02 | [A timing test measured the reader, not the mock](2026-10-02-a-timing-test-measured-the-reader.md) | 4. Teaching the agent to schedule |
 | 2026-10-02 | [The simulated patient says yes like a person, and our grader calls it a safety violation](2026-10-02-the-simulated-patient-says-yes-like-a-person.md) | 4. Teaching the agent to schedule |
+| 2026-10-03 | [A re-seed must not undo what the agent booked, so the data seed only adds what's missing](2026-10-03-a-reseed-must-not-undo-the-agent.md) | 4. Teaching the agent to schedule |
 | 2026-10-03 | [Restore shows what the patient saw: one bubble per turn, and no tool blocks](2026-10-03-restore-shows-what-the-patient-saw.md) | 4. Teaching the agent to schedule |
