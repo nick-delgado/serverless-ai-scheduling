@@ -124,8 +124,8 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## Definition of done
 
 - Every acceptance criterion in the issue is met.
-- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)): break each condition it guards (each `&&`/`||` operand, flag and guard on its own) and watch it go red. A test name, comment or PR claims only what you broke.
-- If the agent, prompt, tools, or model config changed: the eval smoke suite ran and there's no regression against the baseline. The numbers go in the PR.
+- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)). Start from the code you wrote, not from your tests: break each thing it does on its own (each `&&`/`||`/`??` operand, ternary or regex branch, flag, guard and threshold; each value it passes on, such as a default, a copied field, a key, or an injected clock or option; each ordering and wait) and see a test go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
+- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
   - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).
