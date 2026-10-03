@@ -10,7 +10,6 @@ import {
   scriptedMalformed,
   scriptedText,
   scriptedToolUse,
-  type LlmRequest,
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
@@ -33,6 +32,7 @@ import {
   runScripted,
   scenario,
   SCRIPTED_PROFILE as profile,
+  systemText,
   withoutCachePoints,
 } from "./helpers";
 const custom: SystemPromptFactory = (now, name) => ({
@@ -40,8 +40,6 @@ const custom: SystemPromptFactory = (now, name) => ({
   stable: "CUSTOM STABLE PROMPT",
   dynamic: `custom: ${now.toISOString()} for ${name}`,
 });
-const systemText = (r: LlmRequest | undefined) =>
-  (r?.system ?? []).flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
 describe("runScenarioTrial", () => {
   it("carries the conversation from turn to turn, append-only (2e22f79/TEST-202)", async () => {
     const llm = new ScriptedLlmClient(goodBookingSteps());

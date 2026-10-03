@@ -9,6 +9,8 @@
  * (the agent run ended differently) stops the conversation with `replay exhausted`; a conversation the
  * recording doesn't have is a `SimulatorError`.
  */
+import { z } from "zod";
+
 import {
   SimulatorError,
   type PatientSimulator,
@@ -17,14 +19,34 @@ import {
   type SimulatorTurn,
 } from "./types";
 
-/** The part of a results file (`RunReport`) a replay reads. */
-export interface ReplaySource {
-  simulator?: string;
-  cases: readonly {
-    id: string;
-    trials: readonly { kind: string; trial: number; simulatorTurns?: readonly RecordedSimulatorTurn[] }[];
-  }[];
-}
+/** One `RecordedSimulatorTurn`. */
+const RecordedTurn = z.intersection(
+  z.object({
+    turn: z.number().int().positive(),
+    rejected: z.array(z.object({ reply: z.string(), problems: z.array(z.string()) })).optional(),
+  }),
+  z.union([z.object({ message: z.string() }), z.object({ stop: z.string() })]),
+);
+
+/**
+ * The part of a results file (`RunReport`) a replay reads. Trials without `simulatorTurns` (L1 trials)
+ * are ignored.
+ */
+export const ReplaySource = z.object({
+  simulator: z.string().optional(),
+  cases: z.array(
+    z.object({
+      id: z.string(),
+      trials: z.array(
+        z.object({
+          trial: z.number().int().positive(),
+          simulatorTurns: z.array(RecordedTurn).optional(),
+        }),
+      ),
+    }),
+  ),
+});
+export type ReplaySource = z.infer<typeof ReplaySource>;
 
 const keyOf = (scenarioId: string, trial: number) => `${scenarioId}#${String(trial)}`;
 
@@ -40,22 +62,27 @@ export class ReplayPatientSimulator implements PatientSimulator {
     );
   }
 
-  /** A replay of every scenario trial in a results file. */
-  static fromReport(report: ReplaySource): ReplayPatientSimulator {
+  /**
+   * A replay of every trial in a results file (parsed JSON) that recorded simulator turns. Throws when
+   * the file doesn't have the shape, naming the first bad field.
+   */
+  static fromReport(json: unknown): ReplayPatientSimulator {
+    const parsed = ReplaySource.safeParse(json);
+    if (!parsed.success) {
+      const [issue] = parsed.error.issues;
+      throw new Error(
+        `not a results file: ${issue?.path.map(String).join(".") || "(root)"}: ${issue?.message ?? "invalid"}`,
+      );
+    }
+    const report = parsed.data;
     const recordings: Record<string, readonly RecordedSimulatorTurn[]> = {};
     for (const c of report.cases)
       for (const t of c.trials)
-        if (t.kind === "scenario" && t.simulatorTurns !== undefined)
-          recordings[keyOf(c.id, t.trial)] = t.simulatorTurns;
+        if (t.simulatorTurns !== undefined) recordings[keyOf(c.id, t.trial)] = t.simulatorTurns;
     return new ReplayPatientSimulator(
       recordings,
       report.simulator === undefined ? "replay" : `replay:${report.simulator}`,
     );
-  }
-
-  /** Whether a recording exists for this scenario trial. */
-  has(scenarioId: string, trial: number): boolean {
-    return this.#recordings.has(keyOf(scenarioId, trial));
   }
 
   next(context: SimulatorContext): Promise<SimulatorTurn> {

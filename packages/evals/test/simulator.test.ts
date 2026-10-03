@@ -9,7 +9,6 @@ import {
   ScriptedLlmClient,
   scriptedMaxTokens,
   scriptedText,
-  type LlmRequest,
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
@@ -30,6 +29,7 @@ import {
   simulatorSystemPrompt,
   verbatimLeaks,
   withoutQuotedLines,
+  type PatientSimulator,
   type SimulatorContext,
   type TranscriptEvent,
 } from "../src";
@@ -41,6 +41,8 @@ import {
   patient,
   scenario,
   SCRIPTED_PROFILE,
+  systemText,
+  userText,
 } from "./helpers";
 
 const SIM_PROFILE = MODEL_PROFILES["haiku-4.5"];
@@ -56,12 +58,6 @@ const ctx = (over: Partial<SimulatorContext> = {}): SimulatorContext => ({
   lastAssistantText: "",
   ...over,
 });
-const userText = (r: LlmRequest | undefined): string =>
-  (r?.messages ?? [])
-    .flatMap((m) => m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])))
-    .join("\n");
-const systemText = (r: LlmRequest | undefined): string =>
-  (r?.system ?? []).flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
 const sim = (llm: ScriptedLlmClient, extra: { maxAttempts?: number; turnsAfterEscalation?: number } = {}) =>
   new LlmPatientSimulator({ llm, profile: SIM_PROFILE, ...extra });
 
@@ -112,6 +108,19 @@ describe("parseReply", () => {
       problems: ['"bored" is not a stop reason'],
     });
     expect(parseReply("[[STOP]]", BOOK)).toMatchObject({ kind: "invalid" });
+  });
+
+  it("a stop reason may be upper-case, or spaced or hyphenated instead of snake_case (8bea70b/TEST-3)", () => {
+    expect(parseReply("[[STOP:GAVE_UP]]", BOOK)).toEqual({ kind: "stop", reason: "gave_up" });
+    expect(parseReply("[[STOP:gave up]]", BOOK)).toEqual({ kind: "stop", reason: "gave_up" });
+    expect(parseReply("[[STOP:goal-achieved]]", BOOK)).toEqual({ kind: "stop", reason: "goal_achieved" });
+  });
+
+  it("curly quotes around the whole reply are stripped too (8bea70b/TEST-3)", () => {
+    expect(parseReply("“need a derm appt next week”", BOOK)).toEqual({
+      kind: "message",
+      message: "need a derm appt next week",
+    });
   });
 
   it("strips a patient speaker label and wrapping quotes; an empty reply is rejected", () => {
@@ -178,6 +187,11 @@ describe("guard: hidden facts and the goal never go out verbatim", () => {
     expect(verbatimLeaks("my first_pick is fine", CHANGES_MIND)).toEqual([
       'it names the private fact "first_pick"',
     ]);
+  });
+
+  it("a one-word fact key is an ordinary word, not a leak (8bea70b/TEST-2)", () => {
+    expect(Object.keys(CHANGES_MIND.hidden_facts ?? {})).toContain("change");
+    expect(verbatimLeaks("small change: can we do Thursday?", CHANGES_MIND)).toEqual([]);
   });
 });
 
@@ -406,6 +420,24 @@ describe("LlmPatientSimulator in a scenario trial", () => {
     expect(r.simulatorTurns[1]).toEqual({ turn: 2, message: BOOKING_PATIENT[1] });
   });
 
+  it("records the replies the guards rejected on the stop turn too (8bea70b/TEST-5)", async () => {
+    const mixed = "Thanks! [[STOP:goal_achieved]]";
+    const steps = simSteps();
+    const stop = steps.pop();
+    if (stop === undefined) throw new Error("missing stop");
+    const r = await runScenarioTrial(BOOK, {
+      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
+      simulator: sim(new ScriptedLlmClient([...steps, scriptedText(mixed), stop])),
+    });
+    expect(r.simulatorTurns.at(-1)).toEqual({
+      turn: 4,
+      stop: "goal_achieved",
+      rejected: [
+        { reply: mixed, problems: ["it mixes a stop marker with a message; send one or the other"] },
+      ],
+    });
+  });
+
   it("tracks the simulator's tokens and cost per conversation, and costUsd is agent + simulator", async () => {
     const r = await runScenarioTrial(BOOK, {
       agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
@@ -454,6 +486,20 @@ describe("LlmPatientSimulator in a scenario trial", () => {
     expect(r.reason).toMatch(/^simulator: SimulatorError: no usable patient reply in 3 attempt/);
     expect(r.simulatorCost.llmCalls).toBe(3);
     expect(r.costUsd).toBeGreaterThan(0);
+  });
+
+  it("a simulator that throws a plain Error also makes the trial an error, with no simulator cost (8bea70b/TEST-4)", async () => {
+    const broken: PatientSimulator = { name: "broken", next: () => Promise.reject(new Error("boom")) };
+    const r = await runScenarioTrial(BOOK, {
+      agent: { llm: new ScriptedLlmClient(), profile: SCRIPTED_PROFILE },
+      simulator: broken,
+    });
+    expect(r).toMatchObject({ status: "error", stoppedBecause: "error", reason: "simulator: Error: boom" });
+    expect(r.simulatorCost).toEqual({
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      costUsd: 0,
+      llmCalls: 0,
+    });
   });
 
   it("a model call that throws after a rejected reply keeps the rejected attempt's cost (8bea70b/SPEC-1)", async () => {
@@ -523,12 +569,12 @@ describe("ReplayPatientSimulator", () => {
         ]),
       ),
     });
-    const replay = ReplayPatientSimulator.fromReport({
-      simulator: original.simulator,
-      cases: [{ id: BOOK.id, trials: [original] }],
-    });
+    // Through JSON, as `--replay` reads a results file.
+    const file: unknown = JSON.parse(
+      JSON.stringify({ simulator: original.simulator, cases: [{ id: BOOK.id, trials: [original] }] }),
+    );
+    const replay = ReplayPatientSimulator.fromReport(file);
     expect(replay.name).toBe("replay:llm:haiku-4.5:sim.v1");
-    expect(replay.has(BOOK.id, 2)).toBe(true);
     const again = await runScenarioTrial(BOOK, {
       trial: 2,
       agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
@@ -548,6 +594,17 @@ describe("ReplayPatientSimulator", () => {
     expect(await replay.next(ctx({ trial: 2 }))).toEqual({ message: "trial two" });
     expect(await replay.next(ctx({ trial: 1 }))).toEqual({ message: "trial one" });
     expect(await replay.next(ctx({ trial: 1, turn: 2 }))).toEqual({ stop: "replay exhausted" });
+  });
+
+  it("a file that isn't a results file fails at fromReport, naming the bad field (8bea70b/SMELL-3)", () => {
+    const report = (turn: unknown) => ({
+      cases: [{ id: BOOK.id, trials: [{ trial: 1, simulatorTurns: [turn] }] }],
+    });
+    expect(() => ReplayPatientSimulator.fromReport(report({ message: "hi" }))).toThrow(
+      /^not a results file: cases\.0\.trials\.0\.simulatorTurns\.0\.turn: /,
+    );
+    expect(() => ReplayPatientSimulator.fromReport(report({ turn: 1, message: "hi" }))).not.toThrow();
+    expect(() => ReplayPatientSimulator.fromReport({ runs: [] })).toThrow(/^not a results file: cases: /);
   });
 
   it("a conversation the recording doesn't have is a simulator error", async () => {

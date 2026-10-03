@@ -152,3 +152,16 @@ export const failedGraders = (r: TrialResult): string[] =>
 /** A request's messages without cache points, to compare conversations across profiles and turns. */
 export const withoutCachePoints = (request: LlmRequest) =>
   request.messages.map((m) => ({ ...m, content: m.content.filter((b) => b.type !== "cache_point") }));
+
+/** The text of a request's system blocks. */
+export const systemText = (r: LlmRequest | undefined): string =>
+  (r?.system ?? []).flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+
+/**
+ * The text blocks of a request's messages, one per line. Not `textOf`: request messages may also hold
+ * cache points, which `textOf`'s `ContentBlock[]` doesn't allow.
+ */
+export const userText = (r: LlmRequest | undefined): string =>
+  (r?.messages ?? [])
+    .flatMap((m) => m.content.flatMap((b) => (b.type === "text" ? [b.text] : [])))
+    .join("\n");

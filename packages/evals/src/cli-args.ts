@@ -6,14 +6,20 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import { estimateCostUsd, resolveModelProfile, type ModelProfile } from "@sched/agent";
+import { estimateCostUsd, resolveModelProfile, type LlmClient, type ModelProfile } from "@sched/agent";
 
 import { l1Request } from "./l1";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
 import { skipReason } from "./runner";
 import { errorReason } from "./util";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
-import { scriptOnlySimulator, SIMULATOR_PROFILE_ENV, type PatientSimulator } from "./simulator";
+import {
+  LlmPatientSimulator,
+  ReplayPatientSimulator,
+  scriptOnlySimulator,
+  SIMULATOR_PROFILE_ENV,
+  type PatientSimulator,
+} from "./simulator";
 import { MODES, type Mode, type RunReport, type RunSummary } from "./suite";
 import { promptFor } from "./system-prompt";
 
@@ -126,15 +132,47 @@ export const caseSkipReason = (
   simulator: PatientSimulator = scriptOnlySimulator,
 ): string | undefined => (isL1Case(c) ? undefined : skipReason(c, simulator));
 
-/** Stands in for "some simulator" when asking which scenarios still skip (only `surface: api` ones). */
-const ANY_SIMULATOR: PatientSimulator = { name: "any", next: scriptOnlySimulator.next };
-
 /** Simulated patient turns a scenario is expected to take after its script (capped by `max_turns`). */
 export const EXPECTED_SIMULATED_TURNS = 6;
 
-/** Which patient side a scenario estimate assumes. */
-export type EstimateSimulator =
-  { kind: "script-only" } | { kind: "llm"; profile: ModelProfile } | { kind: "replay" };
+/**
+ * The patient side of a run, and what the estimate assumes about it: none beyond the script (L1 mode),
+ * the LLM simulator on its own profile, or a replay of a results file (#31).
+ */
+export type SimulatorSetup =
+  | { kind: "script-only"; simulator?: undefined }
+  | { kind: "llm"; profile: ModelProfile; simulator: PatientSimulator }
+  | { kind: "replay"; simulator: PatientSimulator };
+
+/** What `simulatorSetup` needs from outside: the rate-limited client, and a reader for `--replay`. */
+export interface SimulatorSetupDeps {
+  llm: LlmClient;
+  /** The parsed JSON of a results file. */
+  readReplay: (path: string) => unknown;
+}
+
+/**
+ * Pick the run's simulator from the arguments, once, for both the run and the estimate. Scenario mode
+ * uses the LLM simulator on `simulatorProfile`, or replays `--replay`. A replay file that can't be read
+ * or isn't a results file is a usage error (exit 2).
+ */
+export function simulatorSetup(
+  args: Pick<CliArgs, "mode" | "replay" | "simulatorProfile">,
+  deps: SimulatorSetupDeps,
+): SimulatorSetup {
+  if (args.mode !== "scenario") return { kind: "script-only" };
+  if (args.replay === undefined)
+    return {
+      kind: "llm",
+      profile: args.simulatorProfile,
+      simulator: new LlmPatientSimulator({ llm: deps.llm, profile: args.simulatorProfile }),
+    };
+  try {
+    return { kind: "replay", simulator: ReplayPatientSimulator.fromReport(deps.readReplay(args.replay)) };
+  } catch (error) {
+    throw new CliArgError(`--replay ${args.replay}: ${errorReason(error)}`);
+  }
+}
 
 /**
  * Pre-run estimate (USD). L1: one call per trial, input ≈ request bytes / 4, output ≈ 300 tokens.
@@ -147,7 +185,7 @@ export function estimateRunCost(
   cases: readonly (Scenario | L1Case)[],
   profile: ModelProfile,
   trials: number,
-  simulator: EstimateSimulator = { kind: "script-only" },
+  setup: SimulatorSetup = { kind: "script-only" },
 ): number {
   const cost = (p: ModelProfile, inputTokens: number, outputTokens: number) =>
     estimateCostUsd(p, { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
@@ -158,17 +196,13 @@ export function estimateRunCost(
       estimate += cost(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
       continue;
     }
+    // The same check as the CLI's printed skip list.
+    if (caseSkipReason(c, setup.simulator) !== undefined) continue;
     const scripted = c.script?.length ?? 0;
-    if (simulator.kind === "script-only") {
-      if (caseSkipReason(c) !== undefined) continue;
-      estimate += cost(profile, 4000, 400) * 3 * scripted * trials;
-      continue;
-    }
-    if (skipReason(c, ANY_SIMULATOR) !== undefined) continue;
-    const turns = Math.min(c.max_turns, scripted + EXPECTED_SIMULATED_TURNS);
-    const simulated = turns - scripted;
+    const turns =
+      setup.kind === "script-only" ? scripted : Math.min(c.max_turns, scripted + EXPECTED_SIMULATED_TURNS);
     estimate += cost(profile, 4000, 400) * 3 * turns * trials;
-    if (simulator.kind === "llm") estimate += cost(simulator.profile, 1500, 150) * simulated * trials;
+    if (setup.kind === "llm") estimate += cost(setup.profile, 1500, 150) * (turns - scripted) * trials;
   }
   return estimate;
 }

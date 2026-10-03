@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 
-import { estimateCostUsd, MODEL_PROFILES } from "@sched/agent";
+import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -16,12 +16,20 @@ import {
   parseCliArgs,
   resultsBasePath,
   selectCases,
+  simulatorSetup,
+  type SimulatorSetupDeps,
 } from "../src";
 import { scenario } from "./helpers";
 
 const OUT = "/tmp/evals-results";
 const loaded = loadScenarios();
 const profile = MODEL_PROFILES["gpt-oss-20b"];
+const simProfile = MODEL_PROFILES["haiku-4.5"];
+/** No replay file is ever read unless a test passes its own reader. */
+const deps = (readReplay: SimulatorSetupDeps["readReplay"] = () => ({ cases: [] })): SimulatorSetupDeps => ({
+  llm: new ScriptedLlmClient(),
+  readReplay,
+});
 
 describe("parseCliArgs", () => {
   it("defaults to the L1 smoke suite, one trial, a $1 budget", () => {
@@ -131,6 +139,50 @@ describe("parseCliArgs: the simulator's profile (#31)", () => {
   });
 });
 
+describe("simulatorSetup (8bea70b/TEST-6)", () => {
+  it("L1 mode has no simulator; the estimate assumes the script only", () => {
+    expect(simulatorSetup({ mode: "l1", simulatorProfile: simProfile }, deps())).toEqual({
+      kind: "script-only",
+    });
+  });
+
+  it("scenario mode without --replay uses the LLM simulator on the simulator profile", () => {
+    const setup = simulatorSetup({ mode: "scenario", simulatorProfile: simProfile }, deps());
+    expect(setup).toMatchObject({ kind: "llm", profile: simProfile });
+    expect(setup.simulator?.name).toBe("llm:haiku-4.5:sim.v1");
+  });
+
+  it("--replay reads that file and replays it, with no simulator profile in the estimate", () => {
+    const read: string[] = [];
+    const setup = simulatorSetup(
+      { mode: "scenario", replay: "run.json", simulatorProfile: simProfile },
+      deps((path) => {
+        read.push(path);
+        return { simulator: "llm:haiku-4.5:sim.v1", cases: [] };
+      }),
+    );
+    expect(read).toEqual(["run.json"]);
+    expect(setup).toEqual({ kind: "replay", simulator: expect.anything() as unknown });
+    expect(setup.simulator?.name).toBe("replay:llm:haiku-4.5:sim.v1");
+  });
+
+  it("a replay file that can't be read or isn't a results file is a usage error naming it", () => {
+    const args = { mode: "scenario", replay: "bad.json", simulatorProfile: simProfile } as const;
+    const unreadable = deps(() => {
+      throw new Error("ENOENT");
+    });
+    expect(() => simulatorSetup(args, unreadable)).toThrow(
+      new CliArgError("--replay bad.json: Error: ENOENT"),
+    );
+    expect(() =>
+      simulatorSetup(
+        args,
+        deps(() => ({ cases: "nope" })),
+      ),
+    ).toThrow(CliArgError);
+  });
+});
+
 describe("estimateRunCost", () => {
   it("scales with trials and leaves out cases that will skip", () => {
     const l1 = selectCases(loaded, parseCliArgs(["--filter=l1-emergency-911"], OUT));
@@ -166,9 +218,12 @@ describe("estimateRunCost", () => {
       cacheWriteTokens: 0,
     });
     const agentCall = estimateCostUsd(profile, usage(4000, 400));
-    const simProfile = MODEL_PROFILES["haiku-4.5"];
     const simCall = estimateCostUsd(simProfile, usage(1500, 150));
-    const llm = { kind: "llm", profile: simProfile } as const;
+    const llm = simulatorSetup({ mode: "scenario", simulatorProfile: simProfile }, deps());
+    const replay = simulatorSetup(
+      { mode: "scenario", replay: "r.json", simulatorProfile: simProfile },
+      deps(),
+    );
 
     it("an unscripted scenario runs the expected simulated turns, each with one simulator call", () => {
       const s = scenario("book-derm-next-week-afternoon"); // max_turns 12, no script
@@ -185,7 +240,7 @@ describe("estimateRunCost", () => {
 
     it("a replay calls no simulator model; a surface: api scenario still skips", () => {
       const s = scenario("safety-emergency-chest-pain-911");
-      expect(estimateRunCost([s], profile, 1, { kind: "replay" })).toBeCloseTo(3 * agentCall * 4, 12);
+      expect(estimateRunCost([s], profile, 1, replay)).toBeCloseTo(3 * agentCall * 4, 12);
       expect(estimateRunCost([scenario("safety-conversation-id-ownership")], profile, 1, llm)).toBe(0);
     });
   });

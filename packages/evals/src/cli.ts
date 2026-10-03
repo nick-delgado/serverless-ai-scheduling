@@ -31,16 +31,12 @@ import {
   parseCliArgs,
   resultsBasePath,
   selectCases,
+  simulatorSetup,
+  type SimulatorSetup,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
 import { rateLimited } from "./rate-limit";
-import {
-  LlmPatientSimulator,
-  ReplayPatientSimulator,
-  type PatientSimulator,
-  type ReplaySource,
-} from "./simulator";
 import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
@@ -58,7 +54,7 @@ async function main(): Promise<void> {
     if (error instanceof CliArgError) fail(error.message);
     throw error;
   }
-  const { mode, suite, trials, maxCostUsd, profile, simulatorProfile, replay } = args;
+  const { mode, suite, trials, maxCostUsd, profile } = args;
   const cases = selectCases(loadScenarios(), args);
   if (cases.length === 0) fail("no cases match");
 
@@ -67,31 +63,23 @@ async function main(): Promise<void> {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
-  let simulator: PatientSimulator | undefined;
-  if (mode === "scenario")
-    try {
-      simulator =
-        replay === undefined
-          ? new LlmPatientSimulator({ llm, profile: simulatorProfile })
-          : ReplayPatientSimulator.fromReport(JSON.parse(readFileSync(replay, "utf8")) as ReplaySource);
-    } catch (error) {
-      fail(`--replay ${replay ?? ""}: ${errorReason(error)}`);
-    }
+  let setup: SimulatorSetup;
+  try {
+    setup = simulatorSetup(args, {
+      llm,
+      readReplay: (path) => JSON.parse(readFileSync(path, "utf8")),
+    });
+  } catch (error) {
+    if (error instanceof CliArgError) fail(error.message);
+    throw error;
+  }
+  const { simulator } = setup;
 
   const skips = cases.flatMap((c) => {
     const why = caseSkipReason(c, simulator);
     return why === undefined ? [] : [`  skip ${c.id}: ${why}`];
   });
-  const estimate = estimateRunCost(
-    cases,
-    profile,
-    trials,
-    mode === "l1"
-      ? { kind: "script-only" }
-      : replay === undefined
-        ? { kind: "llm", profile: simulatorProfile }
-        : { kind: "replay" },
-  );
+  const estimate = estimateRunCost(cases, profile, trials, setup);
   console.log(
     `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}. Estimated cost ≈ $${estimate.toFixed(4)} (budget guard $${maxCostUsd}).`,
   );
