@@ -14,7 +14,10 @@ import {
   parseStreamEventLine,
 } from "@sched/contracts";
 
-/** The body broke the stream contract: a malformed line, an unknown event, or no `done`/`error` at the end. */
+/**
+ * A response body broke the API contract: a session body that isn't a `SessionResponse`, or a chat
+ * stream with a malformed line, an unknown event, or no `done`/`error` at the end.
+ */
 export class ChatProtocolError extends Error {
   override readonly name = "ChatProtocolError";
 }
@@ -38,7 +41,8 @@ function parseBuffered(body: string): ChatStreamEvent[] {
 /**
  * Read `body` to its end, calling `onEvent` once per event, in order. Resolves with every event
  * (the last one is `done` or `error`); rejects with `ChatProtocolError` on a contract violation, or
- * with the reader's own error if the connection fails or the request is aborted.
+ * with the reader's own error if the connection fails or the request is aborted. A contract violation
+ * found while the body is still open cancels it.
  */
 export async function readChatStream(
   body: ReadableStream<Uint8Array>,
@@ -80,6 +84,11 @@ export async function readChatStream(
       if (mode === "ndjson") drainLines();
       if (done) break;
     }
+  } catch (error) {
+    // A bad line on an open stream: close the response rather than leave it running. The caller
+    // gets the error that stopped the read, even if cancelling fails too.
+    await reader.cancel().catch(() => undefined);
+    throw error;
   } finally {
     reader.releaseLock();
   }

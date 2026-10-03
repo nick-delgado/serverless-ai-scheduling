@@ -2,6 +2,7 @@ import { type ChatStreamEvent, encodeStreamEvent, TOOL_STATUS_LABELS } from "@sc
 import { describe, expect, it } from "vitest";
 
 import { ChatProtocolError, readChatStream } from "./streamClient";
+import { doneEvent } from "./testUtils";
 
 const status: ChatStreamEvent = {
   type: "status",
@@ -9,12 +10,7 @@ const status: ChatStreamEvent = {
   label: TOOL_STATUS_LABELS.check_availability,
 };
 const delta = (text: string): ChatStreamEvent => ({ type: "text_delta", text });
-const done: ChatStreamEvent = {
-  type: "done",
-  conversationId: "5a0c9e7b-3d2f-4b61-8e4a-7c1f0d9b2e63",
-  messageId: "msg_000002",
-  usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 },
-};
+const done = doneEvent();
 const error: ChatStreamEvent = {
   type: "error",
   code: "AGENT_UNAVAILABLE",
@@ -109,13 +105,60 @@ describe("readChatStream", () => {
     await expect(read(chunks())).rejects.toBeInstanceOf(ChatProtocolError);
   });
 
-  it("rejects an event after the terminal one, without handing it over", async () => {
+  it.each([
+    ["NDJSON", () => encodeStreamEvent(done) + encodeStreamEvent(delta("more")) + encodeStreamEvent(error)],
+    ["a buffered array", () => JSON.stringify([done, delta("more"), done])],
+  ])("rejects an event after the terminal one in %s, without handing it over", async (_, text) => {
     const seen: ChatStreamEvent[] = [];
-    const body = bodyOf([
-      encodeStreamEvent(done) + encodeStreamEvent(delta("more")) + encodeStreamEvent(error),
-    ]);
-    await expect(readChatStream(body, (event) => seen.push(event))).rejects.toThrow(ChatProtocolError);
+    await expect(readChatStream(bodyOf([text()]), (event) => seen.push(event))).rejects.toThrow(
+      ChatProtocolError,
+    );
     expect(seen).toEqual([done]);
+  });
+
+  it("cancels a body that is still open when a line breaks the contract", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes(`${encodeStreamEvent(delta("Hi"))}oops\n`));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    await expect(readChatStream(body, () => undefined)).rejects.toBeInstanceOf(ChatProtocolError);
+    expect(cancelled).toBe(true);
+  });
+
+  it("still rejects with the ChatProtocolError when cancelling the body fails", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes("oops\n"));
+      },
+      cancel() {
+        throw new Error("cancel failed");
+      },
+    });
+    await expect(readChatStream(body, () => undefined)).rejects.toBeInstanceOf(ChatProtocolError);
+  });
+
+  it("rejects with the reader's own error when the body fails mid-stream", async () => {
+    const cause = new TypeError("connection reset");
+    let fail!: () => void;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes(encodeStreamEvent(delta("Hi"))));
+        fail = () => controller.error(cause);
+      },
+    });
+    const seen: ChatStreamEvent[] = [];
+    // The connection fails once the first event has been handed over.
+    const reading = readChatStream(body, (event) => {
+      seen.push(event);
+      fail();
+    });
+    await expect(reading).rejects.toBe(cause);
+    expect(seen).toEqual([delta("Hi")]);
   });
 
   it.each([

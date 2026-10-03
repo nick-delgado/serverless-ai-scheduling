@@ -7,14 +7,15 @@
  *
  * Failures are typed so the error and retry UI (#27) can tell them apart:
  * - `ChatHttpError`: a non-2xx response that carried no stream `error` event (e.g. API Gateway's 401);
- * - `ChatProtocolError` (streamClient.ts): a body that broke the contract;
+ * - `ChatProtocolError` (streamClient.ts): a body that broke the contract (a session body that isn't
+ *   JSON or has the wrong shape, or a chat stream that breaks ADR-007);
  * - anything else `fetch` or the reader throws (network failure, abort) passes through unchanged.
  * A 4xx/5xx whose body is a stream `error` event (400, 429, 503) is not thrown: the event is delivered.
  */
 import {
   type ChatRequest,
   type ChatStreamEvent,
-  ChatStreamEvent as ChatStreamEventSchema,
+  parseStreamEventLine,
   SessionResponse,
 } from "@sched/contracts";
 
@@ -22,11 +23,8 @@ import { ChatProtocolError, readChatStream } from "./streamClient";
 
 export class ChatHttpError extends Error {
   override readonly name = "ChatHttpError";
-  constructor(
-    readonly status: number,
-    message = `The server answered ${String(status)}.`,
-  ) {
-    super(message);
+  constructor(readonly status: number) {
+    super(`The server answered ${String(status)}.`);
   }
 }
 
@@ -48,16 +46,11 @@ export interface ChatApi {
 /** A non-2xx body that is a single stream `error` event (ADR-007's 400/429/503), or `undefined`. */
 function errorEventFrom(body: string): ChatStreamEvent | undefined {
   try {
-    const event = ChatStreamEventSchema.parse(JSON.parse(body.trim()));
+    const event = parseStreamEventLine(body.trim());
     return event.type === "error" ? event : undefined;
   } catch {
     return undefined;
   }
-}
-
-function withJson(headers: Headers): Headers {
-  headers.set("Content-Type", "application/json");
-  return headers;
 }
 
 export function createChatApi(options: ChatApiOptions = {}): ChatApi {
@@ -76,17 +69,20 @@ export function createChatApi(options: ChatApiOptions = {}): ChatApi {
         signal,
       });
       if (!response.ok) throw new ChatHttpError(response.status);
-      const parsed = SessionResponse.safeParse(await response.json());
-      if (!parsed.success) {
-        throw new ChatProtocolError("The session response couldn't be read.", { cause: parsed.error });
+      // A body that isn't JSON and one of the wrong shape fail the same way.
+      try {
+        return SessionResponse.parse(await response.json());
+      } catch (cause) {
+        throw new ChatProtocolError("The session response couldn't be read.", { cause });
       }
-      return parsed.data;
     },
 
     async sendChat(request, onEvent, signal) {
+      const requestHeaders = await headers();
+      requestHeaders.set("Content-Type", "application/json");
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: withJson(await headers()),
+        headers: requestHeaders,
         body: JSON.stringify(request),
         signal,
       });

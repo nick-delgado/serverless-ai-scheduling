@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { REPLIES, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi, server } from "../mocks/node";
-import { ChatHttpError, createChatApi } from "./api";
+import { type ChatApi, ChatHttpError, createChatApi } from "./api";
 import { ChatProtocolError } from "./streamClient";
+import { doneEvent, gate } from "./testUtils";
 
 const request = { clientMessageId: "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47", text: "Any openings?" };
 
@@ -64,6 +65,43 @@ describe("createChatApi", () => {
     await expect(createChatApi().getSession()).rejects.toBeInstanceOf(ChatProtocolError);
   });
 
+  it("rejects a 2xx session body that isn't JSON with a ChatProtocolError", async () => {
+    server.use(http.post("/api/session", () => HttpResponse.html("<p>Sign in</p>")));
+    await expect(createChatApi().getSession()).rejects.toBeInstanceOf(ChatProtocolError);
+  });
+
+  describe("abort", () => {
+    // The call is aborted as its request starts, and only then may the mock answer; without the
+    // signal, the call would resolve.
+    it.each([
+      ["getSession", "/api/session", (api: ChatApi, signal: AbortSignal) => api.getSession(signal)],
+      [
+        "sendChat",
+        "/api/chat",
+        (api: ChatApi, signal: AbortSignal) => api.sendChat(request, () => undefined, signal),
+      ],
+    ] as const)("%s passes its signal to fetch", async (_, path, call) => {
+      const hold = gate();
+      server.use(
+        http.post(path, async () => {
+          await hold.promise;
+          return HttpResponse.json(SESSIONS.upcoming);
+        }),
+      );
+      const controller = new AbortController();
+      server.events.on("request:start", () => {
+        controller.abort();
+        hold.open();
+      });
+      const settled = call(createChatApi(), controller.signal).then(
+        () => "resolved",
+        (error: unknown) => error,
+      );
+      expect(await settled).toMatchObject({ name: "AbortError" });
+      server.events.removeAllListeners("request:start");
+    });
+  });
+
   it("posts the request as JSON and streams every event of the turn", async () => {
     let body: unknown;
     let contentType: string | null = null;
@@ -103,12 +141,7 @@ describe("createChatApi", () => {
   });
 
   it("throws ChatHttpError for a non-2xx body that is a stream event other than error", async () => {
-    const done = encodeStreamEvent({
-      type: "done",
-      conversationId: "5a0c9e7b-3d2f-4b61-8e4a-7c1f0d9b2e63",
-      messageId: "msg_000002",
-      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-    });
+    const done = encodeStreamEvent(doneEvent());
     server.use(http.post("/api/chat", () => HttpResponse.text(done, { status: 500 })));
     await expect(send()).rejects.toEqual(new ChatHttpError(500));
   });

@@ -9,6 +9,7 @@
  * waits for a DOM condition with `until`, which runs real hops while fake time stands still.
  */
 import { type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
+import { EXAMPLES } from "@sched/contracts/testing";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { vi } from "vitest";
@@ -38,6 +39,19 @@ export function sendNow(text: string): void {
 }
 
 export const typingIndicator = () => screen.queryByTestId("typing-indicator");
+
+/** The conversation log. */
+export const log = () => screen.getByRole("list", { name: "Conversation" });
+
+/** A `reducedMotion` getter that always asks for instant rendering. */
+export const instant = () => true;
+
+type DoneEvent = Extract<ChatStreamEvent, { type: "done" }>;
+
+/** The contract's example `done` event, with these fields replaced. */
+export function doneEvent(overrides: Partial<DoneEvent> = {}): DoneEvent {
+  return { ...EXAMPLES.ChatDoneEvent, ...overrides };
+}
 
 export function gate() {
   let open!: () => void;
