@@ -74,7 +74,10 @@ describe("login form (FR-001)", () => {
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/chat");
     expect(router.state.historyAction).toBe("REPLACE"); // Back doesn't return to the form
-    expect(screen.getByRole("main")).toHaveFocus();
+    // Layout moves focus in an effect after the navigation renders, so wait for it.
+    await waitFor(() => {
+      expect(screen.getByRole("main")).toHaveFocus();
+    });
     expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 

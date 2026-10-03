@@ -1,5 +1,5 @@
 import { CLINIC } from "@sched/contracts";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, type RouteObject } from "react-router";
 import { RouterProvider } from "react-router/dom";
@@ -87,6 +87,9 @@ describe("app shell", () => {
     await user.type(screen.getByLabelText("Username"), "maria.santos");
     await user.type(screen.getByLabelText("Password"), "any{Enter}");
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
-    expect(screen.getByRole("main")).toHaveFocus();
+    // The focus move is an effect that runs after the navigation renders, so wait for it.
+    await waitFor(() => {
+      expect(screen.getByRole("main")).toHaveFocus();
+    });
   });
 });
