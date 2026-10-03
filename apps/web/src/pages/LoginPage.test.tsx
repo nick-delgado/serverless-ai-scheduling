@@ -55,6 +55,10 @@ describe("login form (FR-001)", () => {
     expect(passwordField()).toHaveAttribute("type", "password");
     expect(passwordField()).toHaveAttribute("autocomplete", "current-password");
     expect(screen.queryByRole("link", { name: /sign up|register|create/i })).toBeNull();
+    // Nothing to describe until there's an error, and nothing marked invalid.
+    expect(usernameField()).not.toHaveAttribute("aria-describedby");
+    expect(passwordField()).not.toHaveAttribute("aria-describedby");
+    expect(usernameField()).not.toHaveAttribute("aria-invalid");
     await user.tab(); // skip link
     await user.tab();
     expect(usernameField()).toHaveFocus();
@@ -257,6 +261,7 @@ describe("session (FR-002, FR-003)", () => {
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/login");
+    expect(router.state.historyAction).toBe("REPLACE");
   });
 
   it("needs an AuthProvider above anything that reads auth state", () => {

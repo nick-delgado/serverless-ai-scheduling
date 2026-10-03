@@ -94,11 +94,8 @@ export function createAmplifyAuthService(config: () => CognitoConfig): AuthServi
           await signOut();
           return signIn(input);
         });
-        if (result.nextStep.signInStep !== "DONE") {
-          // Drop the half-finished sign-in so the next attempt starts clean.
-          await signOut();
-          return { ok: false, reason: "unsupported" };
-        }
+        // Amplify drops the half-finished sign-in when the next attempt starts.
+        if (result.nextStep.signInStep !== "DONE") return { ok: false, reason: "unsupported" };
         const user = await getCurrentUser();
         return { ok: true, user: { username: user.username } };
       } catch (error) {

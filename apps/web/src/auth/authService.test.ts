@@ -121,6 +121,19 @@ describe("signIn", () => {
   });
 });
 
+describe("configuration", () => {
+  it("resolves the Cognito settings once, on first use", async () => {
+    const config = vi.fn(() => MOCK_COGNITO_CONFIG);
+    const service = createAmplifyAuthService(config);
+    expect(config).not.toHaveBeenCalled();
+    await service.currentUser();
+    await service.signIn("maria.santos", MOCK_PASSWORD);
+    await service.getIdToken();
+    await service.signOut();
+    expect(config).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("getIdToken", () => {
   it("is undefined when signed out", async () => {
     await expect(auth.getIdToken()).resolves.toBeUndefined();

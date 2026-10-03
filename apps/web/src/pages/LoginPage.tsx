@@ -2,7 +2,7 @@ import "./LoginPage.css";
 
 import { CLINIC } from "@sched/contracts";
 import { type FormEvent, useId, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 
 import { pageTitle } from "../app/pageTitle";
 import { useAuth } from "../auth/AuthProvider";
@@ -23,7 +23,6 @@ export const LOGIN_ERRORS = {
  */
 export function LoginPage() {
   const { state, signIn } = useAuth();
-  const navigate = useNavigate();
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
@@ -47,13 +46,12 @@ export function LoginPage() {
     setPending(true);
     setError(undefined);
     try {
+      // On success the auth state changes and the redirect above takes the patient to /chat.
       const result = await signIn(username, password);
-      if (result.ok) {
-        void navigate("/chat", { replace: true });
-        return;
+      if (!result.ok) {
+        setError(LOGIN_ERRORS[result.reason]);
+        passwordRef.current?.select();
       }
-      setError(LOGIN_ERRORS[result.reason]);
-      passwordRef.current?.select();
     } finally {
       busy.current = false;
       setPending(false);
