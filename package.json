@@ -18,11 +18,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "evals": "tsx packages/evals/src/cli.ts"
+    "evals": "tsx packages/evals/src/cli.ts",
+    "seed:data": "tsx scripts/seed-data.ts"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1146.0",
+    "@aws-sdk/client-dynamodb": "^3.1143.0",
     "@aws-sdk/client-ssm": "^3.1146.0",
+    "@aws-sdk/lib-dynamodb": "^3.1143.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.0",
     "amazon-cognito-identity-js": "^6.3.20",

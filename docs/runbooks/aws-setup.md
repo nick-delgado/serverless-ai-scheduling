@@ -149,3 +149,32 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 ## Teardown
 
 Delete workload stacks in reverse order (`web` → `api` → `auth` → `data`) with the `sched-dev` profile. Delete `sched-bootstrap` last with `sched-admin`. The artifact bucket is retained, so empty and delete it manually if desired. Disable Identity Center only if nothing else uses it.
+
+---
+
+## Appendix: seeding an env's demo data
+
+Two scripts, in this order. Both run as `sched-dev` (`aws sso login --profile sched-dev` first). Everything they write is synthetic (the `clinic-default` fixture).
+
+1. **Cognito demo users:** `npx tsx scripts/seed-users.ts --env <env>` (passwords from the git-ignored `.env`). This writes `.seed/cognito-users.<env>.json`, which maps each fixture patient to their Cognito `sub`.
+2. **Table data:** `npm run seed:data -- --env <env>` (or `npx tsx scripts/seed-data.ts --env <env>`).
+
+What the data seed writes to the table named by SSM `/sched/<env>/data/table-name`:
+
+- the 8 fixture providers;
+- 30-minute slots, Mon–Fri 8 AM–5 PM clinic time, for **4 weeks starting today** (the clinic-local date in America/New_York);
+- a `PATIENT#<sub>` profile for each patient in the mapping, and their fixture appointments. Every fixture patient ID becomes the patient's `sub`. Fixture patients without a mapping row are skipped, with their appointments, and their slots stay open.
+
+Before writing, it checks that the mapping is for this env and for the env's current User Pool (SSM `/sched/<env>/auth/user-pool-id`). If the mapping is missing, stale or malformed, it stops and says to re-run `seed-users.ts`.
+
+**Re-running is safe.** A normal run only adds what's missing. It never overwrites an existing slot or appointment, including bookings the agent made since. It rewrites the provider and patient profiles with the same content, and a profile keeps its original `createdAt`. On a later day, it extends the window to 4 weeks from that day, and earlier slots stay. A BOOKED fixture appointment is added only if its slot isn't stored yet, so a patient added to the mapping later may get only their past and cancelled visits. Use `--reset` to get the full set.
+
+**`--reset` deletes before it writes.** It deletes every item in the fixture providers' partitions (profiles and all slots, booked or not), and each mapped patient's profile and appointments, including the ones the agent made. Conversations are kept. It asks you to type the table name, or takes `--confirm <table-name>`. With neither (for example, no terminal), it refuses before touching the table. This deletes table data, so in a shared env (`dev`, `demo`) ask Nick first (CLAUDE.md).
+
+Local runs (DynamoDB Local; no AWS calls):
+
+```bash
+DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/seed-data.ts --env dev --table <local-table> --mapping <file>
+```
+
+`--table` is required when `DYNAMODB_ENDPOINT` is set. `--mapping` overrides the default `.seed/cognito-users.<env>.json`. The tests (`scripts/seed-data.test.ts`) run against DynamoDB Local with temporary mapping files. They're skipped locally when no endpoint answers, and required in CI.
