@@ -4,6 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed))
 
 ## Context
 
@@ -20,7 +21,7 @@ Nick wants CloudFormation "wherever possible". Several agents will work on infra
 
 ## Decision
 
-**AWS SAM, split into independent stacks**, deployed in this order:
+**AWS SAM, split into independent stacks**, deployed in this order: *(Refined by the [2026-09-29 amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed): only `api` uses SAM; data, auth and web are plain CloudFormation.)*
 
 | Stack | Template | Contents | Owner stream |
 |---|---|---|---|
