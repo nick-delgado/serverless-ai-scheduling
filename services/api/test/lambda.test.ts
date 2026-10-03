@@ -1,10 +1,10 @@
 /**
  * The Lambda adapter (`lib/lambda.ts`) over a fake `awslambda` global: claims → patient, body decoding,
- * the status/headers prelude, and the deadline signal.
+ * the status/headers prelude, the stream being ended, and the deadline signal.
  */
 import { PassThrough } from "node:stream";
 
-import { ScriptedLlmClient, resolveModelProfile, scriptedText } from "@sched/agent";
+import { ScriptedLlmClient, resolveModelProfile, scriptedText, type ScriptedStep } from "@sched/agent";
 import { parseChatResponseBody } from "@sched/contracts";
 import { FrozenClock, createInMemoryRepositories } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
@@ -41,9 +41,12 @@ function event(overrides: Partial<RestApiProxyEvent> & { sub?: string } = {}): R
   return { body, requestContext: { requestId: "req-1", authorizer: { claims: { sub } } }, ...rest };
 }
 
-async function invoke(e: RestApiProxyEvent, context: unknown = {}) {
+async function invoke(
+  e: RestApiProxyEvent,
+  { context = {}, steps = [scriptedText("Hi!")] }: { context?: unknown; steps?: ScriptedStep[] } = {},
+) {
   const clock = new FrozenClock("2026-10-05T13:00:00Z");
-  const llm = new ScriptedLlmClient([scriptedText("Hi!")]);
+  const llm = new ScriptedLlmClient(steps);
   const handler = chatStreamHandler({
     repos: createInMemoryRepositories({ clock, seed: buildClinicFixture() }),
     turns: createInMemoryTurnStore(),
@@ -57,14 +60,19 @@ async function invoke(e: RestApiProxyEvent, context: unknown = {}) {
   const chunks: Buffer[] = [];
   stream.on("data", (c: Buffer) => chunks.push(c));
   await handler(e, stream, context);
-  return { events: parseChatResponseBody(Buffer.concat(chunks).toString("utf8")), llm };
+  return {
+    events: parseChatResponseBody(Buffer.concat(chunks).toString("utf8")),
+    llm,
+    ended: stream.writableEnded,
+  };
 }
 
 describe("chatStreamHandler", () => {
   it("streams NDJSON with a 200 prelude for the authorizer's sub", async () => {
-    const { events } = await invoke(event());
+    const { events, ended } = await invoke(event());
     expect(preludes).toEqual([{ statusCode: 200, headers: { ...NDJSON_HEADERS } }]);
     expect(events.at(-1)?.type).toBe("done");
+    expect(ended).toBe(true);
   });
 
   it("decodes a base64 body", async () => {
@@ -78,10 +86,42 @@ describe("chatStreamHandler", () => {
     ["no authorizer", { requestContext: { requestId: "r", authorizer: null } }],
     ["a non-UUID sub", { sub: "admin" }],
   ])("answers 401 with %s", async (_name, overrides) => {
-    const { events, llm } = await invoke(event(overrides));
+    const { events, llm, ended } = await invoke(event(overrides));
     expect(preludes[0]?.statusCode).toBe(401);
     expect(events).toEqual([expect.objectContaining({ type: "error", code: "UNAUTHORIZED" })]);
     expect(llm.requests).toHaveLength(0);
+    expect(ended).toBe(true);
+  });
+
+  describe("with a Lambda context", () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+    afterEach(() => vi.useRealTimers());
+
+    it("passes the deadline to the turn: a model call still running at the deadline ends in AGENT_UNAVAILABLE", async () => {
+      // The deadline fires 1 s in (the floor); the model call starts before that and answers after 5 s.
+      let started!: () => void;
+      const modelCalled = new Promise<void>((resolve) => (started = resolve));
+      const slow: ScriptedStep = () => {
+        started();
+        return new Promise((resolve) => setTimeout(() => resolve(scriptedText("Too late.")), 5_000));
+      };
+      const running = invoke(event(), {
+        context: { getRemainingTimeInMillis: () => PERSIST_RESERVE_MS },
+        steps: [slow],
+      });
+      await modelCalled;
+      await vi.advanceTimersByTimeAsync(5_000);
+      const { events, ended } = await running;
+
+      expect(events.at(-1)).toMatchObject({ type: "error", code: "AGENT_UNAVAILABLE" });
+      expect(ended).toBe(true);
+    });
+
+    it("cancels the deadline timer when the turn ends first", async () => {
+      const { events } = await invoke(event(), { context: { getRemainingTimeInMillis: () => 180_000 } });
+      expect(events.at(-1)?.type).toBe("done");
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });
 
