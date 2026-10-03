@@ -1,3 +1,4 @@
+import { CLINIC } from "@sched/contracts";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, type RouteObject } from "react-router";
@@ -5,6 +6,7 @@ import { RouterProvider } from "react-router/dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { DISCLAIMER_TEXT } from "./DisclaimerBanner";
+import { pageTitle } from "./pageTitle";
 import { appRoutes, pageRoutes } from "./routes";
 
 function renderAt(path: string, pages: RouteObject[] = pageRoutes) {
@@ -30,7 +32,8 @@ describe("app shell", () => {
     expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeVisible();
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("heading", { level: 1 }));
     expectDisclaimer();
-    expect(document.title).toBe(`${heading} · Cedar Ridge Health`);
+    expect(within(screen.getByRole("banner")).getByText(CLINIC.name)).toBeVisible();
+    expect(document.title).toBe(pageTitle(heading));
   });
 
   it("uses the FR-016 wording exactly", () => {

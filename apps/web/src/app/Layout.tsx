@@ -1,3 +1,4 @@
+import { CLINIC } from "@sched/contracts";
 import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router";
 
@@ -29,7 +30,7 @@ export function Layout() {
       <header className="app-header">
         <DisclaimerBanner />
         <div className="app-brand">
-          <span className="app-brand__name">Cedar Ridge Health</span>
+          <span className="app-brand__name">{CLINIC.name}</span>
           <span className="app-brand__tagline">Scheduling assistant</span>
         </div>
       </header>
