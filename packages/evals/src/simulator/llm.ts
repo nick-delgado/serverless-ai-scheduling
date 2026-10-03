@@ -17,16 +17,6 @@
  * `maxAttempts` calls, then the turn fails with a `SimulatorError` (the trial is `error`, not `fail`).
  */
 import { estimateCostUsd, type LlmClient, type ModelProfile } from "@sched/agent";
-import type { TokenUsage } from "@sched/contracts";
-
-import {
-  SimulatorError,
-  type PatientSimulator,
-  type RejectedReply,
-  type SimulatorContext,
-  type SimulatorCost,
-  type SimulatorTurn,
-} from "../simulator";
 import type { TranscriptEvent } from "../transcript";
 import { textOf } from "../transcript";
 import { replyProblems } from "./guards";
@@ -38,6 +28,16 @@ import {
   simulatorUserMessage,
   type SimulatorStopReason,
 } from "./prompt";
+import {
+  addUsage,
+  SimulatorError,
+  zeroSimulatorCost,
+  type PatientSimulator,
+  type RejectedReply,
+  type SimulatorContext,
+  type SimulatorCost,
+  type SimulatorTurn,
+} from "./types";
 
 /** The environment variable that selects the simulator's model profile (default `sonnet-4.6`). */
 export const SIMULATOR_PROFILE_ENV = "SIMULATOR_MODEL_PROFILE";
@@ -101,13 +101,6 @@ export function messagesSinceEscalation(events: readonly TranscriptEvent[]): num
   return events.slice(at + 1).filter((e) => e.kind === "patient").length;
 }
 
-const zeroUsage = (): TokenUsage => ({
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-});
-
 export class LlmPatientSimulator implements PatientSimulator {
   readonly name: string;
   readonly #llm: LlmClient;
@@ -130,7 +123,7 @@ export class LlmPatientSimulator implements PatientSimulator {
 
     const { scenario } = context;
     const system = simulatorSystemPrompt(scenario);
-    const cost: SimulatorCost = { usage: zeroUsage(), costUsd: 0, llmCalls: 0 };
+    const cost: SimulatorCost = zeroSimulatorCost();
     const rejected: RejectedReply[] = [];
 
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
@@ -157,12 +150,7 @@ export class LlmPatientSimulator implements PatientSimulator {
           : { inlineReasoningTag: this.#profile.inlineReasoningTag }),
       });
       cost.llmCalls += 1;
-      cost.usage = {
-        inputTokens: cost.usage.inputTokens + response.usage.inputTokens,
-        outputTokens: cost.usage.outputTokens + response.usage.outputTokens,
-        cacheReadTokens: cost.usage.cacheReadTokens + response.usage.cacheReadTokens,
-        cacheWriteTokens: cost.usage.cacheWriteTokens + response.usage.cacheWriteTokens,
-      };
+      cost.usage = addUsage(cost.usage, response.usage);
       cost.costUsd = estimateCostUsd(this.#profile, cost.usage);
 
       const text = textOf(response.content);

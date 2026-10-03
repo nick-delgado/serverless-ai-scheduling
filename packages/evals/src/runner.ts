@@ -19,8 +19,11 @@ import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
 import type { Scenario } from "./schema";
 import {
+  addUsage,
   scriptOnlySimulator,
   SimulatorError,
+  zeroSimulatorCost,
+  zeroUsage,
   type PatientSimulator,
   type RecordedSimulatorTurn,
   type SimulatorCost,
@@ -78,19 +81,6 @@ export interface RunScenarioOptions {
   trial?: number;
 }
 
-const zeroUsage = (): TokenUsage => ({
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-});
-const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
-  inputTokens: a.inputTokens + b.inputTokens,
-  outputTokens: a.outputTokens + b.outputTokens,
-  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
-  cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
-});
-
 const rejectedOf = (turn: SimulatorTurn) => (turn.rejected === undefined ? {} : { rejected: turn.rejected });
 
 function skipped(trial: number, reason: string, simulator: string): TrialResult {
@@ -110,7 +100,7 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
     llmCalls: 0,
     llmRetries: 0,
     costUsd: 0,
-    simulatorCost: { usage: zeroUsage(), costUsd: 0, llmCalls: 0 },
+    simulatorCost: zeroSimulatorCost(),
     durationMs: 0,
     turnDurationsMs: [],
   };
@@ -149,7 +139,7 @@ export async function runScenarioTrial(
   let llmCalls = 0;
   let llmRetries = 0;
   let costUsd = 0;
-  const simulatorCost: SimulatorCost = { usage: zeroUsage(), costUsd: 0, llmCalls: 0 };
+  const simulatorCost: SimulatorCost = zeroSimulatorCost();
   const simulatorTurns: RecordedSimulatorTurn[] = [];
   const addSimulatorCost = (cost: SimulatorCost | undefined) => {
     if (cost === undefined) return;

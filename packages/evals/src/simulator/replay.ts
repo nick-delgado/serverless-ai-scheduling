@@ -15,7 +15,7 @@ import {
   type RecordedSimulatorTurn,
   type SimulatorContext,
   type SimulatorTurn,
-} from "../simulator";
+} from "./types";
 
 /** The part of a results file (`RunReport`) a replay reads. */
 export interface ReplaySource {
