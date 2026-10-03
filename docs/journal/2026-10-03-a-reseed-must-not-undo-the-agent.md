@@ -6,7 +6,7 @@
 
 ## What happened
 
-S2-02 added `scripts/seed-data.ts`. It loads the `clinic-default` fixture into an env's table: 8 providers, 4 weeks of slots starting today, a `PATIENT#<sub>` profile for each patient in the Cognito mapping from `seed-users.ts`, and the fixture's sample appointments. Every fixture patient ID is rewritten to the patient's `sub`. The tests run against DynamoDB Local. It hasn't run against `dev` yet: that writes to a shared table, which needs Nick's OK.
+S2-02 added `scripts/seed-data.ts`. It loads the `clinic-default` fixture into an env's table: 8 providers, 4 weeks of slots starting today, a `PATIENT#<sub>` profile for each patient in the Cognito mapping from `seed-users.ts`, and the fixture's sample appointments. Every fixture patient ID is rewritten to the patient's `sub`. The tests run against DynamoDB Local. The first `dev` load waited for Nick's OK, because it writes to a shared table; he approved a normal run (no `--reset`) on the review of PR #117.
 
 ## Why we chose what we chose
 
@@ -31,11 +31,12 @@ The DynamoDB Local tests also failed once out of three runs on a busy machine. E
 
 ## Evidence
 
-- `scripts/seed-data.test.ts`: 25 tests, 13 of them against DynamoDB Local.
+- `scripts/seed-data.test.ts`: 26 tests, 13 of them against DynamoDB Local.
 - 47 breaks to `scripts/seed-data.ts` in the first round. Each one turned at least one test red after the two tests above were added.
 - The review of PR #117 found three gaps. The `--reset` delete loop, the SSM reader and the client wiring were checked only by hand. "Never overwrites a booking" booked a slot the second run never wrote, so it couldn't catch an overwrite. The "refuses" test compared only item counts. I made the adapters injectable, added stub tests and a reset test for unmapped patients, and moved the agent-booked slot inside both runs' windows. Then I ran 24 more breaks, and each one turned a test red. They covered the retry, the attempt cap, the backoff, the batch size, the SSM name, the empty-value check, the region default, `AWS_REGION`, the endpoint wiring, the slot filter, the confirmation order, and a reset that deletes unmapped patients.
+- The re-check of `6707ba8` found the default SSM client factory untested. It's now `ssmClientFor(region)`, and building that client without the region turned its test red.
+- The first `dev` load ran on 2026-10-03 at 22:21:58 UTC from `6707ba8`: `npm run seed:data -- --env dev --mapping <main checkout>/.seed/cognito-users.dev.json`, without `--reset`. `baseDate` was 2026-10-03. It wrote 2,900 items: 8 providers, 6 patients, 2,880 slots and 6 appointments, and skipped no aliases. The table went from 16 items (conversations from chat tests) to 2,916. A re-run of the same command wrote 14 items, the same-content profiles with 0 new slots or appointments, and the table stayed at 2,916.
 
 ## What's next
 
-- The first `dev` load. Nick approved a normal run (no `--reset`), and the orchestrator runs it after the review fixes; its counts go in PR #117.
 - For #36 (M3-01): the seeded `dev` window starts on the run date, not the eval base date (2026-10-05), so deployed data matches the in-memory fixture in shape, not in dates or patient IDs.
