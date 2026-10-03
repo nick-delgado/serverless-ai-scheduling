@@ -32,8 +32,8 @@ import {
 import {
   ChatRequest,
   PatientId,
-  TOOL_NAMES,
   messageIdForSeq,
+  type ChatStreamEvent,
   type ConversationId,
   type ConversationMessage,
   type TurnId,
@@ -116,7 +116,13 @@ export async function handleChatTurn(
 
 // ---------------------------------------------------------------------------------------------
 
-const KNOWN_TOOLS: ReadonlySet<string> = new Set(TOOL_NAMES);
+/** The conversation a turn writes to, and where its next message goes. */
+interface OpenTurn {
+  readonly patientId: PatientId;
+  readonly conversationId: ConversationId;
+  readonly turnId: TurnId;
+  nextSeq: number;
+}
 
 class ChatTurn {
   readonly #in: ChatTurnInput;
@@ -178,10 +184,29 @@ class ChatTurn {
   }
 
   async #turn(): Promise<void> {
-    const { repos, turns, clock } = this.#deps;
-    const newId = this.#deps.newId ?? randomUUID;
+    const admitted = await this.#admit();
+    if (!admitted) return;
+    const { patientId, request } = admitted;
+    const { turn, stored } = await this.#openConversation(patientId, request.conversationId);
 
-    // 1. Identity and input.
+    // 4. The patient's message goes in before the loop runs (closing an interrupted turn first).
+    const history = toLlmHistory(stored);
+    const before: LlmMessage[] = needsClosingReply(history) ? [closingReply()] : [];
+    this.#facts.closedInterruptedTurn = before.length > 0;
+    const userMessage: LlmMessage = { role: "user", content: [{ type: "text", text: request.text }] };
+    if (!(await this.#storePatientMessage(turn, [...before, userMessage]))) return;
+
+    const result = await this.#runAgent(turn, request.text, [...history, ...before]);
+    this.#summary.outcome = result.outcome;
+    this.#recordTrace(result);
+
+    const replySeq = await this.#persistTurn(turn, userMessage, result);
+    if (replySeq === "failed") return;
+    this.#finish(turn, result, replySeq);
+  }
+
+  /** 1–2. Identity, input and the daily cap. Undefined when the request was refused. */
+  async #admit(): Promise<{ patientId: PatientId; request: ChatRequest } | undefined> {
     const patient = PatientId.safeParse(this.#in.patientId);
     if (!patient.success) return this.#fail(FAILURES.unauthorized());
     const patientId = patient.data;
@@ -190,92 +215,100 @@ class ChatTurn {
     const request = body.value;
     this.#facts.clientMessageId = request.clientMessageId;
 
-    // 2. Daily cap.
-    const quota = await turns.consumeDailyTurn(patientId, clinicDateOf(clock.now()), this.#deps.dailyTurnCap);
+    const { turns, clock, dailyTurnCap } = this.#deps;
+    const quota = await turns.consumeDailyTurn(patientId, clinicDateOf(clock.now()), dailyTurnCap);
     this.#facts.turnsUsedToday = quota.used;
     if (!quota.ok) return this.#fail(FAILURES.dailyCap());
+    return { patientId, request };
+  }
 
-    // 3. History, through the owned read only.
+  /** 3. History, through the owned read only. An ID that reads as empty is replaced by a new one. */
+  async #openConversation(
+    patientId: PatientId,
+    requested: ConversationId | undefined,
+  ): Promise<{ turn: OpenTurn; stored: ConversationMessage[] }> {
+    const newId = this.#deps.newId ?? randomUUID;
     let stored: ConversationMessage[] = [];
-    let conversationId: ConversationId;
-    if (request.conversationId !== undefined) {
-      stored = await repos.conversations.listMessages(patientId, request.conversationId);
+    if (requested !== undefined) {
+      stored = await this.#deps.repos.conversations.listMessages(patientId, requested);
     }
-    if (request.conversationId !== undefined && stored.length > 0) {
-      conversationId = request.conversationId;
+    let conversationId: ConversationId;
+    if (requested !== undefined && stored.length > 0) {
+      conversationId = requested;
     } else {
       conversationId = newId();
-      this.#summary.conversationReplaced = request.conversationId !== undefined;
+      this.#summary.conversationReplaced = requested !== undefined;
     }
     const turnId = newId();
     this.#summary.conversationId = conversationId;
     this.#summary.turnId = turnId;
     this.#facts.historyMessages = stored.length;
+    const nextSeq = (stored.at(-1)?.seq ?? -1) + 1;
+    return { turn: { patientId, conversationId, turnId, nextSeq }, stored };
+  }
 
-    // 4. The patient's message goes in before the loop runs (closing an interrupted turn first).
-    let nextSeq = (stored.at(-1)?.seq ?? -1) + 1;
-    const store = async (messages: readonly LlmMessage[]): Promise<number | undefined> => {
-      if (messages.length === 0) return undefined;
-      const rows = toStoredMessages(messages, {
-        conversationId,
-        turnId,
-        firstSeq: nextSeq,
-        createdAt: clock.now().toISOString(),
-      });
-      for (let i = 0; i < rows.length; i += MAX_APPEND_BATCH) {
-        await repos.conversations.append(patientId, rows.slice(i, i + MAX_APPEND_BATCH));
-        nextSeq += Math.min(MAX_APPEND_BATCH, rows.length - i);
-        this.#summary.messagesAppended += Math.min(MAX_APPEND_BATCH, rows.length - i);
-      }
-      return rows.at(-1)?.seq;
-    };
-
-    const history = toLlmHistory(stored);
-    const before: LlmMessage[] = needsClosingReply(history) ? [closingReply()] : [];
-    this.#facts.closedInterruptedTurn = before.length > 0;
-    const userMessage: LlmMessage = { role: "user", content: [{ type: "text", text: request.text }] };
-    try {
-      await store([...before, userMessage]);
-    } catch (error) {
-      if (error instanceof ConversationAppendError) {
-        // Another turn of this conversation wrote first. Don't retry blindly (#13 hand-off).
-        this.#log({
-          msg: "chat append conflict",
-          level: "warn",
-          requestId: this.#in.requestId,
-          code: error.code,
-        });
-        return this.#fail(FAILURES.conflict());
-      }
-      throw error;
+  /** Appends messages after the last stored one, in batches. Returns the last seq written. */
+  async #store(turn: OpenTurn, messages: readonly LlmMessage[]): Promise<number | undefined> {
+    if (messages.length === 0) return undefined;
+    const { repos, clock } = this.#deps;
+    const rows = toStoredMessages(messages, {
+      conversationId: turn.conversationId,
+      turnId: turn.turnId,
+      firstSeq: turn.nextSeq,
+      createdAt: clock.now().toISOString(),
+    });
+    for (let i = 0; i < rows.length; i += MAX_APPEND_BATCH) {
+      const batch = rows.slice(i, i + MAX_APPEND_BATCH);
+      await repos.conversations.append(turn.patientId, batch);
+      turn.nextSeq += batch.length;
+      this.#summary.messagesAppended += batch.length;
     }
+    return rows.at(-1)?.seq;
+  }
 
-    // 5. The agent loop, with tools bound to this patient and this (owned) conversation.
+  /** 4. False when another turn of this conversation wrote first (the turn has failed with a conflict). */
+  async #storePatientMessage(turn: OpenTurn, messages: readonly LlmMessage[]): Promise<boolean> {
+    try {
+      await this.#store(turn, messages);
+      return true;
+    } catch (error) {
+      if (!(error instanceof ConversationAppendError)) throw error;
+      // Another turn of this conversation wrote first. Don't retry blindly (#13 hand-off).
+      this.#log({
+        msg: "chat append conflict",
+        level: "warn",
+        requestId: this.#in.requestId,
+        code: error.code,
+      });
+      this.#fail(FAILURES.conflict());
+      return false;
+    }
+  }
+
+  /** 5. The agent loop, with tools bound to this patient and this (owned) conversation. */
+  async #runAgent(turn: OpenTurn, text: string, history: LlmMessage[]): Promise<AgentTurnResult> {
+    const { repos, clock, notifier, limits } = this.#deps;
+    const { patientId, conversationId, turnId } = turn;
     const profileRecord = await repos.patients.get(patientId);
     const executor = createToolExecutor(
       this.#deps.registry ?? TOOL_REGISTRY,
+      { patientId, conversationId, clock, repos, ...(notifier ? { notifier } : {}) },
       {
-        patientId,
-        conversationId,
-        clock,
-        repos,
-        ...(this.#deps.notifier ? { notifier: this.#deps.notifier } : {}),
-      },
-      {
+        // The executor reports internal errors only for registered tools, so the name is a known one.
         onInternalError: (error, call) =>
           this.#log({
             msg: "tool internal error",
             level: "error",
             requestId: this.#in.requestId,
             turnId,
-            tool: KNOWN_TOOLS.has(call.name) ? call.name : "<unknown>",
+            tool: call.name,
             ...errorSummary(error),
           }),
       },
     );
-    const result = await runAgentTurn({
-      history: [...history, ...before],
-      userMessage: request.text,
+    return runAgentTurn({
+      history,
+      userMessage: text,
       system: this.#deps.systemPrompt({
         now: clock.now(),
         patientFirstName: profileRecord?.firstName ?? null,
@@ -284,22 +317,29 @@ class ChatTurn {
       llm: this.#deps.llm,
       profile: this.#deps.profile,
       clock,
-      ...(this.#deps.limits ? { limits: this.#deps.limits } : {}),
+      ...(limits ? { limits } : {}),
       onEvent: (event) => this.#send(200, event),
       conversationId,
       turnId,
       ...(this.#in.signal ? { signal: this.#in.signal } : {}),
       monotonicNow: this.#now,
     });
-    this.#summary.outcome = result.outcome;
-    this.#recordTrace(result);
+  }
 
-    // 6. Persist the rest of the turn (newMessages[0] is the patient message, already stored).
+  /**
+   * 6. Persist the rest of the turn (newMessages[0] is the patient message, already stored), then the
+   * trace. Returns the reply's seq, or "failed" when storing failed and the turn has ended with an error.
+   */
+  async #persistTurn(
+    turn: OpenTurn,
+    userMessage: LlmMessage,
+    result: AgentTurnResult,
+  ): Promise<number | undefined | "failed"> {
     const rest = result.newMessages.slice(1);
     const closing = needsClosingReply([userMessage, ...rest]) ? [closingReply()] : [];
     let replySeq: number | undefined;
     try {
-      replySeq = await store([...rest, ...closing]);
+      replySeq = await this.#store(turn, [...rest, ...closing]);
     } catch (error) {
       this.#log({
         msg: "chat persist failed",
@@ -307,10 +347,11 @@ class ChatTurn {
         requestId: this.#in.requestId,
         ...errorSummary(error),
       });
-      return this.#fail(error instanceof ConversationAppendError ? FAILURES.conflict() : FAILURES.internal());
+      this.#fail(error instanceof ConversationAppendError ? FAILURES.conflict() : FAILURES.internal());
+      return "failed";
     }
     try {
-      await turns.saveTrace(patientId, result.trace);
+      await this.#deps.turns.saveTrace(turn.patientId, result.trace);
     } catch (error) {
       // The trace is for debugging (FR-051); losing one must not fail a turn the patient already saw.
       this.#log({
@@ -320,8 +361,11 @@ class ChatTurn {
         ...errorSummary(error),
       });
     }
+    return replySeq;
+  }
 
-    // 7. Terminal event.
+  /** 7. Terminal event. */
+  #finish(turn: OpenTurn, result: AgentTurnResult, replySeq: number | undefined): void {
     if (result.outcome === "error") {
       this.#log({
         msg: "agent turn error",
@@ -329,19 +373,20 @@ class ChatTurn {
         requestId: this.#in.requestId,
         ...errorSummary(result.error),
       });
-      return this.#fail(classifyAgentError(result.error));
+      this.#fail(classifyAgentError(result.error));
+      return;
     }
     if (replySeq === undefined) throw new Error("Completed turn stored no reply");
     this.#send(200, {
       type: "done",
-      conversationId,
+      conversationId: turn.conversationId,
       messageId: messageIdForSeq(replySeq),
       usage: result.usage,
     });
     this.#summary.terminal = "done";
   }
 
-  #send(statusIfFirst: number, event: Parameters<EventWriter["send"]>[1]): void {
+  #send(statusIfFirst: number, event: ChatStreamEvent): void {
     if (!this.#out.opened) {
       this.#summary.status = statusIfFirst;
       this.#firstEventMs = this.#elapsed();
@@ -352,7 +397,7 @@ class ChatTurn {
     this.#out.send(statusIfFirst, event);
   }
 
-  #fail(failure: ChatFailure): void {
+  #fail(failure: ChatFailure): undefined {
     this.#summary.terminal = "error";
     this.#summary.errorCode = failure.event.code;
     try {
