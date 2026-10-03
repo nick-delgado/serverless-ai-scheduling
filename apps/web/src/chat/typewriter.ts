@@ -97,6 +97,7 @@ export class Typewriter {
 
   /** No more text is coming: complete once the rest has been revealed. */
   finish(): void {
+    if (this.#disposed) return;
     this.#finished = true;
     this.#maybeComplete();
   }

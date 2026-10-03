@@ -270,4 +270,18 @@ describe("Typewriter", () => {
     expect(onComplete).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it.each([
+    ["typed", {}],
+    ["instant", { instant: true }],
+  ])("doesn't complete on finish() after dispose(), even with everything revealed (%s)", (_, options) => {
+    const { typewriter, onComplete } = make(options);
+    typewriter.append("ab");
+    vi.advanceTimersByTime(40);
+    expect(typewriter.text).toBe("ab");
+    typewriter.dispose();
+    typewriter.finish();
+    vi.runAllTimers();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
 });
