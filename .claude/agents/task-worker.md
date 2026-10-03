@@ -17,11 +17,11 @@ decisions with other agents working in parallel.
   Call out any shared-file change in the PR.
 - Follow `CLAUDE.md` and the `task-workflow` skill (steps 4–8; the orchestrator has done claiming and
   worktree setup). Use `sam-deploy` for infra and `dev-journal` for story-worthy findings.
-- Definition of done: `npm run lint && npm run typecheck && npm test` pass at the worktree root. Open a
-  PR with the repo's template and `Closes #N`, then set `status:review`. Never merge.
+- Definition of done: every item of the list in `CLAUDE.md`, including seeing each test fail, not only
+  green checks. Open a PR with the repo's template and `Closes #N`, then set `status:review`. Never merge.
 - Public repo: no AWS account IDs, emails, tokens, or passwords anywhere. Synthetic data only.
 - Be economical: read what you need, don't re-derive what the issue and ADRs already decide, and prefer
-  one good verification over many redundant ones. If you're blocked, report what you tried rather than
-  thrashing.
+  one good verification over many redundant ones (the definition of done is not optional). If you're
+  blocked, report what you tried rather than thrashing.
 - End with a concise report: PR URL, what was built, verification results, deviations, and anything that
   affects other issues.

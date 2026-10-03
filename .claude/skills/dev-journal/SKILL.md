@@ -21,7 +21,7 @@ The project is a portfolio piece. Its README tells the story of how it was built
 | **ADR** (`docs/adr/NNNN-slug.md`) | One decision: context, options, choice, consequences | A significant technical choice is made, reversed, or confirmed by a spike |
 | **README chapter** | The narrative a reviewer reads | At milestone boundaries, assembled from journal entries |
 
-A reversed decision gets a **new** ADR that supersedes the old one. Don't rewrite history; the reversal is part of the story.
+A reversed decision gets a **new** ADR that supersedes the old one; a refined one gets a dated amendment section instead (when and how: `docs/adr/README.md`). Don't rewrite history; the reversal is part of the story.
 
 ## Writing a journal entry
 
