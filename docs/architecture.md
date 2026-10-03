@@ -22,7 +22,7 @@ This is a one-page overview; each part links to the ADR that decided it. It will
                     │ API Gateway REST API (Regional)            │
                     │  Cognito User Pool authorizer (ADR-005)    │
                     │  POST /api/chat   (response streaming)     │
-                    │  GET  /api/session (greeting + history)    │
+                    │  POST /api/session (greeting + history)    │
                     └───────────┬────────────────────────────────┘
                                 ▼
                     ┌────────────────────────────────────────────┐
