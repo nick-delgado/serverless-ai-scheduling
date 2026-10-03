@@ -1,12 +1,15 @@
-# Every PR and every push to main runs the same checks agents run locally
+# Every PR and every push to any branch runs the same checks agents run locally
 # (CLAUDE.md "Definition of done"). No path filters on purpose: required status
 # checks must always report, or docs-only PRs would sit "pending" forever.
+# A branch with an open PR gets two runs: the push run on its head, and the PR run
+# on its merge with the base. GitHub skips the PR run while the PR has a merge
+# conflict, so the push run guarantees every head is tested at least once.
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ["**"]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
