@@ -109,7 +109,7 @@ export class Typewriter {
   }
 
   #schedule(): void {
-    if (this.#timer !== undefined || this.#shown >= this.#received.length) return;
+    if (this.#timer !== undefined) return; // a run is already under way
     // A fresh run starts its clock now, so idle time between deltas isn't spent as a burst.
     this.#lastTick = this.#now();
     this.#timer = setTimeout(() => this.#tick(), this.#tickMs);
@@ -118,7 +118,8 @@ export class Typewriter {
   #tick(): void {
     this.#timer = undefined;
     const now = this.#now();
-    const elapsedSeconds = Math.max(0, now - this.#lastTick) / 1000;
+    // A clock that steps back gives a negative budget and step; `budget -= step` then zeroes it.
+    const elapsedSeconds = (now - this.#lastTick) / 1000;
     this.#lastTick = now;
     const backlog = this.#received.length - this.#shown;
     const rate = Math.max(this.#baseCps, backlog / this.#catchUpSeconds);
@@ -141,7 +142,7 @@ export class Typewriter {
   }
 
   #maybeComplete(): void {
-    if (!this.#finished || this.#completed || this.#disposed) return;
+    if (!this.#finished || this.#completed) return;
     if (this.#shown < this.#received.length) return;
     this.#completed = true;
     this.#onComplete?.(this.text);

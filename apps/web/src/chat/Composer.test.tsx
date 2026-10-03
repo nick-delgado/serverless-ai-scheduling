@@ -19,6 +19,17 @@ describe("Composer", () => {
     expect(input).toHaveValue("");
   });
 
+  it("doesn't call onSend for blank text, or while responding", async () => {
+    const onSend = vi.fn(() => true);
+    const user = userEvent.setup();
+    const { rerender } = render(<Composer onSend={onSend} responding={false} />);
+    const input = screen.getByRole("textbox", { name: "Message" });
+    await user.type(input, "   {Enter}");
+    rerender(<Composer onSend={onSend} responding />);
+    await user.type(input, "Hi{Enter}");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it("keeps the text when the send is refused", async () => {
     const { user, input } = setup(() => false);
     await user.type(input, "Hi{Enter}");

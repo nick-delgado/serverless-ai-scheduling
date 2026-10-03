@@ -68,9 +68,11 @@ describe("useChat", () => {
 
   it("keeps a greeting the aborted first call of a strict-mode remount would overwrite", async () => {
     let calls = 0;
+    const signals: (AbortSignal | undefined)[] = [];
     const api: ChatApi = {
       getSession(signal) {
         calls += 1;
+        signals.push(signal);
         if (calls === 1) {
           // Rejects only after the second call has resolved.
           return new Promise<SessionResponse>((_, reject) =>
@@ -89,6 +91,7 @@ describe("useChat", () => {
     expect(await within(log()).findByText(SESSIONS.no_upcoming.greeting)).toBeVisible();
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(calls).toBe(2);
+    expect(signals.map((signal) => signal?.aborted)).toEqual([true, false]);
     expect(within(log()).queryByText(FALLBACK_GREETING)).not.toBeInTheDocument();
   });
 });

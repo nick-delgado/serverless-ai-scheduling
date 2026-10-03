@@ -109,10 +109,13 @@ describe("readChatStream", () => {
     await expect(read(chunks())).rejects.toBeInstanceOf(ChatProtocolError);
   });
 
-  it("rejects an event after the terminal one", async () => {
-    await expect(read([encodeStreamEvent(done) + encodeStreamEvent(delta("more"))])).rejects.toThrow(
-      ChatProtocolError,
-    );
+  it("rejects an event after the terminal one, without handing it over", async () => {
+    const seen: ChatStreamEvent[] = [];
+    const body = bodyOf([
+      encodeStreamEvent(done) + encodeStreamEvent(delta("more")) + encodeStreamEvent(error),
+    ]);
+    await expect(readChatStream(body, (event) => seen.push(event))).rejects.toThrow(ChatProtocolError);
+    expect(seen).toEqual([done]);
   });
 
   it.each([

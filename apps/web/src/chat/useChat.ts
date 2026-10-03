@@ -91,7 +91,6 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
     () => () => {
       active.current?.controller.abort();
       active.current?.typewriter.dispose();
-      active.current = null;
     },
     [],
   );
@@ -103,7 +102,8 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
 
       const clientMessageId = crypto.randomUUID();
       const controller = new AbortController();
-      let messageId: string | undefined;
+      // Set by `done`, which is the only way a turn completes.
+      let messageId = "";
       let ended = false;
 
       // `end` runs once per turn. A transport error after the reply completed (the connection drops
@@ -125,10 +125,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         onUpdate: (shown) => setTurn((t) => (t ? { ...t, text: shown } : t)),
         onComplete: (final) => {
           end();
-          setMessages((list) => [
-            ...list,
-            { id: messageId ?? `${clientMessageId}-reply`, role: "assistant", text: final },
-          ]);
+          setMessages((list) => [...list, { id: messageId, role: "assistant", text: final }]);
           setAnnouncement(final);
         },
       });

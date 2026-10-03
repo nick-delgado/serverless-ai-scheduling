@@ -261,8 +261,14 @@ describe("ChatPage: a turn", () => {
 
     sendNow("Hi");
     await until(() => typing() === null);
-    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    // One tick per act(), so each partial render reaches the DOM (one long act commits only the end).
+    const bubbles = new Set<string>();
+    for (let tick = 0; tick < 300; tick += 1) {
+      await act(() => vi.advanceTimersByTimeAsync(16));
+      bubbles.add(screen.getByRole("list", { name: "Conversation" }).lastElementChild?.textContent ?? "");
+    }
     observer.disconnect();
+    expect(bubbles.size).toBeGreaterThan(10); // the reply was typed out in steps meanwhile
     expect(screen.queryByText(REPLIES.plain.text, { selector: "li" })).toBeVisible();
     expect(announced.filter((text) => text.length > 0)).toEqual([REPLIES.plain.text]);
   });

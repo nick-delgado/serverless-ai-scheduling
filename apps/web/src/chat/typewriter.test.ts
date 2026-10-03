@@ -43,6 +43,15 @@ describe("Typewriter", () => {
     expect(typewriter.text).toBe("H");
   });
 
+  it("keeps one pace when more text arrives mid-run", () => {
+    const { typewriter } = make();
+    typewriter.append("a".repeat(10));
+    vi.advanceTimersByTime(50); // 2 ticks, a third due at 60 ms
+    typewriter.append("b".repeat(10));
+    vi.advanceTimersByTime(50);
+    expect(typewriter.text).toHaveLength(5);
+  });
+
   it("types at a constant base pace while the backlog is small", () => {
     const { typewriter } = make();
     typewriter.append("a".repeat(30));
@@ -95,7 +104,7 @@ describe("Typewriter", () => {
     expect(typewriter.text).toHaveLength(11);
   });
 
-  it("treats a clock that steps backwards as no time passing", () => {
+  it("doesn't stall after the clock steps backwards", () => {
     let now = 1_000;
     const { typewriter } = make({ now: () => now });
     typewriter.append("a".repeat(10));
@@ -249,7 +258,6 @@ describe("Typewriter", () => {
   it("stops typing and calls nothing after dispose()", () => {
     const { typewriter, updates, onComplete } = make();
     typewriter.append("abcdef");
-    typewriter.finish();
     vi.advanceTimersByTime(40);
     typewriter.dispose();
     const count = updates.length;
