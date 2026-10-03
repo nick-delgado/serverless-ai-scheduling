@@ -11,6 +11,7 @@ import { formatClinicDateTime } from "@sched/tools";
 
 import type { Scenario } from "../schema";
 import type { TranscriptEvent } from "../transcript";
+import type { RejectedReply } from "./types";
 
 /** Why the simulated patient ends the conversation (ADR-008 stop conditions; `max_turns` is the runner's). */
 export const SIMULATOR_STOP_REASONS = ["goal_achieved", "gave_up", "escalated"] as const;
@@ -87,7 +88,7 @@ export function simulatorUserMessage(
   events: readonly TranscriptEvent[],
   turn: number,
   maxTurns: number,
-  rejected: readonly { reply: string; problems: readonly string[] }[] = [],
+  rejected: readonly RejectedReply[] = [],
 ): string {
   const parts = [
     `<conversation>\n${renderTranscript(events)}\n</conversation>`,

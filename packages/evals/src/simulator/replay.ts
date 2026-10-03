@@ -12,21 +12,12 @@
 import { z } from "zod";
 
 import {
+  RecordedSimulatorTurn,
   SimulatorError,
   type PatientSimulator,
-  type RecordedSimulatorTurn,
   type SimulatorContext,
   type SimulatorTurn,
 } from "./types";
-
-/** One `RecordedSimulatorTurn`. */
-const RecordedTurn = z.intersection(
-  z.object({
-    turn: z.number().int().positive(),
-    rejected: z.array(z.object({ reply: z.string(), problems: z.array(z.string()) })).optional(),
-  }),
-  z.union([z.object({ message: z.string() }), z.object({ stop: z.string() })]),
-);
 
 /**
  * The part of a results file (`RunReport`) a replay reads. Trials without `simulatorTurns` (L1 trials)
@@ -40,7 +31,7 @@ export const ReplaySource = z.object({
       trials: z.array(
         z.object({
           trial: z.number().int().positive(),
-          simulatorTurns: z.array(RecordedTurn).optional(),
+          simulatorTurns: z.array(RecordedSimulatorTurn).optional(),
         }),
       ),
     }),
