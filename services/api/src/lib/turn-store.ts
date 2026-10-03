@@ -45,7 +45,10 @@ export function createInMemoryTurnStore(): InMemoryTurnStore {
       if (traces.some((t) => t.trace.turnId === trace.turnId)) {
         return Promise.reject(new Error(`Trace for turn ${trace.turnId} already stored`));
       }
-      traces.push({ patientId, trace: structuredClone(TurnTrace.parse(trace)) });
+      // Reject, don't throw: callers see the same failure shape as the DynamoDB store's.
+      const parsed = TurnTrace.safeParse(trace);
+      if (!parsed.success) return Promise.reject(parsed.error);
+      traces.push({ patientId, trace: structuredClone(parsed.data) });
       return Promise.resolve();
     },
   };
