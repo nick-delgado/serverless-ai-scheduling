@@ -22,22 +22,22 @@ This is a one-page overview; each part links to the ADR that decided it. It will
                     │ API Gateway REST API (Regional)            │
                     │  Cognito User Pool authorizer (ADR-005)    │
                     │  POST /api/chat   (response streaming)     │
-                    │  POST /api/session (greeting + history)    │
-                    └───────────┬────────────────────────────────┘
-                                ▼
-                    ┌────────────────────────────────────────────┐
-                    │ ChatFn (Lambda, Node 24, streamifyResponse)│
-                    │  runAgentTurn()  — packages/agent (ADR-001)│
-                    │   ├─ LlmClient → Claude on Bedrock (ADR-002)│
-                    │   └─ ToolRegistry — packages/tools         │
-                    │       find_providers · check_availability  │
-                    │       get_my_appointments · get_patient_profile
-                    │       book_appointment · reschedule_appointment
-                    │       escalate_to_human ──► Amazon SES     │
-                    └───────────┬────────────────────────────────┘
-                                ▼
-                    ┌────────────────────────────────────────────┐
-                    │ DynamoDB single table (ADR-004)            │
+                    │  POST /api/session (greeting + history)    ├───────────────────┐
+                    └───────────┬────────────────────────────────┘                   │
+                                ▼ POST /api/chat                                     ▼
+                    ┌────────────────────────────────────────────┐    ┌──────────────────────────────┐
+                    │ ChatFn (Lambda, Node 24, streamifyResponse)│    │ SessionFn (Lambda, Node 24)  │
+                    │  runAgentTurn()  — packages/agent (ADR-001)│    │  JSON greeting + restore     │
+                    │   ├─ LlmClient → Claude on Bedrock (ADR-002)│   │  DynamoDB GetItem · Query    │
+                    │   └─ ToolRegistry — packages/tools         │    │  no Bedrock                  │
+                    │       find_providers · check_availability  │    └──────────────┬───────────────┘
+                    │       get_my_appointments · get_patient_profile                │
+                    │       book_appointment · reschedule_appointment                │
+                    │       escalate_to_human ──► Amazon SES     │                   │
+                    └───────────┬────────────────────────────────┘                   │
+                                ▼                                                    │
+                    ┌────────────────────────────────────────────┐                   │
+                    │ DynamoDB single table (ADR-004)            │◄──────────────────┘
                     │  patients · providers · slots (sparse GSI) │
                     │  appointments · conversations · escalations│
                     └────────────────────────────────────────────┘

@@ -217,7 +217,7 @@ Streams S1–S8: auth, data, agent, tools, chat UI, voice, evals, escalation.
 | [#15](https://github.com/nick-delgado/serverless-ai-scheduling/issues/15) | S3-01 | Agent loop, LlmClient (Bedrock Mantle), model profiles, scripted fake | agent | feature | FR-035, FR-051 | #4 |
 | [#16](https://github.com/nick-delgado/serverless-ai-scheduling/issues/16) | S3-02 | System prompt v1 and agent behavior policy | agent | feature | FR-030–FR-037, PRD §5 | #4 |
 | [#17](https://github.com/nick-delgado/serverless-ai-scheduling/issues/17) | S3-03 | Chat streaming Lambda handler (POST /api/chat) | agent | feature | FR-011–FR-013, FR-015, FR-051, NFR-007 | #15, #13, #7 |
-| [#18](https://github.com/nick-delgado/serverless-ai-scheduling/issues/18) | S3-04 | Session endpoint: personalized greeting + conversation restore (GET /api/session) | agent | feature | FR-010, FR-014 | #13, #7 |
+| [#18](https://github.com/nick-delgado/serverless-ai-scheduling/issues/18) | S3-04 | Session endpoint: personalized greeting + conversation restore (POST /api/session) | agent | feature | FR-010, FR-014 | #13, #7 |
 | [#19](https://github.com/nick-delgado/serverless-ai-scheduling/issues/19) | S4-01 | Tools: find_providers and check_availability | tools | feature | FR-030 | #4, #5, #11 |
 | [#20](https://github.com/nick-delgado/serverless-ai-scheduling/issues/20) | S4-02 | Tools: get_my_appointments and get_patient_profile | tools | feature | FR-033, FR-037 | #4, #5, #11 |
 | [#21](https://github.com/nick-delgado/serverless-ai-scheduling/issues/21) | S4-03 | Tool: book_appointment (transactional, idempotent) | tools | feature | FR-031, FR-035, NFR-008 | #4, #5, #11 |
