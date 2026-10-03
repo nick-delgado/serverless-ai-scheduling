@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  sched-<env>-auth: Cognito User Pool + SPA app client (ADR-005). Skeleton from M1-04 (#6);
-  S1-01 (#12) adds the Identity Pool, the Transcribe-only role, and demo-user seeding.
+  sched-<env>-auth: Cognito User Pool + SPA app client (ADR-005), and an Identity Pool whose
+  authenticated role can only open Transcribe streaming WebSockets (ADR-006). Demo users are seeded
+  by scripts/seed-users.ts, not by this template, so no password lives here (ADR-003).
 
 Parameters:
   Env:
@@ -13,6 +14,10 @@ Parameters:
     Default: enabled
     AllowedValues: [enabled, disabled]
     Description: Protects the user pool. Redeploy with "disabled" before a deliberate teardown.
+  PermissionsBoundaryArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /sched/bootstrap/permissions-boundary-arn
+    Description: Ceiling for every IAM role this stack creates (sam-deploy rule 1).
 
 Conditions:
   Protect: !Equals [!Ref DeletionProtection, enabled]
@@ -45,6 +50,9 @@ Resources:
         project: sched
         env: !Ref Env
 
+  # Token lifetimes (ADR-005, FR-003): ID and access tokens last 60 minutes and the SPA renews them
+  # silently with the refresh token, which lasts 7 days. After 7 days the patient signs in again.
+  # Revocation is on, so signing out (RevokeToken) invalidates the refresh token server-side.
   SpaClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
@@ -63,6 +71,61 @@ Resources:
         AccessToken: minutes
         IdToken: minutes
         RefreshToken: days
+
+  # --- Browser credentials for voice (ADR-006) -------------------------------------------------
+  # The SPA exchanges a patient's User Pool ID token for temporary AWS credentials that can do one
+  # thing: open a Transcribe streaming WebSocket. Guests (unauthenticated identities) get nothing.
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      # Identity pool names allow only word characters and spaces, and Env may contain hyphens.
+      IdentityPoolName: !Join ["_", !Split ["-", !Sub "sched-${Env}-patients"]]
+      AllowUnauthenticatedIdentities: false
+      AllowClassicFlow: false # enhanced flow only: Cognito picks the role, the browser can't ask for one
+      CognitoIdentityProviders:
+        - ProviderName: !GetAtt UserPool.ProviderName
+          ClientId: !Ref SpaClient
+          ServerSideTokenCheck: true # a signed-out or revoked user can't mint credentials
+      IdentityPoolTags:
+        - { Key: project, Value: sched }
+        - { Key: env, Value: !Ref Env }
+
+  TranscribeBrowserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed via the Cognito Identity Pool by signed-in patients; Transcribe streaming only.
+      PermissionsBoundary: !Ref PermissionsBoundaryArn
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Federated: cognito-identity.amazonaws.com }
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: authenticated
+      Policies:
+        - PolicyName: transcribe-streaming-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Transcribe streaming has no resource-level permissions, so "*" is the only option.
+              - Effect: Allow
+                Action: transcribe:StartStreamTranscriptionWebSocket
+                Resource: "*"
+      Tags:
+        - { Key: project, Value: sched }
+        - { Key: env, Value: !Ref Env }
+
+  IdentityPoolRoles:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt TranscribeBrowserRole.Arn
 
   UserPoolIdParam:
     Type: AWS::SSM::Parameter
@@ -85,8 +148,17 @@ Resources:
       Type: String
       Value: !Ref SpaClient
 
+  IdentityPoolIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/auth/identity-pool-id
+      Type: String
+      Value: !Ref IdentityPool
+
 Outputs:
   UserPoolId:
     Value: !Ref UserPool
   SpaClientId:
     Value: !Ref SpaClient
+  IdentityPoolId:
+    Value: !Ref IdentityPool

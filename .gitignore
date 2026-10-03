@@ -13,6 +13,8 @@ coverage/
 .env
 .env.*
 !.env.example
+# seed-script output: Cognito sub mappings (scripts/seed-users.ts)
+.seed/
 
 # eval run outputs (baselines are committed under packages/evals/baselines/)
 packages/evals/results/
