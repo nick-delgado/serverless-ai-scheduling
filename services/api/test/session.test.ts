@@ -285,6 +285,20 @@ describe("restore", () => {
     expect(res.statusCode).toBe(200);
     expect(started.slice(3).sort()).toEqual(["messages", "provider"]);
   });
+  it("answers 500, not a contract-breaking body, when a stored message can't be displayed", async () => {
+    const { deps, repos, logs } = setup();
+    const CONV = "00000000-0000-4000-8000-00000000e002";
+    await chat(repos, MARIA, CONV, 0, "2026-10-05T10:00:00.000Z", "Hi", "Hello");
+    const conversations = {
+      ...repos.conversations,
+      listMessages: async (p: PatientId, c: string) =>
+        (await repos.conversations.listMessages(p, c)).map((m) => ({ ...m, createdAt: "yesterday" })),
+    };
+    const { res, json } = await session({ ...deps, repos: { ...repos, conversations } });
+    expect(res.statusCode).toBe(500);
+    expect(ApiError.parse(json).error.code).toBe("INTERNAL");
+    expect(logs[0]).toMatchObject({ msg: "session failed", errorName: "ZodError" });
+  });
 });
 
 describe("request", () => {
@@ -354,7 +368,7 @@ describe("logging", () => {
     await chat(repos, MARIA, CONV, 0, "2026-10-05T10:00:00.000Z", "My knee hurts", "Sorry to hear that");
     let t = 100;
     await ok({ ...deps, monotonicNow: () => (t += 7) });
-    expect(logs).toEqual([
+    expect(logs.slice(0, 1)).toEqual([
       {
         msg: "session",
         requestId: "req-1",
@@ -366,6 +380,11 @@ describe("logging", () => {
         totalMs: 7,
       },
     ]);
+    // Without an injected monotonic clock, timings come from performance.now.
+    await ok(deps);
+    expect(logs).toHaveLength(2);
+    expect(logs.at(-1)?.totalMs).toEqual(expect.any(Number));
+    expect(Number.isFinite(logs.at(-1)?.totalMs)).toBe(true);
     const text = JSON.stringify(logs);
     for (const secret of ["Maria", "knee", "Sorry", "Lee"]) expect(text).not.toContain(secret);
   });

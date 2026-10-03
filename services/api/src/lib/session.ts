@@ -92,7 +92,7 @@ export async function handleSession(input: SessionInput, deps: SessionDeps): Pro
     requestId: input.requestId,
     status: result.statusCode,
     ...facts,
-    totalMs: Math.max(0, Math.round(now() - t0)),
+    totalMs: Math.round(now() - t0),
   });
   return result;
 }
@@ -110,13 +110,13 @@ async function buildSession(
   ]);
   const next = nextUpcomingAppointment(appointments, clock.now());
 
+  const newestId = newest?.conversationId ?? null;
   const [upcoming, stored] = await Promise.all([
     upcomingWithProvider(deps, next),
-    newest === undefined ? [] : repos.conversations.listMessages(patientId, newest.conversationId),
+    newestId === null ? [] : repos.conversations.listMessages(patientId, newestId),
   ]);
   // Empty when the messages have expired (TTL): nothing to restore, and nothing to continue.
-  const conversationId: ConversationId | null =
-    newest !== undefined && stored.length > 0 ? newest.conversationId : null;
+  const conversationId: ConversationId | null = stored.length > 0 ? newestId : null;
   const messages = toDisplayMessages(stored);
 
   Object.assign(facts, {
