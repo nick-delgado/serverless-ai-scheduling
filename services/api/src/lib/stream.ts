@@ -7,7 +7,7 @@
  */
 import { finished } from "node:stream/promises";
 
-import { encodeStreamEvent, type ChatStreamEvent } from "@sched/contracts";
+import { encodeStreamEvent, parseStreamEventLine, type ChatStreamEvent } from "@sched/contracts";
 
 /** Where events go. The Lambda wraps `awslambda.HttpResponseStream`; tests and evals use `memorySink`. */
 export interface EventSink {
@@ -70,10 +70,13 @@ export function memorySink(): { sink: EventSink; response: CapturedResponse } {
     write(chunk) {
       if (response.status === undefined) throw new Error("write before open");
       if (response.ended) throw new Error("write after end");
+      // Parsed against the contract, so a line that breaks it fails the write instead of being captured.
+      const events = chunk
+        .split("\n")
+        .filter((line) => line.trim())
+        .map(parseStreamEventLine);
       response.body += chunk;
-      for (const line of chunk.split("\n")) {
-        if (line.trim()) response.events.push(JSON.parse(line) as ChatStreamEvent);
-      }
+      response.events.push(...events);
     },
     end() {
       response.ended = true;

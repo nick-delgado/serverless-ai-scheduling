@@ -15,9 +15,11 @@ import {
 } from "@sched/agent";
 import { isTerminalEvent, visibleText, type ConversationMessage, type PatientId } from "@sched/contracts";
 import {
+  ConversationAppendError,
   FrozenClock,
   RecordingNotifier,
   createInMemoryRepositories,
+  formatClinicDateTime,
   type InMemoryRepositories,
 } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
@@ -37,6 +39,8 @@ const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
 const WALTER = FIXTURE_PATIENT_IDS["pat-walter"];
 const NOW = "2026-10-05T13:00:00Z"; // Monday 9:00 AM ET
 const CLIENT_MESSAGE_ID = "5b8e2c1a-7d6f-4e3b-9a1c-2d3e4f5a6b7c";
+/** A valid patient ID with no profile in the fixture. */
+const NO_PROFILE = "9d1e4b7a-2c3f-4a5b-8e6d-1f2a3b4c5d6e";
 
 function uuidSequence(): () => string {
   let n = 0;
@@ -162,6 +166,7 @@ describe("handleChatTurn: happy paths", () => {
 
     const conversationId = idOf(summary);
     expect(done?.type === "done" && done.conversationId).toBe(conversationId);
+    expect(summary.conversationReplaced).toBe(false);
     const stored = await messagesOf(w.repos, MARIA, conversationId);
     expect(stored.map((m) => [m.seq, m.role, textOf(m)])).toEqual([
       [0, "user", "Hello"],
@@ -177,12 +182,24 @@ describe("handleChatTurn: happy paths", () => {
     expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
   });
 
-  it("passes the patient's first name and the clinic time to the system prompt", async () => {
+  const systemOf = (w: World): string | undefined =>
+    w.llm.requests[0]?.system.map((b) => ("text" in b ? b.text : "")).join("\n");
+
+  it("passes the patient's first name and the injected clock's time, in clinic time, to the system prompt", async () => {
     const w = world({ steps: [scriptedText("Hi!")] });
     await w.send("Hello");
-    const system = w.llm.requests[0]?.system.map((b) => ("text" in b ? b.text : "")).join("\n");
+    const system = systemOf(w);
     expect(system).toContain("first name is Maria");
-    expect(system).toContain("2026");
+    // The frozen instant rendered in Eastern Time (9:00 AM), not the wall clock and not UTC (1:00 PM).
+    expect(system).toContain(`Current time: ${formatClinicDateTime(new Date(NOW))}`);
+  });
+
+  it("leaves the first name out of the prompt for a patient with no profile on file", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const { response } = await w.send("Hello", { patientId: NO_PROFILE });
+    expect(response.events.at(-1)?.type).toBe("done");
+    expect(systemOf(w)).toContain("Current time:");
+    expect(systemOf(w)).not.toContain("first name is");
   });
 
   it("runs tools, streams their status, and stores the tool messages verbatim", async () => {
@@ -403,6 +420,9 @@ describe("handleChatTurn: rejections before the agent runs", () => {
 
     // Another patient has their own budget.
     expect((await w.send("hi", { patientId: WALTER })).response.status).toBe(200);
+    // 02:00 UTC on the 6th is still 10 PM on the 5th in Eastern Time: the same clinic day, still capped.
+    w.clock.set("2026-10-06T02:00:00Z");
+    expect((await w.send("late")).response.status).toBe(429);
     // The next clinic day starts fresh (04:00 UTC is midnight ET in October).
     w.clock.set("2026-10-06T04:00:00Z");
     expect((await w.send("four")).response.status).toBe(200);
@@ -538,6 +558,54 @@ describe("handleChatTurn: failures", () => {
     expect(response.events.at(-1)).toMatchObject({ type: "error", code: "INTERNAL" });
   });
 
+  it("answers a conflict, not INTERNAL, when another turn wins the race to store the reply", async () => {
+    const w = world({ steps: [scriptedText("Booked!")] });
+    const append = w.repos.conversations.append.bind(w.repos.conversations);
+    let calls = 0;
+    w.deps.repos = {
+      ...w.repos,
+      conversations: {
+        ...w.repos.conversations,
+        append: (p, m) =>
+          ++calls === 1
+            ? append(p, m)
+            : Promise.reject(new ConversationAppendError("SEQ_CONFLICT", defined(m[0]).conversationId, 1)),
+      },
+    };
+    const { response } = await w.send("Hello");
+    expectWellFormed(response);
+    expect(response.events.at(-1)).toMatchObject({
+      type: "error",
+      code: "AGENT_UNAVAILABLE",
+      retryable: true,
+    });
+  });
+
+  it("still resolves and ends the stream when writing to the client throws", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const { sink, response } = memorySink();
+    let writes = 0;
+    const broken = {
+      ...sink,
+      write: () => {
+        writes += 1;
+        throw new Error("client went away");
+      },
+    };
+    const summary = await handleChatTurn(
+      {
+        body: JSON.stringify({ clientMessageId: CLIENT_MESSAGE_ID, text: "Hello" }),
+        patientId: MARIA,
+        requestId: "r",
+      },
+      w.deps,
+      broken,
+    );
+    expect(writes).toBeGreaterThan(0);
+    expect(response.ended).toBe(true);
+    expect(summary.terminal).toBe("error");
+  });
+
   it("answers INTERNAL when a repository throws, and still ends the stream", async () => {
     const w = world({ steps: [scriptedText("Hi!")] });
     w.deps.repos = {
@@ -560,6 +628,46 @@ describe("handleChatTurn: failures", () => {
 });
 
 describe("handleChatTurn: logging", () => {
+  it("logs the turn's timings from the injected monotonic clock", async () => {
+    let t = 0;
+    const w = world({
+      steps: [
+        scriptedToolUse([{ id: "tu_1", name: "find_providers", input: { name_query: "Lee" } }]),
+        scriptedText("Dr. Lee is in family medicine."),
+      ],
+      // Every reading is 10 ms after the last, so each timing is a distinct positive number.
+      overrides: { monotonicNow: () => (t += 10) },
+    });
+    await w.send("Who is Dr. Lee?");
+    const turnLog = defined(w.logs.find((l) => l.msg === "chat turn"));
+    const { firstEventMs, firstTextMs, totalMs } = turnLog;
+
+    expect(typeof firstEventMs).toBe("number");
+    expect(typeof firstTextMs).toBe("number");
+    expect(typeof totalMs).toBe("number");
+    // The status event goes out before the first text, and both before the turn ends.
+    expect(firstEventMs as number).toBeGreaterThan(0);
+    expect(firstTextMs as number).toBeGreaterThan(firstEventMs as number);
+    expect(totalMs as number).toBeGreaterThan(firstTextMs as number);
+    expect(turnLog.llmCalls).toEqual([
+      expect.objectContaining({ durationMs: expect.any(Number) as unknown }),
+      expect.objectContaining({ durationMs: expect.any(Number) as unknown }),
+    ]);
+  });
+
+  it("logs a tool name the model made up as <unknown>, since it can carry patient text", async () => {
+    const w = world({
+      steps: [
+        scriptedToolUse([{ id: "tu_z", name: "lookup_zebra_unicorn_rash", input: {} }]),
+        scriptedText("Sorry, I can't do that."),
+      ],
+    });
+    await w.send("Hello");
+    const turnLog = w.logs.find((l) => l.msg === "chat turn");
+    expect(turnLog?.tools).toEqual([expect.objectContaining({ name: "<unknown>", ok: false })]);
+    expect(JSON.stringify(w.logs)).not.toMatch(/zebra|unicorn/);
+  });
+
   it("logs IDs, timings and tokens, but no message text or tool inputs", async () => {
     const w = world({
       steps: [
