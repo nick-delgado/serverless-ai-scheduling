@@ -27,3 +27,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-02 | [The patient ID is a `sub` Cognito picks, so seeding users comes before seeding profiles](2026-10-02-the-patient-id-is-a-sub-cognito-picks.md) | 4. Teaching the agent to schedule |
 | 2026-10-02 | [The mock API waits like the real one: no response headers until the first event](2026-10-02-the-mock-api-waits-like-the-real-one.md) | 4. Teaching the agent to schedule |
 | 2026-10-02 | [The first real Cognito sub wasn't a UUID, and every live chat turn was a 401](2026-10-02-the-first-real-sub-was-not-a-uuid.md) | 4. Teaching the agent to schedule |
+| 2026-10-02 | [A timing test measured the reader, not the mock](2026-10-02-a-timing-test-measured-the-reader.md) | 4. Teaching the agent to schedule |
