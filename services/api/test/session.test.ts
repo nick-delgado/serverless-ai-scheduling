@@ -144,6 +144,7 @@ describe("greeting", () => {
     expect(res.statusCode).toBe(500);
     expect(ApiError.parse(json).error.code).toBe("INTERNAL");
     expect(logs.map((l) => l.msg)).toEqual(["session failed", "session"]);
+    expect(logs[0]).toMatchObject({ errorMessage: "Appointment references unknown provider prov_lee" });
     expect(logs.at(-1)).toMatchObject({ status: 500, requestId: "req-1" });
   });
 });
@@ -203,6 +204,10 @@ describe("restore", () => {
       ["listConversations", MARIA, { limit: 1 }],
       ["listMessages", MARIA, CONV],
     ]);
+    // No conversation: nothing to read beyond the (empty) list.
+    calls.length = 0;
+    await ok({ ...deps, repos: { ...repos, conversations } }, AISHA);
+    expect(calls).toEqual([["listConversations", AISHA, { limit: 1 }]]);
   });
 
   it("restores nothing when the newest conversation's messages have expired", async () => {
@@ -251,10 +256,16 @@ describe("restore", () => {
       "Hello",
     );
     const started: string[] = [];
-    let release!: () => void;
-    const gate = new Promise<void>((r) => (release = r));
+    // Each read waits for its round's gate, so a read that only starts after another finishes shows up.
+    const round = (): { open: () => void; gate: Promise<void> } => {
+      let open!: () => void;
+      const gate = new Promise<void>((r) => (open = r));
+      return { open, gate };
+    };
+    const first = round();
+    const second = round();
     const gated =
-      <A extends unknown[], R>(name: string, fn: (...a: A) => Promise<R>) =>
+      <A extends unknown[], R>(name: string, fn: (...a: A) => Promise<R>, gate: Promise<void>) =>
       async (...a: A): Promise<R> => {
         started.push(name);
         await gate;
@@ -262,16 +273,16 @@ describe("restore", () => {
       };
     const wrapped = {
       ...repos,
-      patients: { get: gated("profile", repos.patients.get) },
+      patients: { get: gated("profile", repos.patients.get, first.gate) },
       appointments: {
         ...repos.appointments,
-        listForPatient: gated("appointments", repos.appointments.listForPatient),
+        listForPatient: gated("appointments", repos.appointments.listForPatient, first.gate),
       },
-      providers: { ...repos.providers, get: gated("provider", repos.providers.get) },
+      providers: { ...repos.providers, get: gated("provider", repos.providers.get, second.gate) },
       conversations: {
         ...repos.conversations,
-        listConversations: gated("conversations", repos.conversations.listConversations),
-        listMessages: gated("messages", repos.conversations.listMessages),
+        listConversations: gated("conversations", repos.conversations.listConversations, first.gate),
+        listMessages: gated("messages", repos.conversations.listMessages, second.gate),
       },
     };
     const pending = handleSession(
@@ -280,10 +291,11 @@ describe("restore", () => {
     );
     await new Promise((r) => setTimeout(r, 0));
     expect(started).toEqual(["profile", "appointments", "conversations"]);
-    release();
-    const res = await pending;
-    expect(res.statusCode).toBe(200);
+    first.open();
+    await new Promise((r) => setTimeout(r, 0));
     expect(started.slice(3).sort()).toEqual(["messages", "provider"]);
+    second.open();
+    expect((await pending).statusCode).toBe(200);
   });
   it("answers 500, not a contract-breaking body, when a stored message can't be displayed", async () => {
     const { deps, repos, logs } = setup();
