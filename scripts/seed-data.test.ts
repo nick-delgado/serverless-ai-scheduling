@@ -39,6 +39,7 @@ import {
   resetConfirmed,
   runCli,
   seedData,
+  ssmClientFor,
   ssmParamFrom,
 } from "./seed-data";
 import type { UserMapping } from "./seed-users";
@@ -251,6 +252,17 @@ describe("ssmParamFrom", () => {
       "SSM /sched/dev/auth/user-pool-id is empty",
     );
     await expect(param("dev", "none")).rejects.toThrow("SSM /sched/dev/none is empty");
+  });
+});
+
+describe("ssmClientFor", () => {
+  it("builds an SSM client for the given region", async () => {
+    const ssm = ssmClientFor("eu-west-1");
+    try {
+      expect(await ssm.config.region()).toBe("eu-west-1");
+    } finally {
+      ssm.destroy();
+    }
   });
 });
 

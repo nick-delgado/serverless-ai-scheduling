@@ -365,7 +365,7 @@ export interface CliDeps {
   /** Prompts on the terminal; absent when there is none. */
   ask?: (question: string) => Promise<string>;
   now?: Date;
-  /** The SSM client for `region` (default: a real `SSMClient`). */
+  /** The SSM client for `region` (default: `ssmClientFor`). */
   ssmClient?: (region: string) => Pick<SSMClient, "send">;
   /** The DynamoDB client for `region` and the local endpoint, if any (default: `dynamoClientFor`). */
   dynamoClient?: (region: string, endpoint: string | undefined) => DynamoDBClient;
@@ -378,6 +378,10 @@ export function ssmParamFrom(ssm: Pick<SSMClient, "send">): (env: string, name: 
     if (!out.Parameter?.Value) throw new Error(`SSM /sched/${env}/${name} is empty`);
     return out.Parameter.Value;
   };
+}
+
+export function ssmClientFor(region: string): SSMClient {
+  return new SSMClient({ region });
 }
 
 export function dynamoClientFor(region: string, endpoint: string | undefined): DynamoDBClient {
@@ -410,7 +414,7 @@ export async function runCli(
     if (!args.table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
     table = args.table;
   } else {
-    const param = ssmParamFrom((deps.ssmClient ?? ((r) => new SSMClient({ region: r })))(region));
+    const param = ssmParamFrom((deps.ssmClient ?? ssmClientFor)(region));
     table = args.table ?? (await param(args.env, "data/table-name"));
     userPoolId = await param(args.env, "auth/user-pool-id");
   }
