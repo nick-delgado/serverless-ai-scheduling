@@ -1,3 +1,5 @@
+// These helpers run under Vitest in Node, and `until` needs its real `setImmediate`.
+/// <reference types="node" />
 /**
  * Test helpers for the chat page. Timing tests here follow docs/journal/2026-10-02: fake time for the
  * typewriter, and no assertion on how long real I/O takes.
