@@ -14,7 +14,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Checkable statements. Each one should be verifiable by a command, test, or observation. Cite limits by their contracts constant (`LIMITS.…`), and say what happens for empty, past, conflicting or missing input, or write "agent decides; list in the PR".
+      description: Checkable statements. Each one should be verifiable by a command, test, or observation. Cite limits by their contracts constant (`LIMITS.…`), and say what happens for empty, past, conflicting or missing input, or write "agent decides; list in the PR". When the task applies an owner's decision, name each field, table entry and doc line the decision makes stale, or write the same.
       value: |
         - [ ]
     validations:
@@ -23,7 +23,7 @@ body:
     id: owned_paths
     attributes:
       label: Owned paths
-      description: Files/directories this task may create or modify. Anything else needs a callout in the PR.
+      description: Whole files or directories this task may create or modify, never line numbers. Check them against each acceptance criterion and the definition-of-done evidence, such as the runner, CLI or eval wiring that calls the new code. Anything else needs a callout in the PR.
     validations:
       required: true
   - type: textarea

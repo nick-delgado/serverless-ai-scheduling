@@ -75,7 +75,8 @@ Worktrees let several agents build and test at the same time without stepping on
 
 - Only modify the paths the issue lists. Shared files (root `package.json`, `tsconfig`, `packages/contracts`) sometimes need small edits. Keep those minimal and **call them out in the PR**. A schema change in `packages/contracts` affects every stream.
 - If the work clearly needs files outside your paths, comment on the issue and ask the user instead of expanding scope.
-- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke.
+- Before adding a constant, type, schema or helper, search for an existing one (`git grep`) and import it. If it lives where you can't import it, or outside your paths, say so in the PR instead of copying it silently.
+- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke. Do the same when a decision lands in your own PR (a PRD edit, a changed message or rule): search for the old wording and update every restatement (journal entry, code comments, docs), listing any outside your paths in the PR.
 - Commit in small, meaningful steps using Conventional Commits that reference the issue, e.g. `feat(tools): add book_appointment transaction (#23)`. End commit messages with the attribution lines from the session's system reminder, if there are any.
 
 ## 6. Prove it's done
