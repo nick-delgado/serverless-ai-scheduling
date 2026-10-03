@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 
-import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient } from "@sched/agent";
+import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -150,6 +150,17 @@ describe("simulatorSetup (8bea70b/TEST-6)", () => {
     const setup = simulatorSetup({ mode: "scenario", simulatorProfile: simProfile }, deps());
     expect(setup).toMatchObject({ kind: "llm", profile: simProfile });
     expect(setup.simulator?.name).toBe("llm:haiku-4.5:sim.v1");
+  });
+
+  it("builds the LLM simulator on the client it is given, so it shares that client's rate limit (5765869/TEST-201)", async () => {
+    const llm = new ScriptedLlmClient([scriptedText("need a derm appt next week")]);
+    const setup = simulatorSetup(
+      { mode: "scenario", simulatorProfile: simProfile },
+      { llm, readReplay: () => ({ cases: [] }) },
+    );
+    const book = scenario("book-derm-next-week-afternoon");
+    await setup.simulator?.next({ scenario: book, trial: 1, events: [], turn: 1, lastAssistantText: "" });
+    expect(llm.requests.map((r) => r.modelId)).toEqual([simProfile.modelId]);
   });
 
   it("--replay reads that file and replays it, with no simulator profile in the estimate", () => {

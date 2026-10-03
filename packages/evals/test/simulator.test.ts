@@ -9,6 +9,7 @@ import {
   ScriptedLlmClient,
   scriptedMaxTokens,
   scriptedText,
+  type ModelProfile,
 } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
@@ -60,6 +61,20 @@ const ctx = (over: Partial<SimulatorContext> = {}): SimulatorContext => ({
 });
 const sim = (llm: ScriptedLlmClient, extra: { maxAttempts?: number; turnsAfterEscalation?: number } = {}) =>
   new LlmPatientSimulator({ llm, profile: SIM_PROFILE, ...extra });
+
+/**
+ * A trial of `BOOK` with the scripted agent, on the good booking flow unless
+ * `agentSteps` says otherwise, and the given simulator.
+ */
+const scriptedTrial = (
+  simulator: PatientSimulator,
+  over: { agentSteps?: ConstructorParameters<typeof ScriptedLlmClient>[0]; trial?: number } = {},
+) =>
+  runScenarioTrial(BOOK, {
+    ...(over.trial === undefined ? {} : { trial: over.trial }),
+    agent: { llm: new ScriptedLlmClient(over.agentSteps ?? goodBookingSteps()), profile: SCRIPTED_PROFILE },
+    simulator,
+  });
 
 describe("simulator prompt", () => {
   const prompt = simulatorSystemPrompt(BOOK);
@@ -267,6 +282,29 @@ describe("LlmPatientSimulator", () => {
     expect(userText(req)).toContain("patient turn 1 of at most 12");
   });
 
+  it("sends its profile's family, maxTokens, modelFields and inline reasoning tag (5765869/TEST-101)", async () => {
+    const request = async (profile: ModelProfile) => {
+      const llm = new ScriptedLlmClient([scriptedText("need a derm appt next week")]);
+      await new LlmPatientSimulator({ llm, profile }).next(ctx({ turn: 1 }));
+      return llm.requests[0];
+    };
+    const gptOss = await request(MODEL_PROFILES["gpt-oss-20b"]);
+    expect(gptOss).toMatchObject({
+      modelId: "openai.gpt-oss-20b-1:0",
+      family: "openai.gpt-oss",
+      maxTokens: 8000,
+      modelFields: { reasoning_effort: "low" },
+      inlineReasoningTag: "reasoning",
+    });
+    // The tag comes from the profile, not a constant: a made-up tag goes through as it is.
+    const otherTag = await request({ ...MODEL_PROFILES["gpt-oss-20b"], inlineReasoningTag: "think" });
+    expect(otherTag?.inlineReasoningTag).toBe("think");
+    const haiku = await request(MODEL_PROFILES["haiku-4.5"]);
+    expect(haiku).toMatchObject({ family: "anthropic.claude", maxTokens: 4000, modelFields: {} });
+    expect(haiku?.modelFields).toEqual({});
+    expect(haiku !== undefined && "inlineReasoningTag" in haiku).toBe(false);
+  });
+
   it("shows the model the visible conversation so far", async () => {
     const llm = new ScriptedLlmClient([scriptedText("the 2:00 one")]);
     await sim(llm).next(
@@ -392,10 +430,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
 
   it("an unscripted scenario runs (no skip) and ends on the patient's stop", async () => {
     const simLlm = new ScriptedLlmClient(simSteps());
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: sim(simLlm),
-    });
+    const r = await scriptedTrial(sim(simLlm));
     expect(r.status).toBe("pass");
     expect(r).toMatchObject({ stoppedBecause: "goal_achieved", simulator: "llm:haiku-4.5:sim.v1", turns: 3 });
     expect(r.simulatorTurns).toEqual([
@@ -406,10 +441,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
 
   it("records the replies the guards rejected next to the turn they preceded", async () => {
     const simLlm = new ScriptedLlmClient([scriptedText(BOOK.goal), ...simSteps()]);
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: sim(simLlm),
-    });
+    const r = await scriptedTrial(sim(simLlm));
     expect(r.simulatorTurns[0]).toEqual({
       turn: 1,
       message: BOOKING_PATIENT[0],
@@ -425,10 +457,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
     const steps = simSteps();
     const stop = steps.pop();
     if (stop === undefined) throw new Error("missing stop");
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: sim(new ScriptedLlmClient([...steps, scriptedText(mixed), stop])),
-    });
+    const r = await scriptedTrial(sim(new ScriptedLlmClient([...steps, scriptedText(mixed), stop])));
     expect(r.simulatorTurns.at(-1)).toEqual({
       turn: 4,
       stop: "goal_achieved",
@@ -439,10 +468,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
   });
 
   it("tracks the simulator's tokens and cost per conversation, and costUsd is agent + simulator", async () => {
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: sim(new ScriptedLlmClient(simSteps())),
-    });
+    const r = await scriptedTrial(sim(new ScriptedLlmClient(simSteps())));
     const simUsage = { inputTokens: 400, outputTokens: 80, cacheReadTokens: 0, cacheWriteTokens: 0 };
     expect(r.simulatorCost).toEqual({
       usage: simUsage,
@@ -478,10 +504,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
       scriptedText(BOOK.goal),
       scriptedText(BOOK.goal),
     ]);
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(), profile: SCRIPTED_PROFILE },
-      simulator: sim(simLlm),
-    });
+    const r = await scriptedTrial(sim(simLlm), { agentSteps: [] });
     expect(r).toMatchObject({ status: "error", stoppedBecause: "error", turns: 0 });
     expect(r.reason).toMatch(/^simulator: SimulatorError: no usable patient reply in 3 attempt/);
     expect(r.simulatorCost.llmCalls).toBe(3);
@@ -490,10 +513,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
 
   it("a simulator that throws a plain Error also makes the trial an error, with no simulator cost (8bea70b/TEST-4)", async () => {
     const broken: PatientSimulator = { name: "broken", next: () => Promise.reject(new Error("boom")) };
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(), profile: SCRIPTED_PROFILE },
-      simulator: broken,
-    });
+    const r = await scriptedTrial(broken, { agentSteps: [] });
     expect(r).toMatchObject({ status: "error", stoppedBecause: "error", reason: "simulator: Error: boom" });
     expect(r.simulatorCost).toEqual({
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -507,10 +527,7 @@ describe("LlmPatientSimulator in a scenario trial", () => {
       scriptedText(BOOK.goal),
       { error: new Error("ThrottlingException after retries") },
     ]);
-    const r = await runScenarioTrial(BOOK, {
-      agent: { llm: new ScriptedLlmClient(), profile: SCRIPTED_PROFILE },
-      simulator: sim(simLlm),
-    });
+    const r = await scriptedTrial(sim(simLlm), { agentSteps: [] });
     expect(r).toMatchObject({ status: "error", stoppedBecause: "error", turns: 0 });
     expect(r.reason).toBe(
       "simulator: SimulatorError: model call failed: Error: ThrottlingException after retries",
@@ -559,27 +576,22 @@ function interleave(
 
 describe("ReplayPatientSimulator", () => {
   it("replays a recorded trial turn for turn: same patient messages, same stop, no model calls", async () => {
-    const original = await runScenarioTrial(BOOK, {
-      trial: 2,
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: sim(
+    const original = await scriptedTrial(
+      sim(
         new ScriptedLlmClient([
           ...BOOKING_PATIENT.map((m) => scriptedText(m)),
           scriptedText("[[STOP:gave_up]]"),
         ]),
       ),
-    });
+      { trial: 2 },
+    );
     // Through JSON, as `--replay` reads a results file.
     const file: unknown = JSON.parse(
       JSON.stringify({ simulator: original.simulator, cases: [{ id: BOOK.id, trials: [original] }] }),
     );
     const replay = ReplayPatientSimulator.fromReport(file);
     expect(replay.name).toBe("replay:llm:haiku-4.5:sim.v1");
-    const again = await runScenarioTrial(BOOK, {
-      trial: 2,
-      agent: { llm: new ScriptedLlmClient(goodBookingSteps()), profile: SCRIPTED_PROFILE },
-      simulator: replay,
-    });
+    const again = await scriptedTrial(replay, { trial: 2 });
     expect(again.events).toEqual(original.events);
     expect(again.simulatorTurns).toEqual(original.simulatorTurns);
     expect(again.stoppedBecause).toBe("gave_up");
@@ -605,6 +617,8 @@ describe("ReplayPatientSimulator", () => {
     );
     expect(() => ReplayPatientSimulator.fromReport(report({ turn: 1, message: "hi" }))).not.toThrow();
     expect(() => ReplayPatientSimulator.fromReport({ runs: [] })).toThrow(/^not a results file: cases: /);
+    // A file that isn't an object at all names no field: the problem is at the root (5765869/TEST-102).
+    expect(() => ReplayPatientSimulator.fromReport(null)).toThrow(/^not a results file: \(root\): \S/);
   });
 
   it("a conversation the recording doesn't have is a simulator error", async () => {
