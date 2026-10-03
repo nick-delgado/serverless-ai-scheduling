@@ -5,6 +5,11 @@ import { classifyAgentError } from "../src";
 describe("classifyAgentError", () => {
   it.each([
     ["the throttling exception name", Object.assign(new Error("slow down"), { name: "ThrottlingException" })],
+    ["TooManyRequestsException", Object.assign(new Error("slow down"), { name: "TooManyRequestsException" })],
+    [
+      "ServiceQuotaExceededException",
+      Object.assign(new Error("slow down"), { name: "ServiceQuotaExceededException" }),
+    ],
     [
       "HTTP 429 alone",
       Object.assign(new Error("slow down"), { name: "SomethingElse", $metadata: { httpStatusCode: 429 } }),
