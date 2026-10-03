@@ -15,10 +15,12 @@
  * Every reply goes through `replyProblems` (no verbatim goal or hidden facts, never the assistant's
  * voice). A rejected reply is never sent: the model is asked again with the problems listed, up to
  * `maxAttempts` calls, then the turn fails with a `SimulatorError` (the trial is `error`, not `fail`).
+ * A model call that throws fails the turn the same way, carrying what the earlier attempts cost.
  */
 import { estimateCostUsd, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { TranscriptEvent } from "../transcript";
 import { textOf } from "../transcript";
+import { errorReason } from "../util";
 import { replyProblems } from "./guards";
 import {
   SIMULATOR_PROMPT_VERSION,
@@ -127,28 +129,34 @@ export class LlmPatientSimulator implements PatientSimulator {
     const rejected: RejectedReply[] = [];
 
     for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
-      const response = await this.#llm.streamMessage({
-        modelId: this.#profile.modelId,
-        family: this.#profile.family,
-        system: [{ type: "text", text: system }],
-        tools: [],
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: simulatorUserMessage(context.events, context.turn, scenario.max_turns, rejected),
-              },
-            ],
-          },
-        ],
-        maxTokens: this.#profile.maxTokens,
-        modelFields: this.#profile.modelFields,
-        ...(this.#profile.inlineReasoningTag === undefined
-          ? {}
-          : { inlineReasoningTag: this.#profile.inlineReasoningTag }),
-      });
+      let response;
+      try {
+        response = await this.#llm.streamMessage({
+          modelId: this.#profile.modelId,
+          family: this.#profile.family,
+          system: [{ type: "text", text: system }],
+          tools: [],
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: simulatorUserMessage(context.events, context.turn, scenario.max_turns, rejected),
+                },
+              ],
+            },
+          ],
+          maxTokens: this.#profile.maxTokens,
+          modelFields: this.#profile.modelFields,
+          ...(this.#profile.inlineReasoningTag === undefined
+            ? {}
+            : { inlineReasoningTag: this.#profile.inlineReasoningTag }),
+        });
+      } catch (callError) {
+        // Keep what the earlier, rejected attempts cost: the runner adds it to the trial and the budget.
+        throw new SimulatorError(`model call failed: ${errorReason(callError)}`, cost);
+      }
       cost.llmCalls += 1;
       cost.usage = addUsage(cost.usage, response.usage);
       cost.costUsd = estimateCostUsd(this.#profile, cost.usage);

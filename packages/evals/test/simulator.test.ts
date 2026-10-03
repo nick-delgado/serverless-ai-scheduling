@@ -456,6 +456,24 @@ describe("LlmPatientSimulator in a scenario trial", () => {
     expect(r.costUsd).toBeGreaterThan(0);
   });
 
+  it("a model call that throws after a rejected reply keeps the rejected attempt's cost (8bea70b/SPEC-1)", async () => {
+    const simLlm = new ScriptedLlmClient([
+      scriptedText(BOOK.goal),
+      { error: new Error("ThrottlingException after retries") },
+    ]);
+    const r = await runScenarioTrial(BOOK, {
+      agent: { llm: new ScriptedLlmClient(), profile: SCRIPTED_PROFILE },
+      simulator: sim(simLlm),
+    });
+    expect(r).toMatchObject({ status: "error", stoppedBecause: "error", turns: 0 });
+    expect(r.reason).toBe(
+      "simulator: SimulatorError: model call failed: Error: ThrottlingException after retries",
+    );
+    expect(r.simulatorCost.llmCalls).toBe(1);
+    expect(r.simulatorCost.costUsd).toBeGreaterThan(0);
+    expect(r.costUsd).toBe(r.simulatorCost.costUsd);
+  });
+
   it("agent and simulator calls share one per-model rate limit when they use the same model", async () => {
     const acquired: string[] = [];
     class RecordingLimiter extends RateLimiter {
