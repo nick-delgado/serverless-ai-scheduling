@@ -40,9 +40,13 @@ function ndjson(events: readonly ChatStreamEvent[], status: number): Response {
 /**
  * A 200 NDJSON stream: the first event right away (the caller has already waited `firstEventMs`, so
  * headers and first event arrive together), then one event per `intervalMs`. Stops early if the
- * client aborts.
+ * client aborts. Exported for its abort test.
  */
-function ndjsonStream(events: readonly ChatStreamEvent[], intervalMs: number, signal: AbortSignal): Response {
+export function ndjsonStream(
+  events: readonly ChatStreamEvent[],
+  intervalMs: number,
+  signal: AbortSignal,
+): Response {
   const encoder = new TextEncoder();
   let next = 0;
   const body = new ReadableStream<Uint8Array>({

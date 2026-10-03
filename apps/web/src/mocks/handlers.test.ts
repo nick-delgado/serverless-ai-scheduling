@@ -10,7 +10,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "./fixtures";
-import { NDJSON_CONTENT_TYPE } from "./handlers";
+import { NDJSON_CONTENT_TYPE, ndjsonStream } from "./handlers";
 import { configureMockApi } from "./node";
 import { DEFAULT_MOCK_API_OPTIONS, parseMockApiOptions } from "./options";
 
@@ -27,15 +27,19 @@ function postChat(
 }
 
 /** Read an NDJSON body chunk by chunk, as the chat client will, recording each event's arrival. */
-async function readEvents(res: Response): Promise<{ events: ChatStreamEvent[]; chunks: number }> {
+async function readEvents(
+  res: Response,
+): Promise<{ events: ChatStreamEvent[]; chunks: number; arrivals: number[] }> {
   if (!res.body) throw new Error("No body");
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   const events: ChatStreamEvent[] = [];
+  const arrivals: number[] = [];
   let chunks = 0;
   let buffered = "";
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
+    arrivals.push(performance.now());
     chunks += 1;
     buffered += value;
     const lines = buffered.split("\n");
@@ -43,7 +47,14 @@ async function readEvents(res: Response): Promise<{ events: ChatStreamEvent[]; c
     for (const line of lines) if (line.trim()) events.push(parseStreamEventLine(line));
   }
   expect(buffered).toBe(""); // every event ends with a newline
-  return { events, chunks };
+  return { events, chunks, arrivals };
+}
+
+/** Milliseconds from now until `promise` settles (resolved or rejected). */
+async function elapsedUntilSettled(promise: Promise<unknown>): Promise<number> {
+  const start = performance.now();
+  await promise.catch(() => undefined);
+  return performance.now() - start;
 }
 
 describe("POST /api/session", () => {
@@ -71,6 +82,11 @@ describe("POST /api/session", () => {
 
     configureMockApi({ sessionFault: "network" });
     await expect(fetch("/api/session", { method: "POST" })).rejects.toThrow();
+  });
+
+  it("waits latencyMs before answering", async () => {
+    configureMockApi({ latencyMs: 80 });
+    expect(await elapsedUntilSettled(fetch("/api/session", { method: "POST" }))).toBeGreaterThanOrEqual(60);
   });
 });
 
@@ -142,13 +158,39 @@ describe("POST /api/chat", () => {
     expect(chunks).toBe(events.length);
   });
 
-  it("answers a malformed body with 400 and one BAD_REQUEST event", async () => {
-    const res = await postChat({ clientMessageId: "not-a-uuid", text: "" });
-    expect(res.status).toBe(400);
-    expect(parseChatResponseBody(await res.text())).toEqual([
-      expect.objectContaining({ type: "error", code: "BAD_REQUEST", retryable: false }),
-    ]);
+  it("waits eventIntervalMs between events after the first", async () => {
+    configureMockApi({ eventIntervalMs: 25, chatReply: "plain" });
+    const { arrivals } = await readEvents(await postChat());
+    expect(arrivals.length).toBeGreaterThan(2);
+    const gaps = arrivals.slice(1).map((t, i) => t - (arrivals[i] ?? t));
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(18);
   });
+
+  // Every response that doesn't wait on the model: the faults that answer before the body is read,
+  // the 400 for a malformed body, and the 429/503 faults.
+  it.each([
+    ["network", undefined],
+    ["unauthorized", undefined],
+    ["none", { clientMessageId: "not-a-uuid", text: "" }],
+    ["rate_limited", undefined],
+    ["unavailable", undefined],
+  ] as const)("waits latencyMs before answering with chatFault %s", async (chatFault, body) => {
+    configureMockApi({ chatFault, latencyMs: 80 });
+    expect(await elapsedUntilSettled(postChat(body))).toBeGreaterThanOrEqual(60);
+  });
+
+  // `network` and `unauthorized` answer before the body is read (API Gateway rejects first).
+  it.each(["none", "rate_limited", "unavailable", "mid_stream"] as const)(
+    "answers a malformed body with 400 and one BAD_REQUEST event (chatFault %s)",
+    async (chatFault) => {
+      configureMockApi({ chatFault });
+      const res = await postChat({ clientMessageId: "not-a-uuid", text: "" });
+      expect(res.status).toBe(400);
+      expect(parseChatResponseBody(await res.text())).toEqual([
+        expect.objectContaining({ type: "error", code: "BAD_REQUEST", retryable: false }),
+      ]);
+    },
+  );
 
   it.each([
     ["rate_limited", 429, "RATE_LIMITED"],
@@ -167,7 +209,10 @@ describe("POST /api/chat", () => {
     const res = await postChat();
     expect(res.status).toBe(200);
     const { events } = await readEvents(res);
-    expect(events.some((e) => e.type === "text_delta")).toBe(true);
+    const partial = visibleText(events);
+    expect(partial).not.toBe("");
+    expect(partial.length).toBeLessThan(REPLIES.tools.text.length);
+    expect(REPLIES.tools.text.startsWith(partial)).toBe(true);
     expect(events.filter(isTerminalEvent)).toEqual([
       expect.objectContaining({ type: "error", code: "AGENT_UNAVAILABLE", retryable: true }),
     ]);
@@ -182,6 +227,18 @@ describe("POST /api/chat", () => {
 
     configureMockApi({ chatFault: "network" });
     await expect(postChat()).rejects.toThrow();
+  });
+});
+
+describe("ndjsonStream", () => {
+  it("stops sending events once the client aborts", async () => {
+    const controller = new AbortController();
+    const res = ndjsonStream(REPLIES.plain.events, 20, controller.signal);
+    if (!res.body) throw new Error("No body");
+    const reader = res.body.getReader();
+    expect((await reader.read()).done).toBe(false);
+    controller.abort();
+    expect((await reader.read()).done).toBe(true);
   });
 });
 
