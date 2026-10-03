@@ -83,21 +83,20 @@ export class Typewriter {
   }
 
   append(text: string): void {
-    if (this.#disposed || this.#finished || text.length === 0) return;
+    if (this.#disposed || this.#finished) return;
     this.#received += text;
     if (this.#instant) this.#reveal(this.#received.length);
     else this.#schedule();
   }
 
   reset(keepChars: number): void {
-    if (this.#disposed || this.#finished) return;
+    if (this.#disposed) return;
     this.#received = this.#received.slice(0, keepChars);
     if (this.#shown > this.#received.length) this.#reveal(this.#received.length);
   }
 
   /** No more text is coming: complete once the rest has been revealed. */
   finish(): void {
-    if (this.#disposed || this.#finished) return;
     this.#finished = true;
     this.#maybeComplete();
   }
@@ -111,15 +110,13 @@ export class Typewriter {
 
   #schedule(): void {
     if (this.#timer !== undefined || this.#shown >= this.#received.length) return;
-    // A fresh run starts its budget now, so idle time between deltas isn't spent as a burst.
+    // A fresh run starts its clock now, so idle time between deltas isn't spent as a burst.
     this.#lastTick = this.#now();
-    this.#budget = 0;
     this.#timer = setTimeout(() => this.#tick(), this.#tickMs);
   }
 
   #tick(): void {
     this.#timer = undefined;
-    if (this.#disposed) return;
     const now = this.#now();
     const elapsedSeconds = Math.max(0, now - this.#lastTick) / 1000;
     this.#lastTick = now;
@@ -132,6 +129,7 @@ export class Typewriter {
     if (this.#shown < this.#received.length) {
       this.#timer = setTimeout(() => this.#tick(), this.#tickMs);
     } else {
+      // Caught up: budget a late tick didn't need must not become a burst on the next text.
       this.#budget = 0;
       this.#maybeComplete();
     }
@@ -140,7 +138,6 @@ export class Typewriter {
   #reveal(length: number): void {
     this.#shown = length;
     this.#onUpdate(this.text);
-    this.#maybeComplete();
   }
 
   #maybeComplete(): void {

@@ -88,10 +88,10 @@ describe("readChatStream", () => {
     expect(seen).toEqual([delta("Hi"), done]);
   });
 
-  it("reads the buffered fallback: one JSON array, split across chunks", async () => {
+  it("reads the buffered fallback: one JSON array, after a blank chunk and split across chunks", async () => {
     const all = [status, delta("Hello"), done];
-    const json = `  ${JSON.stringify(all)}`;
-    const { seen, events } = await read([json.slice(0, 7), json.slice(7)]);
+    const json = JSON.stringify(all);
+    const { seen, events } = await read([" \n", json.slice(0, 7), json.slice(7)]);
     expect(seen).toEqual(all);
     expect(events).toEqual(all);
   });

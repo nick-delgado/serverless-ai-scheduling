@@ -1,5 +1,5 @@
-import { LIMITS, TOOL_STATUS_LABELS } from "@sched/contracts";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { type ChatStreamEvent, LIMITS, TOOL_STATUS_LABELS } from "@sched/contracts";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,30 +8,36 @@ import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
 import { COUNTER_FROM } from "./Composer";
+import {
+  fakeTime,
+  gate,
+  sendNow,
+  serveChunks,
+  serveEvents,
+  typingIndicator as typing,
+  until,
+} from "./testUtils";
 import { FALLBACK_GREETING } from "./useChat";
 
 const instant = () => true;
+const CONVERSATION_ID = "5a0c9e7b-3d2f-4b61-8e4a-7c1f0d9b2e63";
+const done: ChatStreamEvent = {
+  type: "done",
+  conversationId: CONVERSATION_ID,
+  messageId: "msg_000002",
+  usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
+};
+const availability: ChatStreamEvent = {
+  type: "status",
+  tool: "check_availability",
+  label: TOOL_STATUS_LABELS.check_availability,
+};
 
-/**
- * Fake only timers and Date: fetch and MSW schedule their own work with setImmediate and microtasks,
- * which must keep running for the stream to flow. user-event stalls under fake timers, so these tests
- * type with `sendNow` (fireEvent) instead.
- */
-function fakeTime() {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
-}
-
-/** Render under fake time and let the session call settle. */
+/** Render under fake time and wait (in real hops) for the greeting. */
 async function renderAtFakeTime(reducedMotion: () => boolean) {
   fakeTime();
   render(<ChatPage reducedMotion={reducedMotion} />);
-  await act(() => vi.advanceTimersByTimeAsync(0));
-}
-
-function sendNow(text: string) {
-  const input = screen.getByRole("textbox", { name: "Message" });
-  fireEvent.change(input, { target: { value: text } });
-  fireEvent.keyDown(input, { key: "Enter" });
+  await until(() => screen.queryByText(SESSIONS.upcoming.greeting, { selector: "li" }) !== null);
 }
 
 function renderChat(props: { api?: ChatApi; reducedMotion?: () => boolean } = {}) {
@@ -42,9 +48,6 @@ function renderChat(props: { api?: ChatApi; reducedMotion?: () => boolean } = {}
   const log = screen.getByRole("list", { name: "Conversation" });
   return { user, input, sendButton, log };
 }
-
-const typing = () => screen.queryByTestId("typing-indicator");
-const announcer = () => screen.getByTestId("announcer");
 
 /** Requests the mock API receives for `POST /api/chat`, with their JSON bodies. */
 function captureChatBodies() {
@@ -68,16 +71,18 @@ afterEach(() => {
 describe("ChatPage: greeting", () => {
   it("shows the session's greeting on load, and announces it", async () => {
     const { log } = renderChat();
+    expect(screen.getByTestId("announcer")).toBeEmptyDOMElement();
     expect(typing()).toBeInTheDocument();
     expect(await within(log).findByText(SESSIONS.upcoming.greeting)).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
-    expect(announcer()).toHaveTextContent(SESSIONS.upcoming.greeting);
+    expect(screen.getByTestId("announcer")).toHaveTextContent(SESSIONS.upcoming.greeting);
   });
 
   it("falls back to a generic greeting when the session call fails", async () => {
     configureMockApi({ sessionFault: "internal" });
     const { log } = renderChat();
     expect(await within(log).findByText(FALLBACK_GREETING)).toBeVisible();
+    expect(screen.getByTestId("announcer")).toHaveTextContent(FALLBACK_GREETING);
   });
 });
 
@@ -151,7 +156,8 @@ describe("ChatPage: composer (FR-011)", () => {
   });
 
   it("disables Send, and ignores Enter, while the agent responds; typing stays possible", async () => {
-    configureMockApi({ firstEventMs: 200 });
+    const hold = gate();
+    serveEvents([{ type: "text_delta", text: "Sure." }, done], { 0: hold.promise });
     const bodies = captureChatBodies();
     const { user, input, sendButton, log } = renderChat();
     await user.type(input, "First{Enter}");
@@ -159,7 +165,8 @@ describe("ChatPage: composer (FR-011)", () => {
     expect(sendButton).toBeDisabled();
     await user.keyboard("{Enter}");
     expect(input).toHaveValue("Second");
-    expect(await within(log).findByText(REPLIES.tools.text)).toBeVisible();
+    hold.open();
+    expect(await within(log).findByText("Sure.")).toBeVisible();
     expect(sendButton).toBeEnabled();
     expect(bodies).toHaveLength(1);
   });
@@ -167,60 +174,73 @@ describe("ChatPage: composer (FR-011)", () => {
 
 describe("ChatPage: a turn", () => {
   it("shows the typing indicator from send until the first text, with a chip for the tool status", async () => {
-    configureMockApi({ firstEventMs: 1_000, eventIntervalMs: 100 });
-    await renderAtFakeTime(instant);
+    const [statusSent, textSent] = [gate(), gate()];
+    serveEvents(
+      [
+        availability,
+        { type: "text_delta", text: "Dr. Lee " },
+        { type: "text_delta", text: "is free." },
+        done,
+      ],
+      {
+        0: statusSent.promise,
+        1: textSent.promise,
+      },
+    );
+    const { log } = renderChat();
+    await within(log).findByText(SESSIONS.upcoming.greeting);
     sendNow("Any openings?");
-
-    // Headers and the first event only arrive after 1 s; the indicator shows from send.
-    expect(typing()).toBeInTheDocument();
-    await act(() => vi.advanceTimersByTimeAsync(990));
-    expect(typing()).toBeInTheDocument();
-    expect(screen.queryByText(TOOL_STATUS_LABELS.check_availability)).not.toBeInTheDocument();
-
-    // The first event is the status: a chip, still typing.
-    await act(() => vi.advanceTimersByTimeAsync(20));
-    expect(screen.getByText(TOOL_STATUS_LABELS.check_availability)).toBeVisible();
+    // From send, before any response: the real API sends no headers until its first event.
     expect(typing()).toBeInTheDocument();
 
-    // The first text_delta, 100 ms later, ends the indicator.
-    await act(() => vi.advanceTimersByTimeAsync(100));
+    // A status event: a chip, still typing.
+    statusSent.open();
+    expect(await screen.findByText(TOOL_STATUS_LABELS.check_availability)).toBeVisible();
+    expect(typing()).toBeInTheDocument();
+
+    // The first text_delta ends the indicator; the chip stays for the rest of the turn.
+    textSent.open();
+    expect(await within(log).findByText(/^Dr\. Lee/)).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
-    expect(screen.getByText(TOOL_STATUS_LABELS.check_availability)).toBeVisible();
 
     // When the turn completes, the chips go.
-    await act(() => vi.advanceTimersByTimeAsync(10_000));
-    expect(
-      within(screen.getByRole("list", { name: "Conversation" })).getByText(REPLIES.tools.text),
-    ).toBeVisible();
+    expect(await within(log).findByText("Dr. Lee is free.")).toBeVisible();
     expect(screen.queryByText(TOOL_STATUS_LABELS.check_availability)).not.toBeInTheDocument();
   });
 
   it("types the reply out a character at a time, even when it all arrives at once", async () => {
-    configureMockApi({ chatReply: "plain" });
+    const text = REPLIES.plain.text;
+    serveChunks([[{ type: "text_delta", text }, done]]);
     await renderAtFakeTime(() => false);
     sendNow("Hi");
-    // Zero delays: the whole reply is in the client within a few ms of fake time.
-    await act(() => vi.advanceTimersByTimeAsync(5));
+    // The whole reply and its done are in; fake time hasn't moved, so nothing is typed yet.
+    await until(() => typing() === null);
     const log = screen.getByRole("list", { name: "Conversation" });
-    const bubble = () => within(log).getAllByRole("listitem").at(-1)?.textContent ?? "";
+    const bubble = () => within(log).getAllByRole("listitem").at(-1);
+    expect(bubble()).toHaveTextContent("You: Hi");
 
+    // Default pace: 60/s, or backlog / 0.75 s while the backlog is larger (here ~160/s at first).
     await act(() => vi.advanceTimersByTimeAsync(200));
-    const early = bubble();
+    const early = bubble()?.textContent ?? "";
     expect(early.length).toBeGreaterThan(0);
-    expect(early.length).toBeLessThan(REPLIES.plain.text.length / 2);
-    expect(REPLIES.plain.text.startsWith(early)).toBe(true);
+    expect(early.length).toBeLessThan(text.length / 2);
+    expect(text.startsWith(early)).toBe(true);
+    expect(bubble()).toHaveAttribute("aria-busy", "true");
 
     await act(() => vi.advanceTimersByTimeAsync(200));
-    expect(bubble().length).toBeGreaterThan(early.length);
+    expect((bubble()?.textContent ?? "").length).toBeGreaterThan(early.length);
 
     await act(() => vi.advanceTimersByTimeAsync(5_000));
-    expect(bubble()).toBe(REPLIES.plain.text);
+    expect(bubble()).toHaveTextContent(text);
+    expect(bubble()).not.toHaveAttribute("aria-busy");
   });
 
   it("renders the reply at once under prefers-reduced-motion", async () => {
-    const { user, input, log } = renderChat({ reducedMotion: instant });
-    await user.type(input, "Hi{Enter}");
-    expect(await within(log).findByText(REPLIES.tools.text)).toBeVisible();
+    serveChunks([[{ type: "text_delta", text: REPLIES.plain.text }, done]]);
+    await renderAtFakeTime(instant);
+    sendNow("Hi");
+    // No fake time passes, so no typewriter tick can run.
+    await until(() => screen.queryByText(REPLIES.plain.text, { selector: "li" }) !== null);
   });
 
   it("applies text_reset: the bubble ends with exactly the stored text", async () => {
@@ -232,27 +252,32 @@ describe("ChatPage: a turn", () => {
   });
 
   it("announces the completed reply once, never a partial one", async () => {
+    serveChunks([[{ type: "text_delta", text: REPLIES.plain.text }, done]]);
     await renderAtFakeTime(() => false);
+    const announcer = screen.getByTestId("announcer");
     const announced: string[] = [];
-    const observer = new MutationObserver(() => announced.push(announcer().textContent));
-    observer.observe(announcer(), { childList: true, characterData: true, subtree: true });
+    const observer = new MutationObserver(() => announced.push(announcer.textContent));
+    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
 
     sendNow("Hi");
+    await until(() => typing() === null);
     await act(() => vi.advanceTimersByTimeAsync(10_000));
     observer.disconnect();
-    expect(announced.filter((text) => text.length > 0)).toEqual([REPLIES.tools.text]);
+    expect(screen.queryByText(REPLIES.plain.text, { selector: "li" })).toBeVisible();
+    expect(announced.filter((text) => text.length > 0)).toEqual([REPLIES.plain.text]);
   });
 
   it("continues the conversation the first turn's done event started", async () => {
+    serveEvents([{ type: "text_delta", text: "Sure." }, done]);
     const bodies = captureChatBodies();
     const { user, input, log } = renderChat();
     await user.type(input, "One{Enter}");
-    await within(log).findByText(REPLIES.tools.text);
+    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(1));
     await user.type(input, "Two{Enter}");
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(2));
     const [first, second] = bodies as { conversationId?: string; clientMessageId: string }[];
     expect(first?.conversationId).toBeUndefined();
-    expect(second?.conversationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second?.conversationId).toBe(CONVERSATION_ID);
     expect(second?.clientMessageId).not.toBe(first?.clientMessageId);
   });
 

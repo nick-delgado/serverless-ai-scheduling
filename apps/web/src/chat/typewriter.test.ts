@@ -2,7 +2,13 @@ import { visibleText } from "@sched/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { REPLIES } from "../mocks/fixtures";
-import { Typewriter, type TypewriterOptions } from "./typewriter";
+import {
+  DEFAULT_BASE_CPS,
+  DEFAULT_CATCH_UP_SECONDS,
+  DEFAULT_TICK_MS,
+  Typewriter,
+  type TypewriterOptions,
+} from "./typewriter";
 
 /** 50 characters/s with a 20 ms tick: exactly one character per tick at the base pace. */
 const ONE_PER_TICK = { baseCps: 50, tickMs: 20, catchUpSeconds: 10 };
@@ -76,6 +82,54 @@ describe("Typewriter", () => {
     expect(typewriter.text).toHaveLength(50);
   });
 
+  it("doesn't spend a late tick's unused budget on the next text", () => {
+    let now = 0;
+    const { typewriter } = make({ now: () => now });
+    typewriter.append("a".repeat(10));
+    now = 1_000; // budget for 50 characters, only 10 to reveal
+    vi.advanceTimersByTime(20);
+    expect(typewriter.text).toHaveLength(10);
+    typewriter.append("b".repeat(30));
+    now += 20;
+    vi.advanceTimersByTime(20);
+    expect(typewriter.text).toHaveLength(11);
+  });
+
+  it("treats a clock that steps backwards as no time passing", () => {
+    let now = 1_000;
+    const { typewriter } = make({ now: () => now });
+    typewriter.append("a".repeat(10));
+    now = 0;
+    vi.advanceTimersByTime(20);
+    expect(typewriter.text).toHaveLength(0);
+    now = 20;
+    vi.advanceTimersByTime(20);
+    expect(typewriter.text).toHaveLength(1);
+  });
+
+  it("calls onUpdate only when the revealed text changes", () => {
+    const { typewriter, updates } = make({ baseCps: 20 }); // 0.4 characters per tick
+    typewriter.append("abc");
+    vi.advanceTimersByTime(200);
+    expect(updates).toEqual(["a", "ab", "abc"]);
+  });
+
+  it("with the defaults, types a 600-character burst in a few seconds, not at once", () => {
+    expect([DEFAULT_BASE_CPS, DEFAULT_CATCH_UP_SECONDS, DEFAULT_TICK_MS]).toEqual([60, 0.75, 16]);
+    const onComplete = vi.fn<(text: string) => void>();
+    const typewriter = new Typewriter({ onUpdate: () => undefined, onComplete });
+    typewriter.append("a".repeat(600));
+    typewriter.finish();
+    vi.advanceTimersByTime(DEFAULT_TICK_MS);
+    // First tick: 600 / 0.75 = 800 characters/s for 16 ms.
+    expect(typewriter.text).toHaveLength(12);
+    vi.advanceTimersByTime(1_000);
+    expect(onComplete).not.toHaveBeenCalled();
+    // ~1.9 s to get under 45 characters (one catch-up window at 60/s), then ~0.75 s at 60/s.
+    vi.advanceTimersByTime(2_500);
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
   it("doesn't turn idle time between deltas into a burst", () => {
     const { typewriter } = make();
     typewriter.append("abc");
@@ -96,6 +150,8 @@ describe("Typewriter", () => {
     expect(onComplete).not.toHaveBeenCalled();
     vi.advanceTimersByTime(20);
     expect(onComplete).toHaveBeenCalledExactlyOnceWith("abcde");
+    expect(vi.getTimerCount()).toBe(0);
+    typewriter.finish();
     vi.advanceTimersByTime(1_000);
     expect(onComplete).toHaveBeenCalledOnce();
   });
@@ -197,6 +253,10 @@ describe("Typewriter", () => {
     vi.advanceTimersByTime(40);
     typewriter.dispose();
     const count = updates.length;
+    vi.runAllTimers();
+    typewriter.append("more");
+    typewriter.reset(0);
+    typewriter.finish();
     vi.runAllTimers();
     expect(updates).toHaveLength(count);
     expect(onComplete).not.toHaveBeenCalled();

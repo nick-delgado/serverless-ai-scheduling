@@ -33,8 +33,6 @@ export class ChatHttpError extends Error {
 export interface ChatApiOptions {
   /** Resolves to the ID token to send, or `undefined` to send none. */
   getToken?: () => Promise<string | undefined>;
-  /** Defaults to the global `fetch`, looked up per call so test interceptors apply. */
-  fetch?: typeof fetch;
 }
 
 export interface ChatApi {
@@ -57,11 +55,14 @@ function errorEventFrom(body: string): ChatStreamEvent | undefined {
   }
 }
 
-export function createChatApi(options: ChatApiOptions = {}): ChatApi {
-  const doFetch: typeof fetch = (input, init) => (options.fetch ?? fetch)(input, init);
+function withJson(headers: Headers): Headers {
+  headers.set("Content-Type", "application/json");
+  return headers;
+}
 
+export function createChatApi(options: ChatApiOptions = {}): ChatApi {
   async function headers(): Promise<Headers> {
-    const result = new Headers({ "Content-Type": "application/json" });
+    const result = new Headers();
     const token = await options.getToken?.();
     if (token) result.set("Authorization", token);
     return result;
@@ -69,10 +70,9 @@ export function createChatApi(options: ChatApiOptions = {}): ChatApi {
 
   return {
     async getSession(signal) {
-      const response = await doFetch("/api/session", {
+      const response = await fetch("/api/session", {
         method: "POST",
         headers: await headers(),
-        body: "{}",
         signal,
       });
       if (!response.ok) throw new ChatHttpError(response.status);
@@ -84,9 +84,9 @@ export function createChatApi(options: ChatApiOptions = {}): ChatApi {
     },
 
     async sendChat(request, onEvent, signal) {
-      const response = await doFetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
-        headers: await headers(),
+        headers: withJson(await headers()),
         body: JSON.stringify(request),
         signal,
       });

@@ -1,4 +1,4 @@
-import type { ChatStreamEvent } from "@sched/contracts";
+import { type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -64,9 +64,11 @@ describe("createChatApi", () => {
     await expect(createChatApi().getSession()).rejects.toBeInstanceOf(ChatProtocolError);
   });
 
-  it("posts the request and streams every event of the turn", async () => {
+  it("posts the request as JSON and streams every event of the turn", async () => {
     let body: unknown;
+    let contentType: string | null = null;
     server.events.on("request:start", ({ request }) => {
+      contentType = request.headers.get("Content-Type");
       void request
         .clone()
         .json()
@@ -74,6 +76,7 @@ describe("createChatApi", () => {
     });
     const { seen, events } = await send();
     server.events.removeAllListeners("request:start");
+    expect(contentType).toBe("application/json");
     expect(body).toEqual(request);
     expect(seen).toEqual(events);
     expect(seen.slice(0, -1)).toEqual(REPLIES.tools.events);
@@ -97,6 +100,17 @@ describe("createChatApi", () => {
   it("throws ChatHttpError for a non-2xx body that isn't an error event", async () => {
     server.use(http.post("/api/chat", () => HttpResponse.text("Bad gateway", { status: 502 })));
     await expect(send()).rejects.toEqual(new ChatHttpError(502));
+  });
+
+  it("throws ChatHttpError for a non-2xx body that is a stream event other than error", async () => {
+    const done = encodeStreamEvent({
+      type: "done",
+      conversationId: "5a0c9e7b-3d2f-4b61-8e4a-7c1f0d9b2e63",
+      messageId: "msg_000002",
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    });
+    server.use(http.post("/api/chat", () => HttpResponse.text(done, { status: 500 })));
+    await expect(send()).rejects.toEqual(new ChatHttpError(500));
   });
 
   it("passes a network failure through", async () => {

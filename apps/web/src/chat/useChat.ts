@@ -34,7 +34,7 @@ export interface ChatTurn {
   text: string;
   /** True until the first `text_delta` (and again if a `text_reset` drops every character). */
   waiting: boolean;
-  /** One chip per `status` event, in order; a repeat of the latest one is not added again. */
+  /** One chip per `status` event, in order; a repeat of the latest label is not added again. */
   chips: ToolChip[];
 }
 
@@ -77,6 +77,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         setAnnouncement(session.greeting);
       },
       () => {
+        // An aborted call (unmount, or React's strict-mode remount) must not overwrite the greeting.
         if (controller.signal.aborted) return;
         setGreeting({ state: "ready", text: FALLBACK_GREETING });
         setAnnouncement(FALLBACK_GREETING);
@@ -105,9 +106,11 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       let messageId: string | undefined;
       let ended = false;
 
+      // `end` runs once per turn. A transport error after the reply completed (the connection drops
+      // after `done`) must not turn a finished reply into an error.
       const end = () => {
         ended = true;
-        active.current?.typewriter.dispose();
+        typewriter.dispose();
         active.current = null;
         setTurn(null);
       };
@@ -121,7 +124,6 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         instant: reducedMotion(),
         onUpdate: (shown) => setTurn((t) => (t ? { ...t, text: shown } : t)),
         onComplete: (final) => {
-          if (ended) return;
           end();
           setMessages((list) => [
             ...list,
@@ -133,13 +135,12 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       active.current = { controller, typewriter };
 
       const onEvent = (event: ChatStreamEvent) => {
-        if (ended) return;
         switch (event.type) {
           case "status":
             setTurn((t) => {
               if (!t) return t;
               const last = t.chips[t.chips.length - 1];
-              if (last?.tool === event.tool && last.label === event.label) return t;
+              if (last?.label === event.label) return t;
               return { ...t, chips: [...t.chips, { tool: event.tool, label: event.label }] };
             });
             break;
@@ -172,9 +173,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
           onEvent,
           controller.signal,
         )
-        .catch(() => {
-          if (!controller.signal.aborted) failTurn(GENERIC_ERROR);
-        });
+        .catch(() => failTurn(GENERIC_ERROR));
       return true;
     },
     [api, reducedMotion],
