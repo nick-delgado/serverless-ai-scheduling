@@ -197,12 +197,18 @@ describe("session lifetime", () => {
     expect(claims(await reloaded.getIdToken())).toMatchObject({ token_use: "id" });
   });
 
-  it("signs out as the first call after a reload", async () => {
+  it("configures Amplify before signing out, even as its first call", async () => {
     await auth.signIn("maria.santos", MOCK_PASSWORD);
-    vi.resetModules();
-    const fresh = await import("./authService");
-    await fresh.createAmplifyAuthService(() => MOCK_COGNITO_CONFIG).signOut();
+    // Amplify is global: leave it configured for another app client, whose storage keys are different.
+    const other = createAmplifyAuthService(() => ({
+      ...MOCK_COGNITO_CONFIG,
+      userPoolClientId: "otherclient",
+    }));
+    await other.currentUser();
+    const fresh = createAmplifyAuthService(() => MOCK_COGNITO_CONFIG);
+    await fresh.signOut();
     expect(cognitoMockStats()).toMatchObject({ revocations: 1, liveSessions: 0 });
+    await expect(fresh.currentUser()).resolves.toBeUndefined();
   });
 
   it("signOut revokes the refresh token and clears the stored session", async () => {
