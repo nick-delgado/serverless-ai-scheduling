@@ -19,7 +19,7 @@ Infrastructure is AWS SAM (CloudFormation) with **one template per stack** (ADR-
 | Stack (`sched-<env>-…`) | Template | Owns | Publishes to SSM (`/sched/<env>/…`) |
 |---|---|---|---|
 | data | `infra/stacks/data.yaml` | DynamoDB `sched-<env>-main` (+ GSI1, TTL, PITR) | `data/table-name`, `data/table-arn` |
-| auth | `infra/stacks/auth.yaml` | Cognito User Pool + SPA client (Identity Pool comes with S1-01) | `auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id` |
+| auth | `infra/stacks/auth.yaml` | Cognito User Pool + SPA client, Identity Pool + Transcribe-only browser role | `auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id`, `auth/identity-pool-id` |
 | api | `infra/stacks/api.yaml` | Regional REST API (OpenAPI body, Cognito authorizer, streaming Lambda integration) + handlers | `api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status` |
 | web | `infra/stacks/web.yaml` | Private S3 + CloudFront (OAC); `/api/*` → REST API | `web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |
 
