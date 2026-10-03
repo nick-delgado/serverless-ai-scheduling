@@ -18,12 +18,8 @@ export interface AwsStores {
   turns: TurnStore;
 }
 
-export function createAwsStores(options: {
-  tableName: string;
-  clock: Clock;
-  client?: DynamoDBClient;
-}): AwsStores {
-  const client = options.client ?? new DynamoDBClient({});
+export function createAwsStores(options: { tableName: string; clock: Clock }): AwsStores {
+  const client = new DynamoDBClient({});
   return {
     repos: createDynamoRepositories({ tableName: options.tableName, client, clock: options.clock }),
     turns: createDynamoTurnStore({ tableName: options.tableName, doc: createDocumentClient(client) }),
