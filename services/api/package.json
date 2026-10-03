@@ -12,9 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^0.34.0",
-    "@anthropic-ai/sdk": "^0.129.0",
-    "@sched/contracts": "*"
+    "@aws-sdk/client-dynamodb": "^3.1143.0",
+    "@aws-sdk/lib-dynamodb": "^3.1143.0",
+    "@sched/agent": "*",
+    "@sched/contracts": "*",
+    "@sched/tools": "*"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

@@ -5,6 +5,9 @@
  *
  * The loop streams them as `text_delta` events and appends them to history as an ordinary assistant
  * message, so the next turn's model sees what the patient saw.
+ *
+ * One reply here is not the loop's: `interrupted`, which the chat handler (`services/api`) stores to
+ * close a turn the loop never finished. It lives here so every fixed reply has one home.
  */
 import { CLINIC } from "@sched/contracts";
 
@@ -26,6 +29,13 @@ export const FALLBACK_MESSAGES = {
   /** The model produced unusable output twice in a row. */
   malformedOutput:
     `I'm sorry, something went wrong on my end. Could you try that again? ` +
+    `You can also reach ${FRONT_DESK}.`,
+  /**
+   * Stored by the chat handler, not the loop: closes a turn that ended without an assistant reply (a
+   * model error, a timeout, a crash after the patient's message was stored).
+   */
+  interrupted:
+    `I'm sorry, I couldn't finish my reply to your last message. Could you send it again? ` +
     `You can also reach ${FRONT_DESK}.`,
   /** The turn hit the iteration cap (ADR-001). */
   iterationLimit:
