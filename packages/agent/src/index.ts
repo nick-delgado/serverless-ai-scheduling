@@ -30,6 +30,7 @@ export {
   type ModelProfileName,
 } from "./profiles";
 export { FALLBACK_MESSAGES } from "./fallback-messages";
+export { buildSystemPrompt, type SystemPromptContext } from "./prompts";
 export {
   CACHE_POINT,
   LLM_STOP_REASONS,

@@ -228,9 +228,8 @@ describe("L1 runs: rendering, the request, grading the next action", () => {
     const llm = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
     await runL1Trial(c, { llm, profile });
     const system = (llm.requests[0]?.system ?? []).flatMap((b) => (b.type === "text" ? [b.text] : []));
-    expect(system.join("\n")).toContain(
-      "today is Monday, October 5, 2026 (America/New_York). The patient's first name is Walter.",
-    );
+    expect(system.join("\n")).toContain("Today is Monday, October 5, 2026 (2026-10-05)");
+    expect(system.join("\n")).toContain("The patient's first name, from their profile: Walter.");
   });
 
   it("passes the expected tool call and fails a plain reply", async () => {

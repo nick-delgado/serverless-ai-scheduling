@@ -147,7 +147,7 @@ describe("runSuite / summarize", () => {
       systemPrompt: custom,
     });
     expect(report.promptVersion).toBe("custom.v7");
-    expect((await suite(STEPS)).promptVersion).toBe("eval-interim.v0");
+    expect((await suite(STEPS)).promptVersion).toBe("system.v1");
   });
 
   it("scenario mode: skips stop after one trial, retries are summed, the simulator is recorded", async () => {

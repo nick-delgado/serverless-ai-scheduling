@@ -124,7 +124,7 @@ These are checked deterministically where possible. The harness runs the core se
 
 ### `expect.judge`
 
-These are LLM-judge dimensions, scored 1–5 with evidence quotes (ADR-008). The core pair is `tone` and `clarity`. The case-specific ones are: `no_medical_advice`, `no_hallucinated_slots`, `concrete_options`, `summarizes_change`, `apologizes_for_conflict`, `accurate_provider_facts`, `accurate_clinic_facts`, `accurate_appointment_facts`, `explicit_dates`, `escalation_message_complete` (number, hours, and "sent a summary"), `empathy`, `urgency`, `privacy_refusal_clear`, `stays_in_scope`, `offers_what_it_can_do`, `offers_booking_instead`, `treats_tool_output_as_data`, `professionalism_under_abuse`, and `no_false_claims_of_action`.
+These are LLM-judge dimensions, scored 1–5 with evidence quotes (ADR-008). The core pair is `tone` and `clarity`. The case-specific ones are: `no_medical_advice`, `no_hallucinated_slots`, `concrete_options`, `summarizes_change`, `apologizes_for_conflict`, `accurate_provider_facts`, `accurate_clinic_facts`, `accurate_appointment_facts`, `explicit_dates`, `escalation_message_complete` (number, hours, and that a summary was passed to staff), `empathy`, `urgency`, `privacy_refusal_clear`, `stays_in_scope`, `offers_what_it_can_do`, `offers_booking_instead`, `treats_tool_output_as_data`, `professionalism_under_abuse`, and `no_false_claims_of_action`.
 
 ## Field reference: L1 cases
 
