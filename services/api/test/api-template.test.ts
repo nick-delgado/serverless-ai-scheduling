@@ -67,6 +67,24 @@ function resourceBlock(name: string): string {
   return end < 0 ? rest : rest.slice(0, end + 1);
 }
 
+/**
+ * The lines under `key:` in a block, up to the next line indented no deeper than the key, with comments
+ * and blank lines dropped. Compared exactly, so any added policy, resource or variable shows up.
+ */
+function yamlSection(block: string, key: string): string[] {
+  const lines = block.split("\n");
+  const at = lines.findIndex((l) => new RegExp(`^ *${key}:\\s*$`).test(l));
+  if (at < 0) return [];
+  const indent = (lines[at] ?? "").search(/\S/);
+  const body: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    if (line.trim() === "" || line.trim().startsWith("#")) continue;
+    if (line.search(/\S/) <= indent) break;
+    body.push(line.slice(indent).trimEnd());
+  }
+  return body;
+}
+
 describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
   const fn = resourceBlock("SessionFunction");
   const makefile = readFileSync(new URL("../Makefile", import.meta.url), "utf8");
@@ -79,11 +97,29 @@ describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
   });
 
   it("lets the session function read the base table and nothing else", () => {
-    const actions = [...fn.matchAll(/^\s*- (\w+:\w+)$/gm)].map((m) => m[1]);
-    expect(actions).toEqual(["dynamodb:GetItem", "dynamodb:Query"]);
-    const resources = [...fn.matchAll(/^\s*- !Sub "(\S+)"$/gm)].map((m) => m[1]);
-    expect(resources).toEqual(["{{resolve:ssm:/sched/${Env}/data/table-arn}}"]);
+    // The whole Policies list, so a second statement, a SAM policy template, another resource or a
+    // wildcard each fails here.
+    expect(yamlSection(fn, "Policies")).toEqual([
+      '  - Version: "2012-10-17"',
+      "    Statement:",
+      "      - Sid: SessionReads",
+      "        Effect: Allow",
+      "        Action:",
+      "          - dynamodb:GetItem",
+      "          - dynamodb:Query",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
+    ]);
+    // No role of its own that would bypass Policies.
+    expect(fn).not.toMatch(/^ {6}Role:/m);
     expect(fn).not.toContain("bedrock");
+  });
+
+  it("gives the session function the table name and nothing else", () => {
+    expect(yamlSection(fn, "Variables")).toEqual([
+      '  TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"',
+      "  NODE_OPTIONS: --enable-source-maps",
+    ]);
   });
 
   it("routes POST /api/session through the Cognito authorizer to the session function", () => {
