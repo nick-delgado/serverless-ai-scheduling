@@ -4,18 +4,8 @@
  * Stored `content` is the loop's provider-neutral content blocks, verbatim (reasoning blocks and their
  * signatures included), so the mapping is a field projection both ways. Nothing is ever edited.
  */
-import type { LlmMessage } from "@sched/agent";
-import { CLINIC, type ConversationId, type ConversationMessage, type TurnId } from "@sched/contracts";
-
-/**
- * Closes a turn that ended without an assistant reply (a model error, a timeout, a crash after the
- * patient's message was stored). Converse requires user and assistant messages to alternate, so without
- * it the next turn's request would be invalid. Stored as an ordinary assistant message, so a restored
- * session and the next model call both see that the reply didn't happen.
- */
-export const INTERRUPTED_REPLY =
-  `I'm sorry, I couldn't finish my reply to your last message. Could you send it again? ` +
-  `You can also reach our front desk at ${CLINIC.phone} (${CLINIC.hours}).`;
+import { FALLBACK_MESSAGES, type LlmMessage } from "@sched/agent";
+import type { ConversationId, ConversationMessage, TurnId } from "@sched/contracts";
 
 export function toLlmHistory(messages: readonly ConversationMessage[]): LlmMessage[] {
   return messages.map((m) => ({ role: m.role, content: m.content }));
@@ -41,7 +31,14 @@ export function toStoredMessages(
   }));
 }
 
+/**
+ * Closes a turn that ended without an assistant reply (a model error, a timeout, a crash after the
+ * patient's message was stored). Converse requires user and assistant messages to alternate, so without
+ * it the next turn's request would be invalid. Stored as an ordinary assistant message
+ * (`FALLBACK_MESSAGES.interrupted`), so a restored session and the next model call both see that the
+ * reply didn't happen.
+ */
 export const closingReply = (): LlmMessage => ({
   role: "assistant",
-  content: [{ type: "text", text: INTERRUPTED_REPLY }],
+  content: [{ type: "text", text: FALLBACK_MESSAGES.interrupted }],
 });

@@ -4,6 +4,7 @@
  * `ScriptedLlmClient` in place of Bedrock. Only the transport is absent.
  */
 import {
+  FALLBACK_MESSAGES,
   ScriptedLlmClient,
   resolveModelProfile,
   scriptedMalformed,
@@ -26,7 +27,6 @@ import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
-  INTERRUPTED_REPLY,
   createInMemoryTurnStore,
   handleChatTurn,
   memorySink,
@@ -445,7 +445,7 @@ describe("handleChatTurn: failures", () => {
     const stored = await messagesOf(w.repos, MARIA, idOf(summary));
     expect(stored.map((m) => [m.role, textOf(m)])).toEqual([
       ["user", "Hello"],
-      ["assistant", INTERRUPTED_REPLY],
+      ["assistant", FALLBACK_MESSAGES.interrupted],
     ]);
 
     // The conversation stays valid for the next turn.
@@ -475,7 +475,7 @@ describe("handleChatTurn: failures", () => {
     expect(response.events.at(-1)).toMatchObject({ type: "error", code: "AGENT_UNAVAILABLE" });
     const stored = await messagesOf(w.repos, MARIA, idOf(summary));
     expect(stored.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
-    expect(textOf(defined(stored[3]))).toBe(INTERRUPTED_REPLY);
+    expect(textOf(defined(stored[3]))).toBe(FALLBACK_MESSAGES.interrupted);
     expect(w.turns.traces[0]?.trace.outcome).toBe("error");
   });
 
@@ -506,7 +506,7 @@ describe("handleChatTurn: failures", () => {
     expect(response.events.at(-1)).toMatchObject({ type: "done", messageId: "msg_000005" });
     const stored = await messagesOf(w.repos, MARIA, conversationId);
     expectAlternating(stored);
-    expect(textOf(defined(stored[3]))).toBe(INTERRUPTED_REPLY);
+    expect(textOf(defined(stored[3]))).toBe(FALLBACK_MESSAGES.interrupted);
     expectAlternating(defined(w.llm.requests[1]).messages);
   });
 
