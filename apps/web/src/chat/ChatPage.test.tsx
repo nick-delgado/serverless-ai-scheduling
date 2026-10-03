@@ -6,27 +6,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { REPLIES, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, createChatApi } from "./api";
-import { ChatPage } from "./ChatPage";
+import { ChatApiContext, ChatPage } from "./ChatPage";
 import { COUNTER_FROM } from "./Composer";
 import {
+  doneEvent,
   fakeTime,
   gate,
+  instant,
+  log,
   sendNow,
   serveChunks,
   serveEvents,
   typingIndicator as typing,
   until,
 } from "./testUtils";
-import { FALLBACK_GREETING } from "./useChat";
+import { FALLBACK_GREETING, GENERIC_ERROR } from "./useChat";
 
-const instant = () => true;
-const CONVERSATION_ID = "5a0c9e7b-3d2f-4b61-8e4a-7c1f0d9b2e63";
-const done: ChatStreamEvent = {
-  type: "done",
-  conversationId: CONVERSATION_ID,
-  messageId: "msg_000002",
-  usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
-};
+const done = doneEvent();
+const status = (label: string): ChatStreamEvent => ({ type: "status", tool: "check_availability", label });
+const delta = (text: string): ChatStreamEvent => ({ type: "text_delta", text });
 const availability: ChatStreamEvent = {
   type: "status",
   tool: "check_availability",
@@ -63,6 +61,30 @@ function captureChatBodies() {
   return bodies;
 }
 
+/** Render with instant replies and wait for the greeting. */
+async function renderPage() {
+  render(<ChatPage reducedMotion={instant} />);
+  await within(log()).findByText(SESSIONS.upcoming.greeting);
+}
+
+async function sendFromPage(text: string) {
+  await userEvent.setup().type(screen.getByRole("textbox", { name: "Message" }), `${text}{Enter}`);
+}
+
+/** Record every text the live region holds, from now until `stop()`. */
+function recordAnnouncements() {
+  const announcer = screen.getByTestId("announcer");
+  const announced: string[] = [];
+  const observer = new MutationObserver(() => announced.push(announcer.textContent));
+  observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+  return {
+    stop: () => {
+      observer.disconnect();
+      return announced.filter((text) => text.length > 0);
+    },
+  };
+}
+
 afterEach(() => {
   server.events.removeAllListeners();
   vi.useRealTimers();
@@ -76,6 +98,18 @@ describe("ChatPage: greeting", () => {
     expect(await within(log).findByText(SESSIONS.upcoming.greeting)).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
     expect(screen.getByTestId("announcer")).toHaveTextContent(SESSIONS.upcoming.greeting);
+  });
+
+  it("takes its API from ChatApiContext when no api prop is given", async () => {
+    const seen: (string | null)[] = [];
+    server.events.on("request:start", ({ request }) => seen.push(request.headers.get("Authorization")));
+    render(
+      <ChatApiContext value={createChatApi({ getToken: () => Promise.resolve("synthetic-id-token") })}>
+        <ChatPage reducedMotion={instant} />
+      </ChatApiContext>,
+    );
+    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    expect(seen).toEqual(["synthetic-id-token"]);
   });
 
   it("falls back to a generic greeting when the session call fails", async () => {
@@ -254,10 +288,7 @@ describe("ChatPage: a turn", () => {
   it("announces the completed reply once, never a partial one", async () => {
     serveChunks([[{ type: "text_delta", text: REPLIES.plain.text }, done]]);
     await renderAtFakeTime(() => false);
-    const announcer = screen.getByTestId("announcer");
-    const announced: string[] = [];
-    const observer = new MutationObserver(() => announced.push(announcer.textContent));
-    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
+    const announcements = recordAnnouncements();
 
     sendNow("Hi");
     await until(() => typing() === null);
@@ -267,10 +298,22 @@ describe("ChatPage: a turn", () => {
       await act(() => vi.advanceTimersByTimeAsync(16));
       bubbles.add(screen.getByRole("list", { name: "Conversation" }).lastElementChild?.textContent ?? "");
     }
-    observer.disconnect();
+    const announced = announcements.stop();
     expect(bubbles.size).toBeGreaterThan(10); // the reply was typed out in steps meanwhile
     expect(screen.queryByText(REPLIES.plain.text, { selector: "li" })).toBeVisible();
-    expect(announced.filter((text) => text.length > 0)).toEqual([REPLIES.plain.text]);
+    expect(announced).toEqual([REPLIES.plain.text]);
+  });
+
+  it("announces a reply that repeats the previous announcement", async () => {
+    serveEvents([delta("Sure."), done]);
+    const { user, input, log } = renderChat();
+    await within(log).findByText(SESSIONS.upcoming.greeting);
+    const announcements = recordAnnouncements();
+    await user.type(input, "One{Enter}");
+    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(1));
+    await user.type(input, "Two{Enter}");
+    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(2));
+    expect(announcements.stop()).toEqual(["Sure.", "Sure."]);
   });
 
   it("continues the conversation the first turn's done event started", async () => {
@@ -283,7 +326,7 @@ describe("ChatPage: a turn", () => {
     await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(2));
     const [first, second] = bodies as { conversationId?: string; clientMessageId: string }[];
     expect(first?.conversationId).toBeUndefined();
-    expect(second?.conversationId).toBe(CONVERSATION_ID);
+    expect(second?.conversationId).toBe(done.conversationId);
     expect(second?.clientMessageId).not.toBe(first?.clientMessageId);
   });
 
@@ -310,5 +353,183 @@ describe("ChatPage: a turn", () => {
     expect(within(log).getByText("Hi")).toBeVisible();
     await user.type(input, "again");
     expect(sendButton).toBeEnabled();
+  });
+});
+
+describe("ChatPage: turn details", () => {
+  it("adds a chip per status, skipping a repeat of the latest label, and marks the latest as current", async () => {
+    const hold = gate();
+    serveEvents(
+      [
+        status("Checking A…"),
+        status("Checking A…"),
+        status("Checking B…"),
+        status("Checking A…"),
+        delta("Done."),
+        done,
+      ],
+      {
+        4: hold.promise,
+      },
+    );
+    await renderPage();
+    await sendFromPage("Hi");
+    const chips = await screen.findByRole("list", { name: "What the assistant is doing" });
+    await waitFor(() =>
+      expect(
+        within(chips)
+          .getAllByRole("listitem")
+          .map((li) => li.textContent),
+      ).toEqual(["Checking A…", "Checking B…", "Checking A…"]),
+    );
+    const items = within(chips).getAllByRole("listitem");
+    expect(items.map((li) => li.classList.contains("chip--current"))).toEqual([false, false, true]);
+    hold.open();
+    await within(log()).findByText("Done.");
+  });
+
+  it("shows the typing indicator again when a text_reset drops every character, and no empty bubble", async () => {
+    const hold = gate();
+    serveEvents([delta("I can't"), { type: "text_reset", keepChars: 0 }, delta("Sure."), done], {
+      2: hold.promise,
+    });
+    await renderPage();
+    await sendFromPage("Hi");
+    await waitFor(() => expect(typing()).toBeInTheDocument());
+    // greeting + the patient's message; the reset bubble is gone rather than left empty
+    expect(within(log()).getAllByRole("listitem")).toHaveLength(2);
+    hold.open();
+    expect(await within(log()).findByText("Sure.")).toBeVisible();
+    expect(typing()).not.toBeInTheDocument();
+  });
+
+  it("marks the reply busy while it types", async () => {
+    const hold = gate();
+    serveEvents([delta("Part one. "), delta("Part two."), done], { 1: hold.promise });
+    await renderPage();
+    await sendFromPage("Hi");
+    const bubble = await within(log()).findByText("Part one.");
+    expect(bubble).toHaveAttribute("aria-busy", "true");
+    hold.open();
+    const final = await within(log()).findByText("Part one. Part two.");
+    expect(final).not.toHaveAttribute("aria-busy");
+  });
+
+  it("keeps a completed reply when the connection fails after done", async () => {
+    let failed: Promise<ChatStreamEvent[]> | undefined;
+    const real = createChatApi();
+    const api: ChatApi = {
+      getSession: (signal) => real.getSession(signal),
+      sendChat: (_request, onEvent) => {
+        onEvent(delta("All set."));
+        onEvent(done);
+        failed = Promise.reject(new TypeError("connection reset"));
+        return failed;
+      },
+    };
+    render(<ChatPage api={api} reducedMotion={instant} />);
+    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    await sendFromPage("Hi");
+    expect(await within(log()).findByText("All set.")).toBeVisible();
+    await act(() => failed?.catch(() => undefined));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(log()).getByText("All set.")).toBeVisible();
+  });
+
+  it("finishes typing a reply when the connection fails after done", async () => {
+    const text = "a".repeat(300);
+    let failed: Promise<ChatStreamEvent[]> | undefined;
+    const real = createChatApi();
+    const api: ChatApi = {
+      getSession: (signal) => real.getSession(signal),
+      sendChat: (_request, onEvent) => {
+        onEvent(delta(text));
+        onEvent(done);
+        failed = Promise.reject(new TypeError("connection reset"));
+        return failed;
+      },
+    };
+    fakeTime();
+    render(<ChatPage api={api} reducedMotion={() => false} />);
+    await until(() => within(log()).queryByText(SESSIONS.upcoming.greeting) !== null);
+    sendNow("Hi");
+    // The connection fails while fake time stands still: none of the reply has been typed yet.
+    await act(() => failed?.catch(() => undefined));
+    expect(within(log()).queryByText(text)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(within(log()).getByText(text)).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears the error when the next message is sent", async () => {
+    configureMockApi({ chatFault: "network" });
+    await renderPage();
+    await sendFromPage("Hi");
+    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
+    configureMockApi({ chatFault: "none" });
+    await sendFromPage("Again");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await within(log()).findByText(REPLIES.tools.text);
+  });
+
+  it("stops the request and the typing when the page unmounts", async () => {
+    let chatSignal: AbortSignal | undefined;
+    const real = createChatApi();
+    const api: ChatApi = {
+      getSession: (signal) => real.getSession(signal),
+      sendChat: (request, onEvent, signal) => {
+        chatSignal = signal;
+        return real.sendChat(request, onEvent, signal);
+      },
+    };
+    const hold = gate();
+    serveEvents([delta("a".repeat(400)), done], { 1: hold.promise });
+    fakeTime();
+    const { unmount } = render(<ChatPage api={api} reducedMotion={() => false} />);
+    await until(() => within(log()).queryByText(SESSIONS.upcoming.greeting) !== null);
+    sendNow("Hi");
+    await until(() => typing() === null);
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    // Typing is under way (the stream is held before done): the typewriter's next tick is pending.
+    expect(within(log()).getByText(/^a+$/)).toBeVisible();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    unmount();
+    expect(chatSignal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    hold.open();
+  });
+
+  it("scrolls the end of the conversation into view when a chip appears and when reply text appears", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const [chipSent, textSent, restSent] = [gate(), gate(), gate()];
+    serveEvents([availability, delta("Part one. "), delta("Part two."), done], {
+      0: chipSent.promise,
+      1: textSent.promise,
+      2: restSent.promise,
+    });
+    try {
+      await renderPage();
+      await sendFromPage("Hi");
+      await within(log()).findByText("Hi");
+      scrollIntoView.mockClear();
+
+      // A chip: the turn's text is still empty and the messages haven't changed.
+      chipSent.open();
+      await screen.findByText(TOOL_STATUS_LABELS.check_availability);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      scrollIntoView.mockClear();
+
+      // The first text of the reply: the chips and the messages haven't changed.
+      textSent.open();
+      await within(log()).findByText("Part one.");
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+
+      restSent.open();
+      await within(log()).findByText("Part one. Part two.");
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
   });
 });

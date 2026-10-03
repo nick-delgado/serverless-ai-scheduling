@@ -47,9 +47,7 @@ export const FALLBACK_GREETING = `Hi! I'm the ${CLINIC.name} scheduling assistan
 export const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 export function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === "function"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 export interface UseChatOptions {
@@ -104,10 +102,12 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       const controller = new AbortController();
       // Set by `done`, which is the only way a turn completes.
       let messageId = "";
+      let doneReceived = false;
       let ended = false;
 
-      // `end` runs once per turn. A transport error after the reply completed (the connection drops
-      // after `done`) must not turn a finished reply into an error.
+      // `end` runs once per turn. A transport error after `done` (the connection drops, or the stream
+      // sends more) must not turn the reply into an error, whether or not it has finished typing: the
+      // server stored it, and the typewriter finishes it.
       const end = () => {
         ended = true;
         typewriter.dispose();
@@ -152,6 +152,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
           case "done":
             conversationId.current = event.conversationId;
             messageId = event.messageId;
+            doneReceived = true;
             typewriter.finish();
             break;
           case "error":
@@ -161,6 +162,8 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       };
 
       setError(null);
+      // Empty the live region, so a reply equal to the last announcement is still a change to announce.
+      setAnnouncement("");
       setMessages((list) => [...list, { id: clientMessageId, role: "patient", text }]);
       setTurn({ text: "", waiting: true, chips: [] });
 
@@ -170,7 +173,9 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
           onEvent,
           controller.signal,
         )
-        .catch(() => failTurn(GENERIC_ERROR));
+        .catch(() => {
+          if (!doneReceived) failTurn(GENERIC_ERROR);
+        });
       return true;
     },
     [api, reducedMotion],
