@@ -71,10 +71,6 @@ export const interimSystemPrompt: SystemPromptFactory = (now, patientFirstName) 
   };
 };
 
-/** The production prompt (`buildSystemPrompt` from `@sched/agent`) as a factory. */
-export const productionSystemPrompt: SystemPromptFactory = (now, patientFirstName) =>
-  buildSystemPrompt({ now, patientFirstName });
-
 /**
  * The prompt a run uses: `factory` (default: the production prompt) at `now`, for `firstName`. Without a
  * first name the production prompt says it isn't known; the interim prompt gets "there".

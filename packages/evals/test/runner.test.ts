@@ -1,10 +1,11 @@
 /**
  * What the multi-turn runner hands the model and the simulator: the trial's system prompt (custom or
- * the interim one, with the frozen date and the patient's first name), the conversation carried from
+ * the production one, with the frozen date and the patient's first name), the conversation carried from
  * turn to turn, the simulator's view of the run, and the per-trial accounting. Also how `runSuite`
  * passes its options through, and how a trial skips, errors, injects faults and stops.
  */
 import {
+  buildSystemPrompt,
   estimateCostUsd,
   ScriptedLlmClient,
   scriptedMalformed,
@@ -15,7 +16,6 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
-  productionSystemPrompt,
   QueuedPatientSimulator,
   runScenarioTrial,
   runSuite,
@@ -74,7 +74,7 @@ describe("runScenarioTrial", () => {
     const production = new ScriptedLlmClient([scriptedText("Please call 911 now.")]);
     await runScenarioTrial(s, { agent: { llm: production, profile } });
     const text = systemText(production.requests[0]);
-    expect(text).toContain(productionSystemPrompt(new Date(s.clock), "Walter").stable);
+    expect(text).toContain(buildSystemPrompt({ now: new Date(s.clock), patientFirstName: "Walter" }).stable);
     expect(text).toContain("Today is Monday, October 5, 2026 (2026-10-05)");
     expect(text).toContain("The patient's first name, from their profile: Walter.");
   });

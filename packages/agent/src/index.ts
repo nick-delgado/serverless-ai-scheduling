@@ -30,14 +30,7 @@ export {
   type ModelProfileName,
 } from "./profiles";
 export { FALLBACK_MESSAGES } from "./fallback-messages";
-export {
-  ESCALATION_MESSAGE,
-  SYSTEM_PROMPT_V1_VERSION,
-  buildSystemPrompt,
-  renderSystemPromptV1Dynamic,
-  systemPromptV1,
-  type SystemPromptContext,
-} from "./prompts";
+export { buildSystemPrompt, type SystemPromptContext } from "./prompts";
 export {
   CACHE_POINT,
   LLM_STOP_REASONS,
