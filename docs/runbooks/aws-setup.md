@@ -33,12 +33,13 @@ In **IAM Identity Center → Permission sets**:
 | `AdministratorAccess` | AWS managed `AdministratorAccess` | 1 h | Nick only: bootstrap (step 5) and break-glass |
 | `SchedDeployer` | **Inline policy** from `infra/bootstrap/sched-deployer-policy.json` | 8 h | Claude Code agents (`sched-dev` profile) |
 
-Before pasting the inline policy, substitute your account ID and the verified SES identity (the sender address, the same value as `SES_SENDER` in the git-ignored `.env`; it lets agents send escalation emails and run `scripts/retry-escalations.ts`):
+Before pasting the inline policy, substitute your account ID and the two SES identities: the sender (`<SES_IDENTITY>`, the same value as `SES_SENDER` in the git-ignored `.env`) and the front-desk recipient (`<SES_RECIPIENT>`, the same value as `SES_STAFF_RECIPIENT`; in the one-address setup of step 7 both are the same address). The grant lets agents send escalation emails and run `scripts/retry-escalations.ts`, and its `ses:FromAddress` condition allows only the sender as the From address:
 
 ```bash
 ACCOUNT_ID=123456789012              # your 12-digit account ID
-SES_IDENTITY=you@example.com         # the verified SES identity; never commit the real one
-sed -e "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" -e "s/<SES_IDENTITY>/$SES_IDENTITY/g" \
+SES_IDENTITY=you@example.com         # the verified sender identity; never commit the real one
+SES_RECIPIENT=you@example.com        # the verified recipient identity (the same address in a one-address setup)
+sed -e "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" -e "s/<SES_IDENTITY>/$SES_IDENTITY/g" -e "s/<SES_RECIPIENT>/$SES_RECIPIENT/g" \
   infra/bootstrap/sched-deployer-policy.json | pbcopy
 ```
 
@@ -97,7 +98,7 @@ aws cloudformation deploy --profile sched-admin --region us-east-1 \
   --stack-name sched-bootstrap --template-file infra/bootstrap/bootstrap.yaml --capabilities CAPABILITY_NAMED_IAM
 ```
 
-When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>` and `<SES_IDENTITY>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
+When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>`, `<SES_IDENTITY>` and `<SES_RECIPIENT>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
 
 ## 6. Enable Bedrock model access
 
@@ -148,7 +149,7 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | SES email verification click | Requires a human to click the email link | Nick |
 | SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh`) |
 | Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`) |
-| Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Nick (`scripts/retry-escalations.ts`, below) |
+| Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 
 ## Teardown
 
@@ -201,13 +202,13 @@ npx tsx scripts/retry-escalations.ts dev --dry-run      # list what would be re-
 npx tsx scripts/retry-escalations.ts dev
 ```
 
-Run it from the main checkout, where `.env` holds `SES_SENDER` and `SES_STAFF_RECIPIENT` (or pass `--env-file <path>`). Sending needs `ses:SendEmail` on the identity, which the `SchedDeployer` permission set (`sched-dev`) grants through its `SendAsVerifiedIdentity` statement (Nick's choice on #35). If the permission set hasn't been re-provisioned with that statement yet, the send fails with AccessDenied; the dry run works either way.
+Run it from the main checkout, where `.env` holds `SES_SENDER` and `SES_STAFF_RECIPIENT` (or pass `--env-file <path>`). Sending needs `ses:SendEmail` on the sender and recipient identities, with the sender as the From address, which the `SchedDeployer` permission set (`sched-dev`) grants through its `SendAsVerifiedIdentity` statement (Nick's choice on #35). If the permission set hasn't been re-provisioned with that statement yet, the send fails with AccessDenied; the dry run works either way.
 
 What it does:
 
 1. **Finds** every escalation whose notification is `FAILED`, plus each `PENDING` one at least 10 minutes old (`--min-pending-age <minutes>`), with one Scan of the env's table (SSM `/sched/<env>/data/table-name`, or `--table`). Younger `PENDING` ones may still be sending, so it leaves them alone.
-2. **Rebuilds** each email from the stored escalation, the patient's profile and the conversation's messages, exactly as the tool does. Messages expire after 30 days, so an older escalation goes out with an empty transcript.
-3. **Re-sends** it through the SES notifier, then sets the notification to `SENT` with the new SES MessageId, or to `FAILED` with the error (email addresses redacted). One failure doesn't stop the others. The exit code is 1 if any failed.
+2. **Rebuilds** each email from the stored escalation, the patient's profile and the conversation's messages, with the tool's own load-and-send step. The transcript is the conversation as stored at retry time, not a copy of the first attempt's: it can include later messages, and messages expire after 30 days, so an older escalation goes out with an empty transcript.
+3. **Re-sends** it through the SES notifier, then sets the notification to `SENT` with the new SES MessageId, or to `FAILED` with the error (email addresses redacted). One failure doesn't stop the others. The exit code is 1 if any failed, or if the run stopped on an error (for example, missing SES settings).
 
 The output has only IDs, statuses and MessageIds. Run one at a time: two runs at once can both send the same escalation. Re-running is safe otherwise, since a `SENT` escalation is never picked up again. A line ending in `status not recorded` means the email went out but the status didn't change, so the next run sends it again. Set that escalation's status by hand, or accept the duplicate.
 
