@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
-- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123))
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35))
 
 ## Context
 
@@ -28,7 +28,7 @@ Nick wants CloudFormation "wherever possible". Several agents will work on infra
 | `sched-bootstrap` (once, admin) | `infra/bootstrap/bootstrap.yaml` | CloudFormation execution role + permissions boundary, SAM artifact bucket, AWS Budget alarm, (later) GitHub OIDC deploy role | Nick (reviewed) |
 | `sched-<env>-data` | `infra/stacks/data.yaml` | DynamoDB table + GSI, TTL | S2 |
 | `sched-<env>-auth` | `infra/stacks/auth.yaml` | Cognito User Pool + app client, Identity Pool + Transcribe role | S1 |
-| `sched-<env>-api` | `infra/stacks/api.yaml` | REST API (Cognito authorizer, streaming integration), Lambdas, SES identity/config *(planned, #35; see the [2026-10-03 amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123))* | S3, S8 |
+| `sched-<env>-api` | `infra/stacks/api.yaml` | REST API (Cognito authorizer, streaming integration), Lambdas, SES identity/config *(planned, #35; see the [2026-10-03 amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123))* *(Refined by the [2026-10-04 amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35): the SES grant and `NoEcho` address parameters, with no SES identity resource.)* | S3, S8 |
 | `sched-<env>-web` | `infra/stacks/web.yaml` | S3 bucket (private), CloudFront (OAC), `/api/*` behavior → REST API | S5 |
 
 - **Cross-stack wiring:** SSM parameters under `/sched/<env>/<stack>/<name>`, rather than `Fn::ImportValue` exports. Exports lock the producer stack, which blocks parallel iteration. *(How consumers read them is refined in the amendment below.)*
@@ -75,5 +75,14 @@ The `sam-deploy` skill carries these as working rules.
 The decision stands. Three details in the body no longer matched what was built or decided:
 
 - **CI runs `cfn-lint`** (the linter behind `sam validate --lint`) on every `infra/**/*.yaml`, as the `cfn-lint` job in `.github/workflows/ci.yml` (#8). `sam validate --lint` stays the local check before a deploy.
-- **The api stack has no SES resources yet.** The SES identity and the chat function's `ses:SendEmail` grant come with the escalation notifier (#35); until then escalations are stored with a `FAILED` notification status (#17).
+- **The api stack has no SES resources yet.** The SES identity and the chat function's `ses:SendEmail` grant come with the escalation notifier (#35); until then escalations are stored with a `FAILED` notification status (#17). *(Superseded by the [2026-10-04 amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35): #35 added the grant and the address parameters.)*
 - **The redeploy criterion is a new environment, not a new account** (decided on #123, matching PRD FR-050): a new environment in an account where the bootstrap and the runbook's one-time steps are done deploys from the runbook alone (#42). A second AWS account would add an entitlement and quota wait for little value.
+
+## Amendment (2026-10-04): the SES grant and parameters as built (#35)
+
+The decision stands. #35 settled the api stack's SES part:
+
+- **No SES identity resource.** The identity is verified by hand (runbook step 7, one of the listed exceptions). The api stack takes its addresses as two `NoEcho` parameters, `SesSender` and `SesStaffRecipient`, which `scripts/deploy.sh` passes from the environment or the git-ignored `.env`. They default to empty, and an env without them gets no SES grant and no notifier. `dev` and `demo` api deploys refuse to run without them.
+- **The chat function's grant** is `ses:SendEmail` on the sender's and the recipient's identity ARNs (the SES sandbox authorizes the recipient identity too), with a `StringEquals` condition on `ses:FromAddress` set to `SesSender`, so the recipient identity can't be used as a sender. ADR-009's [2026-10-04 amendment](0009-safety-and-privacy.md#amendment-2026-10-04-the-ses-grant-as-built-35) has the details.
+- **A `NotificationFailedAlarm`** on `Sched/NotificationFailed` (dimension `Env`) is in the api stack, with no alarm action (#38 decides actions with its dashboard).
+- **The retry script's Scan** (`scripts/retry-escalations.ts`) runs as the `sched-dev` operator, not as a stack role: the chat function's role still has no Scan.

@@ -6,6 +6,9 @@
 #   scripts/deploy.sh all pr52                                 # ephemeral env: sched-pr52-* (tear down with teardown.sh)
 #   scripts/deploy.sh data dev -- DeletionProtection=disabled  # overrides go only to templates that declare them
 #
+# The api stack also takes the escalation email's SES identity from SES_SENDER / SES_STAFF_RECIPIENT
+# (environment or the git-ignored .env); dev and demo refuse to deploy it without them.
+#
 # Deploys the checkout this script lives in (repo_root below comes from the script's own path), so
 # a worktree deploys its own branch. Every stack is tagged with the git branch and commit it came from.
 #
@@ -59,6 +62,37 @@ if ! $is_protected && [[ " ${extra_overrides[*]-} " != *" DeletionProtection="* 
   extra_overrides+=("DeletionProtection=disabled")
 fi
 
+# --- the escalation email's SES identity (api stack, #35) --------------------------------------
+# SES_SENDER and SES_STAFF_RECIPIENT are never committed (public repo): they come from the environment, or
+# else from the git-ignored .env of this checkout or of the main checkout (worktrees share that one). They
+# go to the api stack as NoEcho parameters, which SAM prints as *****. Never echo them here.
+main_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+dotenv_value() {
+  local key="$1" file val=""
+  for file in "$repo_root/.env" "$main_checkout/.env"; do
+    [[ -f "$file" ]] || continue
+    val="$(sed -n "s/^${key}=//p" "$file" | tail -n 1)"
+    val="${val%\"}"; val="${val#\"}"
+    val="${val%\'}"; val="${val#\'}"
+    [[ -n "$val" ]] && break
+  done
+  printf '%s' "$val"
+}
+ses_sender="${SES_SENDER:-$(dotenv_value SES_SENDER)}"
+ses_recipient="${SES_STAFF_RECIPIENT:-$(dotenv_value SES_STAFF_RECIPIENT)}"
+ses_overrides=()
+if [[ " ${stacks[*]} " == *" api "* ]]; then
+  if [[ -n "$ses_sender" && -n "$ses_recipient" ]]; then
+    ses_overrides=("SesSender=${ses_sender}" "SesStaffRecipient=${ses_recipient}")
+  elif $is_protected; then
+    echo "SES_SENDER and SES_STAFF_RECIPIENT must be set (environment or .env, see .env.example) to deploy" \
+         "the api stack to '${env}': without them the chat function loses its escalation email." >&2
+    exit 1
+  else
+    echo "note: SES_SENDER/SES_STAFF_RECIPIENT not set; '${env}' gets no escalation email (notifications FAILED)." >&2
+  fi
+fi
+
 echo "Deploying ${stacks[*]} to env '${env}' from ${git_branch}@${git_commit} (${repo_root})"
 if $is_protected && [[ "$git_branch" != "main" ]]; then
   echo "note: '${env}' is shared; this deploys an unmerged branch. Deploy only the stacks your issue owns," \
@@ -84,6 +118,7 @@ for stack in "${stacks[@]}"; do
   for kv in ${extra_overrides[@]+"${extra_overrides[@]}"}; do
     [[ "$declared" == *" ${kv%%=*} "* ]] && overrides+=("$kv")
   done
+  [[ "$stack" == "api" ]] && overrides+=(${ses_overrides[@]+"${ses_overrides[@]}"})
 
   sam validate --lint --template-file "$template" --region "$AWS_REGION"
   sam build --template-file "$template" --build-dir "$build_dir" --cached --cache-dir ".aws-sam/cache-${stack}" >/dev/null

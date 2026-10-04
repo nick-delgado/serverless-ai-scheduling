@@ -7,8 +7,9 @@
  * authorizer's `claims.sub` (see `lib/chat-turn.ts`).
  *
  * Seams still on stand-ins (wired by #36): the system prompt is `placeholderSystemPrompt` until #16's
- * prompt lands, and there is no notifier until #35's SES notifier lands, so escalations are recorded
- * with notification status FAILED and the patient is given the front-desk number (#23).
+ * prompt lands, and no notifier is passed yet: #35's SES notifier exists (`sesNotifierFromEnv` in
+ * `@sched/tools/ses`) and #36 wires it. Until then escalations are recorded with notification status
+ * FAILED and the patient is given the front-desk number (#23).
  */
 import { ConverseLlmClient } from "@sched/agent";
 import { SystemClock } from "@sched/tools";

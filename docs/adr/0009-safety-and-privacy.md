@@ -1,7 +1,7 @@
 # ADR-009: Safety, privacy, and abuse controls
 
 - **Status:** Accepted
-- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123))
+- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123)); 2026-10-04 (the SES grant as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-as-built-35))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-035…FR-037, NFR-004, ADR-004, ADR-005, ADR-008
@@ -26,7 +26,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 - The patient ID comes from the JWT only (ADR-005). Tools can reach only that patient's records, so there is no tool that can read another patient's data.
 - **Conversation ownership** (ADR-004 amendment, 2026-09-29): IDs in a request body are never trusted on their own. Message items store `patientId`. Reading a conversation, appending to it, and reading or updating its escalation all check that `patientId` against the JWT `sub` in the data layer. A mismatch looks exactly like "not found".
 - Lambda roles are least-privilege:
-  - The chat function can read and write the table and call `bedrock-mantle:CreateInference` on the configured models. It can call `ses:SendEmail` only from the verified identity. *(Superseded by ADR-010: `bedrock:InvokeModel*` on inference-profile and foundation-model ARNs.)* *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-lambda-roles-as-built-123): the table actions, the SES grant deferred to #35, and the session function's role.)*
+  - The chat function can read and write the table and call `bedrock-mantle:CreateInference` on the configured models. It can call `ses:SendEmail` only from the verified identity. *(Superseded by ADR-010: `bedrock:InvokeModel*` on inference-profile and foundation-model ARNs.)* *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-lambda-roles-as-built-123): the table actions, the SES grant deferred to #35, and the session function's role.)* *(Refined by the [2026-10-04 amendment](#amendment-2026-10-04-the-ses-grant-as-built-35): the SES grant as built.)*
 
 **Agent behavior** (system prompt policy, enforced by evals)
 - **Scope:** scheduling, availability, the patient's own appointments, and escalation. Off-topic requests get a polite decline.
@@ -61,5 +61,15 @@ The domain is healthcare, even though the data is fake. The system has to behave
 The decision stands. The roles as built in `infra/stacks/api.yaml` settle the details the body left open:
 
 - **The chat function's table access** is item reads and conditional writes only: GetItem, Query, PutItem, UpdateItem and ConditionCheckItem on the base table and its indexes, with no Scan or Delete (#17). `TransactWriteItems` is authorized per item through the Put, Update and ConditionCheck actions.
-- **The chat function's SES grant is deferred.** `ses:SendEmail`, still limited to the verified identity, comes with the escalation notifier (#35). Until then `escalate_to_human` stores the escalation with a `FAILED` notification status and sends no email, as [ADR-003's 2026-10-03 amendment](0003-iac-layout.md#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123) records.
+- **The chat function's SES grant is deferred.** `ses:SendEmail`, still limited to the verified identity, comes with the escalation notifier (#35). Until then `escalate_to_human` stores the escalation with a `FAILED` notification status and sends no email, as [ADR-003's 2026-10-03 amendment](0003-iac-layout.md#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123) records. *(Superseded by the [2026-10-04 amendment](#amendment-2026-10-04-the-ses-grant-as-built-35): #35 added the grant.)*
 - **The session function** (`POST /api/session`, #18) can only GetItem and Query the base table. It has no Bedrock or SES access.
+
+## Amendment (2026-10-04): the SES grant as built (#35)
+
+The decision stands, and "`ses:SendEmail` only from the verified identity" holds as follows:
+
+- **The chat function's role** may call `ses:SendEmail` on two identity ARNs, the sender's and the front-desk recipient's (in the SES sandbox the recipient identity is authorized too), with a `StringEquals` condition on `ses:FromAddress` equal to the sender. So even when the two addresses differ, the role can send only *from* the sender. The condition key applies to `SendEmail` per the [Service Authorization Reference for Amazon SES v2](https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonsimpleemailservicev2.html). The grant exists only when both addresses are configured.
+- **The addresses are deploy-time `NoEcho` parameters** (`SesSender`, `SesStaffRecipient`), passed by `scripts/deploy.sh` from the environment or the git-ignored `.env`. They never appear in a committed file, and SAM prints them as `*****`.
+- **The `SchedDeployer` permission set** (`sched-dev`) has the same grant, on both identities with the same `ses:FromAddress` condition (`SendAsVerifiedIdentity` in `infra/bootstrap/sched-deployer-policy.json`, placeholders substituted by hand), so an operator can run `scripts/retry-escalations.ts` without an admin login. Nick decided this on #35.
+- **The retry script scans the table** for unsent escalations as that operator. The chat function's role still has no Scan.
+- **Logs and metrics stay ID-only.** A failed send writes one EMF record of `Sched/NotificationFailed` with the escalation and conversation IDs and the error's name, never its message. The error text stored on the escalation has email addresses redacted.

@@ -13,13 +13,13 @@ When it isn't clear which one a change is, ask the owner.
 |---|---|---|
 | [001](0001-agent-runtime.md) | Agent runtime: our own tool-use loop in Lambda | Accepted (amended 2026-10-03) |
 | [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Client decision superseded by ADR-010; model-selection method stands |
-| [003](0003-iac-layout.md) | Infrastructure as code: SAM, one template per stack | Accepted (amended 2026-09-29, 2026-10-03) |
+| [003](0003-iac-layout.md) | Infrastructure as code: SAM, one template per stack | Accepted (amended 2026-09-29, 2026-10-03, 2026-10-04) |
 | [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03) |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted (amended 2026-10-03) |
 | [006](0006-voice-transcription.md) | Voice transcription: browser → Transcribe Streaming | Proposed (spike S-3) |
 | [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7; amended 2026-10-03, twice) |
 | [008](0008-evaluation-strategy.md) | Evaluation strategy | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03) |
-| [009](0009-safety-and-privacy.md) | Safety, privacy, and abuse controls | Accepted (amended 2026-10-03) |
+| [009](0009-safety-and-privacy.md) | Safety, privacy, and abuse controls | Accepted (amended 2026-10-03, 2026-10-04) |
 | [010](0010-provider-neutral-llm-layer.md) | Provider-neutral LLM layer via Bedrock Converse | Accepted (spike S-1c, #60) |
 
 ## Template
