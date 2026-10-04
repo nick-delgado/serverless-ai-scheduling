@@ -5,11 +5,7 @@
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  cognitoMockStats,
-  configureCognitoMock,
-  expireCognitoSessions,
-} from "../mocks/cognito";
+import { cognitoMockStats, configureCognitoMock, expireCognitoSessions } from "../mocks/cognito";
 import { MOCK_COGNITO_CONFIG, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { server } from "../mocks/node";
 import { type AuthService, createAmplifyAuthService } from "./authService";
