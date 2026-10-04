@@ -1,16 +1,20 @@
 import { CLINIC } from "@sched/contracts";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, type RouteObject } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { describe, expect, it, vi } from "vitest";
 
+import type { AuthService } from "../auth/authService";
+import { fakeAuthService } from "../auth/testing";
 import { DISCLAIMER_TEXT } from "./DisclaimerBanner";
 import { pageTitle } from "./pageTitle";
 import { appRoutes, pageRoutes } from "./routes";
 
-function renderAt(path: string, pages: RouteObject[] = pageRoutes) {
-  const router = createMemoryRouter(appRoutes(pages), { initialEntries: [path] });
+const signedIn = () => fakeAuthService({ username: "maria.santos" });
+
+function renderAt(path: string, pages: RouteObject[] = pageRoutes, auth: AuthService = fakeAuthService()) {
+  const router = createMemoryRouter(appRoutes(pages, auth), { initialEntries: [path] });
   render(<RouterProvider router={router} />);
   return router;
 }
@@ -28,7 +32,7 @@ describe("app shell", () => {
     ["/chat", "Chat"],
     ["/no-such-page", "Page not found"],
   ])("renders %s inside the layout, with the disclaimer and a page title", async (path, heading) => {
-    renderAt(path);
+    renderAt(path, pageRoutes, path === "/chat" ? signedIn() : fakeAuthService());
     expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeVisible();
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("heading", { level: 1 }));
     expectDisclaimer();
@@ -40,7 +44,13 @@ describe("app shell", () => {
     expect(DISCLAIMER_TEXT).toBe("Demo — fictional clinic. Do not enter real health information.");
   });
 
-  it("sends / to the login placeholder", async () => {
+  it("sends / to the chat when signed in", async () => {
+    const router = renderAt("/", pageRoutes, signedIn());
+    expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/chat");
+  });
+
+  it("sends / to the login page when signed out", async () => {
     const router = renderAt("/");
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/login");
@@ -74,8 +84,12 @@ describe("app shell", () => {
     renderAt("/login");
     await screen.findByRole("heading", { name: "Sign in" });
     expect(screen.getByRole("main")).not.toHaveFocus();
-    await user.click(screen.getByRole("link", { name: "Continue to the chat" }));
+    await user.type(screen.getByLabelText("Username"), "maria.santos");
+    await user.type(screen.getByLabelText("Password"), "any{Enter}");
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
-    expect(screen.getByRole("main")).toHaveFocus();
+    // The focus move is an effect that runs after the navigation renders, so wait for it.
+    await waitFor(() => {
+      expect(screen.getByRole("main")).toHaveFocus();
+    });
   });
 });

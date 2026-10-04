@@ -1,0 +1,64 @@
+/* The login page (S1-02, #25). Colors are tokens; the danger/surface pairs are checked in tokens.test.ts. */
+.login {
+  max-width: 26rem;
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.login__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.login__field label {
+  font-weight: 600;
+}
+
+.login__field input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.login__field input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* Always in the DOM so screen readers announce the message when it appears (role="alert"). */
+.login__error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+.login__error:empty {
+  display: none;
+}
+
+.login__submit {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-6);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login__submit:hover {
+  background: var(--color-accent-hover);
+}
+
+.login__submit[aria-disabled="true"] {
+  cursor: progress;
+}
