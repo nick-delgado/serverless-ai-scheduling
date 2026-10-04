@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Lambda handlers: POST /api/chat (streaming), GET /api/session.",
+  "description": "Lambda handlers: POST /api/chat (streaming), POST /api/session.",
   "exports": {
     ".": "./src/index.ts"
   },
