@@ -302,6 +302,20 @@ describe("session (FR-002, FR-003)", () => {
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
   });
 
+  // The button stays mounted in Layout while signed out (it renders nothing), so its guard must be
+  // cleared after a sign-out, or the next sign-out in the same page session would be ignored.
+  it("signs out again after signing back in", async () => {
+    const user = userEvent.setup();
+    const auth = fakeAuthService({ username: "maria.santos" });
+    const { router } = renderApp("/chat", auth);
+    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    await signInThroughForm("maria.santos", "pw");
+    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(auth.signOut).toHaveBeenCalledTimes(2);
+    expect(router.state.location.pathname).toBe("/login");
+  });
+
   it("goes to /login when a silent refresh finds the session revoked", async () => {
     configureCognitoMock({ tokenLifetimeSeconds: 1 });
     const { router } = renderApp("/login");
