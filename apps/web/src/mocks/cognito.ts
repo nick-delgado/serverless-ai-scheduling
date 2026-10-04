@@ -16,6 +16,7 @@
  * with `configureCognitoMock`; `resetCognitoMock` forgets sessions and options.
  */
 import { http, HttpResponse, passthrough } from "msw";
+import { z } from "zod";
 
 import { MOCK_COGNITO_CONFIG, MOCK_COGNITO_USERS, MOCK_PASSWORD, type MockCognitoUser } from "./cognitoUsers";
 import { base64FromBytes, randomHex, type SrpChallenge, startChallenge, verifyPasswordClaim } from "./srp";
@@ -120,9 +121,19 @@ function findUser(username: string): MockCognitoUser | undefined {
   return MOCK_COGNITO_USERS.find((user) => user.username === username.toLowerCase());
 }
 
-type Body = Record<string, unknown>;
-const field = (body: Body, key: string): Record<string, string> =>
-  (body[key] ?? {}) as Record<string, string>;
+/** A request body: a JSON object, or `{}` for anything else (so a non-mock request passes through). */
+const RequestBody = z.record(z.string(), z.unknown()).catch({});
+type Body = z.infer<typeof RequestBody>;
+/** `AuthParameters` and `ChallengeResponses` are string maps in Cognito's API; absent means empty. */
+const StringMap = z.record(z.string(), z.string()).default({});
+
+/** The string map at `key`, or a 400 like Cognito's when it isn't one. */
+function stringMap(body: Body, key: string): Record<string, string> | Response {
+  const parsed = StringMap.safeParse(body[key]);
+  return parsed.success
+    ? parsed.data
+    : cognitoError("InvalidParameterException", `${key} must be a map of strings`);
+}
 
 async function initiateAuth(body: Body): Promise<Response> {
   if (body.AuthFlow !== "USER_SRP_AUTH") {
@@ -131,7 +142,9 @@ async function initiateAuth(body: Body): Promise<Response> {
       `${String(body.AuthFlow)} flow not enabled for this client`,
     );
   }
-  const { USERNAME: username = "", SRP_A: srpA = "" } = field(body, "AuthParameters");
+  const params = stringMap(body, "AuthParameters");
+  if (params instanceof Response) return params;
+  const { USERNAME: username = "", SRP_A: srpA = "" } = params;
   const user = findUser(username);
   // Unknown users get a challenge too and fail at the next step, the same way as a wrong password.
   const userIdForSrp = user?.username ?? username;
@@ -151,7 +164,8 @@ async function initiateAuth(body: Body): Promise<Response> {
 }
 
 async function respondToAuthChallenge(body: Body): Promise<Response> {
-  const responses = field(body, "ChallengeResponses");
+  const responses = stringMap(body, "ChallengeResponses");
+  if (responses instanceof Response) return responses;
   const secretBlock = responses.PASSWORD_CLAIM_SECRET_BLOCK ?? "";
   const pending = challenges.get(secretBlock);
   if (body.ChallengeName !== "PASSWORD_VERIFIER" || !pending) return notAuthorized();
@@ -194,10 +208,12 @@ function revokeToken(body: Body): Response {
 
 export const cognitoHandlers = [
   http.post(ENDPOINT, async ({ request }) => {
-    const body = (await request
-      .clone()
-      .json()
-      .catch(() => ({}))) as Body;
+    const body = RequestBody.parse(
+      await request
+        .clone()
+        .json()
+        .catch(() => undefined),
+    );
     if (body.ClientId !== MOCK_COGNITO_CONFIG.userPoolClientId) return passthrough();
     if (options.fault === "network") return HttpResponse.error();
     if (options.fault === "internal") {
