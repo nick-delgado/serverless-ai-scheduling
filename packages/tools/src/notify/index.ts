@@ -3,7 +3,7 @@
  *
  * Tools depend only on this interface, injected through `ToolContext.notifier` (CLAUDE.md rule 3), so the
  * eval harness and unit tests run with `RecordingNotifier` and never send email. The SES implementation
- * (#35) lives next to this file; the chat handler (#17) wires it.
+ * (#35) is `./ses.ts`, a separate entry point (`@sched/tools/ses`); the chat handler wires it (#36).
  *
  * Everything in a notice except the ids is untrusted text (the patient's words, the model's summary):
  * an implementation must escape it for its medium (e.g. HTML email) and never interpret it.
@@ -15,6 +15,9 @@ import type {
   IsoDate,
   IsoDateTimeUtc,
 } from "@sched/contracts";
+
+export * from "./notice";
+export * from "./render";
 
 /** One visible line of the conversation. Only text the patient saw or typed; never reasoning or tool internals. */
 export interface TranscriptLine {

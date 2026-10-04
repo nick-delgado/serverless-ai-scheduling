@@ -122,14 +122,15 @@ When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Iden
 
 1. Console → **Amazon SES** (us-east-1) → **Identities** → **Create identity** → Email address. Use an address you control. It will be both the **sender** and the **staff recipient** for escalation emails.
 2. Click the verification link in the email.
-3. Leave SES in the **sandbox**. That's fine for the demo, since sandbox accounts can only send to verified addresses. Later, the `api` stack references this identity through a parameter.
+3. Leave SES in the **sandbox**. That's fine for the demo, since sandbox accounts can only send to verified addresses.
+4. Put the address in the git-ignored `.env` of the main checkout as `SES_SENDER` and `SES_STAFF_RECIPIENT` (see `.env.example`). `scripts/deploy.sh` passes them to the `api` stack as NoEcho parameters, and refuses to deploy `api` to `dev` or `demo` without them. The repo is public, so the address never goes in a committed file, an issue or a PR.
 
 ## 8. Tell the agents
 
 Reply in the Claude Code session with:
 - the `sched-dev` profile working (output of `aws sts get-caller-identity --profile sched-dev`);
 - the Bedrock model-access status for the three models;
-- the verified SES email address.
+- that the verified SES address is in `.env` (step 7). Don't paste the address itself.
 
 ---
 
@@ -145,6 +146,7 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | SES email verification click | Requires a human to click the email link | Nick |
 | SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh`) |
 | Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`) |
+| Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Nick (`scripts/retry-escalations.ts`, below) |
 
 ## Teardown
 
@@ -178,3 +180,39 @@ DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/seed-data.ts --env dev -
 ```
 
 `--table` is required when `DYNAMODB_ENDPOINT` is set. `--mapping` overrides the default `.seed/cognito-users.<env>.json`. The tests (`scripts/seed-data.test.ts`) run against DynamoDB Local with temporary mapping files. They're skipped locally when no endpoint answers, and required in CI.
+
+---
+
+## Appendix: re-sending failed escalation emails
+
+`escalate_to_human` emails the front desk once and never re-sends (FR-034). The patient always gets the phone number, but if the email fails, staff never hear about the escalation. The escalation record then keeps a `FAILED` notification status, or stays `PENDING` if the function couldn't record the result.
+
+**When to run it:**
+
+- the CloudWatch alarm `sched-<env>-notification-failed` fired (metric `Sched/NotificationFailed`, dimension `Env`, written by the SES notifier for each failed send); or
+- an escalation is stuck at `PENDING` (for example, the function timed out mid-turn, which the alarm doesn't see).
+
+**How:**
+
+```bash
+npx tsx scripts/retry-escalations.ts dev --dry-run      # list what would be re-sent; sends nothing
+AWS_PROFILE=sched-admin npx tsx scripts/retry-escalations.ts dev
+```
+
+Run it from the main checkout, where `.env` holds `SES_SENDER` and `SES_STAFF_RECIPIENT` (or pass `--env-file <path>`). Sending needs `ses:SendEmail` on the identity. The `SchedDeployer` permission set (`sched-dev`) doesn't have it, so the send runs as `sched-admin`. The dry run works as `sched-dev`.
+
+What it does:
+
+1. **Finds** every escalation whose notification is `FAILED`, plus each `PENDING` one at least 10 minutes old (`--min-pending-age <minutes>`), with one Scan of the env's table (SSM `/sched/<env>/data/table-name`, or `--table`). Younger `PENDING` ones may still be sending, so it leaves them alone.
+2. **Rebuilds** each email from the stored escalation, the patient's profile and the conversation's messages, exactly as the tool does. Messages expire after 30 days, so an older escalation goes out with an empty transcript.
+3. **Re-sends** it through the SES notifier, then sets the notification to `SENT` with the new SES MessageId, or to `FAILED` with the error (email addresses redacted). One failure doesn't stop the others. The exit code is 1 if any failed.
+
+The output has only IDs, statuses and MessageIds. Run one at a time: two runs at once can both send the same escalation. Re-running is safe otherwise, since a `SENT` escalation is never picked up again. A line ending in `status not recorded` means the email went out but the status didn't change, so the next run sends it again. Set that escalation's status by hand, or accept the duplicate.
+
+Local runs (DynamoDB Local; no AWS calls except SES):
+
+```bash
+DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/retry-escalations.ts dev --table <local-table> --dry-run
+```
+
+The tests (`scripts/retry-escalations.test.ts`) run against DynamoDB Local with a recording notifier, so they never send email.

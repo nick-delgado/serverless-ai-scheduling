@@ -4,7 +4,8 @@ Description: >-
   sched-<env>-api: Regional REST API with a Cognito User Pool authorizer and a response-streaming
   Lambda integration for POST /api/chat (ADR-007). The chat function runs the agent loop (S3-03, #17)
   over the single table and Bedrock Converse, and streams NDJSON events. POST /api/session (S3-04, #18)
-  returns the templated greeting and the current conversation, read-only, with no model call.
+  returns the templated greeting and the current conversation, read-only, with no model call. The chat
+  function may send the escalation email through SES (#35), and an alarm watches failed sends.
 
 Parameters:
   Env:
@@ -27,6 +28,24 @@ Parameters:
     Default: 50
     MinValue: 1
     Description: Agent turns per patient per clinic-local day (ADR-009).
+  # The escalation email's addresses (#35): the verified SES identity, kept out of this public repo.
+  # scripts/deploy.sh passes them from SES_SENDER / SES_STAFF_RECIPIENT (the git-ignored .env). Empty
+  # (an ephemeral env without them) leaves the chat function with no SES grant and no notifier.
+  SesSender:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Verified SES identity that escalation emails are sent from.
+  SesStaffRecipient:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Front-desk address that receives escalation emails (a verified identity in the SES sandbox).
+
+Conditions:
+  SesConfigured: !And
+    - !Not [!Equals [!Ref SesSender, ""]]
+    - !Not [!Equals [!Ref SesStaffRecipient, ""]]
 
 Globals:
   Function:
@@ -79,6 +98,9 @@ Resources:
           TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
           AGENT_MODEL_PROFILE: !Ref AgentModelProfile
           DAILY_TURN_CAP: !Ref DailyTurnCap
+          # Read by sesNotifierFromEnv (@sched/tools/ses); wired into the tools by #36.
+          SES_SENDER: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]
+          SES_STAFF_RECIPIENT: !If [SesConfigured, !Ref SesStaffRecipient, !Ref AWS::NoValue]
           NODE_OPTIONS: --enable-source-maps
       LoggingConfig:
         LogFormat: JSON
@@ -118,6 +140,40 @@ Resources:
                 # gpt-oss is called by foundation-model ID, in this region only.
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-120b-1:0
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-20b-1:0
+            # The escalation email (#35, ADR-009): SendEmail from the verified identity only. In the SES
+            # sandbox the recipient identity is authorized too, so both identities are listed.
+            - !If
+              - SesConfigured
+              - Sid: SendEscalationEmail
+                Effect: Allow
+                Action: ses:SendEmail
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesSender}
+                  - !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesStaffRecipient}
+              - !Ref AWS::NoValue
+
+  # ---------------------------------------------------------------------------------------------
+  # Failed staff notifications (#35): the SES notifier writes an EMF record of Sched/NotificationFailed
+  # (ids only) per failed send. Shared with #38's dashboard. The runbook's retry section says what to do.
+  # ---------------------------------------------------------------------------------------------
+  NotificationFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub sched-${Env}-notification-failed
+      AlarmDescription: >-
+        An escalation email to staff failed to send. Re-send it with
+        `npx tsx scripts/retry-escalations.ts <env>` (docs/runbooks/aws-setup.md, "Re-sending failed escalation emails").
+      Namespace: Sched
+      MetricName: NotificationFailed
+      Dimensions:
+        - Name: Env
+          Value: !Ref Env
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
 
   # ---------------------------------------------------------------------------------------------
   # POST /api/session: templated greeting + conversation restore (#18). Read-only, no Bedrock.
@@ -280,3 +336,5 @@ Outputs:
     Value: !Sub https://${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageNameParam.Value}/api/session
   SessionFunctionName:
     Value: !Ref SessionFunction
+  NotificationFailedAlarmName:
+    Value: !Ref NotificationFailedAlarm
