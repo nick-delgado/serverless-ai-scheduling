@@ -11,6 +11,7 @@ export const ChatFault = z.enum([
   "unauthorized",
   "rate_limited",
   "unavailable",
+  "daily_cap",
   "mid_stream",
 ]);
 export const SessionVariant = z.enum(["upcoming", "no_upcoming", "restore"]);
@@ -40,6 +41,7 @@ export const MockApiOptions = z.object({
    * - `network`: the request fails (fetch rejects);
    * - `unauthorized`: API Gateway's own 401 `{"message":"Unauthorized"}`;
    * - `rate_limited` / `unavailable`: 429 / 503 with one retryable NDJSON `error` event;
+   * - `daily_cap`: 429 with the daily turn cap's `error` event (not retryable, ADR-009);
    * - `mid_stream`: 200, part of the reply, then a retryable `error` event.
    */
   chatFault: ChatFault.catch("none"),

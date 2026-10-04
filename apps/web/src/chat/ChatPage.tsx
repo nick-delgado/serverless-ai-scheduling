@@ -3,6 +3,7 @@ import "./chat.css";
 import { createContext, useContext, useEffect, useRef } from "react";
 
 import { pageTitle } from "../app/pageTitle";
+import { useOptionalAuth } from "../auth/AuthProvider";
 import { type ChatApi, createChatApi } from "./api";
 import { Composer } from "./Composer";
 import { type ChatTurn, type Greeting, useChat, type UseChatOptions } from "./useChat";
@@ -18,11 +19,27 @@ export interface ChatPageProps extends UseChatOptions {
   api?: ChatApi;
 }
 
-/** The chat page (S5-02, #26): greeting, messages, the streaming reply, and the composer. */
+/**
+ * The chat page (S5-02, #26): greeting, messages, the streaming reply, the error bubble with Retry,
+ * and the composer. The patient's `sub` and the 401 handling (sign out, which routes to sign-in) come
+ * from the auth context unless the props give them (#27).
+ */
 export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
   const contextApi = useContext(ChatApiContext);
-  const chat = useChat(apiProp ?? contextApi, options);
+  const auth = useOptionalAuth();
+  const chat = useChat(apiProp ?? contextApi, {
+    ...options,
+    sub: options.sub ?? (auth?.state.status === "signedIn" ? auth.state.user.sub : undefined),
+    onUnauthorized: options.onUnauthorized ?? (auth ? () => void auth.signOut() : undefined),
+  });
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Retry removes its own button: put focus back in the message box rather than lose it.
+  const retry = () => {
+    chat.retry();
+    inputRef.current?.focus();
+  };
 
   // Keep the latest text in view as messages arrive and the reply types out.
   useEffect(() => {
@@ -49,15 +66,21 @@ export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
             {chat.turn.text}
           </li>
         )}
+        {chat.error && (
+          <li className="bubble bubble--error">
+            <p className="bubble__error-text" role="alert">
+              {chat.error.message}
+            </p>
+            {chat.error.retryable && (
+              <button type="button" className="bubble__retry" onClick={retry}>
+                Retry
+              </button>
+            )}
+          </li>
+        )}
       </ol>
 
       <Activity greeting={chat.greeting} turn={chat.turn} />
-
-      {chat.error && (
-        <p className="chat__error" role="alert">
-          {chat.error}
-        </p>
-      )}
 
       {/* Completed messages only, never per character (FR-013, NFR-005). */}
       <div className="visually-hidden" aria-live="polite" aria-atomic="true" data-testid="announcer">
@@ -66,7 +89,7 @@ export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
       <div ref={endRef} />
 
       <div className="chat__composer">
-        <Composer onSend={chat.send} responding={chat.responding} />
+        <Composer onSend={chat.send} responding={chat.responding} inputRef={inputRef} />
       </div>
     </div>
   );

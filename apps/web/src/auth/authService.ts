@@ -17,6 +17,8 @@ import type { CognitoConfig } from "./config";
 
 export interface AuthUser {
   username: string;
+  /** The Cognito `sub` (Amplify's `userId`): the chat's login-session rule keys on it (#27). */
+  sub: string;
 }
 
 export type SignInResult =
@@ -76,8 +78,8 @@ export function createAmplifyAuthService(config: () => CognitoConfig): AuthServi
     async currentUser() {
       try {
         ensureConfigured();
-        const { username } = await getCurrentUser();
-        return { username };
+        const { username, userId } = await getCurrentUser();
+        return { username, sub: userId };
       } catch {
         return undefined;
       }
@@ -97,7 +99,7 @@ export function createAmplifyAuthService(config: () => CognitoConfig): AuthServi
         // Amplify drops the half-finished sign-in when the next attempt starts.
         if (result.nextStep.signInStep !== "DONE") return { ok: false, reason: "unsupported" };
         const user = await getCurrentUser();
-        return { ok: true, user: { username: user.username } };
+        return { ok: true, user: { username: user.username, sub: user.userId } };
       } catch (error) {
         if (CREDENTIAL_ERRORS.has(errorName(error))) return { ok: false, reason: "credentials" };
         console.error("Sign-in failed", error);

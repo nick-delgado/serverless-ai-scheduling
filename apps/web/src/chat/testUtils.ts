@@ -8,7 +8,7 @@
  * that varies by runner. So a test never advances fake time *hoping* the stream has been read: it
  * waits for a DOM condition with `until`, which runs real hops while fake time stands still.
  */
-import { type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
+import { type ChatRequest, type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
@@ -42,6 +42,25 @@ export const typingIndicator = () => screen.queryByTestId("typing-indicator");
 
 /** The conversation log. */
 export const log = () => screen.getByRole("list", { name: "Conversation" });
+
+/** The Retry button, if one is shown. */
+export const retryButton = () => screen.queryByRole("button", { name: "Retry" });
+
+/**
+ * The JSON bodies of `POST /api/chat` requests, in the order they were sent. The listener stays
+ * until `server.events.removeAllListeners()`.
+ */
+export function captureChatBodies(): ChatRequest[] {
+  const bodies: ChatRequest[] = [];
+  server.events.on("request:start", ({ request }) => {
+    if (new URL(request.url).pathname !== "/api/chat") return;
+    void request
+      .clone()
+      .json()
+      .then((json: ChatRequest) => bodies.push(json));
+  });
+  return bodies;
+}
 
 /** A `reducedMotion` getter that always asks for instant rendering. */
 export const instant = () => true;

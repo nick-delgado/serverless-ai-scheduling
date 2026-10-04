@@ -167,7 +167,7 @@ describe("login form (FR-001)", () => {
     await user.keyboard("{Enter}");
     await user.click(submitButton());
     expect(auth.signIn).toHaveBeenCalledTimes(1);
-    finish({ ok: true, user: { username: "maria.santos" } });
+    finish({ ok: true, user: { username: "maria.santos", sub: "sub-maria.santos" } });
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/chat");
   });

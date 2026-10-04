@@ -9,18 +9,23 @@ export interface FakeAuthService extends AuthService {
   user: AuthUser | undefined;
 }
 
+/** A synthetic `sub` for a username, when a test doesn't give one. */
+export function fakeSub(username: string): string {
+  return `sub-${username}`;
+}
+
 /**
- * Starts signed out (or as `user`). `signIn` succeeds for any username unless the test replaces
- * it, e.g. with a promise it settles itself.
+ * Starts signed out (or as `user`, with `fakeSub(username)` unless it gives a `sub`). `signIn`
+ * succeeds for any username unless the test replaces it, e.g. with a promise it settles itself.
  */
-export function fakeAuthService(user?: AuthUser): FakeAuthService {
+export function fakeAuthService(user?: { username: string; sub?: string }): FakeAuthService {
   const listeners = new Set<() => void>();
   const fake: FakeAuthService = {
-    user,
+    user: user && { username: user.username, sub: user.sub ?? fakeSub(user.username) },
     currentUser: vi.fn(() => Promise.resolve(fake.user)),
     signIn: vi.fn((username: string): Promise<SignInResult> => {
-      fake.user = { username };
-      return Promise.resolve({ ok: true, user: { username } });
+      fake.user = { username, sub: fakeSub(username) };
+      return Promise.resolve({ ok: true, user: fake.user });
     }),
     signOut: vi.fn(() => {
       fake.user = undefined;

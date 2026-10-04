@@ -127,9 +127,34 @@
   }
 }
 
-.chat__error {
-  margin: 0 0 var(--space-3);
+.bubble--error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  align-self: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.bubble__error-text {
+  margin: 0;
   color: var(--color-danger);
+}
+
+.bubble__retry {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bubble__retry:hover {
+  background: var(--color-surface-muted);
 }
 
 .chat__composer {

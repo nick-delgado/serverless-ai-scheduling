@@ -38,3 +38,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-04 | [The scroll test ran out of findByText's second, not the scroll](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [The deploy script has tests too, and deleting a line missed half a guard](2026-10-04-the-deploy-script-has-tests-too.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [The staff email's address stays out of the repo, the logs and its own error messages](2026-10-04-the-staff-email-must-not-carry-its-own-address.md) | 4. Teaching the agent to schedule |
+| 2026-10-04 | [Only the browser knows when a sign-in began, so the restore rule lives in the SPA](2026-10-04-only-the-browser-knows-when-a-sign-in-began.md) | 4. Teaching the agent to schedule |
