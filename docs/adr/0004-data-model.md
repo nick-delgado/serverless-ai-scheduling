@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-014, FR-030…FR-034, FR-037, NFR-004, NFR-008, ADR-001, ADR-009, issues #5, #13, #56
-- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces))
+- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation-56)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces-17)); 2026-10-03 (key details as built, and the conversation list, #13, #18; see [Amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123))
 
 ## Context
 
@@ -33,11 +33,11 @@ Requirements:
 | Entity | PK | SK | GSI1PK / GSI1SK (sparse) | Notes |
 |---|---|---|---|---|
 | Patient profile | `PATIENT#<sub>` | `PROFILE` | — | `<sub>` = Cognito user `sub` (ADR-005) |
-| Provider | `PROVIDER#<providerId>` | `PROFILE` | `PROVIDERS` / `<specialty>#<lastName>` | Lists providers by specialty |
-| Slot | `PROVIDER#<providerId>` | `SLOT#<startIsoUtc>` | `OPEN#<specialty>#<yyyy-mm-dd>` / `<startIsoUtc>#<providerId>` | **GSI1 attributes exist only while the slot is OPEN**, so GSI1 is an index of open availability |
+| Provider | `PROVIDER#<providerId>` | `PROFILE` | `PROVIDERS` / `<specialty>#<lastName>` | Lists providers by specialty *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123): GSI1SK ends `#<providerId>`.)* |
+| Slot | `PROVIDER#<providerId>` | `SLOT#<startIsoUtc>` | `OPEN#<specialty>#<yyyy-mm-dd>` / `<startIsoUtc>#<providerId>` | **GSI1 attributes exist only while the slot is OPEN**, so GSI1 is an index of open availability *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123): the GSI1PK date is the clinic-local day.)* |
 | Appointment | `PATIENT#<sub>` | `APPT#<appointmentId>` | — | Holds `providerId`, `slotStart`, `status`, `reason` |
 | Conversation meta | `PATIENT#<sub>` | `CONV#<createdIso>#<convId>` | — | Lists a patient's recent conversations |
-| Message | `CONV#<convId>` | `MSG#<seq:06d>` | — | Anthropic content blocks as JSON, plus a trace ref; `expiresAt` = +30 days. **Amended 2026-09-29:** also stores `patientId` |
+| Message | `CONV#<convId>` | `MSG#<seq:06d>` | — | Anthropic content blocks as JSON *(superseded by the [2026-10-03 amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123): ADR-010's neutral blocks)*, plus a trace ref; `expiresAt` = +30 days. **Amended 2026-09-29:** also stores `patientId` |
 | Escalation | `CONV#<convId>` | `ESC#<createdIso>` | — | Reason, summary, email message ID. **Amended 2026-09-29:** SK is a fixed `ESC` |
 
 **Access patterns:**
@@ -48,7 +48,7 @@ Requirements:
 | AP-2 | List a patient's appointments | Query `PATIENT#sub`, `begins_with(SK, "APPT#")` |
 | AP-3 | Get provider(s) by specialty | Query GSI1 `PROVIDERS`, `begins_with(<specialty>#)` |
 | AP-4 | Open slots for a provider in a date range | Query `PROVIDER#id`, `SK between SLOT#from and SLOT#to`, filter `status = OPEN` |
-| AP-5 | Open slots for a specialty on a day | Query GSI1 `OPEN#<specialty>#<date>` (sparse, so only open slots) |
+| AP-5 | Open slots for a specialty on a day | Query GSI1 `OPEN#<specialty>#<date>` (sparse, so only open slots) *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123): the day is the clinic-local date.)* |
 | AP-6 | Book a slot | `TransactWriteItems`: update Slot (condition `status = OPEN`) → BOOKED, set `appointmentId`, **remove GSI1 attrs**; put Appointment (condition `attribute_not_exists(PK)`) |
 | AP-7 | Reschedule | `TransactWriteItems`: release old slot (condition `appointmentId = :appt`), book new slot (condition `status = OPEN`), update Appointment (condition `status = BOOKED`, owned by patient) |
 | AP-8 | Append/read conversation messages | Query `CONV#id` ascending; put with `attribute_not_exists` on `MSG#seq` (append-only). **Superseded by the 2026-09-29 amendment** (ownership checks) |
@@ -71,7 +71,7 @@ Requirements:
 - Repository contract tests, including a concurrency test: 10 parallel bookings of one slot → exactly 1 succeeds.
 - The eval graders assert end-state correctness against this model.
 
-## Amendment (2026-09-29): conversation ownership and one escalation per conversation
+## Amendment (2026-09-29): conversation ownership and one escalation per conversation (#56)
 
 The decision above stands: single table, same keys, and the same booking transactions. Building the in-memory repositories (#5, PR #55) found two gaps in the conversation and escalation rows. This amendment closes them, and the DynamoDB implementation (#13) builds on it.
 
@@ -112,7 +112,7 @@ The decision above stands: single table, same keys, and the same booking transac
 - **GSI1 is eventually consistent on the real table** (#5 raised this). Right after a booking, AP-5 can still list the slot for a short while. That's safe: booking is conditioned on the base-table item (`status = OPEN`), so a stale listing ends in `SLOT_UNAVAILABLE`, never a double booking. AP-4 uses a consistent base-table query. DynamoDB Local updates GSIs synchronously, so the contract suite can't observe this lag.
 
 
-## Amendment (2026-10-02): turn counters and traces
+## Amendment (2026-10-02): turn counters and traces (#17)
 
 The chat handler (#17) adds two item types for ADR-009's daily turn cap and FR-051's per-turn trace. Both live in `services/api` (`lib/dynamo-turn-store.ts`), not in the tools' repositories, because no tool reads them.
 
@@ -122,3 +122,12 @@ The chat handler (#17) adds two item types for ADR-009's daily turn cap and FR-0
 | Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `outcome`, the `TurnTrace` as an opaque JSON string; `PutItem` with `attribute_not_exists(PK)`; `expiresAt` = turn start + 30 days |
 
 Neither prefix collides with an existing query: patient queries use `APPT#` and `CONV#`, conversation reads use `MSG#`, and the escalation is the fixed `ESC` key. Traces hold tool inputs (patient free text), so they stay out of CloudWatch (ADR-009).
+
+## Amendment (2026-10-03): key details as built, and the conversation list (#123)
+
+The decision stands. The DynamoDB repositories (#13) and the session call (#18) settled four details the table above doesn't show:
+
+- **Provider GSI1SK** is `<specialty>#<lastName>#<providerId>`, so equal last names keep a stable order (#13). AP-3 is unchanged.
+- **Slot GSI1PK's day is the clinic-local date** (`America/New_York`) of the slot's start, so AP-5 "on a day" means a clinic day (#13). GSI1SK and the base-table SK stay UTC.
+- **Message content** is ADR-010's neutral content blocks, stored as an opaque JSON string, not Anthropic blocks (#60).
+- **AP-10, list a patient's conversations, newest first:** Query `PATIENT#sub`, `begins_with(SK, "CONV#")`, `ScanIndexForward: false`, consistent read. `POST /api/session` takes the newest (limit 1) as the current conversation (ADR-007, #18).

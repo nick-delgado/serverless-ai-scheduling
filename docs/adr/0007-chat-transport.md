@@ -1,7 +1,7 @@
 # ADR-007: Chat transport — REST API with Lambda response streaming
 
 - **Status:** Accepted (2026-09-29). Spike S-2, run as part of the M1 walking skeleton (#7), confirmed it; see Validation.
-- **Amended:** 2026-10-03 (the session call is `POST /api/session`; see [Amendment](#amendment-2026-10-03-the-session-call-is-a-post-18))
+- **Amended:** 2026-10-03 (the session call is `POST /api/session`; see [Amendment](#amendment-2026-10-03-the-session-call-is-a-post-18)); 2026-10-03 (what the chat handler settled, #17; see [Amendment](#amendment-2026-10-03-what-the-chat-handler-settled-123))
 - **Date:** 2026-09-28 (proposed), 2026-09-29 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-012, FR-013, NFR-001, ADR-001, ADR-003
@@ -42,6 +42,8 @@ The limitations don't affect us: no VTL response transforms, no integration cach
 {"type":"done","messageId":"…","usage":{"inputTokens":…,"outputTokens":…,"cacheReadTokens":…}}
 {"type":"error","code":"AGENT_UNAVAILABLE","message":"…","retryable":true}
 ```
+
+*(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-what-the-chat-handler-settled-123): `done` carries `conversationId`.)*
 
 - The **client typewriter** renders `text_delta` through a smoothing buffer: a constant characters-per-second pace, catching up on bursts. The text appears character by character whether the network delivers it in chunks or all at once, which satisfies FR-013. `prefers-reduced-motion` renders immediately.
 - **`text_reset`** (contracts v1.1, #60). When the agent loop throws away a response whose text already streamed (a refusal, a `max_tokens` cut-off, or malformed output) and retries, it sends `{"type":"text_reset","keepChars":N}`. The client truncates the in-progress assistant bubble to its first `N` characters (JavaScript string length over this turn's `text_delta`s), drops anything beyond that still queued in the typewriter buffer, and keeps rendering the deltas that follow. Applying every reset in order yields exactly the text the turn stored; `visibleText()` in `packages/contracts` is the reference implementation. A reset never follows `done` or `error`.
@@ -120,3 +122,12 @@ Nick picked the second option on 2026-09-29: the session call is **`POST /api/se
 - **Shape:** a buffered JSON `SessionResponse` from its own read-only Lambda (`sched-<env>-api-session`), not a stream. Any other body is a 400 `ApiError`; the patient still comes only from `claims.sub` (ADR-005). The response carries `Cache-Control: no-store`.
 - **Consequences:** `GET /api/session` doesn't exist (API Gateway answers it with 403 before any Lambda runs). The SPA's mock already uses POST (#24). The stage-wide throttle (5 req/s, burst 10) now covers session calls as well as chat turns.
 
+## Amendment (2026-10-03): what the chat handler settled (#123)
+
+The decision stands. Building the chat handler (#17, PR #96) settled these transport details:
+
+- **`done` carries `conversationId`.** An unknown or foreign `conversationId` in the request starts a new conversation with a server-generated ID, never an error (not-yours and doesn't-exist look the same, ADR-004); `done` tells the client which ID it got.
+- **Status before streaming:** 400 `BAD_REQUEST`; 401 `UNAUTHORIZED`; 429 `RATE_LIMITED` for Bedrock throttling (retryable) and for the daily turn cap (not retryable, ADR-009); 409 `AGENT_UNAVAILABLE` (retryable) when another turn of the conversation wrote first; 503 `AGENT_UNAVAILABLE` for other agent errors; 500 `INTERNAL`.
+- **Timeout:** the chat Lambda has 180 s and aborts the loop 15 s earlier, so it can store the turn and end the stream with `error`.
+- **Alternation:** a turn that fails after the patient's message is stored is closed with a fixed assistant reply, because Converse requires alternating roles; history stays append-only.
+- **Retries** (planned, #27 and #104, decided on #123): the client offers Retry only for a retryable error or a network failure, and resends the same text with the same `clientMessageId` and `conversationId`. The server answers a repeat of an already-answered message by streaming the stored reply's visible text again as `text_delta` and ending with `done` carrying the stored `messageId`, with no model call and no counted turn.

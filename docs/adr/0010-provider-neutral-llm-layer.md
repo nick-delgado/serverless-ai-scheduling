@@ -79,7 +79,7 @@ The M3 eval matrix (#37) still chooses the production default.
 
 - **Parity held, so the `AnthropicBedrock` adapter is retired.**
   - `packages/agent` no longer depends on `@anthropic-ai/*`.
-  - The walking-skeleton handler in `services/api` still calls the Anthropic SDK directly. #17 replaces it with `runAgentTurn` + `ConverseLlmClient`.
+  - The walking-skeleton handler in `services/api` still calls the Anthropic SDK directly. #17 replaces it with `runAgentTurn` + `ConverseLlmClient`. *(Done in #17, PR #96: the chat Lambda runs `runAgentTurn` over `ConverseLlmClient`.)*
 - **IAM for #17.** Converse is authorized by `bedrock:InvokeModelWithResponseStream` (and `bedrock:InvokeModel`). The chat role needs these resources:
   - the Nova inference-profile ARNs, plus their foundation-model ARNs in the US regions they route to;
   - the gpt-oss foundation-model ARNs;

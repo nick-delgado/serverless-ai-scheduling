@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
-- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed))
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123))
 
 ## Context
 
@@ -21,14 +21,14 @@ Nick wants CloudFormation "wherever possible". Several agents will work on infra
 
 ## Decision
 
-**AWS SAM, split into independent stacks**, deployed in this order: *(Refined by the [2026-09-29 amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed): only `api` uses SAM; data, auth and web are plain CloudFormation.)*
+**AWS SAM, split into independent stacks**, deployed in this order: *(Refined by the [2026-09-29 amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7): only `api` uses SAM; data, auth and web are plain CloudFormation.)*
 
 | Stack | Template | Contents | Owner stream |
 |---|---|---|---|
 | `sched-bootstrap` (once, admin) | `infra/bootstrap/bootstrap.yaml` | CloudFormation execution role + permissions boundary, SAM artifact bucket, AWS Budget alarm, (later) GitHub OIDC deploy role | Nick (reviewed) |
 | `sched-<env>-data` | `infra/stacks/data.yaml` | DynamoDB table + GSI, TTL | S2 |
 | `sched-<env>-auth` | `infra/stacks/auth.yaml` | Cognito User Pool + app client, Identity Pool + Transcribe role | S1 |
-| `sched-<env>-api` | `infra/stacks/api.yaml` | REST API (Cognito authorizer, streaming integration), Lambdas, SES identity/config | S3, S8 |
+| `sched-<env>-api` | `infra/stacks/api.yaml` | REST API (Cognito authorizer, streaming integration), Lambdas, SES identity/config *(planned, #35; see the [2026-10-03 amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123))* | S3, S8 |
 | `sched-<env>-web` | `infra/stacks/web.yaml` | S3 bucket (private), CloudFront (OAC), `/api/*` behavior → REST API | S5 |
 
 - **Cross-stack wiring:** SSM parameters under `/sched/<env>/<stack>/<name>`, rather than `Fn::ImportValue` exports. Exports lock the producer stack, which blocks parallel iteration. *(How consumers read them is refined in the amendment below.)*
@@ -51,9 +51,9 @@ Nick wants CloudFormation "wherever possible". Several agents will work on infra
 
 ## Validation
 
-`sam validate --lint` runs in CI for every template. A clean-account deploy works from the runbook alone (an M3 exit criterion).
+`sam validate --lint` runs in CI for every template. A clean-account deploy works from the runbook alone (an M3 exit criterion). *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123): CI runs `cfn-lint`, and the redeploy is a new environment in a bootstrapped account.)*
 
-## Amendment (2026-09-29): what the first real deploys changed
+## Amendment (2026-09-29): what the first real deploys changed (#6, #7)
 
 Recorded after #6 (PR #52) and the walking skeleton #7 (PR #54). The decision above stands: SAM, one stack per domain, SSM wiring, deploys through the exec role. These three details changed, and each has a reason:
 
@@ -69,3 +69,11 @@ Recorded after #6 (PR #52) and the walking skeleton #7 (PR #54). The decision ab
    - **The exception:** account-wide bootstrap values that don't vary by env (`/sched/bootstrap/permissions-boundary-arn`) may stay typed parameters (#7).
 
 The `sam-deploy` skill carries these as working rules.
+
+## Amendment (2026-10-03): validation as run, and the redeploy criterion (#123)
+
+The decision stands. Three details in the body no longer matched what was built or decided:
+
+- **CI runs `cfn-lint`** (the linter behind `sam validate --lint`) on every `infra/**/*.yaml`, as the `cfn-lint` job in `.github/workflows/ci.yml` (#8). `sam validate --lint` stays the local check before a deploy.
+- **The api stack has no SES resources yet.** The SES identity and the chat function's `ses:SendEmail` grant come with the escalation notifier (#35); until then escalations are stored with a `FAILED` notification status (#17).
+- **The redeploy criterion is a new environment, not a new account** (decided on #123, matching PRD FR-050): a new environment in an account where the bootstrap and the runbook's one-time steps are done deploys from the runbook alone (#42). A second AWS account would add an entitlement and quota wait for little value.

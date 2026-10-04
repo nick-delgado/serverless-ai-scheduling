@@ -34,3 +34,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-03 | [Restore shows what the patient saw: one bubble per turn, and no tool blocks](2026-10-03-restore-shows-what-the-patient-saw.md) | 4. Teaching the agent to schedule |
 | 2026-10-03 | [One long act() hid every partial render, so the live-region test couldn't fail](2026-10-03-one-long-act-hid-every-partial-render.md) | 4. Teaching the agent to schedule |
 | 2026-10-03 | [The Cognito mock does real SRP, because SRP never sends the password](2026-10-03-the-cognito-mock-does-real-srp.md) | 4. Teaching the agent to schedule |
+| 2026-10-03 | [No decision was reversed, but 98 details had drifted into review comments](2026-10-03-the-drift-was-in-the-comments.md) | 4. Teaching the agent to schedule |

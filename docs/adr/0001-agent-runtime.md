@@ -1,6 +1,7 @@
 # ADR-001: Agent runtime — our own tool-use loop in Lambda
 
 - **Status:** Accepted
+- **Amended:** 2026-10-03 (the loop's contract as built, #15, #60; see [Amendment](#amendment-2026-10-03-the-loops-contract-as-built-123))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-030…FR-037, ADR-002, ADR-007, ADR-008
@@ -50,7 +51,7 @@ Constraints:
 
 **Option 1: our own loop in `packages/agent`, invoked from a streaming Lambda.**
 
-The loop's contract:
+The loop's contract: *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-the-loops-contract-as-built-123): pre-bound executor, events, limits.)*
 
 ```ts
 runAgentTurn({
@@ -69,21 +70,32 @@ Loop requirements:
 - Execute **parallel tool calls concurrently**, and return all `tool_result` blocks in **one** user message.
 - A failed tool returns `is_error: true` with a safe message. Tool errors never throw out of the loop.
 - **Identity injection:** the handler receives `ctx.patientId`. Tool input schemas never contain it.
-- Check `stop_reason` before reading content:
+- Check `stop_reason` before reading content *(refined by ADR-010: normalized stop reasons)*:
   - `refusal`: apply the client-side fallback policy (Bedrock has no server-side fallbacks).
   - `max_tokens`: retry once with a higher budget, then fail gracefully.
 - Iteration cap. When it's hit, the agent apologizes and offers escalation. It never spins.
 - **Trace capture:** every model call and tool call is recorded (inputs, outputs, latency, tokens). The chat handler persists the trace; the eval harness grades it.
-- **Prompt caching:** stable tools and system prompt first, with a cache breakpoint after them. Volatile context (today's date, patient first name) goes after the breakpoint.
+- **Prompt caching:** stable tools and system prompt first, with a cache breakpoint after them. Volatile context (today's date, patient first name) goes after the breakpoint. *(Refined by the [amendment](#amendment-2026-10-03-the-loops-contract-as-built-123): two cache points.)*
 
 ## Consequences
 
 - We write and test roughly 200–300 lines of loop code, and unit-test it with a scripted fake `LlmClient` (no network).
 - The same function serves production (Lambda) and evaluation (in-process), so eval results reflect real behavior.
-- We must keep up with API changes ourselves (e.g., new stop reasons). This is mitigated by using SDK types, not hand-rolled ones.
+- We must keep up with API changes ourselves (e.g., new stop reasons). This is mitigated by using SDK types, not hand-rolled ones. *(Superseded by ADR-010: neutral types in `@sched/contracts`.)*
 - **Revisit if** sessions need to outlive a single request, or we need managed memory, browser, or code-interpreter tools. AgentCore Runtime would then be the natural next step, and the `LlmClient`/`ToolRegistry` seams make that move incremental.
 
 ## Validation
 
 - Unit tests for the loop's edge cases: parallel calls, a tool error, refusal, `max_tokens`, the iteration cap.
 - The eval harness (ADR-008) runs this exact function. Task success and trajectory metrics validate it.
+
+## Amendment (2026-10-03): the loop's contract as built (#123)
+
+The decision stands: our own loop in `packages/agent`, run by the chat Lambda and the eval harness. Building it (#15) and moving it to Converse (ADR-010, #60) settled the contract:
+
+- **The executor comes pre-bound to the patient** (#15). The chat handler builds it from the JWT `sub` (`createToolExecutor(TOOL_REGISTRY, ctx)`); `runAgentTurn` takes `executor`, never a `patientId`, so CLAUDE.md rule 1 is enforced by the type signature.
+- **Inputs:** `history`, `userMessage`, `system { version, stable, dynamic }`, `executor`, `llm`, `profile`, `clock`, `limits`, `onEvent`, `conversationId`, `turnId`, `signal`. **Returns** `{ newMessages, trace, usage, outcome, text, error? }`.
+- **Limits** (#15): `maxIterations: 8` counts model calls, retries included; `maxToolCallsPerTurn: 16`; no token budget. Tools requested on the last allowed call get a `NOT_ALLOWED` result instead of running.
+- **Events:** the loop emits `status`, `text_delta` and `text_reset` (#57, #60); the chat handler owns `done` and `error` (ADR-007, #17).
+- **Transport and stop reasons** (#60): the loop speaks ADR-010's neutral content blocks and normalized stop reasons, not Anthropic `stop_reason`s.
+- **Caching:** two cache points where the profile allows them: after the stable system block, and a rolling one on the last user message.
