@@ -15,7 +15,7 @@ import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, ChatHttpError, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
 import { readLoginSession, writeLoginSession } from "./loginSession";
-import { gate, instant, log, typingIndicator as typing } from "./testUtils";
+import { doneEvent, gate, instant, log, serveEvents, typingIndicator as typing } from "./testUtils";
 import { FALLBACK_GREETING, SESSION_ERROR, SIGNED_OUT_ERROR } from "./useChat";
 
 const SUB = "sub-maria.santos";
@@ -119,22 +119,29 @@ describe("ChatPage: restore (FR-014)", () => {
 
   it("doesn't restore over a turn the patient sent before the session call answered", async () => {
     writeLoginSession({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
-    const hold = gate();
+    const sessionHold = gate();
     server.use(
       http.post("/api/session", async () => {
-        await hold.promise;
+        await sessionHold.promise;
         return HttpResponse.json(SESSIONS.restore);
       }),
     );
+    // The turn is still running when the session answers, so its done hasn't changed the store yet.
+    const turnHold = gate();
+    serveEvents([{ type: "text_delta", text: "Moving it." }, doneEvent()], { 1: turnHold.promise });
     const { sendMessage } = renderPage({ sub: SUB });
     await sendMessage("Hi");
-    await within(log()).findByText(REPLIES.tools.text);
-    hold.open();
+    await within(log()).findByText("Moving it.");
+    sessionHold.open();
     await within(log()).findByText(SESSIONS.restore.greeting);
     expect(restoredShown()).toBe(false);
     expect(within(log()).getByText("Hi")).toBeVisible();
-    expect(within(log()).getByText(REPLIES.tools.text)).toBeVisible();
+    turnHold.open();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    await waitFor(() => expect(within(log()).getByText("Hi")).toBeVisible());
+    expect(restoredShown()).toBe(false);
   });
+
   it("applies the sub the page has when the session call answers, not when it started", async () => {
     writeLoginSession({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
     const hold = gate();
