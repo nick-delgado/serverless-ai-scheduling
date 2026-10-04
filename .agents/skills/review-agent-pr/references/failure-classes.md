@@ -18,6 +18,7 @@ none fits, and never invent a class in a review: new classes are added by
 | `behaviour-untested` | A behaviour the spec or the PR depends on has no test at all. |
 | `claim-beyond-evidence` | A test name, comment, PR description, journal entry or commit message claims more than the code or tests show. |
 | `spec-guess` | The PR decided something the spec left open and did not say so. |
+| `spec-open` | The spec left a question open and the PR disclosed its choice, so the owner had to decide. This measures how issues are written, not an agent mistake; a readiness review of the issue (`review-agent-issue`) should move these questions before the work. |
 | `spec-deviation` | The PR contradicts the spec, an acceptance criterion or an owner decision. |
 | `scope-drift` | The PR changed things the task did not ask for, or missed files its own criteria need. |
 | `duplication` | New code repeats something that already exists (a helper, constant, type, schema). |
