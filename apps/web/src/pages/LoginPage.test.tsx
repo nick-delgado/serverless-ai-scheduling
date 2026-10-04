@@ -9,6 +9,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pageTitle } from "../app/pageTitle";
 import { appRoutes } from "../app/routes";
 import type { AuthService, SignInResult } from "../auth/authService";
 import { SignOutButton } from "../auth/SignOutButton";
@@ -214,6 +215,7 @@ describe("session (FR-002, FR-003)", () => {
       renderApp(path, auth);
       expect(await screen.findByRole("status")).toHaveTextContent("Checking your session…");
       expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+      expect(document.title).toBe(pageTitle("Checking your session"));
     },
   );
 

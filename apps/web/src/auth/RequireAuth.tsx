@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from "react-router";
 
+import { pageTitle } from "../app/pageTitle";
 import { useAuth } from "./AuthProvider";
 
 /**
@@ -13,9 +14,11 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
+/** What /chat and /login show while the stored session is read. */
 export function SessionCheck() {
   return (
     <p className="page muted" role="status">
+      <title>{pageTitle("Checking your session")}</title>
       Checking your session…
     </p>
   );

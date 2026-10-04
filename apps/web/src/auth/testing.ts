@@ -10,8 +10,8 @@ export interface FakeAuthService extends AuthService {
 }
 
 /**
- * Starts signed out (or as `user`). `signIn` resolves with `result` (default: success), unless the
- * test replaces it, e.g. with a promise it settles itself.
+ * Starts signed out (or as `user`). `signIn` succeeds for any username unless the test replaces
+ * it, e.g. with a promise it settles itself.
  */
 export function fakeAuthService(user?: AuthUser): FakeAuthService {
   const listeners = new Set<() => void>();
