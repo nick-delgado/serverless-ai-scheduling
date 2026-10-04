@@ -15,6 +15,16 @@ Nick answered the 18 in one pass. He took the auditors' recommendation on 17. On
 - **Amend, don't supersede.** No ADR's core decision had been reversed. Each one still describes what's built: our own loop, SAM with split stacks, a single table with transactional bookings, Cognito with SRP, a streaming REST API, our own eval harness, and Converse as the only transport. So every fix is a dated amendment or an italic pointer, under the rule PR #112 set in `docs/adr/README.md`. Amendments added in this pass carry `(#123)` in their heading and cite the issue or PR that settled each detail.
 - **Write down only what was decided.** Each PRD and ADR edit came from a finding's proposed text, adjusted to Nick's answers. Where a decision also shapes future work, such as the CI eval gate, the model-choice rule, or the E2E environment, the docs record the rule and the issues carry the work.
 
+The spec left some choices open. These are the ones PR #124 made, and how its review settled them:
+
+- **FR-010's measurement run.** Decision 6 said "#40's run against `dev`", and decision 17 moved #40's E2E suite to an `e2e` environment. #40 already reconciles the two (the suite runs on `e2e`, FR-010 is measured by a read-only run on `dev`), so FR-010 now names "a Playwright run on the deployed stack (#40)" and leaves the environment to #40. Nick chose that wording in the review.
+- **The daily cap is FR-017, a Must.** The audit proposed the requirement without an ID. It got its own ID rather than a clause in NFR-004, because patients see it (a message, and no Retry) and FR-015 already refers to it. Nick kept it as FR-017, Must, in the review.
+- **ADR-003 got an amendment, not in-place edits.** The audit proposed editing two body lines; an amendment with pointers keeps the original text, as the marking rule asks. The review found three ADRs (005, 007, 009) where we had still rewritten lines in place; they now follow the same rule, and ADR-009 has its own amendment.
+- **ADR-008 got one 2026-10-03 amendment** for the gate, exit metrics, latency and cost, the matrix, the API-surface retirement and judge agreement, because those decisions change ADR-008 body lines the issue didn't name.
+- **Traceability beyond the audit's list:** #27 under FR-010 (it shows a failed session call), #80 under FR-037 (it carries the API-surface retirement), and #41 under FR-041 and FR-050.
+- **Rules kept in two places.** The gate, exit-metric, cost and retry rules are written out in both the PRD and the ADR amendments. Nick kept both copies in the review, so each document reads on its own; the price is editing both, and the review already caught one disagreement (the gate's profile), now fixed.
+- **The backlog map shows open follow-ups only.** Closed M2-era issues such as #56, #57, #60 and #88 stay on GitHub; the map's intro now says so (Nick's choice in the review).
+
 ## What surprised us
 
 - **The drift lived where agents don't read.** Most findings were decisions recorded only in a PR's owner-decision lines or an issue comment. Examples: the greeting is templated and shown whole; restore covers one login session; the daily cap is 50 turns and Retry isn't offered for it; clinic business is escalated but unrelated requests are declined. Each was right in the code and absent from the PRD, so the next agent reading FR-014 or FR-015 would have rebuilt the question from scratch.
@@ -28,7 +38,7 @@ Nick answered the 18 in one pass. He took the auditors' recommendation on 17. On
 - Counts: 98 findings (A 31, B 26, C 25, D 16) → 18 decisions + about 60 mechanical fixes. The PRD audit's status table: Met 2, Built 14, Partly 12, Not started 9, Deferred 1, out of 38 requirements.
 - The deployed `sched-dev-*` stacks and the 14 SSM parameters under `/sched/dev` matched the templates on `main`.
 - The traceability table (PRD §10) had no issue above #45. It now maps the follow-ups filed from reviews (#49–#122).
-- The edits, each with its finding ID: the PR that closes #123.
+- The edits, each with its finding ID: PR #124, which closes #123.
 
 ## What's next
 
