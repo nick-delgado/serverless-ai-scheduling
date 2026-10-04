@@ -147,7 +147,7 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | `sched-bootstrap` stack deploy | It *is* CloudFormation, but deployed with admin rights, once | Nick |
 | Bedrock model access / use-case form | Console-only agreement flow | Nick |
 | SES email verification click | Requires a human to click the email link | Nick |
-| SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh`) |
+| SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh <env>`, after the env's auth and web stacks; builds with the Cognito IDs from SSM, see the `sam-deploy` skill) |
 | Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`) |
 | Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 

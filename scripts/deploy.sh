@@ -19,7 +19,7 @@ set -euo pipefail
 
 ORDER=(data auth api web)
 # Long-lived environments: stateful resources stay deletion-protected, and teardown.sh refuses them.
-# Keep in sync with scripts/teardown.sh.
+# Keep in sync with scripts/teardown.sh and scripts/deploy-web.sh.
 PROTECTED_ENVS=(dev demo)
 
 target="${1:-}"
