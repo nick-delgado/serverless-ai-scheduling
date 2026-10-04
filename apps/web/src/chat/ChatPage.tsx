@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef } from "react";
 
 import { pageTitle } from "../app/pageTitle";
 import { useOptionalAuth } from "../auth/AuthProvider";
+import { VoiceInput } from "../voice/VoiceInput";
 import { type ChatApi, createChatApi } from "./api";
 import { Composer } from "./Composer";
 import { type ChatTurn, type Greeting, useChat, type UseChatOptions } from "./useChat";
@@ -21,7 +22,7 @@ export interface ChatPageProps extends UseChatOptions {
 
 /**
  * The chat page (S5-02, #26): greeting, messages, the streaming reply, the error bubble with Retry,
- * and the composer. The patient's `sub` and the 401 handling (sign out, which routes to sign-in) come
+ * and the composer, with the mic as its accessory (#28). The patient's `sub` and the 401 handling (sign out, which routes to sign-in) come
  * from the auth context unless the props give them (#27).
  */
 export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
@@ -89,7 +90,12 @@ export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
       <div ref={endRef} />
 
       <div className="chat__composer">
-        <Composer onSend={chat.send} responding={chat.responding} inputRef={inputRef} />
+        <Composer
+          onSend={chat.send}
+          responding={chat.responding}
+          inputRef={inputRef}
+          accessory={<VoiceInput onTranscript={chat.send} responding={chat.responding} inputRef={inputRef} />}
+        />
       </div>
     </div>
   );
