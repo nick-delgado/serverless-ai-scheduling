@@ -74,9 +74,9 @@ Worktrees let several agents build and test at the same time without stepping on
 ## 5. Implement inside your owned paths
 
 - Only modify the paths the issue lists. Shared files (root `package.json`, `tsconfig`, `packages/contracts`) sometimes need small edits. Keep those minimal and **call them out in the PR**. A schema change in `packages/contracts` affects every stream.
-- If the work clearly needs files outside your paths, comment on the issue and ask the user instead of expanding scope.
-- Before adding a constant, type, schema or helper, search for an existing one (`git grep`) and import it. If it lives where you can't import it, or outside your paths, say so in the PR instead of copying it silently.
-- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke. Do the same when a decision lands in your own PR (a PRD edit, a changed message or rule): search for the old wording and update every restatement (journal entry, code comments, docs), listing any outside your paths in the PR.
+- If the work clearly needs files outside your paths, or beyond a limit the issue puts on a path ("fixtures only"), comment on the issue and ask the user instead of expanding scope. If you can't ask (a delegated task worker), make the smallest change that meets the criterion and list it under "Shared-file or contract changes", naming the criterion that needs it, for the owner to approve.
+- Before adding a constant, type, schema or helper, search for an existing one (`git grep`) and import it. If it lives where you can't import it, prefer the smallest disclosed edit that shares it (an export) to a copy. If you do copy, list each copy and its source under "Shared-file or contract changes".
+- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke. Do the same when a decision, or the work itself, lands in your own PR (a PRD edit, a changed message or rule, a step that was pending): search for the old wording, and run `git grep -n '#<N>\b'` for lines that still call your issue planned or pending. Edit every restatement (journal entry, code comments, docs, diagrams), and list the ones outside your paths under "Shared-file or contract changes".
 - Commit in small, meaningful steps using Conventional Commits that reference the issue, e.g. `feat(tools): add book_appointment transaction (#23)`. End commit messages with the attribution lines from the session's system reminder, if there are any.
 
 ## 6. Prove it's done
@@ -102,7 +102,7 @@ gh pr create --base main --title "<type>(<scope>): <summary> (#<N>)" --body-file
 ```
 
 Use `.github/pull_request_template.md`. The body must include:
-- `Closes #<N>`;
+- `Closes #<N>`. It stays even when a criterion needs a step you can't run (a write to `dev`, a live measurement, a browser check, an eval run a rule you were given blocks): mark that step pending in the PR, where its result will go, and report it. It's done before merge;
 - the PRD requirement IDs covered;
 - how you verified it (commands and results, eval numbers);
 - any shared-file or contract changes;
@@ -115,6 +115,8 @@ Then update the labels:
 ```bash
 gh issue edit <N> --add-label "status:review" --remove-label "status:in-progress"
 ```
+
+If the PR adds a journal entry, add `PR #<number>` to its **Related** line now, then commit and push.
 
 ## 8. Hand off
 

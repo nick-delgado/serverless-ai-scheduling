@@ -3,7 +3,7 @@
 Each ADR records one significant decision: the context, the options we weighed, what we chose, and what that costs us. Once **Accepted**, an ADR changes in one of two ways:
 
 - **Reversing the decision** (choosing a different option) takes a new ADR that supersedes the old one. Update the old one's status line.
-- **Refining it** (details settled while building, or a configuration value such as a model profile) takes a dated `## Amendment (YYYY-MM-DD): <topic> (#N)` section at the end. The header names each amendment, in the status line (`Accepted (amended YYYY-MM-DD: <topic>, #N)`) or an `**Amended:**` line, and each body line it changes gets an italic pointer to it, such as *(Superseded by the [amendment](#…): …)* or *(Refined by …)*.
+- **Refining it** (details settled while building, or a configuration value such as a model profile) takes a dated `## Amendment (YYYY-MM-DD): <topic> (#N)` section at the end. The header names each amendment, in the status line (`Accepted (amended YYYY-MM-DD: <topic>, #N)`) or an `**Amended:**` line, and each body line it changes keeps its accepted wording and gets a short italic pointer appended (a few words and a link; the detail lives in the amendment), such as *(Superseded by the [amendment](#…): …)* or *(Refined by …)*. There is no in-place correction: a stale detail is a refinement, even when an issue or audit proposes new wording for the line. `scripts/adr-history.test.ts` checks this against `main`.
 
 When it isn't clear which one a change is, ask the owner.
 

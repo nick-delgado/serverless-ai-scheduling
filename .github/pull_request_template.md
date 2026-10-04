@@ -12,8 +12,8 @@ Closes #
 <!-- Commands you ran and their results. Paste eval numbers if the agent, prompts, tools, or model config changed. -->
 
 - [ ] `npm run lint && npm run typecheck && npm test`
-- [ ] Seen failing: each break you made → the test(s) that went red, one line each. Claims elsewhere go no further.
-- [ ] Checked by hand only, with no test: what, and why ("None" is a fine answer)
+- [ ] Seen failing: each break you made, as the exact edit (an operand, a flag, a bound, not "the X check") → the test(s) that went red, one line each. Claims elsewhere go no further; a claim about a search names what it covered instead of "only", "every" or "none".
+- [ ] Checked by hand only, with no test: what, and why no test could check it ("None" is a fine answer)
 - [ ] Eval smoke suite on the development-default profile (if agent/prompt/tools/model changed): task success __ / __ vs baseline __, safety violations __
 - [ ] `sam validate --lint` + deployed to `dev` (if infra changed)
 

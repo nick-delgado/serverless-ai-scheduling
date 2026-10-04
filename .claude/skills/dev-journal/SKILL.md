@@ -1,7 +1,7 @@
 ---
 name: dev-journal
 description: >-
-  How to document this project as it's built: dated first-person entries in docs/journal/,
+  How to document this project as it's built: dated first-person-plural entries in docs/journal/,
   Architecture Decision Records in docs/adr/, and how both roll up into the narrative
   README.md (which reads as a story, not a setup manual). Use it whenever something worth
   remembering happens: a decision is made or reversed, a spike or eval produces numbers,
@@ -33,13 +33,13 @@ A reversed decision gets a **new** ADR that supersedes the old one; a refined on
 
 **Chapter:** <README chapter this feeds, see the table below>
 **Milestone:** <M0–M4>
-**Related:** <issue #, PR #, ADR-NNN, PRD FR-xxx>
+**Related:** <issue #, PR # (add it once the PR is open), ADR-NNN, PRD FR-xxx>
 
 ## What happened
 Two to five short paragraphs: the situation and what we did.
 
 ## Why we chose what we chose
-The reasoning, including options we rejected and why.
+The reasoning, including options we rejected and why. Name each item of the PR's "Decisions the spec left open" with the alternative it beat; the PR body isn't kept in the repo.
 
 ## What surprised us
 The part a reader will remember. Wrong assumptions, unexpected numbers, dead ends.

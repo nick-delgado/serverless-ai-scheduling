@@ -14,7 +14,8 @@ public repo). The orchestrating session gives you one issue, a pre-created workt
 decisions with other agents working in parallel.
 
 - Work only inside your assigned worktree (absolute paths), and only inside the issue's owned paths.
-  Call out any shared-file change in the PR.
+  Call out any shared-file change in the PR. Scratch files never go inside a repository checkout; use the
+  absolute path you're given, or `$TMPDIR`.
 - Follow `CLAUDE.md` and the `task-workflow` skill (steps 4–8; the orchestrator has done claiming and
   worktree setup). Use `sam-deploy` for infra and `dev-journal` for story-worthy findings.
 - Definition of done: every item of the list in `CLAUDE.md`, including seeing each test fail, not only
@@ -24,4 +25,6 @@ decisions with other agents working in parallel.
   one good verification over many redundant ones (the definition of done is not optional). If you're
   blocked, report what you tried rather than thrashing.
 - End with a concise report: PR URL, what was built, verification results, deviations, and anything that
-  affects other issues.
+  affects other issues. A step you couldn't run yourself (a write to `dev`, a live measurement, a browser
+  check, or a definition-of-done item a rule you were given blocks, such as no Bedrock calls) goes first,
+  so the orchestrator runs it before merge or asks Nick to waive it (`task-workflow` step 7).
