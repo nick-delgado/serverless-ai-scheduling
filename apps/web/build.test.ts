@@ -1,7 +1,9 @@
 // @vitest-environment node
 /**
  * The production build (S5-01, #24): `vite build` writes `index.html` plus hashed files under
- * `assets/`, the layout the web stack's bucket expects, and none of the MSW mock reaches it.
+ * `assets/`, the layout the web stack's bucket expects, and none of the MSW mock reaches it. The
+ * auth code names the Cognito mock's pool behind `import.meta.env.DEV` (S1-02, #25), so its
+ * constants are checked too.
  */
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +11,8 @@ import { join } from "node:path";
 
 import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { MOCK_COGNITO_CONFIG, MOCK_PASSWORD } from "./src/mocks/cognitoUsers";
 
 const here = decodeURIComponent(new URL(".", import.meta.url).pathname);
 
@@ -63,5 +67,14 @@ describe("production build", () => {
       return match ? [`${file}: ${match[0]}`] : [];
     });
     expect(hits).toEqual([]);
+  });
+
+  it.each([
+    ["pool ID", MOCK_COGNITO_CONFIG.userPoolId],
+    ["app client ID", MOCK_COGNITO_CONFIG.userPoolClientId],
+    ["password", MOCK_PASSWORD],
+  ])("leaves out the Cognito mock's %s", async (_, value) => {
+    const texts = await contents();
+    expect(files.filter((_file, i) => texts[i]?.includes(value))).toEqual([]);
   });
 });

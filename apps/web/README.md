@@ -38,7 +38,7 @@ Amplify Auth with Cognito only (ADR-005): `src/auth/` wraps `signIn`, `signOut` 
 - **Tests:** `src/test/setup.ts` installs it for every test, with no delays and no faults. `configureMockApi({ ... })` from `src/mocks/node` changes options for one test; they reset after each test. `server.use(...)` from the same module overrides a handler.
 - **Options** (`src/mocks/options.ts`): `latencyMs`, `firstEventMs`, `eventIntervalMs`; `chatReply` (`tools`, `plain`, `reset`); `chatFault` (`network`, `unauthorized`, `rate_limited`, `unavailable`, `mid_stream`); `session` (`upcoming`, `no_upcoming`, `restore`); `sessionFault` (`network`, `unauthorized`, `internal`).
 
-Production builds contain no mock code: the worker script is served by the dev server only, and `main.tsx` loads the mock behind `import.meta.env.DEV`. `build.test.ts` runs the production build in `npm test` and checks both: `index.html` plus scripts under `assets/`, and no mock code or worker script in the output.
+Production builds contain no mock code: the worker script is served by the dev server only, `main.tsx` loads the mock behind `import.meta.env.DEV`, and `src/auth/session.ts` names the Cognito mock's pool behind the same guard. `build.test.ts` runs the production build in `npm test` and checks `index.html` plus scripts under `assets/`, and that the output has no mock API code, no worker script, and none of the Cognito mock's pool ID, app client ID or password.
 
 ## Conventions
 
