@@ -1,5 +1,5 @@
 /**
- * Buffered (non-streaming) JSON responses for REST API proxy handlers, e.g. `GET /api/session` (#18).
+ * Buffered (non-streaming) JSON responses for REST API proxy handlers, e.g. `POST /api/session` (#18).
  * Error bodies follow the `ApiError` contract; the chat stream's equivalents are in `errors.ts`.
  */
 import { ApiError, type ChatErrorCode } from "@sched/contracts";
