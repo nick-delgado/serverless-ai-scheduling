@@ -31,7 +31,7 @@ We planted two untested branches in `packages/tools/src/clock.ts` on a throwaway
 ## Evidence
 
 - Local, Apple silicon, DynamoDB Local running: `npm test` 31.8 s, `npm run test:coverage` 34–42 s across 4 runs. On the branch, overall coverage is 95.6 % of statements and 91.1 % of branches (a figure, not a threshold).
-- CI job `Lint, typecheck, test` before (the last three `main` runs): 2 min 42 s, 1 min 56 s and 2 min 26 s, with `npm test` taking 66–96 s. After, on this branch's first three runs (two of the branch, one of the planted defect): 1 min 52 s, 3 min 04 s and 2 min 08 s, with `test:coverage` taking 64–120 s and the gate under 1 s. That is within the runner's spread, so the 10-minute timeout stays.
+- CI job `Lint, typecheck, test` before (the last three `main` runs): 2 min 42 s, 1 min 56 s and 2 min 26 s, with `npm test` taking 66–96 s. After, five green runs on PR #155's branch: 1 min 52 s to 3 min 04 s, with `test:coverage` taking 64–121 s and the gate under 1 s. The job averages about 15 s more (141 s to 155 s), well inside its 10-minute timeout.
 - Planted defect: run [37243233424](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/37243233424), where `coverage:changed` failed and printed `packages/tools/src/clock.ts:36` and `:130`.
 - `scripts/coverage-changed.test.ts`: 48 tests. They call `main` in-process, because a child process records no coverage, against throwaway git repositories and hand-built coverage JSON.
 
