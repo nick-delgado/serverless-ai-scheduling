@@ -1,14 +1,16 @@
-# 2026-10-04 — The deploy script has tests too
+# 2026-10-04 — The deploy script has tests too, and deleting a line missed half a guard
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #100, ADR-003, ADR-005; unblocks #36, informs #41
+**Related:** issue #100, PR #132, ADR-003, ADR-005; unblocks #36, informs #41
 
 ## What happened
 
 The web stack (#7) has had an empty bucket and a CloudFront distribution in front of it since M1, but no script put the SPA in it. `scripts/deploy-web.sh <env>` now does: it reads the env's Cognito IDs and the web stack's bucket, distribution and domain from SSM, builds `apps/web` with the IDs as `VITE_*` variables, syncs `apps/web/dist/` to the bucket and invalidates the distribution. The PR #120 review made one rule non-negotiable: a build without the pool IDs must never ship, because the login page would throw at runtime and nothing at build time would complain.
 
-The definition of done says a test counts only once you've seen it fail, and that applies to a bash script as much as to a tool handler. So the script runs for real in `scripts/deploy-web.test.ts`, inside a throwaway git repo, against stand-in `aws` and `npm` commands on `PATH` that log every call. The stand-in `aws` answers `ssm get-parameter` from a per-test map, and the stand-in `npm` writes a fake `dist/` that embeds the `VITE_*` values it received. I then broke the script 43 ways, one at a time (each SSM name, each `VITE_*` variable, each refusal, each cache header, each `--delete`, the upload order, the invalidation path, the wait), and every break turned a test red.
+The definition of done says a test counts only once you've seen it fail, and that applies to a bash script as much as to a tool handler. So the script runs for real in `scripts/deploy-web.test.ts`, inside a throwaway git repo, against stand-in `aws` and `npm` commands on `PATH` that log every call. The stand-in `aws` answers `ssm get-parameter` from a per-test map, and the stand-in `npm` writes a fake `dist/` that embeds the `VITE_*` values it received. I then broke the script 43 ways, one line at a time (each SSM name, each `VITE_*` variable, each refusal, each cache header, each `--delete`, the upload order, the invalidation path, the wait), and each of those breaks turned a test red.
+
+That sweep broke lines, not conditions, and the PR #132 review found what slipped through. The build-output guard is `[[ ! -f "$dist/index.html" ]] || [[ -z "$(find "$dist/assets" ...)" ]]`. Every test that reached it without an `index.html` also had no `assets/`, so with the `index.html` half deleted the other half still refused, with the same message, and no test went red. The env regex was tested only with `Dev`, so its `$` anchor and length bounds could change unnoticed; `demo` never reached the shared-env warning; the `create-invalidation` call was matched only in part. A second sweep broke those conditions one at a time, after a new stand-in build (assets, no `index.html`), new bad and good env names, a `demo` run and an exact invalidation call were added.
 
 ## Why we chose what we chose
 
@@ -22,10 +24,11 @@ The definition of done says a test counts only once you've seen it fail, and tha
 
 ## Evidence
 
-- `scripts/deploy-web.test.ts`: 23 tests, about 9 s (each one spawns git and bash several times, hence a 30 s per-test timeout).
-- 43 single-line mutations of `scripts/deploy-web.sh`, all red, 0 survivors.
+- `scripts/deploy-web.test.ts`: 30 tests, about 11 s (each one spawns git and bash several times, hence a 30 s per-test timeout).
+- First sweep: 43 single-line breaks of `scripts/deploy-web.sh`, each red. It did not break operands: the `index.html` half of the build-output guard survived it.
+- Second sweep, after the review: 11 breaks, each red: either half of the build-output guard; the regex's `$` anchor and each length bound moved both ways (`{0,15}`, `{2,15}`, `{1,14}`, `{1,16}`); `demo` dropped from `PROTECTED_ENVS`; `--query Invalidation.Id` or `--output text` dropped from the invalidation; and `2>/dev/null` put back on the SSM read, which had reported throttling and access errors as "missing".
 - A real `vite build` with synthetic IDs writes `index.html`, one JS and one CSS file under `assets/`, and both IDs end up in the JS bundle, the same layout the stand-in `npm` fakes.
-- The `dev` run is in the PR (#100).
+- The `dev` run is in [PR #132](https://github.com/nick-delgado/serverless-ai-scheduling/pull/132), from commit `26eb34e` (the script has changed since only in how SSM errors show).
 
 ## What's next
 
