@@ -131,9 +131,12 @@ For each cause or pattern worth acting on, write a concrete proposal. Rules:
 
 ## Cause summary
 
-| Finding | Primary cause | Confidence | Evidence |
-|---|---|---|---|
-<one row per blocker, major and minor; the evidence cell is one sentence with its path:line>
+| Finding | Severity | Failure class | Primary cause | Confidence | Evidence |
+|---|---|---|---|---|---|
+<one row per blocker, major and minor; the evidence cell is one sentence with its path:line.
+The failure class is exactly one from the tracked list in the manifest (or, if it has none,
+`<SKILL_DIR>/references/failure-classes.md`), or `other`. It names what went wrong, which
+stays stable while causes shift; the project counts it to see whether its changes worked.>
 
 Nits, not analysed: <IDs, or "none">
 

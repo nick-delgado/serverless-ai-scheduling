@@ -8,7 +8,8 @@
 #                 base.ref, base.sha, head.ref, head.sha, additions, deletions, changed_files)
 #   files.json    the changed files, one JSON object per line (filename, status, additions,
 #                 deletions)
-#   commits.txt   the PR's commits, oldest first: short sha, then the full message
+#   commits.txt   the PR's commits, oldest first: short sha and author date, then the full
+#                 message
 #   diff.patch    the PR's diff
 #   ci.txt        the checks and statuses reported on the head commit
 # Prints a summary: head and base, size, whether it can merge, CI state, and the issues the
@@ -38,7 +39,7 @@ gh api --paginate "repos/{owner}/{repo}/pulls/${pr}/files" \
   --jq '.[] | {filename, status, additions, deletions}' > "$run/files.json"
 
 gh api --paginate "repos/{owner}/{repo}/pulls/${pr}/commits" \
-  --jq '.[] | "======== \(.sha[0:7]) ========\n\(.commit.message)\n"' > "$run/commits.txt"
+  --jq '.[] | "======== \(.sha[0:7]) \(.commit.author.date) ========\n\(.commit.message)\n"' > "$run/commits.txt"
 
 gh api "repos/{owner}/{repo}/pulls/${pr}" -H "Accept: application/vnd.github.diff" > "$run/diff.patch"
 
