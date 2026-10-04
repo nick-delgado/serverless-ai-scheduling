@@ -35,5 +35,21 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
   },
   { ...reactHooks.configs.flat.recommended, files: ["apps/web/**/*.{ts,tsx}"] },
+  {
+    // CLAUDE.md rule 3: the agent and tools packages read time from an injected Clock, so evals can freeze it.
+    // Parsing a stored value (`new Date(iso)`) is fine; only the two Clock implementations read the real clock.
+    files: ["packages/agent/src/**/*.ts", "packages/tools/src/**/*.ts"],
+    ignores: ["packages/agent/src/ports.ts", "packages/tools/src/clock.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          message: "Read the time from an injected Clock (CLAUDE.md rule 3), not the real clock.",
+        },
+      ],
+    },
+  },
   prettier,
 );
