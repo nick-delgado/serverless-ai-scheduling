@@ -61,10 +61,10 @@ function captureChatBodies() {
   return bodies;
 }
 
-/** Render with instant replies and wait for the greeting. */
+/** Render with instant replies and wait (in real hops, no fixed timeout) for the greeting. */
 async function renderPage() {
   render(<ChatPage reducedMotion={instant} />);
-  await within(log()).findByText(SESSIONS.upcoming.greeting);
+  await until(() => within(log()).queryByText(SESSIONS.upcoming.greeting) !== null);
 }
 
 async function sendFromPage(text: string) {
@@ -514,9 +514,13 @@ describe("ChatPage: turn details", () => {
     // which a loaded runner can spend before the gated stream gets through (#122).
     try {
       await renderPage();
+      // Forget the mount and greeting scrolls (the greeting is shown, so its scroll has run), so only
+      // the sent message's own scroll satisfies the next wait; once it's seen and cleared, it can't
+      // stand in for the chip's below.
+      expect(within(log()).getByText(SESSIONS.upcoming.greeting)).toBeVisible();
+      scrollIntoView.mockClear();
       await sendFromPage("Hi");
       await until(() => within(log()).queryByText("Hi") !== null);
-      // The message's own scroll first, so it can't stand in for the chip's below.
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" }));
       scrollIntoView.mockClear();
 
