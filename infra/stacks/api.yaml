@@ -141,7 +141,8 @@ Resources:
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-120b-1:0
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-20b-1:0
             # The escalation email (#35, ADR-009): SendEmail from the verified identity only. In the SES
-            # sandbox the recipient identity is authorized too, so both identities are listed.
+            # sandbox the recipient identity is authorized too, so both identities are listed, and the
+            # ses:FromAddress condition keeps the recipient identity from being used as a sender.
             - !If
               - SesConfigured
               - Sid: SendEscalationEmail
@@ -150,6 +151,9 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesSender}
                   - !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesStaffRecipient}
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SesSender
               - !Ref AWS::NoValue
 
   # ---------------------------------------------------------------------------------------------

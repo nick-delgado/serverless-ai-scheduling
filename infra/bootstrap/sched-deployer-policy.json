@@ -100,7 +100,11 @@
       "Sid": "SendAsVerifiedIdentity",
       "Effect": "Allow",
       "Action": "ses:SendEmail",
-      "Resource": "arn:aws:ses:us-east-1:<ACCOUNT_ID>:identity/<SES_IDENTITY>"
+      "Resource": [
+        "arn:aws:ses:us-east-1:<ACCOUNT_ID>:identity/<SES_IDENTITY>",
+        "arn:aws:ses:us-east-1:<ACCOUNT_ID>:identity/<SES_RECIPIENT>"
+      ],
+      "Condition": { "StringEquals": { "ses:FromAddress": "<SES_IDENTITY>" } }
     },
     {
       "Sid": "ReadOnlyDebugging",

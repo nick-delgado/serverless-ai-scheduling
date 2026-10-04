@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 
-import { SendEmailCommand, type SESv2Client } from "@aws-sdk/client-sesv2";
+import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { FrozenClock } from "../../src/clock";
 import { renderEscalationEmail } from "../../src/notify/render";
 import {
   emfFailureReporter,
@@ -10,6 +11,7 @@ import {
   NotificationSendError,
   notificationFailedEmf,
   redactAddresses,
+  SES_ENV,
   SesNotifier,
   sesNotifierFromEnv,
   type NotificationFailure,
@@ -179,25 +181,77 @@ describe("failed-notification metric", () => {
     });
   });
 
-  it("is written to stdout as one raw line", () => {
+  it("is written to stdout as one raw line, stamped by the clock", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    emfFailureReporter("pr52")(failure);
+    const at = new Date("2026-10-05T14:30:00Z");
+    emfFailureReporter("pr52", new FrozenClock(at))(failure);
     expect(write).toHaveBeenCalledTimes(1);
     const line = String(write.mock.calls[0]?.[0]);
     expect(line.endsWith("}\n")).toBe(true);
     expect(JSON.parse(line)).toMatchObject({
+      _aws: { Timestamp: at.getTime() },
       Env: "pr52",
       NotificationFailed: 1,
       errorName: "MessageRejected",
     });
   });
+});
 
-  it("matches the alarm in infra/stacks/api.yaml", () => {
-    const template = readFileSync(new URL("../../../../infra/stacks/api.yaml", import.meta.url), "utf8");
-    const alarm = /NotificationFailedAlarm:\n(?:(?: {4}.*)?\n)+/.exec(template)?.[0] ?? "";
+describe("infra/stacks/api.yaml", () => {
+  const template = readFileSync(new URL("../../../../infra/stacks/api.yaml", import.meta.url), "utf8");
+  /** The lines of the top-level-indented block that starts with `header`, up to the next one at its indent. */
+  const block = (header: string, indent: number): string => {
+    const pad = " ".repeat(indent);
+    const re = new RegExp(`^${pad}${header}\n(?:(?:${pad} .*)?\n)+`, "m");
+    return re.exec(template)?.[0] ?? "";
+  };
+
+  it("has an alarm on the failed-notification metric that fires on one failure in the env", () => {
+    const alarm = block("NotificationFailedAlarm:", 2);
     expect(alarm).toContain(`Namespace: ${NOTIFICATION_FAILED_METRIC.namespace}\n`);
     expect(alarm).toContain(`MetricName: ${NOTIFICATION_FAILED_METRIC.name}\n`);
-    expect(alarm).toContain(`- Name: ${NOTIFICATION_FAILED_METRIC.dimension}\n`);
+    expect(alarm).toContain(
+      `Dimensions:\n        - Name: ${NOTIFICATION_FAILED_METRIC.dimension}\n          Value: !Ref Env\n`,
+    );
+    expect(alarm).toContain("Statistic: Sum\n");
+    expect(alarm).toContain("Threshold: 1\n");
+    expect(alarm).toContain("ComparisonOperator: GreaterThanOrEqualToThreshold\n");
+  });
+
+  it("gives every function the env the metric's dimension is read from", () => {
+    expect(block("Globals:", 0)).toContain(
+      "    Environment:\n      Variables:\n        SCHED_ENV: !Ref Env\n",
+    );
+  });
+
+  it("passes the SES addresses to the chat function under the names sesNotifierFromEnv reads", () => {
+    const chat = block("ChatFunction:", 2);
+    expect(chat).toContain(
+      `          ${SES_ENV.sender}: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]\n`,
+    );
+    expect(chat).toContain(
+      `          ${SES_ENV.recipient}: !If [SesConfigured, !Ref SesStaffRecipient, !Ref AWS::NoValue]\n`,
+    );
+  });
+
+  it("lets the chat function send only from the sender identity", () => {
+    const chat = block("ChatFunction:", 2);
+    const grant = /^ {14}- Sid: SendEscalationEmail\n(?: {16}.*\n)+/m.exec(chat)?.[0];
+    const identity = "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity";
+    expect(grant).toBe(
+      [
+        "              - Sid: SendEscalationEmail",
+        "                Effect: Allow",
+        "                Action: ses:SendEmail",
+        "                Resource:",
+        `                  - !Sub ${identity}/\${SesSender}`,
+        `                  - !Sub ${identity}/\${SesStaffRecipient}`,
+        "                Condition:",
+        "                  StringEquals:",
+        "                    ses:FromAddress: !Ref SesSender",
+        "",
+      ].join("\n"),
+    );
   });
 });
 
@@ -224,6 +278,29 @@ describe("sesNotifierFromEnv", () => {
     expect(() => sesNotifierFromEnv({ SES_SENDER: SENDER, SES_STAFF_RECIPIENT: RECIPIENT })).toThrow(
       "SCHED_ENV is not set",
     );
+  });
+
+  it("builds its own SES client when none is given", async () => {
+    const send = vi
+      .spyOn(SESv2Client.prototype, "send")
+      .mockImplementation((() =>
+        Promise.resolve({ MessageId: "m-default" })) as unknown as SESv2Client["send"]);
+    const vars = { SCHED_ENV: "dev", SES_SENDER: SENDER, SES_STAFF_RECIPIENT: RECIPIENT };
+    await expect(sesNotifierFromEnv(vars)?.notifyEscalation(NOTICE)).resolves.toEqual({
+      messageId: "m-default",
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("stamps the failure metric with the clock it is given", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const at = new Date("2026-10-05T16:00:00Z");
+    const bad = fakeClient(() => Promise.reject(new Error("throttled")));
+    const vars = { SCHED_ENV: "dev", SES_SENDER: SENDER, SES_STAFF_RECIPIENT: RECIPIENT };
+    await expect(
+      sesNotifierFromEnv(vars, bad.client, new FrozenClock(at))?.notifyEscalation(NOTICE),
+    ).rejects.toThrow(NotificationSendError);
+    expect(JSON.parse(String(write.mock.calls[0]?.[0]))).toMatchObject({ _aws: { Timestamp: at.getTime() } });
   });
 
   it("sends with the configured addresses and reports failures for SCHED_ENV", async () => {

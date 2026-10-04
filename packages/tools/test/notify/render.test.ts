@@ -34,7 +34,7 @@ describe("renderEscalationEmail", () => {
   it("puts every field of the notice in the text and HTML bodies", () => {
     const { text, html } = renderEscalationEmail(NOTICE);
     for (const body of [text, html]) {
-      expect(body).toContain("Maria Santos, date of birth 1984-03-12");
+      expect(body).toContain("Maria Santos, date of birth 1988-04-17");
       expect(body).toContain(REASON_LABELS.patient_requested);
       expect(body).toContain(NOTICE.createdLocal);
       expect(body).toContain(NOTICE.escalationId);
@@ -82,7 +82,7 @@ describe("renderEscalationEmail", () => {
     const { subject } = renderEscalationEmail({
       ...NOTICE,
       summary: `Bcc: someone\r\n${HOSTILE}`,
-      patient: { firstName: "Mal\r\nBcc:", lastName: "x", dateOfBirth: "1984-03-12" },
+      patient: { firstName: "Mal\r\nBcc:", lastName: "x", dateOfBirth: "1988-04-17" },
     });
     expect(subject).toBe(`Patient escalation: ${REASON_LABELS.patient_requested} (${NOTICE.escalationId})`);
   });
@@ -90,8 +90,8 @@ describe("renderEscalationEmail", () => {
   it.each([
     ["summary", { summary: HOSTILE }],
     ["transcript text", { transcript: [{ role: "patient", text: HOSTILE, createdAt: NOTICE.createdAt }] }],
-    ["first name", { patient: { firstName: HOSTILE, lastName: "Santos", dateOfBirth: "1984-03-12" } }],
-    ["last name", { patient: { firstName: "Maria", lastName: HOSTILE, dateOfBirth: "1984-03-12" } }],
+    ["first name", { patient: { firstName: HOSTILE, lastName: "Santos", dateOfBirth: "1988-04-17" } }],
+    ["last name", { patient: { firstName: "Maria", lastName: HOSTILE, dateOfBirth: "1988-04-17" } }],
     ["date of birth", { patient: { firstName: "Maria", lastName: "Santos", dateOfBirth: HOSTILE } }],
     ["local time", { createdLocal: HOSTILE }],
     ["escalation id", { escalationId: HOSTILE }],

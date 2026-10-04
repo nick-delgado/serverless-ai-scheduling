@@ -16,8 +16,12 @@
  */
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
-import type { EscalationNotice, Notifier, NotifyResult } from "./index";
+import { type Clock, SystemClock } from "../clock";
+import type { EscalationNotice, Notifier, NotifyResult } from "./types";
 import { renderEscalationEmail } from "./render";
+
+/** The chat function's environment variables for the addresses: `infra/stacks/api.yaml` sets them. */
+export const SES_ENV = { sender: "SES_SENDER", recipient: "SES_STAFF_RECIPIENT" } as const;
 
 /** The failed-notification metric. `infra/stacks/api.yaml` (alarm) and #38's dashboard use these names. */
 export const NOTIFICATION_FAILED_METRIC = {
@@ -67,9 +71,12 @@ export function notificationFailedEmf(env: string, failure: NotificationFailure,
  * Writes the EMF line straight to stdout. Lambda's JSON log format wraps `console.*` output in its own
  * record, which CloudWatch would not read as EMF; a raw stdout line is passed through as it is.
  */
-export function emfFailureReporter(env: string): (failure: NotificationFailure) => void {
+export function emfFailureReporter(
+  env: string,
+  clock: Clock = new SystemClock(),
+): (failure: NotificationFailure) => void {
   return (failure) => {
-    process.stdout.write(`${notificationFailedEmf(env, failure, new Date())}\n`);
+    process.stdout.write(`${notificationFailedEmf(env, failure, clock.now())}\n`);
   };
 }
 
@@ -130,15 +137,16 @@ export class SesNotifier implements Notifier {
 
 /**
  * The chat function's notifier, from its environment: `SES_SENDER`, `SES_STAFF_RECIPIENT` and `SCHED_ENV`
- * (the metric's `Env`). Undefined when SES is not configured for the env (both unset), so the tool records
- * FAILED; throws when only one of the two is set.
+ * (the metric's `Env`); `clock` stamps the failure metric. Undefined when SES is not configured for the env
+ * (both unset), so the tool records FAILED; throws when only one of the two is set.
  */
 export function sesNotifierFromEnv(
   vars: Readonly<Record<string, string | undefined>>,
   client?: Pick<SESv2Client, "send">,
+  clock: Clock = new SystemClock(),
 ): SesNotifier | undefined {
-  const sender = vars.SES_SENDER;
-  const recipient = vars.SES_STAFF_RECIPIENT;
+  const sender = vars[SES_ENV.sender];
+  const recipient = vars[SES_ENV.recipient];
   if (!sender && !recipient) return undefined;
   if (!sender || !recipient) throw new Error("Set both SES_SENDER and SES_STAFF_RECIPIENT, or neither");
   const env = vars.SCHED_ENV;
@@ -147,6 +155,6 @@ export function sesNotifierFromEnv(
     client: client ?? new SESv2Client({}),
     sender,
     recipient,
-    onFailure: emfFailureReporter(env),
+    onFailure: emfFailureReporter(env, clock),
   });
 }

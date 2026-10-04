@@ -6,7 +6,11 @@ import type { EscalationNotice } from "../../src/notify";
 export const NOTICE: EscalationNotice = {
   escalationId: EXAMPLES.EscalationId,
   conversationId: EXAMPLES.ConversationId,
-  patient: { firstName: "Maria", lastName: "Santos", dateOfBirth: "1984-03-12" },
+  patient: {
+    firstName: EXAMPLES.Patient.firstName,
+    lastName: EXAMPLES.Patient.lastName,
+    dateOfBirth: EXAMPLES.Patient.dateOfBirth,
+  },
   reason: "patient_requested",
   summary: "Patient wants to discuss a billing question with a person.",
   createdAt: "2026-10-05T13:00:00Z",
