@@ -72,7 +72,7 @@ describe("createChatApi", () => {
 
   describe("abort", () => {
     // The call is aborted as its request starts, and only then may the mock answer; without the
-    // signal, the call would resolve.
+    // signal, neither call ends in an AbortError.
     it.each([
       ["getSession", "/api/session", (api: ChatApi, signal: AbortSignal) => api.getSession(signal)],
       [
