@@ -1,7 +1,7 @@
 # ADR-007: Chat transport — REST API with Lambda response streaming
 
 - **Status:** Accepted (2026-09-29). Spike S-2, run as part of the M1 walking skeleton (#7), confirmed it; see Validation.
-- **Amended:** 2026-10-03 (the session call is `POST /api/session`; see [Amendment](#amendment-2026-10-03-the-session-call-is-a-post-18)); 2026-10-03 (what the chat handler settled, #17; see [Amendment](#amendment-2026-10-03-what-the-chat-handler-settled-123))
+- **Amended:** 2026-10-03 (the session call is `POST /api/session`; see [Amendment](#amendment-2026-10-03-the-session-call-is-a-post-18)); 2026-10-03 (what the chat handler settled, #17; see [Amendment](#amendment-2026-10-03-what-the-chat-handler-settled-123)); 2026-10-04 (chat retries as built, #104; see [Amendment](#amendment-2026-10-04-chat-retries-as-built-104))
 - **Date:** 2026-09-28 (proposed), 2026-09-29 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-012, FR-013, NFR-001, ADR-001, ADR-003
@@ -129,5 +129,15 @@ The decision stands. Building the chat handler (#17, PR #96) settled these trans
 - **`done` carries `conversationId`.** An unknown or foreign `conversationId` in the request starts a new conversation with a server-generated ID, never an error (not-yours and doesn't-exist look the same, ADR-004); `done` tells the client which ID it got.
 - **Status before streaming:** 400 `BAD_REQUEST`; 401 `UNAUTHORIZED`; 429 `RATE_LIMITED` for Bedrock throttling (retryable) and for the daily turn cap (not retryable, ADR-009); 409 `AGENT_UNAVAILABLE` (retryable) when another turn of the conversation wrote first; 503 `AGENT_UNAVAILABLE` for other agent errors; 500 `INTERNAL`.
 - **Timeout:** the chat Lambda has 180 s and aborts the loop 15 s earlier, so it can store the turn and end the stream with `error`.
-- **Alternation:** a turn that fails after the patient's message is stored is closed with a fixed assistant reply, because Converse requires alternating roles; history stays append-only.
-- **Retries** (planned, #27 and #104, decided on #123): the client offers Retry only for a retryable error or a network failure, and resends the same text with the same `clientMessageId` and `conversationId`. The server answers a repeat of an already-answered message by streaming the stored reply's visible text again as `text_delta` and ending with `done` carrying the stored `messageId`, with no model call and no counted turn.
+- **Alternation:** a turn that fails after the patient's message is stored is closed with a fixed assistant reply, because Converse requires alternating roles; history stays append-only. *(Refined by the [2026-10-04 amendment](#amendment-2026-10-04-chat-retries-as-built-104): closed at once only after a tool ran.)*
+- **Retries** (planned, #27 and #104, decided on #123): the client offers Retry only for a retryable error or a network failure, and resends the same text with the same `clientMessageId` and `conversationId`. The server answers a repeat of an already-answered message by streaming the stored reply's visible text again as `text_delta` and ending with `done` carrying the stored `messageId`, with no model call and no counted turn. *(Built by the [2026-10-04 amendment](#amendment-2026-10-04-chat-retries-as-built-104).)*
+
+## Amendment (2026-10-04): chat retries as built (#104)
+
+The decision stands. Building retries (#104, FR-015) settled:
+
+- **What a repeat is.** The patient's stored message carries the `clientMessageId` it was sent with (an optional field on `ConversationMessage`, written in the same append). A send is a repeat only when its ID is the one on the **last** patient message of the loaded, owned conversation; anything else is a new message. The same ID with different text is a 400 `BAD_REQUEST`, and nothing is stored or counted.
+- **Alternation.** A turn that fails **before any tool ran** is no longer closed: it ends at the patient's message. A new message closes it with the fixed reply first, in the same append, as before. A turn that fails **after** a tool ran is closed at once, as before.
+- **A repeat of an answered message** (including one closed after a tool ran) streams the assistant bubble that restore shows for that turn as one `text_delta`, then `done` with that bubble's `messageId` and zero usage. No `status` events, no model call, no counted turn, no trace. It is served even at the daily cap. A turn whose storing stopped after a tool result (a crash between batches) gets the fixed reply first, then replays it.
+- **A repeat of an interrupted message** (it has no reply) runs the agent on the history before it, with a new `turnId`, and doesn't store the patient's message again or count a turn. A repeat that arrives while the original is still running is treated the same way; whichever turn stores second gets the retryable 409.
+- **`error` carries `conversationId`** (optional) whenever the conversation exists in storage when the error is sent: this request stored the patient's message, or it continued a stored conversation. It is omitted for 400, 401, the daily cap, and a failed first append of a new conversation. The client sets it as it does from `done`, so Retry after a failed first turn, and a reload, continue that conversation (FR-014).
