@@ -120,6 +120,13 @@ describe("hintWithoutReason", () => {
     ["/* v8 ignore next -- @preserve */", true],
     ["/* v8 ignore next -- */ after(); // -- not the hint's reason", true],
     ["/* istanbul ignore if */", true],
+    ["/* v8 ignore else */", true],
+    ["/* v8 ignore stop */", true],
+    ["const remaining = count -- 1; /* v8 ignore next */", true],
+    ["/* c8 ignore file */", true],
+    ["/* node:coverage ignore next */", true],
+    ["// v8 ignore next -- x", false],
+    ["/* v8 ignore nextline */", false],
     ["/* v8 ignore next -- CLI entry */", false],
     ["/* v8 ignore stop -- end of the AWS-only path */", false],
     ["// c8 ignore next -- @preserve only reached in the browser", false],
@@ -132,7 +139,9 @@ describe("hintWithoutReason", () => {
 
 describe("checkChanged", () => {
   it("reports uncovered and unexplained added lines only for files with coverage", () => {
+    // A file without coverage comes first, so the files after it must still be checked.
     const added = new Map([
+      ["docs/note.md", [{ line: 2, text: "/* v8 ignore next */" }]],
       [
         "src/a.ts",
         [
@@ -141,7 +150,6 @@ describe("checkChanged", () => {
           { line: 3, text: "/* v8 ignore next */" },
         ],
       ],
-      ["deploy.sh", [{ line: 2, text: "# v8 ignore next" }]],
     ]);
     const coverage = new Map([
       [
@@ -179,7 +187,7 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([])).toEqual({});
   });
 
-  it.each([[["--bse", "x"]], [["--base"]], [["--base", "--coverage", "c.json"]]])("rejects %j", (argv) => {
+  it.each([[["--bse", "x"]], [["--base"]], [["--coverage", "--base"]]])("rejects %j", (argv) => {
     expect(() => parseCliArgs(argv)).toThrow(/usage: coverage-changed/);
   });
 });
@@ -217,6 +225,11 @@ describe("main", () => {
     git("config", "user.email", "test@example.invalid");
     git("config", "user.name", "Test");
     git("config", "commit.gpgsign", "false");
+    // A user's config can colour diffs, route them through an external tool, or turn rename detection off;
+    // the gate must not depend on any of it.
+    git("config", "color.diff", "always");
+    git("config", "diff.external", "false");
+    git("config", "diff.renames", "false");
     write(".gitignore", "coverage/\n");
     write("src/a.ts", BASE);
     write("src/old.ts", `${KEPT}export const edited = 1;\n`);
@@ -331,6 +344,26 @@ describe("main", () => {
     expect(out).toEqual(["Added lines no test executes (1):", "src/new.ts:6"]);
   });
 
+  it("diffs from the merge base, so what the base changed since the branch began doesn't count", () => {
+    git("checkout", "-q", "main");
+    write("src/old.ts", `${KEPT.split("\n").slice(1).join("\n")}export const edited = 1;\n`);
+    commit("main drops kept1");
+    git("checkout", "-q", "feature");
+    write("src/a.ts", `${BASE}export const four = 4;\n`);
+    commit("add four");
+    // On the branch, src/old.ts line 1 (kept1, which main has since dropped) never ran.
+    writeCoverage({ "src/a.ts": fileCoverage([[1, 4, 1]]), "src/old.ts": fileCoverage([[1, 1, 0]]) });
+    expect(run()).toBe(0);
+  });
+
+  it("reads paths with non-ASCII characters as git wrote them", () => {
+    write("src/café.ts", "export const crème = never();\n");
+    commit("add café");
+    writeCoverage({ "src/café.ts": fileCoverage([[1, 1, 0]]) });
+    expect(run()).toBe(1);
+    expect(out).toContain("src/café.ts:1");
+  });
+
   it("checks committed changes only, not the working tree", () => {
     write("src/a.ts", `${BASE}export const four = never();\n`);
     writeCoverage({ "src/a.ts": fileCoverage([[4, 4, 0]]) });
@@ -355,28 +388,29 @@ describe("main", () => {
   });
 
   describe("base ref", () => {
-    // The branch's uncovered line 4 shows which base was used: `later` is the branch head, so nothing is added since it.
+    // The branch adds uncovered line 4, so a run against `main` fails. `origin/main` points at the branch
+    // head here, so a run against it has nothing to check and passes.
     beforeEach(() => {
       write("src/a.ts", `${BASE}export const four = never();\n`);
       commit("feature adds four");
       writeCoverage({ "src/a.ts": fileCoverage([[4, 4, 0]]) });
-      git("update-ref", "refs/remotes/origin/main", "main");
-      git("update-ref", "refs/heads/later", "HEAD");
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
     });
 
     it("defaults to origin/main", () => {
-      expect(run([])).toBe(1);
-      expect(out).toContain("src/a.ts:4");
+      expect(run([])).toBe(0);
+      expect(out).toEqual(["coverage-changed: every added source line since origin/main ran in a test."]);
     });
 
     it("uses COVERAGE_BASE, and --base over it", () => {
-      expect(run([], { COVERAGE_BASE: "later" })).toBe(0);
-      expect(out.at(-1)).toMatch(/since later ran/);
-      expect(run(["--base", "main"], { COVERAGE_BASE: "later" })).toBe(1);
+      expect(run([], { COVERAGE_BASE: "main" })).toBe(1);
+      expect(out).toContain("src/a.ts:4");
+      expect(run(["--base", "origin/main"], { COVERAGE_BASE: "main" })).toBe(0);
     });
 
     it("treats an empty COVERAGE_BASE (a push run) as unset", () => {
-      expect(run([], { COVERAGE_BASE: "" })).toBe(1);
+      expect(run([], { COVERAGE_BASE: "" })).toBe(0);
+      expect(out.at(-1)).toMatch(/since origin\/main ran/);
     });
 
     it("without a merge base: exits 2 in CI, and warns and passes locally", () => {

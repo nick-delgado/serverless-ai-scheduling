@@ -27,7 +27,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { join, relative } from "node:path";
 
 export const DEFAULT_BASE = "origin/main";
 export const DEFAULT_COVERAGE_FILE = "coverage/coverage-final.json";
@@ -138,13 +138,12 @@ export function checkChanged(
   return { uncovered, unexplained };
 }
 
-/** Coverage keyed by repo-relative path with `/` separators; files outside `root` are dropped. */
+/** Coverage keyed by repo-relative path (POSIX: CI runs on Linux); files outside `root` are dropped. */
 export function coverageByFile(json: Record<string, FileCoverage>, root: string): Map<string, FileCoverage> {
   const byFile = new Map<string, FileCoverage>();
   for (const [path, fileCoverage] of Object.entries(json)) {
     const rel = relative(root, path);
-    if (rel.startsWith("..") || isAbsolute(rel)) continue;
-    byFile.set(rel.split(sep).join("/"), fileCoverage);
+    if (!rel.startsWith("..")) byFile.set(rel, fileCoverage);
   }
   return byFile;
 }
@@ -182,8 +181,7 @@ export function main(
 ): number {
   const log = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8" });
   let args: CliArgs;
   try {
     args = parseCliArgs(argv);
