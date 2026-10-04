@@ -33,11 +33,13 @@ In **IAM Identity Center → Permission sets**:
 | `AdministratorAccess` | AWS managed `AdministratorAccess` | 1 h | Nick only: bootstrap (step 5) and break-glass |
 | `SchedDeployer` | **Inline policy** from `infra/bootstrap/sched-deployer-policy.json` | 8 h | Claude Code agents (`sched-dev` profile) |
 
-Before pasting the inline policy, substitute your account ID:
+Before pasting the inline policy, substitute your account ID and the verified SES identity (the sender address, the same value as `SES_SENDER` in the git-ignored `.env`; it lets agents send escalation emails and run `scripts/retry-escalations.ts`):
 
 ```bash
-ACCOUNT_ID=123456789012   # your 12-digit account ID
-sed "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" infra/bootstrap/sched-deployer-policy.json | pbcopy
+ACCOUNT_ID=123456789012              # your 12-digit account ID
+SES_IDENTITY=you@example.com         # the verified SES identity; never commit the real one
+sed -e "s/<ACCOUNT_ID>/$ACCOUNT_ID/g" -e "s/<SES_IDENTITY>/$SES_IDENTITY/g" \
+  infra/bootstrap/sched-deployer-policy.json | pbcopy
 ```
 
 Then go to **AWS accounts**, select the account, choose **Assign users or groups**, pick your user, and assign **both** permission sets.
@@ -95,7 +97,7 @@ aws cloudformation deploy --profile sched-admin --region us-east-1 \
   --stack-name sched-bootstrap --template-file infra/bootstrap/bootstrap.yaml --capabilities CAPABILITY_NAMED_IAM
 ```
 
-When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
+When a PR changes `infra/bootstrap/sched-deployer-policy.json`, go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>` and `<SES_IDENTITY>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
 
 ## 6. Enable Bedrock model access
 

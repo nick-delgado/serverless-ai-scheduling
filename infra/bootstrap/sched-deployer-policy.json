@@ -97,6 +97,12 @@
       "Resource": "*"
     },
     {
+      "Sid": "SendAsVerifiedIdentity",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:aws:ses:us-east-1:<ACCOUNT_ID>:identity/<SES_IDENTITY>"
+    },
+    {
       "Sid": "ReadOnlyDebugging",
       "Effect": "Allow",
       "Action": [
