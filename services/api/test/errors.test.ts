@@ -1,6 +1,7 @@
+import { DAILY_CAP_MESSAGE } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
-import { classifyAgentError } from "../src";
+import { FAILURES, classifyAgentError } from "../src";
 
 describe("classifyAgentError", () => {
   it.each([
@@ -33,5 +34,13 @@ describe("classifyAgentError", () => {
       httpStatus: 503,
       event: expect.objectContaining({ code: "AGENT_UNAVAILABLE", retryable: true }),
     });
+  });
+});
+
+describe("FAILURES.dailyCap", () => {
+  it("answers with the shared daily-cap message, which names the front desk (#104)", () => {
+    expect(FAILURES.dailyCap().event.message).toBe(DAILY_CAP_MESSAGE);
+    expect(DAILY_CAP_MESSAGE).toContain("1-800-555-0199");
+    expect(DAILY_CAP_MESSAGE).toContain("Mon–Fri, 8 AM–5 PM ET");
   });
 });

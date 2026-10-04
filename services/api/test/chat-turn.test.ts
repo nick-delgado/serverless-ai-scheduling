@@ -61,12 +61,16 @@ interface World {
     options?: {
       patientId?: string | undefined;
       conversationId?: string;
+      /** Repeat an earlier send's ID (a Retry). Every send gets a fresh one otherwise. */
+      clientMessageId?: string;
       body?: string | null;
       signal?: AbortSignal;
     },
   ) => Promise<{
     response: ReturnType<typeof memorySink>["response"];
     summary: Awaited<ReturnType<typeof handleChatTurn>>;
+    /** The `clientMessageId` this send used. */
+    clientMessageId: string;
   }>;
 }
 
@@ -79,6 +83,7 @@ function world(
   const llm = new ScriptedLlmClient(options.steps ?? []);
   const notifier = new RecordingNotifier();
   const logs: LogEntry[] = [];
+  let sends = 0;
   const deps: ChatTurnDeps = {
     repos,
     turns,
@@ -102,11 +107,14 @@ function world(
     logs,
     async send(text, o = {}) {
       const { sink, response } = memorySink();
+      // A fresh ID per send, so only a send that asks to repeat one is a Retry (A-9).
+      const clientMessageId =
+        o.clientMessageId ?? `c1e2a3b4-0000-4000-8000-${String(++sends).padStart(12, "0")}`;
       const body =
         o.body !== undefined
           ? o.body
           : JSON.stringify({
-              clientMessageId: CLIENT_MESSAGE_ID,
+              clientMessageId,
               text,
               ...(o.conversationId === undefined ? {} : { conversationId: o.conversationId }),
             });
@@ -120,7 +128,7 @@ function world(
         deps,
         sink,
       );
-      return { response, summary };
+      return { response, summary, clientMessageId };
     },
   };
 }
@@ -435,23 +443,30 @@ describe("handleChatTurn: failures", () => {
     $metadata: { httpStatusCode: 429 },
   });
 
-  it("answers 429 when Bedrock throttles before anything streamed, keeps the message, and closes the turn", async () => {
+  it("answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open", async () => {
     const w = world({ steps: [{ error: throttled }, scriptedText("Back now.")] });
     const { response, summary } = await w.send("Hello");
 
     expectWellFormed(response);
     expect(response.status).toBe(429);
     expect(response.events).toEqual([expect.objectContaining({ code: "RATE_LIMITED", retryable: true })]);
-    const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+    // No tool ran, so no closing reply: the turn ends at the patient's message, for a Retry (#104, Q-1).
+    const conversationId = idOf(summary);
+    expect((await messagesOf(w.repos, MARIA, conversationId)).map((m) => [m.role, textOf(m)])).toEqual([
+      ["user", "Hello"],
+    ]);
+
+    // A new message closes it first, so the conversation stays valid for the next turn.
+    const next = await w.send("Hello again", { conversationId });
+    expect(next.response.events.at(-1)?.type).toBe("done");
+    expectAlternating(defined(w.llm.requests[1]).messages);
+    const stored = await messagesOf(w.repos, MARIA, conversationId);
     expect(stored.map((m) => [m.role, textOf(m)])).toEqual([
       ["user", "Hello"],
       ["assistant", FALLBACK_MESSAGES.interrupted],
+      ["user", "Hello again"],
+      ["assistant", "Back now."],
     ]);
-
-    // The conversation stays valid for the next turn.
-    const next = await w.send("Hello again", { conversationId: idOf(summary) });
-    expect(next.response.events.at(-1)?.type).toBe("done");
-    expectAlternating(defined(w.llm.requests[1]).messages);
   });
 
   it("answers AGENT_UNAVAILABLE for other model errors", async () => {
@@ -695,5 +710,258 @@ describe("handleChatTurn: logging", () => {
     expect(typeof turnLog?.totalMs).toBe("number");
     expect(turnLog?.conversationId).toBeDefined();
     expect(JSON.stringify(w.logs)).not.toMatch(/zebra|unicorn/);
+  });
+});
+
+describe("handleChatTurn: retries (#104, FR-015)", () => {
+  const throttled = Object.assign(new Error("Too many requests"), {
+    name: "ThrottlingException",
+    $metadata: { httpStatusCode: 429 },
+  });
+  const NO_USAGE = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  const turnLog = (w: World, n: number) => w.logs.filter((l) => l.msg === "chat turn")[n];
+
+  it("stores the clientMessageId on the patient's message only", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const { summary, clientMessageId } = await w.send("Hello");
+    const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+    expect(stored[0]?.clientMessageId).toBe(clientMessageId);
+    expect(stored[1]).not.toHaveProperty("clientMessageId");
+  });
+
+  it("replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy", async () => {
+    const w = world({ steps: [scriptedText("Hi Maria! How can I help you today?")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    const retry = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+
+    expectWellFormed(retry.response);
+    expect(retry.response.status).toBe(200);
+    expect(retry.response.events).toEqual([
+      { type: "text_delta", text: "Hi Maria! How can I help you today?" },
+      { type: "done", conversationId, messageId: "msg_000001", usage: NO_USAGE },
+    ]);
+    expect(retry.summary).toMatchObject({ terminal: "done", replayed: true, messagesAppended: 0 });
+    expect(first.summary.replayed).toBe(false);
+    expect(w.llm.requests).toHaveLength(1);
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
+    expect(w.turns.traces).toHaveLength(1);
+    expect(await messagesOf(w.repos, MARIA, conversationId)).toHaveLength(2);
+    expect(turnLog(w, 1)).toMatchObject({ replayed: true, retry: "answered" });
+    expect(turnLog(w, 0)).toMatchObject({ replayed: false });
+  });
+
+  it("replays even for a patient at the daily cap, since it makes no model call", async () => {
+    const w = world({ cap: 1, steps: [scriptedText("Hi!")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    expect((await w.send("Another", { conversationId })).response.status).toBe(429);
+    const retry = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+    // The capped send stored nothing, so "Hello" is still the last patient message.
+    expect(retry.response.events.at(-1)).toMatchObject({ type: "done", messageId: "msg_000001" });
+  });
+
+  it("replays the closing reply of a turn that failed after a tool ran, as restore shows it", async () => {
+    const w = world({
+      steps: [
+        scriptedToolUse([{ id: "tu_1", name: "find_providers", input: {} }], { text: "Let me check." }),
+        { error: new Error("boom") },
+      ],
+    });
+    const first = await w.send("Who works there?");
+    expect(first.response.events.at(-1)).toMatchObject({ type: "error", retryable: true });
+    const conversationId = idOf(first.summary);
+    const retry = await w.send("Who works there?", {
+      conversationId,
+      clientMessageId: first.clientMessageId,
+    });
+
+    expect(retry.response.events).toEqual([
+      { type: "text_delta", text: `Let me check.\n\n${FALLBACK_MESSAGES.interrupted}` },
+      { type: "done", conversationId, messageId: "msg_000003", usage: NO_USAGE },
+    ]);
+    expect(w.llm.requests).toHaveLength(2);
+  });
+
+  it("closes, then replays, a turn whose storing stopped after a tool result", async () => {
+    const w = world();
+    const conversationId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const clientMessageId = "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47";
+    const row = (seq: number, role: "user" | "assistant", content: ConversationMessage["content"]) => ({
+      conversationId,
+      seq,
+      role,
+      content,
+      turnId: "00000000-0000-4000-8000-0000000000ff",
+      createdAt: NOW,
+    });
+    await w.repos.conversations.append(MARIA, [
+      { ...row(0, "user", [{ type: "text", text: "Who works there?" }]), clientMessageId },
+      row(1, "assistant", [{ type: "tool_use", id: "tu_1", name: "find_providers", input: {} }]),
+      row(2, "user", [{ type: "tool_result", toolUseId: "tu_1", content: "{}" }]),
+    ]);
+    const retry = await w.send("Who works there?", { conversationId, clientMessageId });
+
+    expect(retry.response.events).toEqual([
+      { type: "text_delta", text: FALLBACK_MESSAGES.interrupted },
+      { type: "done", conversationId, messageId: "msg_000003", usage: NO_USAGE },
+    ]);
+    const stored = await messagesOf(w.repos, MARIA, conversationId);
+    expectAlternating(stored);
+    expect(textOf(defined(stored[3]))).toBe(FALLBACK_MESSAGES.interrupted);
+    expect(w.llm.requests).toHaveLength(0);
+  });
+
+  it("answers INTERNAL for a repeat whose stored turn has no reply text to replay", async () => {
+    const w = world();
+    const conversationId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const clientMessageId = "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47";
+    const at = { conversationId, turnId: "00000000-0000-4000-8000-0000000000ff", createdAt: NOW };
+    await w.repos.conversations.append(MARIA, [
+      { ...at, seq: 0, role: "user", content: [{ type: "text", text: "Hi" }], clientMessageId },
+      {
+        ...at,
+        seq: 1,
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t", name: "find_providers", input: {} }],
+      },
+    ]);
+    const retry = await w.send("Hi", { conversationId, clientMessageId });
+    expectWellFormed(retry.response);
+    expect(retry.response.events).toEqual([expect.objectContaining({ type: "error", code: "INTERNAL" })]);
+    expect(w.llm.requests).toHaveLength(0);
+  });
+
+  it("after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn", async () => {
+    const w = world({ cap: 1, steps: [{ error: throttled }, scriptedText("Back now.")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    expect(first.response.events).toEqual([expect.objectContaining({ type: "error", conversationId })]);
+
+    const retry = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+    expectWellFormed(retry.response);
+    expect(retry.response.events.at(-1)).toMatchObject({
+      type: "done",
+      conversationId,
+      messageId: "msg_000001",
+    });
+    expect(visibleText(retry.response.events)).toBe("Back now.");
+    expect(retry.summary).toMatchObject({ conversationReplaced: false, replayed: false });
+
+    // The model saw the patient's message once, and history stays append-only and alternating.
+    expect(
+      w.llm.requests[1]?.messages.map((m) => [m.role, m.content.filter((b) => b.type === "text")]),
+    ).toEqual([["user", [expect.objectContaining({ type: "text", text: "Hello" })]]]);
+    const stored = await messagesOf(w.repos, MARIA, conversationId);
+    expect(stored.map((m) => [m.seq, m.role, textOf(m)])).toEqual([
+      [0, "user", "Hello"],
+      [1, "assistant", "Back now."],
+    ]);
+    // A new turn ID for the re-run; the patient's message keeps its own (A-5).
+    expect(stored[1]?.turnId).toBe(retry.summary.turnId);
+    expect(stored[0]?.turnId).toBe(first.summary.turnId);
+    expect(stored[0]?.turnId).not.toBe(stored[1]?.turnId);
+    // Under a cap of 1, the re-run ran and wasn't counted.
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
+    expect(w.turns.traces).toHaveLength(2);
+    expect(turnLog(w, 1)).toMatchObject({ retry: "interrupted", replayed: false });
+  });
+
+  it("re-runs an interrupted turn in a continued conversation on the history before it", async () => {
+    const w = world({ steps: [scriptedText("Hi!"), { error: throttled }, scriptedText("Tuesday works.")] });
+    const conversationId = idOf((await w.send("Hello")).summary);
+    const failed = await w.send("Any time Tuesday?", { conversationId });
+    expect(failed.response.events.at(-1)).toMatchObject({ type: "error", conversationId });
+    const retry = await w.send("Any time Tuesday?", {
+      conversationId,
+      clientMessageId: failed.clientMessageId,
+    });
+
+    expect(retry.response.events.at(-1)).toMatchObject({ type: "done", messageId: "msg_000003" });
+    expect(w.llm.requests[2]?.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    const stored = await messagesOf(w.repos, MARIA, conversationId);
+    expect(stored.map((m) => textOf(m))).toEqual(["Hello", "Hi!", "Any time Tuesday?", "Tuesday works."]);
+  });
+
+  it("refuses a repeated clientMessageId with different text, storing and counting nothing", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    const odd = await w.send("Goodbye", { conversationId, clientMessageId: first.clientMessageId });
+
+    expectWellFormed(odd.response);
+    expect(odd.response.status).toBe(400);
+    expect(odd.response.events).toEqual([
+      { type: "error", code: "BAD_REQUEST", message: expect.any(String) as unknown, retryable: false },
+    ]);
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
+    expect(await messagesOf(w.repos, MARIA, conversationId)).toHaveLength(2);
+    expect(w.llm.requests).toHaveLength(1);
+  });
+
+  it("matches only the last patient message: an earlier message's ID is a new send", async () => {
+    const w = world({ steps: [scriptedText("1"), scriptedText("2"), scriptedText("3")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    await w.send("Tuesday?", { conversationId });
+    const again = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+
+    expect(again.summary.replayed).toBe(false);
+    expect(w.llm.requests).toHaveLength(3);
+    expect((await messagesOf(w.repos, MARIA, conversationId)).map(textOf)).toEqual([
+      "Hello",
+      "1",
+      "Tuesday?",
+      "2",
+      "Hello",
+      "3",
+    ]);
+  });
+
+  it("never matches another patient's conversation: the same ID there starts a new conversation", async () => {
+    const w = world({ steps: [scriptedText("Hi Maria!"), scriptedText("Hi Walter!")] });
+    const maria = await w.send("Hello");
+    const walter = await w.send("Hello", {
+      patientId: WALTER,
+      conversationId: idOf(maria.summary),
+      clientMessageId: maria.clientMessageId,
+    });
+    expect(walter.summary).toMatchObject({ conversationReplaced: true, replayed: false });
+    expect(visibleText(walter.response.events)).toBe("Hi Walter!");
+  });
+
+  it("names a continued conversation on error, but not for the daily cap or a refused body", async () => {
+    const w = world({ cap: 2, steps: [scriptedText("Hi!"), { error: new Error("boom") }] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    const failed = await w.send("Tuesday?", { conversationId });
+    expect(failed.response.events.at(-1)).toMatchObject({ type: "error", conversationId });
+
+    const capped = await w.send("Wednesday?", { conversationId });
+    expect(capped.response.status).toBe(429);
+    expect(capped.response.events[0]).not.toHaveProperty("conversationId");
+    const refused = await w.send("Different", { conversationId, clientMessageId: failed.clientMessageId });
+    expect(refused.response.status).toBe(400);
+    expect(refused.response.events[0]).not.toHaveProperty("conversationId");
+  });
+
+  it("names the conversation on a conflict in a continued conversation, but not when a new one's first append fails", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const conversationId = idOf((await w.send("Hello")).summary);
+    w.deps.repos = {
+      ...w.repos,
+      conversations: {
+        ...w.repos.conversations,
+        append: (_p, m) =>
+          Promise.reject(new ConversationAppendError("SEQ_CONFLICT", defined(m[0]).conversationId, 2)),
+      },
+    };
+    const conflict = await w.send("Again", { conversationId });
+    expect(conflict.response.events).toEqual([
+      expect.objectContaining({ type: "error", retryable: true, conversationId }),
+    ]);
+    const fresh = await w.send("New chat");
+    expect(fresh.response.status).toBe(409);
+    expect(fresh.response.events[0]).not.toHaveProperty("conversationId");
   });
 });
