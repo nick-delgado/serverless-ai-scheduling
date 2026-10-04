@@ -73,6 +73,7 @@ dotenv_value() {
     [[ -f "$file" ]] || continue
     val="$(sed -n "s/^${key}=//p" "$file" | tail -n 1)"
     val="${val%\"}"; val="${val#\"}"
+    val="${val%\'}"; val="${val#\'}"
     [[ -n "$val" ]] && break
   done
   printf '%s' "$val"
