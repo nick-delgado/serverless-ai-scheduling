@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #140, issue #72 (batch 3, proposal P1), PR #131 review, issue #113
+**Related:** issue #140, PR #155, issue #72 (batch 3, proposal P1), PR #131 review, issue #113
 
 ## What happened
 
