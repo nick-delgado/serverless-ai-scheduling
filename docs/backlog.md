@@ -1,6 +1,6 @@
 # Backlog map
 
-The **source of truth for status** is GitHub: issues, labels, milestones, native *blocked by* links, and the [project board](https://github.com/users/nick-delgado/projects/1). This page is the static map: which streams exist, what depends on what, and which issues can run in parallel. Regenerate it if the backlog's structure changes. Last updated 2026-10-03 (#123): the follow-up issues filed from PR reviews are added, and the milestone moves and new blockers decided in the drift audit are shown.
+The **source of truth for status** is GitHub: issues, labels, milestones, native *blocked by* links, and the [project board](https://github.com/users/nick-delgado/projects/1). This page is the static map: which streams exist, what depends on what, and which issues can run in parallel. Regenerate it if the backlog's structure changes. Last updated 2026-10-03 (#123): the follow-up issues filed from PR reviews are added, and the milestone moves and new blockers decided in the drift audit are shown. Of the issues filed since M2 started, only the open follow-ups are mapped; closed ones (such as #56, #57, #60 and #88) are on GitHub, which is the source of truth for them.
 
 **How to pick work:** use the `task-workflow` skill. Only issues labeled `status:ready` (all blockers closed) are claimable. When you close an issue, promote any dependents whose blockers are now all closed from `status:backlog` to `status:ready`.
 
@@ -179,7 +179,6 @@ flowchart LR
   S4_04 --> F77
   S4_05 --> F77
   S7_01 --> F80
-  S7_02 --> F98
   S5_01 --> F99
   S5_01 --> F100
   S3_03 --> F104
@@ -295,7 +294,7 @@ Wire real repos/tools, full eval matrix + model decision, observability, securit
 
 | # | ID | Task | Stream | Type | PRD | Blocked by |
 |---|---|---|---|---|---|---|
-| [#36](https://github.com/nick-delgado/serverless-ai-scheduling/issues/36) | M3-01 | Integration: real repos + all tools + prompt in the deployed chat; end-to-end in dev | integration | feature | FR-010–FR-037 | #17, #18, #19, #20, #21, #22, #35, #14, #27, #25, #29, #16 |
+| [#36](https://github.com/nick-delgado/serverless-ai-scheduling/issues/36) | M3-01 | Integration: real repos + all tools + prompt in the deployed chat; end-to-end in dev | integration | feature | FR-010–FR-037 | #17, #18, #19, #20, #21, #22, #35, #14, #27, #25, #29, #16, #99, #100 |
 | [#37](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37) | M3-02 | Full eval matrix + production model decision (finalize ADR-002) | integration | eval | PRD §7, FR-042 | #36, #34, #80, #107 |
 | [#38](https://github.com/nick-delgado/serverless-ai-scheduling/issues/38) | M3-03 | Observability: Powertools logs/metrics/traces, dashboard, trace viewer | integration | infra | NFR-007, FR-051 | #36 |
 | [#39](https://github.com/nick-delgado/serverless-ai-scheduling/issues/39) | M3-04 | Security review: IAM least privilege, data handling, rate limits vs ADR-009 | integration | docs | NFR-004 | #36 |
