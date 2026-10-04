@@ -19,8 +19,10 @@ small files for the report.
 
 **PR:** #<n> <title> · **Reviewed commit:** [`<short sha>`](<PR URL>/commits/<full sha>) · **CI:** <passing | failing: names | pending | none> · **Spec:** <issue #m (link) | path/to/spec.md | none found>
 
-<Two or three sentences: what the PR does and the most important problems. Code only: say
-nothing here about causes or process.>
+<!-- summary -->
+
+(Leave that line exactly as it is: the assembly script replaces it with the verifier's
+summary. Do not write your own.)
 
 Confirmed findings after verification (<reported> reported, <confirmed> confirmed, <merged> merged, <rejected> rejected):
 

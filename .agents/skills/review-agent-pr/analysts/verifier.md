@@ -231,6 +231,12 @@ the other two headings.
 ## Output: `<RUN_DIR>/verified.md`
 
 ```markdown
+## Summary
+
+<two or three sentences for the top of the report: what the PR does, and the most important
+problems you confirmed (or that there are none of note). Code only: nothing about causes or
+process. On a re-review, say whether it is converging.>
+
 ## Confirmed findings
 
 <each surviving finding in the finding-schema block format, original ID kept, with these

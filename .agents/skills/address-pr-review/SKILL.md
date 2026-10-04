@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.03.2"
+  harness-version: "2026.10.04"
 ---
 
 # Address a PR review
@@ -323,8 +323,8 @@ Then recommend exactly one of these, and give the reason and the numbers:
 | Recommend | When |
 |---|---|
 | **No further review needed** | The report's verdict was `Acceptable`; you fixed only minors and nits; you implemented no owner decision with a code change; nothing is `disputed`, `not fixed: needs owner` or waiting for a decision; the source change is under about 50 lines with no new source files; and the checks pass. The owner can check the response table and the diff by eye. |
-| **A re-check** (`review-agent-pr` in re-check mode, in a fresh session) | Anything else, as long as the fixes stay within the findings and decisions and the source change is contained: no more than about 300 lines or 20% of `pr-source`, whichever is larger, and no new source file over about 150 lines. This covers fixed blockers and majors, implemented decisions, and disputes, which the re-check settles on the code. |
-| **A full review** (`review-agent-pr`, in a fresh session) | The source change is larger than that, or the fixes go beyond the findings and decisions (a refactor nobody asked for, new behaviour). |
+| **A re-check** (`review-agent-pr` in re-check mode) | Anything else, as long as the fixes stay within the findings and decisions and the source change is contained: no more than about 300 lines or 20% of `pr-source`, whichever is larger, and no new source file over about 150 lines. This covers fixed blockers and majors, implemented decisions, and disputes, which the re-check settles on the code. |
+| **A full review** (`review-agent-pr`) | The source change is larger than that, or the fixes go beyond the findings and decisions (a refactor nobody asked for, new behaviour). |
 
 If the checks failed, say so first: the fixes are not ready for any review.
 
