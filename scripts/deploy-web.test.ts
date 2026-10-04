@@ -38,6 +38,7 @@ echo "aws $*" >> "$FAKE_LOG"
 case "$1 $2" in
   "sts get-caller-identity") echo "identity profile=$AWS_PROFILE region=$AWS_REGION" >> "$FAKE_LOG"; [[ -n "\${FAKE_STS_FAIL:-}" ]] && exit 255; echo '{}' ;;
   "ssm get-parameter")
+    [[ -n "\${FAKE_SSM_ERROR:-}" ]] && { echo "$FAKE_SSM_ERROR" >&2; exit 254; }
     f="$FAKE_SSM_DIR/$(printf '%s' "$4" | tr / _)"
     [[ -f "$f" ]] || { echo "ParameterNotFound" >&2; exit 254; }
     cat "$f" ;;
@@ -51,7 +52,7 @@ const FAKE_NPM = `#!/usr/bin/env bash
 echo "npm $* VITE_USER_POOL_ID=\${VITE_USER_POOL_ID-unset} VITE_SPA_CLIENT_ID=\${VITE_SPA_CLIENT_ID-unset} VITE_IDENTITY_POOL_ID=\${VITE_IDENTITY_POOL_ID-unset}" >> "$FAKE_LOG"
 [[ "\${FAKE_BUILD:-}" == "none" ]] && exit 0
 mkdir -p apps/web/dist/assets
-echo '<!doctype html><script src="/assets/index-abc123.js"></script>' > apps/web/dist/index.html
+[[ "\${FAKE_BUILD:-}" == "no-index" ]] || echo '<!doctype html><script src="/assets/index-abc123.js"></script>' > apps/web/dist/index.html
 [[ "\${FAKE_BUILD:-}" == "no-assets" ]] && exit 0
 pool="$VITE_USER_POOL_ID"
 [[ "\${FAKE_BUILD:-}" == "no-pool" ]] && pool=""
@@ -77,6 +78,16 @@ function head(): string {
 
 function without(name: string): Record<string, string> {
   return Object.fromEntries(Object.entries(SSM).filter(([key]) => key !== name));
+}
+
+// The SSM map with its names moved to another env; renameValues moves the values too.
+function ssmFor(env: string, renameValues: boolean): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(SSM).map(([k, v]) => [
+      k.replace("/sched/dev/", `/sched/${env}/`),
+      renameValues ? v.replace("sched-dev-", `sched-${env}-`) : v,
+    ]),
+  );
 }
 
 function setSsm(values: Record<string, string>): void {
@@ -155,7 +166,9 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
       calls.findIndex((c) => c.startsWith("aws s3")),
     );
     const invalidate = calls.findIndex((c) => c.startsWith("aws cloudfront create-invalidation"));
-    expect(calls[invalidate]).toContain("--distribution-id ETESTDIST --paths /*");
+    expect(calls[invalidate]).toBe(
+      "aws cloudfront create-invalidation --distribution-id ETESTDIST --paths /* --query Invalidation.Id --output text",
+    );
     expect(invalidate).toBeGreaterThan(calls.findLastIndex((c) => c.startsWith("aws s3 sync")));
     expect(calls).toContain(
       "aws cloudfront wait invalidation-completed --distribution-id ETESTDIST --id ITESTINVALIDATION",
@@ -196,15 +209,23 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
   );
 
   it("reads the env's own parameters and refuses a bucket that isn't the env's site bucket", () => {
-    setSsm(
-      Object.fromEntries(Object.entries(SSM).map(([k, v]) => [k.replace("/sched/dev/", "/sched/pr7/"), v])),
-    );
+    setSsm(ssmFor("pr7", false));
     const { status, out, calls } = run(["pr7"]);
     expect(status).toBe(1);
     expect(out).toContain("unexpected bucket 'sched-dev-web-000000000000' for env 'pr7'");
     expect(calls).toContain(
       "aws ssm get-parameter --name /sched/pr7/web/bucket-name --query Parameter.Value --output text",
     );
+    expect(builds(calls)).toEqual([]);
+  });
+
+  it("shows the CLI's own error when an SSM read fails for a reason other than not-found", () => {
+    const { status, out, calls } = run(["dev"], {
+      FAKE_SSM_ERROR:
+        "An error occurred (ThrottlingException) when calling the GetParameter operation: Rate exceeded",
+    });
+    expect(status).toBe(1);
+    expect(out).toContain("(ThrottlingException)");
     expect(builds(calls)).toEqual([]);
   });
 
@@ -232,6 +253,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
 
   it.each([
     ["none", "no apps/web/dist/index.html"],
+    ["no-index", "no apps/web/dist/index.html"],
     ["no-assets", "no files under apps/web/dist/assets/"],
     ["no-pool", "don't contain the 'dev' user pool ID"],
   ])("refuses to sync when the build output is incomplete (%s)", (build, message) => {
@@ -272,20 +294,32 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     expect(run(["dev", "--dry-run"]).out).not.toContain("is shared");
     git("checkout", "-q", "-b", "feat/1-x");
     expect(run(["dev", "--dry-run"]).out).toContain("note: 'dev' is shared");
-    setSsm(
-      Object.fromEntries(
-        Object.entries(SSM).map(([k, v]) => [k.replace("dev", "pr7"), v.replace("dev", "pr7")]),
-      ),
-    );
+    setSsm(ssmFor("demo", true));
+    expect(run(["demo", "--dry-run"]).out).toContain("note: 'demo' is shared");
+    setSsm(ssmFor("pr7", true));
     expect(run(["pr7", "--dry-run"]).out).not.toContain("is shared");
   });
 
-  it.each([[[]], [["Dev"]], [["dev", "--yes"]], [["dev", "--dry-run", "x"]]])(
-    "rejects bad arguments %j",
-    (args) => {
-      const { status, calls } = run(args);
-      expect(status).toBe(2);
-      expect(calls).toEqual([]);
+  it.each([
+    [[]],
+    [["Dev"]],
+    [["dev_x"]],
+    [["d"]],
+    [["a2345678901234567"]],
+    [["dev", "--yes"]],
+    [["dev", "--dry-run", "x"]],
+  ])("rejects bad arguments %j", (args) => {
+    const { status, calls } = run(args);
+    expect(status).toBe(2);
+    expect(calls).toEqual([]);
+  });
+
+  it.each(["ab", "a234567890123456"])(
+    "accepts the env name %s (2 and 16 characters are the length bounds)",
+    (env) => {
+      const { status, out } = run([env, "--dry-run"]);
+      expect(status).toBe(1);
+      expect(out).toContain(`missing SSM parameters (deploy the auth and web stacks for '${env}' first)`);
     },
   );
 });

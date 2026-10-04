@@ -65,9 +65,9 @@ if $is_protected && [[ "$git_branch" != "main" ]]; then
 fi
 
 # --- configuration from SSM, all of it before the build -----------------------------------------
-param() { # <name> → its value, or nothing when the parameter is missing or unreadable
+param() { # <name> → its value, or nothing when the parameter is missing or unreadable (the CLI's error stays visible)
   local value
-  value="$(aws ssm get-parameter --name "$1" --query Parameter.Value --output text 2>/dev/null || true)"
+  value="$(aws ssm get-parameter --name "$1" --query Parameter.Value --output text || true)"
   [[ "$value" == "None" ]] && value=""
   printf '%s' "$value"
 }
