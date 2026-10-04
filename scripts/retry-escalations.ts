@@ -10,9 +10,9 @@
  * 1. Find: one Scan of the table for escalation items with those statuses (fine at this scale). A `PENDING`
  *    one is taken only once it is `--min-pending-age` minutes old (default 10), so a turn that is still
  *    notifying is left alone. `FAILED` ones are always taken.
- * 2. Rebuild: the notice from the stored escalation, the patient's profile and the conversation's messages,
- *    with the same builder as the tool (`buildEscalationNotice`). Messages expire after 30 days, so an old
- *    escalation may go out with an empty transcript.
+ * 2. Rebuild: the notice from the stored escalation, the patient's profile and the conversation's messages
+ *    as stored now, with the tool's own load-and-send step (`sendEscalationNotice`). Messages expire after
+ *    30 days, so an old escalation may go out with an empty transcript.
  * 3. Re-send through the SES notifier, then set the notification to `SENT` with the new MessageId, or to
  *    `FAILED` with the (address-redacted) error. Each escalation is handled on its own; one failure does
  *    not stop the rest. Exit code 1 if any failed.
@@ -25,24 +25,29 @@
  * `.env`) unless already set. Runs as the `sched-dev` SSO profile (AWS_PROFILE / AWS_REGION, defaults
  * `sched-dev` / `us-east-1`). With `DYNAMODB_ENDPOINT` set (DynamoDB Local), `--table` is required.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs } from "node:util";
+import { parseArgs, parseEnv } from "node:util";
 
 import { SESv2Client } from "@aws-sdk/client-sesv2";
 import type { SSMClient } from "@aws-sdk/client-ssm";
 import { type DynamoDBDocumentClient, paginateScan } from "@aws-sdk/lib-dynamodb";
-import { Escalation } from "@sched/contracts";
-import { buildEscalationNotice, type Notifier, type Repositories, SystemClock } from "@sched/tools";
-import { createDocumentClient, createDynamoRepositories } from "@sched/tools/dynamo";
+import type { Escalation } from "@sched/contracts";
+import {
+  notificationErrorText,
+  sendEscalationNotice,
+  type Notifier,
+  type Repositories,
+  SystemClock,
+} from "@sched/tools";
+import { createDocumentClient, createDynamoRepositories, escalationFrom } from "@sched/tools/dynamo";
 import { SesNotifier } from "@sched/tools/ses";
 
 import { dynamoClientFor, ssmClientFor, ssmParamFrom } from "./seed-data";
 
+// Copied from scripts/seed-data.ts, which doesn't export it.
 const ENV_PATTERN = /^[a-z][a-z0-9-]{1,15}$/;
-/** As in escalate_to_human: the stored error is at most 500 characters. */
-const MAX_ERROR = 500;
 export const DEFAULT_MIN_PENDING_AGE_MINUTES = 10;
 
 // ---------------------------------------------------------------------------------------------
@@ -56,11 +61,16 @@ export const DEFAULT_MIN_PENDING_AGE_MINUTES = 10;
 export async function findUnsentEscalations(
   doc: DynamoDBDocumentClient,
   tableName: string,
-  options: { now: Date; minPendingAgeMs: number },
+  options: {
+    now: Date;
+    minPendingAgeMs: number;
+    /** Items read per Scan page (DynamoDB `Limit`); the default is DynamoDB's (up to 1 MB). */
+    pageSize?: number;
+  },
 ): Promise<Escalation[]> {
   const found: Escalation[] = [];
   const pages = paginateScan(
-    { client: doc },
+    { client: doc, pageSize: options.pageSize },
     {
       TableName: tableName,
       ConsistentRead: true,
@@ -72,8 +82,7 @@ export async function findUnsentEscalations(
   const pendingBefore = options.now.getTime() - options.minPendingAgeMs;
   for await (const page of pages) {
     for (const item of page.Items ?? []) {
-      const { PK: _pk, SK: _sk, entityType: _type, ...fields } = item;
-      const escalation = Escalation.parse(fields);
+      const escalation = escalationFrom(item);
       if (escalation.notification.status === "PENDING" && Date.parse(escalation.createdAt) > pendingBefore)
         continue;
       found.push(escalation);
@@ -96,11 +105,6 @@ export interface RetryOutcome {
   error?: string;
 }
 
-const errorText = (error: unknown): string => {
-  const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  return text.slice(0, MAX_ERROR);
-};
-
 /** Rebuild the notice for `escalation`, send it, and record the result on the escalation. */
 export async function retryEscalation(
   escalation: Escalation,
@@ -108,19 +112,7 @@ export async function retryEscalation(
 ): Promise<RetryOutcome> {
   const { patientId, conversationId, escalationId } = escalation;
   const was = escalation.notification.status === "PENDING" ? "PENDING" : "FAILED";
-  let notification: { status: "SENT"; messageId: string } | { status: "FAILED"; error: string };
-  try {
-    const [patient, messages] = await Promise.all([
-      deps.repos.patients.get(patientId),
-      deps.repos.conversations.listMessages(patientId, conversationId),
-    ]);
-    const { messageId } = await deps.notifier.notifyEscalation(
-      buildEscalationNotice(escalation, patient, messages),
-    );
-    notification = { status: "SENT", messageId };
-  } catch (error) {
-    notification = { status: "FAILED", error: errorText(error) };
-  }
+  const notification = await sendEscalationNotice(escalation, patientId, deps);
   const outcome: RetryOutcome = { escalationId, conversationId, was, ...notification };
   try {
     const updated = await deps.repos.escalations.updateNotification(patientId, conversationId, notification);
@@ -129,7 +121,7 @@ export async function retryEscalation(
     // Sent but not recorded: the next run would send it again, so say so loudly.
     return {
       ...outcome,
-      error: `${outcome.error ? `${outcome.error}; ` : ""}status not recorded (${errorText(error)})`,
+      error: `${outcome.error ? `${outcome.error}; ` : ""}status not recorded (${notificationErrorText(error)})`,
     };
   }
   return outcome;
@@ -180,6 +172,8 @@ export async function retryEscalations(options: {
 // ---------------------------------------------------------------------------------------------
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const USAGE =
+  "usage: retry-escalations.ts <env> [--dry-run] [--min-pending-age <minutes>] [--table <name>] [--env-file <path>]";
 
 export interface CliArgs {
   env: string;
@@ -201,8 +195,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     },
   });
   const [env, ...rest] = positionals;
-  if (env === undefined)
-    throw new Error("usage: retry-escalations.ts <env> [--dry-run] [--min-pending-age <minutes>]");
+  if (env === undefined) throw new Error(USAGE);
   if (rest.length > 0) throw new Error(`unexpected arguments: ${rest.join(" ")}`);
   if (!ENV_PATTERN.test(env)) throw new Error(`invalid env: ${env}`);
   const age = values["min-pending-age"];
@@ -222,27 +215,32 @@ export interface CliDeps {
   now?: Date;
   ssmClient?: (region: string) => Pick<SSMClient, "send">;
   dynamoClient?: typeof dynamoClientFor;
-  /** The SES notifier for `region` (default: SES v2 with no failure metric; this script reports failures itself). */
+  /** The SES notifier for `region` (default: `sesNotifierFor`). */
   notifier?: (region: string, sender: string, recipient: string) => Notifier;
   log?: (line: string) => void;
+  /** Where `main` reports an error that stopped the run (default: `console.error`). */
+  logError?: (line: string) => void;
 }
 
-function sesNotifierFor(region: string, sender: string, recipient: string): Notifier {
-  return new SesNotifier({
-    client: new SESv2Client({ region }),
-    sender,
-    recipient,
-    onFailure: () => undefined,
-  });
+/**
+ * The script's SES notifier: SES v2 in `region`, with no failure metric (this script reports each failure
+ * itself, and its runs are not the chat function's). `client` is for tests.
+ */
+export function sesNotifierFor(
+  region: string,
+  sender: string,
+  recipient: string,
+  client: Pick<SESv2Client, "send"> = new SESv2Client({ region }),
+): Notifier {
+  return new SesNotifier({ client, sender, recipient, onFailure: () => undefined });
 }
 
-/** The CLI. `vars` is the process environment, with the `.env` file already loaded. */
+/** The CLI after parsing. `vars` is the process environment, with the `.env` file already loaded. */
 export async function runCli(
-  argv: readonly string[],
+  args: CliArgs,
   vars: Readonly<Record<string, string | undefined>>,
   deps: CliDeps = {},
 ): Promise<RetrySummary> {
-  const args = parseCliArgs(argv);
   const log = deps.log ?? ((line: string) => console.log(line));
   const endpoint = vars.DYNAMODB_ENDPOINT;
   const region = vars.AWS_REGION ?? "us-east-1";
@@ -290,21 +288,37 @@ export async function runCli(
   }
 }
 
+/**
+ * The script's entry point; returns the exit code: 1 if the run stopped on an error or any re-send failed.
+ *
+ * `vars` is the process environment, and is changed in place: `AWS_PROFILE` defaults to `sched-dev`, and
+ * the `--env-file` (default `<repo root>/.env`) is loaded into it if it exists. Values already set win, as
+ * with `process.loadEnvFile`.
+ */
+export async function main(
+  argv: readonly string[],
+  vars: Record<string, string | undefined>,
+  deps: CliDeps = {},
+): Promise<number> {
+  vars.AWS_PROFILE ??= "sched-dev";
+  try {
+    const args = parseCliArgs(argv);
+    if (existsSync(args.envFile)) {
+      for (const [key, value] of Object.entries(parseEnv(readFileSync(args.envFile, "utf8"))))
+        vars[key] ??= value;
+    }
+    const summary = await runCli(args, vars, deps);
+    return summary.failed > 0 ? 1 : 0;
+  } catch (err) {
+    (deps.logError ?? ((line: string) => console.error(line)))(
+      err instanceof Error ? err.message : String(err),
+    );
+    return 1;
+  }
+}
+
 if (import.meta.main) {
-  process.env.AWS_PROFILE ??= "sched-dev";
-  const envFile = parseArgs({
-    args: process.argv.slice(2),
-    allowPositionals: true,
-    strict: false,
-    options: { "env-file": { type: "string", default: join(repoRoot, ".env") } },
-  }).values["env-file"];
-  if (typeof envFile === "string" && existsSync(envFile)) process.loadEnvFile(envFile);
-  runCli(process.argv.slice(2), process.env)
-    .then((summary) => {
-      if (summary.failed > 0) process.exitCode = 1;
-    })
-    .catch((err: unknown) => {
-      console.error(err instanceof Error ? err.message : err);
-      process.exitCode = 1;
-    });
+  void main(process.argv.slice(2), process.env).then((code) => {
+    process.exitCode = code;
+  });
 }

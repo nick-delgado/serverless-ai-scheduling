@@ -3,7 +3,14 @@
  * with a recording notifier: nothing is emailed. Without a reachable endpoint the table tests are skipped
  * locally but fail in CI, where a DynamoDB Local service runs. All data is synthetic.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { type SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import type { SSMClient } from "@aws-sdk/client-ssm";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { type ConversationMessage, type Escalation, type EscalationReason } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import {
@@ -16,7 +23,7 @@ import {
 } from "@sched/tools";
 import { createDocumentClient, createDynamoRepositories, writeSeed } from "@sched/tools/dynamo";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   dynamoLocalAvailable,
@@ -24,13 +31,17 @@ import {
   localClient,
   tableFactory,
 } from "../packages/tools/test/dynamo/local";
+import { NOTICE } from "../packages/tools/test/notify/fixtures";
 import {
+  type CliDeps,
   DEFAULT_MIN_PENDING_AGE_MINUTES,
   findUnsentEscalations,
+  main,
   parseCliArgs,
   retryEscalation,
   retryEscalations,
   runCli,
+  sesNotifierFor,
 } from "./retry-escalations";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
@@ -38,6 +49,9 @@ const WALTER = FIXTURE_PATIENT_IDS["pat-walter"];
 const NO_PROFILE_PATIENT = "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"; // valid v4 UUID, no profile stored
 const NOW = new Date("2026-10-05T15:00:00Z");
 const MIN = 60_000;
+
+const cli = (argv: string[], vars: Record<string, string | undefined>, deps?: CliDeps) =>
+  runCli(parseCliArgs(argv), vars, deps);
 
 const conv = (n: number): string => `c0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -74,11 +88,12 @@ const messages = (conversationId: string, at: string): ConversationMessage[] => 
 
 describe("parseCliArgs", () => {
   it("takes the env as the first argument, with defaults", () => {
-    expect(parseCliArgs(["dev"])).toMatchObject({
+    expect(parseCliArgs(["dev"])).toEqual({
       env: "dev",
       dryRun: false,
       minPendingAgeMinutes: DEFAULT_MIN_PENDING_AGE_MINUTES,
       table: undefined,
+      envFile: fileURLToPath(new URL("../.env", import.meta.url)),
     });
     expect(DEFAULT_MIN_PENDING_AGE_MINUTES).toBe(10);
   });
@@ -90,7 +105,10 @@ describe("parseCliArgs", () => {
   });
 
   it.each([
-    [[], /usage: retry-escalations\.ts <env>/],
+    [
+      [],
+      /^usage: retry-escalations\.ts <env> \[--dry-run\] \[--min-pending-age <minutes>\] \[--table <name>\] \[--env-file <path>\]$/,
+    ],
     [["dev", "demo"], /unexpected arguments: demo/],
     [["Dev"], /invalid env: Dev/],
     [["dev", "--min-pending-age", "5m"], /whole minutes, got 5m/],
@@ -98,6 +116,56 @@ describe("parseCliArgs", () => {
     [["dev", "--min-pending-age", "1.5"], /whole minutes, got 1\.5/],
   ] as [string[], RegExp][])("rejects %j", (argv, message) => {
     expect(() => parseCliArgs(argv)).toThrow(message);
+  });
+});
+
+describe("main without a table", () => {
+  it.each([
+    ["defaults AWS_PROFILE to sched-dev", {}, "sched-dev"],
+    ["keeps an AWS_PROFILE that is set", { AWS_PROFILE: "other" }, "other"],
+  ])("%s", async (_case, preset: Record<string, string>, profile) => {
+    const vars: Record<string, string | undefined> = { ...preset };
+    const errors: string[] = [];
+    expect(await main([], vars, { logError: (l) => errors.push(l) })).toBe(1);
+    expect(vars.AWS_PROFILE).toBe(profile);
+    expect(errors).toEqual([expect.stringMatching(/^usage: /) as string]);
+  });
+});
+
+describe("sesNotifierFor", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends from the sender to the recipient", async () => {
+    const send = vi.fn(() => Promise.resolve({ MessageId: "m-1" }));
+    const client = { send: send as unknown as SESv2Client["send"] };
+    const n = sesNotifierFor("us-east-1", "sender@example.com", "desk@example.com", client);
+    await expect(n.notifyEscalation(NOTICE)).resolves.toEqual({ messageId: "m-1" });
+    const command = (send.mock.calls[0] as unknown[])[0] as SendEmailCommand;
+    expect(command.input).toMatchObject({
+      FromEmailAddress: "sender@example.com",
+      Destination: { ToAddresses: ["desk@example.com"] },
+    });
+  });
+
+  it("builds its own SES client in the region", async () => {
+    const regions: string[] = [];
+    vi.spyOn(SESv2Client.prototype, "send").mockImplementation(async function (this: SESv2Client) {
+      regions.push(await this.config.region());
+      return { MessageId: "m-2" };
+    } as unknown as SESv2Client["send"]);
+    const n = sesNotifierFor("eu-west-1", "sender@example.com", "desk@example.com");
+    await expect(n.notifyEscalation(NOTICE)).resolves.toEqual({ messageId: "m-2" });
+    expect(regions).toEqual(["eu-west-1"]);
+  });
+
+  it("writes no metric line for a failed send", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const client = { send: (() => Promise.reject(new Error("throttled"))) as unknown as SESv2Client["send"] };
+    const n = sesNotifierFor("us-east-1", "sender@example.com", "desk@example.com", client);
+    await expect(n.notifyEscalation(NOTICE)).rejects.toThrow("Error: throttled");
+    expect(write).not.toHaveBeenCalled();
   });
 });
 
@@ -174,10 +242,40 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       expect((await find(0)).map((e) => e.conversationId)).toEqual([conv(1)]);
     });
 
-    it("ignores items that are not escalations", async () => {
+    it("ignores items that are not escalations, even with an unsent notification", async () => {
       // The seeded profiles, the conversations' messages and meta items share the table.
-      await escalate(MARIA, conv(1), 60 * MIN, { status: "SENT", messageId: "m-1" });
+      const sent = await escalate(MARIA, conv(1), 60 * MIN, { status: "SENT", messageId: "m-1" });
+      // An item shaped like an unsent escalation, under another entity type and key.
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: `CONV#${conv(2)}`,
+            SK: "OTHER",
+            entityType: "OTHER",
+            ...sent,
+            conversationId: conv(2),
+            notification: { status: "FAILED", error: "Error: x" },
+          },
+        }),
+      );
       expect(await find()).toEqual([]);
+    });
+
+    it("reads every page of the Scan", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      await escalate(WALTER, conv(2), 50 * MIN, { status: "FAILED", error: "Error: y" });
+      await escalate(MARIA, conv(3), 40 * MIN, { status: "PENDING" });
+      const send = vi.spyOn(doc, "send");
+      const found = await findUnsentEscalations(doc, tableName, {
+        now: NOW,
+        minPendingAgeMs: 10 * MIN,
+        pageSize: 1,
+      });
+      expect(found.map((e) => e.conversationId)).toEqual([conv(1), conv(2), conv(3)]);
+      // One item per page: the escalations, the profiles and the messages take many pages.
+      expect(send.mock.calls.length).toBeGreaterThan(3);
+      send.mockRestore();
     });
   });
 
@@ -283,6 +381,20 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
     });
 
     it.each([
+      ["an empty rejection", "", "Unknown error"],
+      ["a non-Error rejection", "socket closed", "socket closed"],
+      ["an Error with no message", new Error(""), "Error: "],
+    ])("records FAILED with a non-empty error after %s", async (_case, reason, error) => {
+      const escalation = await escalate(MARIA, conv(1), 60 * MIN, { status: "PENDING" });
+      const notifier: Notifier = { notifyEscalation: () => Promise.reject(reason) };
+
+      const outcome = await retryEscalation(escalation, { repos, notifier });
+
+      expect(outcome).toMatchObject({ status: "FAILED", error });
+      expect(await statusOf(MARIA, conv(1))).toEqual({ status: "FAILED", error });
+    });
+
+    it.each([
       [
         "throws",
         () => Promise.reject(new Error("throughput exceeded")),
@@ -359,6 +471,12 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       ]);
     });
 
+    it("counts an empty rejection as failed", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      const summary = await run({ notifyEscalation: () => Promise.reject("") });
+      expect(summary).toMatchObject({ found: 1, sent: 0, failed: 1 });
+    });
+
     it("counts a send whose status was not recorded as failed", async () => {
       await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
       const broken: Repositories = {
@@ -402,7 +520,7 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
         (_region: string, _sender: string, _recipient: string): Notifier => recording,
       );
 
-      const summary = await runCli(
+      const summary = await cli(
         ["dev", "--table", tableName],
         { ...LOCAL, ...SES, AWS_REGION: "us-west-2" },
         {
@@ -422,9 +540,9 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       await escalate(MARIA, conv(1), 5 * MIN, { status: "PENDING" });
       const deps = { now: NOW, notifier: () => new RecordingNotifier(), log: () => undefined };
       const args = ["dev", "--table", tableName, "--dry-run"];
-      expect((await runCli(args, LOCAL, deps)).found).toBe(0);
-      expect((await runCli([...args, "--min-pending-age", "5"], LOCAL, deps)).found).toBe(1);
-      expect((await runCli(args, LOCAL, { ...deps, now: new Date(NOW.getTime() + 5 * MIN) })).found).toBe(1);
+      expect((await cli(args, LOCAL, deps)).found).toBe(0);
+      expect((await cli([...args, "--min-pending-age", "5"], LOCAL, deps)).found).toBe(1);
+      expect((await cli(args, LOCAL, { ...deps, now: new Date(NOW.getTime() + 5 * MIN) })).found).toBe(1);
     });
 
     it("needs the SES settings unless it is a dry run", async () => {
@@ -434,24 +552,24 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
         { ...LOCAL, SES_SENDER: SES.SES_SENDER },
         { ...LOCAL, SES_STAFF_RECIPIENT: "x" },
       ]) {
-        await expect(runCli(["dev", "--table", tableName], vars, deps)).rejects.toThrow(
+        await expect(cli(["dev", "--table", tableName], vars, deps)).rejects.toThrow(
           /Set SES_SENDER and SES_STAFF_RECIPIENT .* or pass --dry-run/,
         );
       }
-      await expect(runCli(["dev", "--table", tableName, "--dry-run"], LOCAL, deps)).resolves.toMatchObject({
+      await expect(cli(["dev", "--table", tableName, "--dry-run"], LOCAL, deps)).resolves.toMatchObject({
         found: 0,
       });
     });
 
     it("needs --table with a local endpoint", async () => {
-      await expect(runCli(["dev", "--dry-run"], LOCAL, { log: () => undefined })).rejects.toThrow(
+      await expect(cli(["dev", "--dry-run"], LOCAL, { log: () => undefined })).rejects.toThrow(
         "DYNAMODB_ENDPOINT is set: pass --table <name>",
       );
     });
 
     it("uses --table without asking SSM", async () => {
       const ssmClient = vi.fn();
-      const summary = await runCli(
+      const summary = await cli(
         ["dev", "--table", tableName, "--dry-run"],
         {},
         {
@@ -470,7 +588,7 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       const send = vi.fn(() => Promise.resolve({ Parameter: { Value: tableName } }));
       const ssmClient = vi.fn(() => ({ send }) as unknown as Pick<SSMClient, "send">);
 
-      const summary = await runCli(
+      const summary = await cli(
         ["pr52", "--dry-run"],
         { AWS_REGION: "us-east-2" },
         {
@@ -486,6 +604,94 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
         input: { Name: "/sched/pr52/data/table-name" },
       });
       expect(summary.found).toBe(1);
+    });
+
+    it("builds no notifier in a dry run, even with the SES settings", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      const notifierFor = vi.fn((): Notifier => new RecordingNotifier());
+      const summary = await cli(
+        ["dev", "--table", tableName, "--dry-run"],
+        { ...LOCAL, ...SES },
+        {
+          now: NOW,
+          notifier: notifierFor,
+          log: () => undefined,
+        },
+      );
+      expect(notifierFor).not.toHaveBeenCalled();
+      expect(summary).toMatchObject({ found: 1, sent: 0, failed: 0 });
+    });
+
+    it("defaults the region to us-east-1", async () => {
+      const notifierFor = vi.fn(
+        (_region: string, _s: string, _r: string): Notifier => new RecordingNotifier(),
+      );
+      await cli(
+        ["dev", "--table", tableName],
+        { DYNAMODB_ENDPOINT: ENDPOINT, ...SES },
+        {
+          now: NOW,
+          notifier: notifierFor,
+          dynamoClient: () => localClient(),
+          log: () => undefined,
+        },
+      );
+      expect(notifierFor).toHaveBeenCalledWith("us-east-1", SES.SES_SENDER, SES.SES_STAFF_RECIPIENT);
+    });
+  });
+
+  describe("main", () => {
+    const LOCAL = { DYNAMODB_ENDPOINT: ENDPOINT, AWS_REGION: "us-east-1" };
+    const quiet = { now: NOW, log: () => undefined, logError: () => undefined };
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), "retry-escalations-"));
+    });
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const envFile = (text: string): string => {
+      const file = join(dir, ".env");
+      writeFileSync(file, text);
+      return file;
+    };
+
+    it("returns 1 when a re-send fails and 0 when all are sent", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      const file = envFile("SES_SENDER=sender@example.com\nSES_STAFF_RECIPIENT=desk@example.com\n");
+      const argv = ["dev", "--table", tableName, "--env-file", file];
+      const failing = new RecordingNotifier();
+      failing.failWith(new Error("throttled"));
+      expect(await main(argv, { ...LOCAL }, { ...quiet, notifier: () => failing })).toBe(1);
+      expect(await main(argv, { ...LOCAL }, { ...quiet, notifier: () => new RecordingNotifier() })).toBe(0);
+    });
+
+    it("loads the SES settings from --env-file, keeping values already set", async () => {
+      const file = envFile(
+        "SES_SENDER='file-sender@example.com'\nSES_STAFF_RECIPIENT=\"file-desk@example.com\"\n",
+      );
+      const argv = ["dev", "--table", tableName, "--env-file", file];
+      const notifierFor = vi.fn(
+        (_region: string, _s: string, _r: string): Notifier => new RecordingNotifier(),
+      );
+      const deps = { ...quiet, notifier: notifierFor };
+
+      const vars: Record<string, string | undefined> = { ...LOCAL };
+      expect(await main(argv, vars, deps)).toBe(0);
+      expect(notifierFor).toHaveBeenLastCalledWith(
+        "us-east-1",
+        "file-sender@example.com",
+        "file-desk@example.com",
+      );
+      expect(vars.SES_SENDER).toBe("file-sender@example.com");
+
+      expect(await main(argv, { ...LOCAL, SES_SENDER: "set@example.com" }, deps)).toBe(0);
+      expect(notifierFor).toHaveBeenLastCalledWith("us-east-1", "set@example.com", "file-desk@example.com");
+    });
+
+    it("runs without an env file when the file is missing", async () => {
+      const argv = ["dev", "--table", tableName, "--dry-run", "--env-file", join(dir, "missing.env")];
+      expect(await main(argv, { ...LOCAL }, quiet)).toBe(0);
     });
   });
 });

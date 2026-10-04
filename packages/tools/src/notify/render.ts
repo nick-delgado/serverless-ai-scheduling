@@ -10,7 +10,7 @@
  */
 import type { EscalationReason } from "@sched/contracts";
 
-import type { EscalationNotice } from "./index";
+import type { EscalationNotice } from "./types";
 
 export const REASON_LABELS: Record<EscalationReason, string> = {
   patient_requested: "Patient asked for a person",

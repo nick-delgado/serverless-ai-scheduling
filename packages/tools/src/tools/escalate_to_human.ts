@@ -12,25 +12,12 @@
  */
 import { CLINIC, type Escalation } from "@sched/contracts";
 
-import { buildEscalationNotice } from "../notify/notice";
+import { sendEscalationNotice } from "../notify/notice";
 import { toolFail, toolOk, type ToolContext, type ToolHandler } from "../registry";
 
-const MAX_ERROR = 500;
-
-async function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalation["notification"]> {
-  if (!ctx.notifier) return { status: "FAILED", error: "No notifier configured" };
-  try {
-    const [patient, messages] = await Promise.all([
-      ctx.repos.patients.get(ctx.patientId),
-      ctx.repos.conversations.listMessages(ctx.patientId, ctx.conversationId),
-    ]);
-    const notice = buildEscalationNotice(escalation, patient, messages);
-    const { messageId } = await ctx.notifier.notifyEscalation(notice);
-    return { status: "SENT", messageId };
-  } catch (error) {
-    const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    return { status: "FAILED", error: text.slice(0, MAX_ERROR) || "Unknown error" };
-  }
+function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalation["notification"]> {
+  if (!ctx.notifier) return Promise.resolve({ status: "FAILED", error: "No notifier configured" });
+  return sendEscalationNotice(escalation, ctx.patientId, { repos: ctx.repos, notifier: ctx.notifier });
 }
 
 export const escalateToHuman: ToolHandler<"escalate_to_human"> = async (input, ctx) => {
