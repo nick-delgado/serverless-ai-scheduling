@@ -9,8 +9,8 @@
 import {
   type ApiError,
   ChatRequest,
-  CLINIC,
   type ChatStreamEvent,
+  DAILY_CAP_MESSAGE,
   encodeStreamEvent,
   messageIdForSeq,
   SessionResponse,
@@ -92,7 +92,7 @@ function errorEvent(
       return {
         type: "error",
         code: "RATE_LIMITED",
-        message: `You've reached today's message limit for the assistant. Please try again tomorrow, or call our front desk at ${CLINIC.phone} (${CLINIC.hours}).`,
+        message: DAILY_CAP_MESSAGE,
         retryable: false,
       };
     case "AGENT_UNAVAILABLE":

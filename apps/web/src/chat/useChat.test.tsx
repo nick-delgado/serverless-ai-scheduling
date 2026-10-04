@@ -1,4 +1,4 @@
-import type { ChatStreamEvent, SessionResponse } from "@sched/contracts";
+import type { ChatRequest, ChatStreamEvent, SessionResponse } from "@sched/contracts";
 import { act, render, renderHook, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { REPLIES, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
+import { readLoginSession } from "./loginSession";
 import {
   doneEvent,
   fakeTime,
@@ -104,6 +105,77 @@ describe("useChat", () => {
     reduce = true;
     sendNow("Two");
     await until(() => within(log()).queryAllByText(text).length === 2);
+  });
+});
+
+describe("useChat: the conversation an error names (#104)", () => {
+  const SUB = "c2a4e6b8-1d3f-4a5b-8c7d-9e0f1a2b3c4d";
+  const STORED = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+  const unavailable = (conversationId?: string): ChatStreamEvent => ({
+    type: "error",
+    code: "AGENT_UNAVAILABLE",
+    message: "The assistant is temporarily unavailable. Please try again.",
+    retryable: true,
+    ...(conversationId === undefined ? {} : { conversationId }),
+  });
+
+  /** A ChatApi that answers each send with the next scripted event and records the requests. */
+  function scriptedApi(answers: ChatStreamEvent[]) {
+    const bodies: ChatRequest[] = [];
+    const api: ChatApi = {
+      getSession: () => Promise.resolve(SESSIONS.no_upcoming),
+      sendChat: (request, onEvent) => {
+        bodies.push(request);
+        const answer = answers[bodies.length - 1];
+        if (!answer) return Promise.resolve([]);
+        onEvent(answer);
+        return Promise.resolve([answer]);
+      },
+    };
+    return { api, bodies };
+  }
+
+  async function sendThenRetry(answers: ChatStreamEvent[]) {
+    localStorage.clear();
+    const { api, bodies } = scriptedApi(answers);
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant, sub: SUB }));
+    await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
+    for (const text of answers.slice(0, -1).map((_, i) => `Message ${i}`)) {
+      act(() => {
+        result.current.send(text);
+      });
+      await waitFor(() => expect(result.current.responding).toBe(false));
+    }
+    expect(result.current.error?.retryable).toBe(true);
+    act(() => result.current.retry());
+    await waitFor(() => expect(bodies).toHaveLength(answers.length));
+    return bodies;
+  }
+
+  it("sends the conversation a failed first turn's error names with Retry, and remembers it for a reload", async () => {
+    const bodies = await sendThenRetry([unavailable(STORED), done]);
+    expect(bodies[0]?.conversationId).toBeUndefined();
+    expect(bodies[1]).toEqual({ ...bodies[0], conversationId: STORED });
+    expect(readLoginSession()).toEqual({ sub: SUB, conversationId: done.conversationId });
+  });
+
+  it("writes the login session from the error, before any done", async () => {
+    localStorage.clear();
+    const { api } = scriptedApi([unavailable(STORED)]);
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant, sub: SUB }));
+    await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
+    act(() => {
+      result.current.send("Hi");
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(readLoginSession()).toEqual({ sub: SUB, conversationId: STORED });
+  });
+
+  it("keeps the conversation it has when an error names none", async () => {
+    const other = doneEvent({ conversationId: STORED, messageId: "msg_000001" });
+    const bodies = await sendThenRetry([other, unavailable(), done]);
+    expect(bodies[1]?.conversationId).toBe(STORED);
+    expect(bodies[2]?.conversationId).toBe(STORED);
   });
 });
 
