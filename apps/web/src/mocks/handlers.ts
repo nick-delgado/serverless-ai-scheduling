@@ -9,6 +9,7 @@
 import {
   type ApiError,
   ChatRequest,
+  CLINIC,
   type ChatStreamEvent,
   encodeStreamEvent,
   messageIdForSeq,
@@ -66,7 +67,9 @@ export function ndjsonStream(
   return new HttpResponse(body, { status: 200, headers: { "Content-Type": NDJSON_CONTENT_TYPE } });
 }
 
-function errorEvent(code: "BAD_REQUEST" | "RATE_LIMITED" | "AGENT_UNAVAILABLE"): ChatStreamEvent {
+function errorEvent(
+  code: "BAD_REQUEST" | "RATE_LIMITED" | "DAILY_CAP" | "AGENT_UNAVAILABLE",
+): ChatStreamEvent {
   switch (code) {
     case "BAD_REQUEST":
       return {
@@ -81,6 +84,15 @@ function errorEvent(code: "BAD_REQUEST" | "RATE_LIMITED" | "AGENT_UNAVAILABLE"):
         code,
         message: "Lots of people are chatting right now. Please try again in a moment.",
         retryable: true,
+      };
+    case "DAILY_CAP":
+      // The chat handler's daily-cap answer (services/api/src/lib/errors.ts): a RATE_LIMITED that
+      // isn't retryable, with the front desk's number and hours (FR-017).
+      return {
+        type: "error",
+        code: "RATE_LIMITED",
+        message: `You've reached today's message limit for the assistant. Please try again tomorrow, or call our front desk at ${CLINIC.phone} (${CLINIC.hours}).`,
+        retryable: false,
       };
     case "AGENT_UNAVAILABLE":
       return {
@@ -152,6 +164,10 @@ export function createMockApi(getOptions: () => MockApiOptions): MockApi {
       return options.chatFault === "rate_limited"
         ? ndjson([errorEvent("RATE_LIMITED")], 429)
         : ndjson([errorEvent("AGENT_UNAVAILABLE")], 503);
+    }
+    if (options.chatFault === "daily_cap") {
+      await sleep(options.latencyMs);
+      return ndjson([errorEvent("DAILY_CAP")], 429);
     }
 
     // The model's time to first token: no headers until the first event (ADR-007).

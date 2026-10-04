@@ -1,6 +1,7 @@
 import {
   ApiError,
   type ChatStreamEvent,
+  CLINIC,
   isTerminalEvent,
   parseChatResponseBody,
   parseStreamEventLine,
@@ -178,13 +179,14 @@ describe("POST /api/chat", () => {
     ["none", { clientMessageId: "not-a-uuid", text: "" }],
     ["rate_limited", undefined],
     ["unavailable", undefined],
+    ["daily_cap", undefined],
   ] as const)("waits latencyMs before answering with chatFault %s", async (chatFault, body) => {
     configureMockApi({ chatFault, latencyMs: 80 });
     expect(await elapsedUntilSettled(postChat(body))).toBeGreaterThanOrEqual(60);
   });
 
   // `network` and `unauthorized` answer before the body is read (API Gateway rejects first).
-  it.each(["none", "rate_limited", "unavailable", "mid_stream"] as const)(
+  it.each(["none", "rate_limited", "unavailable", "daily_cap", "mid_stream"] as const)(
     "answers a malformed body with 400 and one BAD_REQUEST event (chatFault %s)",
     async (chatFault) => {
       configureMockApi({ chatFault });
@@ -206,6 +208,17 @@ describe("POST /api/chat", () => {
     expect(parseChatResponseBody(await res.text())).toEqual([
       expect.objectContaining({ type: "error", code, retryable: true }),
     ]);
+  });
+
+  it("injects the daily cap as 429 with one RATE_LIMITED event that isn't retryable and names the front desk", async () => {
+    configureMockApi({ chatFault: "daily_cap" });
+    const res = await postChat();
+    expect(res.status).toBe(429);
+    const events = parseChatResponseBody(await res.text());
+    expect(events).toEqual([
+      expect.objectContaining({ type: "error", code: "RATE_LIMITED", retryable: false }),
+    ]);
+    expect(events[0]).toHaveProperty("message", expect.stringContaining(CLINIC.phone));
   });
 
   it("injects a failure mid-stream: 200, part of the reply, then a retryable error", async () => {

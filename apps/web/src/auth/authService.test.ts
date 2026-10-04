@@ -15,6 +15,9 @@ vi.setConfig({ testTimeout: 20_000 });
 
 let auth: AuthService;
 
+/** Maria as the service reports her: her username and her Cognito `sub`. */
+const MARIA = { username: "maria.santos", sub: "0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e" };
+
 beforeEach(() => {
   localStorage.clear();
   auth = createAmplifyAuthService(() => MOCK_COGNITO_CONFIG);
@@ -32,9 +35,9 @@ describe("signIn", () => {
   it("signs in with the right password and returns the user", async () => {
     await expect(auth.signIn("maria.santos", MOCK_PASSWORD)).resolves.toEqual({
       ok: true,
-      user: { username: "maria.santos" },
+      user: MARIA,
     });
-    await expect(auth.currentUser()).resolves.toEqual({ username: "maria.santos" });
+    await expect(auth.currentUser()).resolves.toEqual(MARIA);
   });
 
   it("trims spaces around the username", async () => {
@@ -52,7 +55,7 @@ describe("signIn", () => {
   it("signs in whatever the username's case (the pool is case-insensitive)", async () => {
     await expect(auth.signIn("Maria.Santos", MOCK_PASSWORD)).resolves.toEqual({
       ok: true,
-      user: { username: "maria.santos" },
+      user: MARIA,
     });
   });
 
@@ -148,7 +151,7 @@ describe("getIdToken", () => {
     // A token from the refresh: the one from sign-in expired a second after it was issued.
     expect(claims(token)).toMatchObject({ token_use: "id", "cognito:username": "maria.santos" });
     expect(Number(claims(token).exp) * 1000).toBeGreaterThan(Date.now() + 3_000_000);
-    await expect(auth.currentUser()).resolves.toEqual({ username: "maria.santos" });
+    await expect(auth.currentUser()).resolves.toEqual(MARIA);
   });
 
   it("is undefined, and the session is cleared, when the refresh token no longer works", async () => {
@@ -165,7 +168,7 @@ describe("getIdToken", () => {
     configureCognitoMock({ fault: "internal" });
     await expect(auth.getIdToken()).rejects.toThrow();
     configureCognitoMock({ fault: "none" });
-    await expect(auth.currentUser()).resolves.toEqual({ username: "maria.santos" });
+    await expect(auth.currentUser()).resolves.toEqual(MARIA);
   });
 
   it("signs in again over a stored session it couldn't refresh", async () => {
@@ -185,7 +188,7 @@ describe("session lifetime", () => {
     vi.resetModules();
     const fresh = await import("./authService");
     const reloaded = fresh.createAmplifyAuthService(() => MOCK_COGNITO_CONFIG);
-    await expect(reloaded.currentUser()).resolves.toEqual({ username: "maria.santos" });
+    await expect(reloaded.currentUser()).resolves.toEqual(MARIA);
     expect(claims(await reloaded.getIdToken())).toMatchObject({ token_use: "id" });
   });
 

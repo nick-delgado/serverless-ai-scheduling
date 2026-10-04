@@ -1,5 +1,5 @@
 /**
- * The chat page's state: the greeting, the messages, and the turn in progress.
+ * The chat page's state: the greeting, the messages, the turn in progress, and the error, if any.
  *
  * A turn runs from send until its reply has been fully typed out:
  * - `waiting` is true from send until the first `text_delta` arrives (FR-012: the typing indicator
@@ -9,13 +9,25 @@
  * - when the typewriter has revealed everything, the reply joins the messages and is announced once
  *   through the live region (not per character).
  *
- * Errors end the turn with `error` set. The retry bubble, keeping the failed message and restoring the
- * conversation are #27; `failTurn` and the `ChatHttpError` / `ChatProtocolError` types are its seams.
+ * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list.
+ * - Retry is offered only for a stream `error` event with `retryable: true`, or a network failure
+ *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`). It
+ *   resends the same text with the same `clientMessageId` and `conversationId`, without adding the
+ *   message again. Any other error shows its message without Retry (the daily cap's front-desk number).
+ * - A 401 (the session call's or a turn's) means the sign-in has ended: `onUnauthorized` is called,
+ *   which signs the patient out and so routes to sign-in.
+ *
+ * Restore (FR-014, #27): on load, `POST /api/session`'s conversation is shown only if it is the one
+ * this login session has been using (`loginSession.ts`); otherwise the chat starts empty and the next
+ * turn starts a new conversation. A failed session call shows the fallback greeting with an error and
+ * Retry (a 401 instead routes to sign-in, as above).
  */
 import { CLINIC, type ChatStreamEvent, type ToolName } from "@sched/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ChatApi } from "./api";
+import { type ChatApi, ChatHttpError } from "./api";
+import { conversationToRestore, readLoginSession, writeLoginSession } from "./loginSession";
+import { ChatProtocolError } from "./streamClient";
 import { Typewriter } from "./typewriter";
 
 export interface ChatMessage {
@@ -40,11 +52,23 @@ export interface ChatTurn {
 
 export type Greeting = { state: "loading" } | { state: "ready"; text: string };
 
+export interface ChatError {
+  message: string;
+  /** Whether `retry` will try again: the failed turn, or the session call. */
+  retryable: boolean;
+}
+
 /** Shown when the session call fails, so the page still opens with a greeting. */
 export const FALLBACK_GREETING = `Hi! I'm the ${CLINIC.name} scheduling assistant. How can I help today?`;
 
-/** Shown when a turn fails without a message of its own (network, 401, a broken stream). */
+/** Shown when a turn fails without a message of its own (network, a broken stream, an HTTP error). */
 export const GENERIC_ERROR = "Something went wrong. Please try again.";
+
+/** Shown when the session call fails (other than a 401). */
+export const SESSION_ERROR = "We couldn't load your conversation. You can try again, or send a message.";
+
+/** Shown on a 401: the sign-in has ended. */
+export const SIGNED_OUT_ERROR = "Your sign-in has ended. Please sign in again.";
 
 export function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -53,6 +77,25 @@ export function prefersReducedMotion(): boolean {
 export interface UseChatOptions {
   /** Read at the start of each turn. Defaults to the `prefers-reduced-motion` media query. */
   reducedMotion?: () => boolean;
+  /**
+   * The signed-in patient's Cognito `sub`, for the login-session rule. Without it no conversation is
+   * restored and none is remembered.
+   */
+  sub?: string;
+  /** Called when the API answers 401: the sign-in has ended. */
+  onUnauthorized?: () => void;
+}
+
+/** What Retry repeats: a failed turn (its message is already in the list), or the session call. */
+type RetryTarget = { kind: "turn"; text: string; clientMessageId: string } | { kind: "session" };
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof ChatHttpError && error.status === 401;
+}
+
+/** A network failure: what `fetch` or the reader throws, as opposed to an answer the API gave. */
+function isNetworkFailure(error: unknown): boolean {
+  return !(error instanceof ChatHttpError) && !(error instanceof ChatProtocolError);
 }
 
 export function useChat(api: ChatApi, options: UseChatOptions = {}) {
@@ -60,12 +103,34 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
   const [greeting, setGreeting] = useState<Greeting>({ state: "loading" });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [turn, setTurn] = useState<ChatTurn | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChatError | null>(null);
   /** The latest completed message, for the polite live region. */
   const [announcement, setAnnouncement] = useState("");
+  /** Bumped by a session Retry, which runs the session effect again. */
+  const [sessionAttempt, setSessionAttempt] = useState(0);
 
   const conversationId = useRef<string | undefined>(undefined);
   const active = useRef<{ controller: AbortController; typewriter: Typewriter } | null>(null);
+  /** What Retry does for the current error; `null` when there is nothing to retry. */
+  const retryTarget = useRef<RetryTarget | null>(null);
+  /** Set by the first send: a session answered after it must not restore over the new turn. */
+  const sent = useRef(false);
+
+  // Read when a call settles, not when it starts, so the latest values apply.
+  const latest = useRef(options);
+  useEffect(() => {
+    latest.current = options;
+  });
+
+  const showError = useCallback((message: string, retry: RetryTarget | null) => {
+    retryTarget.current = retry;
+    setError({ message, retryable: retry !== null });
+  }, []);
+
+  const clearError = useCallback(() => {
+    retryTarget.current = null;
+    setError(null);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -73,16 +138,29 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       (session) => {
         setGreeting({ state: "ready", text: session.greeting });
         setAnnouncement(session.greeting);
+        if (sent.current) return;
+        const restore = conversationToRestore(session.conversationId, latest.current.sub, readLoginSession());
+        if (restore === undefined) return;
+        conversationId.current = restore;
+        setMessages(session.messages.map(({ id, role, text }) => ({ id, role, text })));
       },
-      () => {
+      (failure: unknown) => {
         // An aborted call (unmount, or React's strict-mode remount) must not overwrite the greeting.
         if (controller.signal.aborted) return;
         setGreeting({ state: "ready", text: FALLBACK_GREETING });
         setAnnouncement(FALLBACK_GREETING);
+        // A send since then has started a conversation of its own: there's nothing left to load.
+        if (sent.current) return;
+        if (isUnauthorized(failure)) {
+          showError(SIGNED_OUT_ERROR, null);
+          latest.current.onUnauthorized?.();
+          return;
+        }
+        showError(SESSION_ERROR, { kind: "session" });
       },
     );
     return () => controller.abort();
-  }, [api]);
+  }, [api, sessionAttempt, showError]);
 
   // Unmounting stops the turn: no more fetch, no more typing.
   useEffect(
@@ -93,12 +171,9 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
     [],
   );
 
-  const send = useCallback(
-    (raw: string): boolean => {
-      const text = raw.trim();
-      if (text.length === 0 || active.current) return false;
-
-      const clientMessageId = crypto.randomUUID();
+  /** Run one turn for a message already in the list. Retry calls it again with the same arguments. */
+  const runTurn = useCallback(
+    (text: string, clientMessageId: string) => {
       const controller = new AbortController();
       // Set by `done`, which is the only way a turn completes.
       let messageId = "";
@@ -114,10 +189,10 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         active.current = null;
         setTurn(null);
       };
-      const failTurn = (message: string) => {
+      const failTurn = (message: string, retryable: boolean) => {
         if (ended) return;
         end();
-        setError(message);
+        showError(message, retryable ? { kind: "turn", text, clientMessageId } : null);
       };
 
       const typewriter = new Typewriter({
@@ -149,22 +224,24 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
             typewriter.reset(event.keepChars);
             if (typewriter.received.length === 0) setTurn((t) => (t ? { ...t, waiting: true } : t));
             break;
-          case "done":
+          case "done": {
             conversationId.current = event.conversationId;
+            const { sub } = latest.current;
+            if (sub !== undefined) writeLoginSession({ sub, conversationId: event.conversationId });
             messageId = event.messageId;
             doneReceived = true;
             typewriter.finish();
             break;
+          }
           case "error":
-            failTurn(event.message);
+            failTurn(event.message, event.retryable);
             break;
         }
       };
 
-      setError(null);
+      clearError();
       // Empty the live region, so a reply equal to the last announcement is still a change to announce.
       setAnnouncement("");
-      setMessages((list) => [...list, { id: clientMessageId, role: "patient", text }]);
       setTurn({ text: "", waiting: true, chips: [] });
 
       api
@@ -173,13 +250,45 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
           onEvent,
           controller.signal,
         )
-        .catch(() => {
-          if (!doneReceived) failTurn(GENERIC_ERROR);
+        .catch((failure: unknown) => {
+          if (doneReceived) return;
+          if (isUnauthorized(failure)) {
+            failTurn(SIGNED_OUT_ERROR, false);
+            latest.current.onUnauthorized?.();
+            return;
+          }
+          failTurn(GENERIC_ERROR, isNetworkFailure(failure));
         });
-      return true;
     },
-    [api, reducedMotion],
+    [api, reducedMotion, showError, clearError],
   );
 
-  return { greeting, messages, turn, error, announcement, responding: turn !== null, send };
+  const send = useCallback(
+    (raw: string): boolean => {
+      const text = raw.trim();
+      if (text.length === 0 || active.current) return false;
+      const clientMessageId = crypto.randomUUID();
+      sent.current = true;
+      setMessages((list) => [...list, { id: clientMessageId, role: "patient", text }]);
+      runTurn(text, clientMessageId);
+      return true;
+    },
+    [runTurn],
+  );
+
+  /** Retry what failed: the last turn (same text, `clientMessageId` and conversation) or the session call. */
+  const retry = useCallback(() => {
+    const target = retryTarget.current;
+    // Nothing to retry, or a second call before the first re-rendered (it cleared the target).
+    if (!target) return;
+    if (target.kind === "turn") {
+      runTurn(target.text, target.clientMessageId);
+      return;
+    }
+    clearError();
+    setGreeting({ state: "loading" });
+    setSessionAttempt((n) => n + 1);
+  }, [runTurn, clearError]);
+
+  return { greeting, messages, turn, error, announcement, responding: turn !== null, send, retry };
 }

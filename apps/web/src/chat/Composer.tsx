@@ -1,5 +1,5 @@
 import { LIMITS } from "@sched/contracts";
-import { type FormEvent, type KeyboardEvent, type ReactNode, useId, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, type Ref, useId, useState } from "react";
 
 /** The character counter appears from here on, so it doesn't distract in normal use. */
 export const COUNTER_FROM = LIMITS.chatTextMaxChars - 200;
@@ -11,13 +11,15 @@ export interface ComposerProps {
   responding: boolean;
   /** Extra controls beside Send, e.g. the microphone button (#28). */
   accessory?: ReactNode;
+  /** The message box, e.g. to move focus back to it after Retry. */
+  inputRef?: Ref<HTMLTextAreaElement>;
 }
 
 /**
  * The message box (FR-011): multiline; Enter sends, Shift+Enter adds a newline; Send is disabled
  * while the text is blank or the agent is responding; at most `LIMITS.chatTextMaxChars` characters.
  */
-export function Composer({ onSend, responding, accessory }: ComposerProps) {
+export function Composer({ onSend, responding, accessory, inputRef }: ComposerProps) {
   const [text, setText] = useState("");
   const id = useId();
   const counterId = `${id}-counter`;
@@ -46,6 +48,7 @@ export function Composer({ onSend, responding, accessory }: ComposerProps) {
         Message
       </label>
       <textarea
+        ref={inputRef}
         id={`${id}-input`}
         className="composer__input"
         rows={2}
