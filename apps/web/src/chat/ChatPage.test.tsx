@@ -61,10 +61,10 @@ function captureChatBodies() {
   return bodies;
 }
 
-/** Render with instant replies and wait for the greeting. */
+/** Render with instant replies and wait (in real hops, no fixed timeout) for the greeting. */
 async function renderPage() {
   render(<ChatPage reducedMotion={instant} />);
-  await within(log()).findByText(SESSIONS.upcoming.greeting);
+  await until(() => within(log()).queryByText(SESSIONS.upcoming.greeting) !== null);
 }
 
 async function sendFromPage(text: string) {
@@ -509,25 +509,34 @@ describe("ChatPage: turn details", () => {
       1: textSent.promise,
       2: restSent.promise,
     });
+    // The page scrolls in an effect after each render, so each check waits for the call. Each step
+    // waits for its text with `until` (real I/O hops, no fixed timeout) rather than `findByText`'s 1 s,
+    // which a loaded runner can spend before the gated stream gets through (#122).
     try {
       await renderPage();
+      // Forget the mount and greeting scrolls (the greeting is shown, so its scroll has run), so only
+      // the sent message's own scroll satisfies the next wait; once it's seen and cleared, it can't
+      // stand in for the chip's below.
+      expect(within(log()).getByText(SESSIONS.upcoming.greeting)).toBeVisible();
+      scrollIntoView.mockClear();
       await sendFromPage("Hi");
-      await within(log()).findByText("Hi");
+      await until(() => within(log()).queryByText("Hi") !== null);
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" }));
       scrollIntoView.mockClear();
 
       // A chip: the turn's text is still empty and the messages haven't changed.
       chipSent.open();
-      await screen.findByText(TOOL_STATUS_LABELS.check_availability);
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      await until(() => screen.queryByText(TOOL_STATUS_LABELS.check_availability) !== null);
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" }));
       scrollIntoView.mockClear();
 
       // The first text of the reply: the chips and the messages haven't changed.
       textSent.open();
-      await within(log()).findByText("Part one.");
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      await until(() => within(log()).queryByText("Part one.") !== null);
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" }));
 
       restSent.open();
-      await within(log()).findByText("Part one. Part two.");
+      await until(() => within(log()).queryByText("Part one. Part two.") !== null);
     } finally {
       delete (Element.prototype as Partial<Element>).scrollIntoView;
     }
