@@ -198,10 +198,10 @@ DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/seed-data.ts --env dev -
 
 ```bash
 npx tsx scripts/retry-escalations.ts dev --dry-run      # list what would be re-sent; sends nothing
-AWS_PROFILE=sched-admin npx tsx scripts/retry-escalations.ts dev
+npx tsx scripts/retry-escalations.ts dev
 ```
 
-Run it from the main checkout, where `.env` holds `SES_SENDER` and `SES_STAFF_RECIPIENT` (or pass `--env-file <path>`). Sending needs `ses:SendEmail` on the identity. The `SchedDeployer` permission set (`sched-dev`) doesn't have it, so the send runs as `sched-admin`. The dry run works as `sched-dev`.
+Run it from the main checkout, where `.env` holds `SES_SENDER` and `SES_STAFF_RECIPIENT` (or pass `--env-file <path>`). Sending needs `ses:SendEmail` on the identity, which the `SchedDeployer` permission set (`sched-dev`) grants through its `SendAsVerifiedIdentity` statement (Nick's choice on #35). If the permission set hasn't been re-provisioned with that statement yet, the send fails with AccessDenied; the dry run works either way.
 
 What it does:
 
