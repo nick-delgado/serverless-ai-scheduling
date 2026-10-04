@@ -23,7 +23,7 @@ body:
     id: owned_paths
     attributes:
       label: Owned paths
-      description: Whole files or directories this task may create or modify, never line numbers. Check them against each acceptance criterion and the definition-of-done evidence, such as the runner, CLI or eval wiring that calls the new code. Anything else needs a callout in the PR.
+      description: Whole files or directories this task may create or modify, never line numbers. Check them, and any limit you put on one ("fixtures only"), against each acceptance criterion and the definition-of-done evidence, such as the runner, CLI or eval wiring that calls the new code, existing code a criterion reuses (so it is shared, not copied), and the shared test setup the new code must join. Anything else needs a callout in the PR.
     validations:
       required: true
   - type: textarea
@@ -35,7 +35,9 @@ body:
     id: verification
     attributes:
       label: Verification
-      description: Commands or steps that prove the acceptance criteria.
+      description: Commands or steps that prove each acceptance criterion. For a criterion against a real service or a browser, say how it is shown and who runs it (the agent, the orchestrator before merge, or Nick).
+    validations:
+      required: true
   - type: textarea
     id: references
     attributes:

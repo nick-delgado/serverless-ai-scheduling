@@ -1,5 +1,7 @@
 # agent worktrees (see task-workflow skill)
 .worktrees/
+# a stray agent scratch folder; scratch files belong outside every checkout ($TMPDIR or the session's scratchpad)
+scratchpad/
 
 # dependencies & builds
 node_modules/

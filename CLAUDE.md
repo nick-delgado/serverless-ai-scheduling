@@ -106,7 +106,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Every change maps to a GitHub issue. Use the **`task-workflow` skill**: claim the issue, work in a worktree, check the definition of done, open a PR that closes the issue. Issues filed through the API follow `.github/ISSUE_TEMPLATE/task.yml` too.
 - Adding, changing, or debugging an agent tool: follow the **`add-agent-tool` skill** (contract, handler, tests, registry entry, description, evals).
 - Reviewing agent PRs: run **`review-agent-pr`** from any session's main conversation, including the one that wrote or orchestrated the PR, but never inside a subagent or forked context. All judgement comes from the fresh subagents it spawns; pass them nothing from the session's own context. Fix its "Fix now" findings with `address-pr-review` from the PR's worktree, and batch recurring causes into process changes with `improve-agent-process`.
-- Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR. A line of `CLAUDE.md` your change makes false (a command, a status) is fixed in the same PR, called out the same way.
+- Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR. A line your change makes false, in `CLAUDE.md` or any other doc, skill or keep-in-sync comment (a command, a status, a list of copies), is fixed in the same PR, called out the same way; an Accepted ADR changes by amendment. The journal entry the definition of done asks for, and its row in `docs/journal/README.md`, are in scope for every issue.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
   - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, and test on Node from `.nvmrc`.
@@ -136,4 +136,4 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## Writing style for docs
 
 - `README.md` is a **story** (problem → decisions → what broke → what evals showed → what's next). Setup instructions live in `docs/runbooks/`, not the README.
-- ADRs are short: context, options, decision, consequences. Journal entries are dated and first-person, with evidence (numbers, links, commits).
+- ADRs are short: context, options, decision, consequences. Journal entries are dated and first-person plural ("we" is Nick and the agents; say who did what), with evidence (numbers, links, commits).
