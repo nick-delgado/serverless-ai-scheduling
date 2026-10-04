@@ -35,4 +35,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-03 | [One long act() hid every partial render, so the live-region test couldn't fail](2026-10-03-one-long-act-hid-every-partial-render.md) | 4. Teaching the agent to schedule |
 | 2026-10-03 | [The Cognito mock does real SRP, because SRP never sends the password](2026-10-03-the-cognito-mock-does-real-srp.md) | 4. Teaching the agent to schedule |
 | 2026-10-03 | [No decision was reversed, but 98 details had drifted into review comments](2026-10-03-the-drift-was-in-the-comments.md) | 4. Teaching the agent to schedule |
+| 2026-10-04 | [The scroll test ran out of findByText's second, not the scroll](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [The staff email's address stays out of the repo, the logs and its own error messages](2026-10-04-the-staff-email-must-not-carry-its-own-address.md) | 4. Teaching the agent to schedule |
