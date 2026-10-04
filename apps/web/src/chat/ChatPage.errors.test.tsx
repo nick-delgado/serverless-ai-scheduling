@@ -2,7 +2,7 @@
  * The error bubble and Retry (FR-015, FR-017, #27). Retry shows only for a retryable stream `error`
  * event or a network failure, and resends the same text, `clientMessageId` and `conversationId`.
  */
-import { CLINIC, type ChatRequest } from "@sched/contracts";
+import { CLINIC, encodeStreamEvent } from "@sched/contracts";
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -13,7 +13,7 @@ import { configureMockApi, server } from "../mocks/node";
 import { REPLIES } from "../mocks/fixtures";
 import { createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
-import { instant, log, typingIndicator as typing } from "./testUtils";
+import { captureChatBodies, instant, log, retryButton, typingIndicator as typing } from "./testUtils";
 import { GENERIC_ERROR, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
 const UNAVAILABLE = "The assistant isn't available right now. Please try again.";
@@ -24,21 +24,6 @@ afterEach(() => {
   server.events.removeAllListeners();
   vi.restoreAllMocks();
 });
-
-/** The JSON bodies of `POST /api/chat` requests, in the order they were sent. */
-function captureChatBodies(): ChatRequest[] {
-  const bodies: ChatRequest[] = [];
-  server.events.on("request:start", ({ request }) => {
-    if (new URL(request.url).pathname !== "/api/chat") return;
-    void request
-      .clone()
-      .json()
-      .then((json: ChatRequest) => bodies.push(json));
-  });
-  return bodies;
-}
-
-const retryButton = () => screen.queryByRole("button", { name: "Retry" });
 
 async function renderPage(props: { onUnauthorized?: () => void } = {}) {
   render(<ChatPage reducedMotion={instant} {...props} />);
@@ -161,8 +146,33 @@ describe("ChatPage: Retry (FR-015)", () => {
     expect(within(log()).getByText("Hi")).toBeVisible();
   });
 
-  it("on a 401, says the sign-in has ended, without Retry, and hands over to sign-in", async () => {
+  it("on API Gateway's 401 (no event body), says the sign-in has ended, without Retry, and hands over to sign-in", async () => {
     configureMockApi({ chatFault: "unauthorized" });
+    const onUnauthorized = vi.fn();
+    const { sendMessage } = await renderPage({ onUnauthorized });
+    await sendMessage("Hi");
+    expect(await screen.findByRole("alert")).toHaveTextContent(SIGNED_OUT_ERROR);
+    expect(retryButton()).not.toBeInTheDocument();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("on the chat handler's 401 (an UNAUTHORIZED error event), says the sign-in has ended, without Retry, and hands over to sign-in", async () => {
+    const event = {
+      type: "error",
+      code: "UNAUTHORIZED",
+      message: "Please sign in again.",
+      retryable: false,
+    } as const;
+    server.use(
+      http.post(
+        "/api/chat",
+        () =>
+          new HttpResponse(encodeStreamEvent(event), {
+            status: 401,
+            headers: { "Content-Type": NDJSON_CONTENT_TYPE },
+          }),
+      ),
+    );
     const onUnauthorized = vi.fn();
     const { sendMessage } = await renderPage({ onUnauthorized });
     await sendMessage("Hi");
@@ -205,13 +215,12 @@ describe("ChatPage: Retry (FR-015)", () => {
   });
 
   it("does nothing on Retry when there is no error", async () => {
-    const bodies = captureChatBodies();
     const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
     await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
     act(() => result.current.retry());
+    // A turn would be under way, or the greeting loading again, as soon as `act` returns.
     expect(result.current.responding).toBe(false);
-    expect(bodies).toHaveLength(0);
-    expect(result.current.responding).toBe(false);
+    expect(result.current.greeting.state).toBe("ready");
   });
 
   it("keeps Retry keyboard-operable: Enter on the focused button retries", async () => {

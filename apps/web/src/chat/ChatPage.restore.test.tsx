@@ -3,7 +3,7 @@
  * (`loginSession.ts`): only the conversation this login session has been using, for the same `sub`,
  * comes back; anything else starts the chat empty, and the next turn starts a new conversation.
  */
-import { type ChatRequest, type SessionResponse } from "@sched/contracts";
+import { type SessionResponse } from "@sched/contracts";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -15,7 +15,16 @@ import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, ChatHttpError, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
 import { readLoginSession, writeLoginSession } from "./loginSession";
-import { doneEvent, gate, instant, log, serveEvents, typingIndicator as typing } from "./testUtils";
+import {
+  captureChatBodies,
+  doneEvent,
+  gate,
+  instant,
+  log,
+  retryButton,
+  serveEvents,
+  typingIndicator as typing,
+} from "./testUtils";
 import { FALLBACK_GREETING, SESSION_ERROR, SIGNED_OUT_ERROR } from "./useChat";
 
 const SUB = "sub-maria.santos";
@@ -28,19 +37,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The JSON bodies of `POST /api/chat` requests, in the order they were sent. */
-function captureChatBodies(): ChatRequest[] {
-  const bodies: ChatRequest[] = [];
-  server.events.on("request:start", ({ request }) => {
-    if (new URL(request.url).pathname !== "/api/chat") return;
-    void request
-      .clone()
-      .json()
-      .then((json: ChatRequest) => bodies.push(json));
-  });
-  return bodies;
-}
-
 function renderPage(props: { sub?: string; onUnauthorized?: () => void; api?: ChatApi } = {}) {
   render(<ChatPage reducedMotion={instant} {...props} />);
   const user = userEvent.setup();
@@ -49,7 +45,6 @@ function renderPage(props: { sub?: string; onUnauthorized?: () => void; api?: Ch
 }
 
 const restoredShown = () => within(log()).queryByText(RESTORED_QUESTION ?? "") !== null;
-const retryButton = () => screen.queryByRole("button", { name: "Retry" });
 
 describe("ChatPage: restore (FR-014)", () => {
   it("restores the conversation this login session has been using, in order, and continues it", async () => {
