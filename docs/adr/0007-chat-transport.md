@@ -1,6 +1,7 @@
 # ADR-007: Chat transport — REST API with Lambda response streaming
 
 - **Status:** Accepted (2026-09-29). Spike S-2, run as part of the M1 walking skeleton (#7), confirmed it; see Validation.
+- **Amended:** 2026-10-03 (the session call is `POST /api/session`; see [Amendment](#amendment-2026-10-03-the-session-call-is-a-post-18))
 - **Date:** 2026-09-28 (proposed), 2026-09-29 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-012, FR-013, NFR-001, ADR-001, ADR-003
@@ -107,4 +108,15 @@ p95 is nearest-rank, so with N=10 it is the maximum. 20/20 runs ended with `done
   - a custom cache policy whose cache key includes `Authorization`, with the origin sending `Cache-Control: no-store`;
   - a POST for the session call;
   - a different identity-source header for the authorizer.
+
+  *(Settled by the [amendment](#amendment-2026-10-03-the-session-call-is-a-post-18): a POST.)*
 - **SAM's `BuildMethod: esbuild` doesn't work with our npm workspaces.** It runs `npm install` in an isolated copy of `CodeUri`, where `@sched/contracts` can't resolve. Functions use `BuildMethod: makefile` with `Metadata.WorkingDirectory` at the repo root, and `services/api/Makefile` runs esbuild there. With `nodejs*` runtimes, `sam build --cached` still reruns make on every build, so edits in `packages/*` can't leave a stale bundle. This refines ADR-003's bundling line.
+
+## Amendment (2026-10-03): the session call is a POST (#18)
+
+Nick picked the second option on 2026-09-29: the session call is **`POST /api/session`** with an empty or `{}` body, behind the same Cognito authorizer as `POST /api/chat`.
+
+- **Why:** CloudFront forwards `Authorization` for POST under our `CachingDisabled` `/api/*` behavior, so no custom cache policy or extra header is needed, and a POST is never cached. Both API calls now look the same to CloudFront and the authorizer.
+- **Shape:** a buffered JSON `SessionResponse` from its own read-only Lambda (`sched-<env>-api-session`), not a stream. Any other body is a 400 `ApiError`; the patient still comes only from `claims.sub` (ADR-005). The response carries `Cache-Control: no-store`.
+- **Consequences:** `GET /api/session` doesn't exist (API Gateway answers it with 403 before any Lambda runs). The SPA's mock already uses POST (#24). The stage-wide throttle (5 req/s, burst 10) now covers session calls as well as chat turns.
+

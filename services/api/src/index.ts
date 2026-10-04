@@ -1,5 +1,5 @@
 /**
- * @sched/api: Lambda handlers for `POST /api/chat` (streaming, #17) and `GET /api/session` (#18).
+ * @sched/api: Lambda handlers for `POST /api/chat` (streaming, #17) and `POST /api/session` (#18).
  *
  * This entry point exports the transport-free chat turn core and its in-memory helpers, so the eval
  * harness can run the real handler in-process with injected repositories, clock, LLM and notifier (#30).

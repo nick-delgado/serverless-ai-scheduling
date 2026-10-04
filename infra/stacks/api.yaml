@@ -3,7 +3,8 @@ Transform: AWS::Serverless-2016-10-31
 Description: >-
   sched-<env>-api: Regional REST API with a Cognito User Pool authorizer and a response-streaming
   Lambda integration for POST /api/chat (ADR-007). The chat function runs the agent loop (S3-03, #17)
-  over the single table and Bedrock Converse, and streams NDJSON events.
+  over the single table and Bedrock Converse, and streams NDJSON events. POST /api/session (S3-04, #18)
+  returns the templated greeting and the current conversation, read-only, with no model call.
 
 Parameters:
   Env:
@@ -118,6 +119,46 @@ Resources:
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-120b-1:0
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/openai.gpt-oss-20b-1:0
 
+  # ---------------------------------------------------------------------------------------------
+  # POST /api/session: templated greeting + conversation restore (#18). Read-only, no Bedrock.
+  # ---------------------------------------------------------------------------------------------
+  SessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-session
+      RetentionInDays: 14
+
+  SessionFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+      WorkingDirectory: ../..
+    Properties:
+      FunctionName: !Sub sched-${Env}-api-session
+      Description: POST /api/session (#18). Templated greeting and the current conversation, as JSON.
+      CodeUri: ../../services/api
+      Handler: index.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
+          NODE_OPTIONS: --enable-source-maps
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref SessionLogGroup
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            # Exactly the reads it makes, all on the base table: GetItem for the profile and the
+            # provider; Query for the patient's appointments, conversations and one conversation's messages.
+            - Sid: SessionReads
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
+
   ChatApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -153,6 +194,16 @@ Resources:
                 responseTransferMode: STREAM
                 # Streaming integrations may run up to 15 minutes; an agent turn needs well under 5.
                 timeoutInMillis: 300000
+          /api/session:
+            post:
+              summary: Templated greeting and the current conversation (SessionResponse). Body empty or {}.
+              security:
+                - CognitoUserPool: []
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionFunction.Arn}/invocations
+                timeoutInMillis: 10000
         components:
           securitySchemes:
             # No OAuth scopes on the method, so the authorizer validates the Cognito *ID* token.
@@ -174,6 +225,14 @@ Resources:
       FunctionName: !GetAtt ChatFunction.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/chat
+
+  SessionApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SessionFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/session
 
   # ---------------------------------------------------------------------------------------------
   # Outputs for the web stack and scripts (/sched/<env>/api/...)
@@ -216,3 +275,8 @@ Outputs:
     Value: !Sub https://${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageNameParam.Value}/api/chat
   ChatFunctionName:
     Value: !Ref ChatFunction
+  SessionUrl:
+    Description: Direct execute-api URL (the SPA goes through CloudFront at /api/session instead).
+    Value: !Sub https://${ChatApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageNameParam.Value}/api/session
+  SessionFunctionName:
+    Value: !Ref SessionFunction

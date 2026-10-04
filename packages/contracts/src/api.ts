@@ -37,7 +37,10 @@ export const UpcomingAppointment = z.strictObject({
 });
 export type UpcomingAppointment = z.infer<typeof UpcomingAppointment>;
 
-/** `GET /api/session`: the templated greeting (FR-010) and the current conversation, for restore (FR-014). */
+/**
+ * `POST /api/session` (empty or `{}` body): the templated greeting (FR-010) and the current conversation,
+ * for restore (FR-014). POST because CloudFront drops `Authorization` on GET (ADR-007, amendment 2026-10-03).
+ */
 export const SessionResponse = z.strictObject({
   patient: z.strictObject({ firstName: z.string().min(1).max(60) }),
   greeting: z.string().min(1).max(500),
