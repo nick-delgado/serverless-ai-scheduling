@@ -222,9 +222,12 @@ label() {
 }
 
 build_report() {
-  local r f
+  local r f summary
 
-  trim < "$run/report-head.md"
+  # The summary in the header is the verifier's, inserted here so the orchestrator never
+  # writes its own.
+  summary="$(h2 "$verified" "Summary" | trim)"
+  SUMMARY="$summary" awk '$0 == "<!-- summary -->" { print ENVIRON["SUMMARY"]; next } { print }' "$run/report-head.md" | trim
 
   printf '\n### Fix now\n\n'
   echo "For the agent that wrote this PR: fix these. Nothing here needs a product decision."
@@ -362,7 +365,7 @@ case "$mode" in
     for required in "$run/report-head.md" "$run/report-meta.md" "$verified"; do
       [ -s "$required" ] || { echo "error: missing or empty $required" >&2; exit 1; }
     done
-    need "$verified" "Confirmed findings" "Minor findings table" "Rejected findings" "Spot checks" "Previous findings" "Convergence" "Verification summary" "Reviewer tables"
+    need "$verified" "Summary" "Confirmed findings" "Minor findings table" "Rejected findings" "Spot checks" "Previous findings" "Convergence" "Verification summary" "Reviewer tables"
     fail_if_missing
     confirmed="$(h2 "$verified" "Confirmed findings")"
     case "$confirmed" in

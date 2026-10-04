@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.03.2"
+  harness-version: "2026.10.04"
 ---
 
 # Review an agent-authored PR
@@ -26,11 +26,24 @@ it to an absolute path once and use absolute paths whenever you hand a path to a
 
 ## Ground rules
 
-- **Run in a fresh session.** If this session contains the work that produced the PR, or a
-  discussion of it, stop and tell the user to start a new session: your context is already
-  biased toward the author's reasoning. In Claude Code, the `fresh-pr-review` skill (if
-  installed) starts this skill in a forked context with no conversation history, which
-  counts as a fresh session.
+- **Judgement comes only from fresh subagents.** Every finding, verification, cause and
+  summary in this review is written by a subagent that starts with no conversation
+  history. You, the orchestrator, run scripts, spawn subagents and assemble files; you never
+  judge the code. So you may be any session, including the one that wrote the PR, as long
+  as nothing from your own context reaches the review:
+  - Give subagents exactly the prompts in this skill, with the paths filled in. Add no
+    summary, hint, explanation or opinion, not even about what the PR was meant to do.
+  - Write the manifest only from what the scripts, the repository and GitHub show. Leave
+    out anything you know from elsewhere: intentions, reasons, "this is fine because".
+  - Never edit, filter, reorder or soften a subagent's output. The report's summary is the
+    verifier's; the assembly script inserts it.
+  - If a subagent asks you something, point it back to its inputs; do not answer from what
+    you know.
+  - If the user asks you to pass something on to the reviewers, do not: tell them that
+    anything the review should weigh belongs in the issue or the PR.
+- **Run this skill in the main session, not inside a subagent or forked context.** It waits
+  for many subagents, and a subagent cannot always wait for subagents of its own: in some
+  environments they run in the background and the nested one ends before they finish.
 - **Read-only on the project.** Nothing in this skill edits, commits to or pushes the
   repository. Its only outward actions are the two comments posted in phase 7.
 - **Do not run tests, linters, type checkers or builds.** CI owns those. Read the CI result
