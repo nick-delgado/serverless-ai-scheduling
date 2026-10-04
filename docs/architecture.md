@@ -50,7 +50,7 @@ Parts marked *planned* aren't deployed yet: the SES escalation email (#35) and v
 1. The SPA sends `POST /api/chat {conversationId?, clientMessageId, text}` with the Cognito ID token.
 2. The REST API authorizer validates the JWT. The Lambda receives `claims.sub` as the patient ID.
 3. ChatFn counts the turn against the patient's daily cap (50, ADR-009; 429 when reached). It then loads the conversation history through the owned read (DynamoDB; an unknown or foreign `conversationId` starts a new conversation, ADR-007 amendment) and appends the patient's new message before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. It then calls `runAgentTurn` with the history **as loaded before that append** (the loop adds the user message itself, as the first entry of `newMessages`), plus:
-   - a tool executor bound to a `ToolContext` carrying the patientId **from the JWT**, the clinic timezone, and the clock (the loop itself never sees the patient ID; ADR-001 amendment);
+   - a tool executor bound to a `ToolContext` carrying the patientId **from the JWT**, the conversation ID, the clock, the repositories, and the staff notifier when one is configured (none until #35, so escalations are recorded `FAILED`) (the loop itself never sees the patient ID; ADR-001 amendment);
    - `ConverseLlmClient`;
    - the configured `ModelProfile`.
 4. The loop calls the configured model (`AGENT_MODEL_PROFILE`, default Sonnet 4.6) through Converse (ADR-010). When the model requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to the model. This repeats until the model ends the turn, capped at 8 iterations.
