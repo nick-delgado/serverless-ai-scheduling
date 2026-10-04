@@ -15,6 +15,7 @@ import { fakeAuthService, fakeSub } from "../auth/testing";
 import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi } from "../mocks/node";
 import { LOGIN_SESSION_STORAGE_KEY, readLoginSession, writeLoginSession } from "./loginSession";
+import { log } from "./testUtils";
 
 const MARIA = { username: "maria.santos", sub: fakeSub("maria.santos") };
 const RESTORED_QUESTION = SESSIONS.restore.messages[0]?.text ?? "";
@@ -24,7 +25,10 @@ beforeEach(() => {
   // The routed page reads reduced motion from the media query, which jsdom lacks: reply instantly.
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: true, media: query }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function renderApp(path: string, auth: AuthService) {
   const router = createMemoryRouter(appRoutes(undefined, auth), { initialEntries: [path] });
@@ -32,7 +36,6 @@ function renderApp(path: string, auth: AuthService) {
   return router;
 }
 
-const conversation = () => screen.getByRole("list", { name: "Conversation" });
 const stored = () => localStorage.getItem(LOGIN_SESSION_STORAGE_KEY);
 
 describe("ChatPage in the app: the login session", () => {
@@ -47,7 +50,7 @@ describe("ChatPage in the app: the login session", () => {
     renderApp("/chat", fakeAuthService(MARIA));
     const input = await screen.findByRole("textbox", { name: "Message" });
     await userEvent.setup().type(input, "Hi{Enter}");
-    await within(conversation()).findByText(REPLIES.tools.text);
+    await within(log()).findByText(REPLIES.tools.text);
     expect(readLoginSession()?.sub).toBe(MARIA.sub);
   });
 
@@ -56,6 +59,18 @@ describe("ChatPage in the app: the login session", () => {
     const router = renderApp("/chat", fakeAuthService(MARIA));
     await userEvent.setup().click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    await waitFor(() => expect(stored()).toBeNull());
+  });
+
+  it("clears it on sign-out even when the sign-out call fails", async () => {
+    writeLoginSession({ sub: MARIA.sub, conversationId: RESTORE_CONVERSATION_ID });
+    const auth = fakeAuthService(MARIA);
+    auth.signOut = vi.fn(() => Promise.reject(new Error("offline")));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const router = renderApp("/chat", auth);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(stored()).toBeNull());
   });
 
