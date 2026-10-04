@@ -58,7 +58,7 @@ The flip side: `dev` is **shared**, and the last deploy wins. With several agent
 - **Check what's running:** `aws cloudformation describe-stacks --stack-name sched-dev-<stack> --query 'Stacks[0].Tags'` shows `git-branch` and `git-commit`.
 - Once CI deploys from `main` (M3-06, #41), `dev` will track `main`, and branch work belongs in ephemeral envs.
 
-**Protected envs** (`dev`, `demo`) keep deletion protection on, and `teardown.sh` refuses them. Their list is `PROTECTED_ENVS` in both scripts.
+**Protected envs** (`dev`, `demo`) keep deletion protection on, and `teardown.sh` refuses them. Their list is `PROTECTED_ENVS` in `deploy.sh`, `teardown.sh` and `deploy-web.sh`.
 
 ## Publishing the SPA (web)
 
