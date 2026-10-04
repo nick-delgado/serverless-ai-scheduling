@@ -21,7 +21,7 @@ Infrastructure is AWS SAM (CloudFormation) with **one template per stack** (ADR-
 | data | `infra/stacks/data.yaml` | DynamoDB `sched-<env>-main` (+ GSI1, TTL, PITR) | `data/table-name`, `data/table-arn` |
 | auth | `infra/stacks/auth.yaml` | Cognito User Pool + SPA client, Identity Pool + Transcribe-only browser role | `auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id`, `auth/identity-pool-id` |
 | api | `infra/stacks/api.yaml` | Regional REST API (OpenAPI body, Cognito authorizer, streaming Lambda integration) + handlers | `api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status` |
-| web | `infra/stacks/web.yaml` | Private S3 + CloudFront (OAC); `/api/*` → REST API | `web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |
+| web | `infra/stacks/web.yaml` | Private S3 + CloudFront (OAC); `/api/*` → REST API. The SPA files are published separately, by `scripts/deploy-web.sh` (below) | `web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |
 
 **Deploy order is data → auth → api → web**, because later stacks read earlier stacks' SSM parameters. `sched-bootstrap` is admin-only and deployed once by Nick. Never deploy, update, or delete it.
 
@@ -59,6 +59,22 @@ The flip side: `dev` is **shared**, and the last deploy wins. With several agent
 - Once CI deploys from `main` (M3-06, #41), `dev` will track `main`, and branch work belongs in ephemeral envs.
 
 **Protected envs** (`dev`, `demo`) keep deletion protection on, and `teardown.sh` refuses them. Their list is `PROTECTED_ENVS` in both scripts.
+
+## Publishing the SPA (web)
+
+The web stack creates an empty bucket and distribution. The SPA's files are build artifacts, not infrastructure, so they go up through the one documented CLI exception (runbook, ADR-003):
+
+```bash
+scripts/deploy-web.sh <env> --dry-run   # build and print the plan (aws s3 sync --dryrun); changes nothing
+scripts/deploy-web.sh <env>             # build, sync to the site bucket, invalidate /*, wait for it
+```
+
+- **Run it after `scripts/deploy.sh` has deployed the env's auth and web stacks.** It reads everything from SSM: `auth/user-pool-id`, `auth/spa-client-id` and `auth/identity-pool-id` become `VITE_USER_POOL_ID`, `VITE_SPA_CLIENT_ID` and `VITE_IDENTITY_POOL_ID` for `npm run build -w apps/web`, and `web/bucket-name`, `web/distribution-id` and `web/domain` say where to publish. Any missing parameter stops it before the build.
+- **Refusals:** a dirty working tree (untracked files included), expired credentials, a bucket that isn't `sched-<env>-web-*`, and a build without `index.html`, without files under `assets/`, or without the env's user pool ID in its bundle.
+- **Caching:** `assets/*` (content-hashed by Vite) get `public, max-age=31536000, immutable`; everything else (`index.html`) gets `no-cache`. Order: new assets, then `index.html` (tagged with `git-commit` metadata), then stale files are deleted, then the invalidation, so the live `index.html` never points at a missing asset.
+- **Shared `dev`:** the same rule as `deploy.sh`. It prints a note when an unmerged branch publishes to `dev` or `demo`; prefer an ephemeral env for branch work. It runs as `SchedDeployer` (S3 on `sched-*` buckets, `cloudfront:CreateInvalidation`); CloudFormation and the exec role aren't involved.
+- **Check it:** `curl -sI https://<domain>/` shows `cache-control: no-cache`; an `/assets/...` file shows the one-year `max-age`. Deep links such as `/chat` on refresh return an S3 error (403) until #99.
+- **Tests:** `scripts/deploy-web.test.ts` runs the script against stand-in `aws` and `npm` commands; change both together.
 
 ## Rules when editing templates
 

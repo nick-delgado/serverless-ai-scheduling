@@ -75,6 +75,10 @@ function head(): string {
   return spawnSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: repo, encoding: "utf8" }).stdout.trim();
 }
 
+function without(name: string): Record<string, string> {
+  return Object.fromEntries(Object.entries(SSM).filter(([key]) => key !== name));
+}
+
 function setSsm(values: Record<string, string>): void {
   rmSync(ssmDir, { recursive: true, force: true });
   mkdirSync(ssmDir);
@@ -130,7 +134,8 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe("deploy-web.sh", () => {
+// Each test spawns git and bash several times; on a busy machine that outruns the 5 s default.
+describe("deploy-web.sh", { timeout: 30_000 }, () => {
   it("builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates", () => {
     const { status, out, calls } = run(["dev"]);
     expect(status, out).toBe(0);
@@ -161,9 +166,7 @@ describe("deploy-web.sh", () => {
   it.each(["user-pool-id", "spa-client-id", "identity-pool-id"])(
     "fails before building when /sched/<env>/auth/%s is missing",
     (name) => {
-      const ssm = { ...SSM };
-      delete ssm[`/sched/dev/auth/${name}`];
-      setSsm(ssm);
+      setSsm(without(`/sched/dev/auth/${name}`));
       const { status, out, calls } = run(["dev"]);
       expect(status).toBe(1);
       expect(out).toContain(`missing SSM parameters`);
@@ -184,9 +187,7 @@ describe("deploy-web.sh", () => {
   it.each(["bucket-name", "distribution-id", "domain"])(
     "fails before building when /sched/<env>/web/%s is missing",
     (name) => {
-      const ssm = { ...SSM };
-      delete ssm[`/sched/dev/web/${name}`];
-      setSsm(ssm);
+      setSsm(without(`/sched/dev/web/${name}`));
       const { status, out, calls } = run(["dev"]);
       expect(status).toBe(1);
       expect(out).toContain(`/sched/dev/web/${name}`);
