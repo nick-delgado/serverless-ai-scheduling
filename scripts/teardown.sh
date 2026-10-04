@@ -8,7 +8,7 @@
 set -euo pipefail
 
 ORDER_REVERSED=(web api auth data)
-PROTECTED_ENVS=(dev demo) # keep in sync with scripts/deploy.sh
+PROTECTED_ENVS=(dev demo) # keep in sync with scripts/deploy.sh and scripts/deploy-web.sh
 
 env="${1:-}"
 assume_yes="${2:-}"
