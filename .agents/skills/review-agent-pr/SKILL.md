@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.04.2"
+  harness-version: "2026.10.04.3"
 ---
 
 # Review an agent-authored PR
@@ -240,6 +240,9 @@ subagent reads it. List paths and one-line descriptions; do not paste file conte
    exists, or "none". Name the files in `RUN_DIR/previous/` but say that only the verifier
    reads them. Name `RUN_DIR/changed-lines.txt`, which the reviewers do read, and say how
    many review rounds there have been.
+8. **Tracked failure classes**: the output of `<SKILL_DIR>/scripts/get-tracked-classes.sh`,
+   or, if it prints `none`, "default: `<SKILL_DIR>/references/failure-classes.md`". The
+   root-cause analyst tags each finding with one of them.
 
 ## Phase 4: Specialist reviews (parallel)
 

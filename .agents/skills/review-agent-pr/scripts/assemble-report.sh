@@ -340,6 +340,16 @@ build_process() {
   echo "<!-- agent-pr-review:process pr=$pr sha=$sha -->"
   echo "## Review of PR #$pr at \`$sha\`"
   echo
+
+  # One data line, so later batches can count failure classes per first review and per
+  # 1,000 changed lines without reading prose.
+  local round lines began version
+  if [ -s "$run/previous/report.md" ]; then round="re-review"; else round="first"; fi
+  lines="$(sed -n 's/.*"additions":\([0-9]*\).*"deletions":\([0-9]*\).*/\1 \2/p' "$run/pr.json" 2>/dev/null | head -n 1 | awk '{ print $1 + $2 }')"
+  began="$(sed -n 's/^======== [0-9a-f]* \([0-9T:Z-]*\) ========$/\1/p' "$run/commits.txt" 2>/dev/null | head -n 1)"
+  version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
+  echo "Round: ${round} · Changed lines: ${lines:-unknown} · Work began: ${began:-unknown} · Harness version: ${version:-unknown}"
+  echo
   echo "Why the agent produced the findings of that review, and what could change in the project's docs, skills, prompts, specs and guardrails. Causes are inferences from the repository: the agent's prompt and transcript were not available."
 
   printf '\n### Causes\n\n'
