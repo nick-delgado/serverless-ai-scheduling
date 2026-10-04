@@ -10,7 +10,7 @@ The chat page's scroll test ("scrolls the end of the conversation into view when
 
 The agent reproduced it before changing anything, on `main` at `7cfc08c`, by running full suites in parallel on an 8-core machine. The scroll test failed on its own only under the heavier load, and every one of those failures was a `findByText` timeout (cause 2). Cause 1 never showed up.
 
-The fix makes each step wait for its text with `until(...)` from `src/chat/testUtils.ts`. `until` counts real I/O hops and has no wall-clock limit. Each scroll check became `waitFor(...)`, so cause 1 is covered too. The test checks the same three scrolls as before.
+The fix makes each step wait for its text with `until(...)` from `src/chat/testUtils.ts`. `until` counts real I/O hops and has no wall-clock limit. Each scroll check became `waitFor(...)`, so cause 1 is covered too. The test keeps its two scroll checks, for the chip and for the reply text, and adds a wait for the sent message's own scroll before them.
 
 ## Why we chose what we chose
 
