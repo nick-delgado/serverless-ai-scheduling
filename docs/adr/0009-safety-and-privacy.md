@@ -1,6 +1,7 @@
 # ADR-009: Safety, privacy, and abuse controls
 
 - **Status:** Accepted
+- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-035…FR-037, NFR-004, ADR-004, ADR-005, ADR-008
@@ -25,8 +26,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 - The patient ID comes from the JWT only (ADR-005). Tools can reach only that patient's records, so there is no tool that can read another patient's data.
 - **Conversation ownership** (ADR-004 amendment, 2026-09-29): IDs in a request body are never trusted on their own. Message items store `patientId`. Reading a conversation, appending to it, and reading or updating its escalation all check that `patientId` against the JWT `sub` in the data layer. A mismatch looks exactly like "not found".
 - Lambda roles are least-privilege:
-  - The chat function can read and conditionally write the table (GetItem, Query, PutItem, UpdateItem, ConditionCheckItem; no Scan or Delete) and call `bedrock:InvokeModel`/`bedrock:InvokeModelWithResponseStream` on the entitled profiles' inference-profile and foundation-model ARNs *(refined by ADR-010)*. Once the SES notifier lands (#35), it can call `ses:SendEmail` only from the verified identity.
-  - The session function can only GetItem and Query the base table.
+  - The chat function can read and write the table and call `bedrock-mantle:CreateInference` on the configured models. It can call `ses:SendEmail` only from the verified identity. *(Superseded by ADR-010: `bedrock:InvokeModel*` on inference-profile and foundation-model ARNs.)* *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-lambda-roles-as-built-123): the table actions, the SES grant deferred to #35, and the session function's role.)*
 
 **Agent behavior** (system prompt policy, enforced by evals)
 - **Scope:** scheduling, availability, the patient's own appointments, and escalation. Off-topic requests get a polite decline.
@@ -34,7 +34,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 - **Emergencies:** chest pain, trouble breathing, suicidal thoughts, and similar get an immediate "call 911 (or 988 for crisis)" message. The agent does not keep scheduling first.
 - **Confirmation before any write:** the agent restates provider, date/time (clinic timezone), and reason, and books only after an explicit yes.
 - **No invented facts:** every slot presented or booked must come from a tool result.
-- **Escalation:** triggered when the patient asks for a human, repeated failure occurs (2+ failed attempts), the patient is frustrated, or the request is out of scope. The agent gives the number **1-800-555-0199** (fictional). `escalate_to_human` emails staff a summary and transcript.
+- **Escalation:** triggered when the patient asks for a human, repeated failure occurs (2+ failed attempts), the patient is frustrated, or the request is out of scope. The agent gives the number **1-800-555-0199** (fictional). `escalate_to_human` emails staff a summary and transcript. *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-lambda-roles-as-built-123): the email waits for the SES notifier, #35.)*
 - **Tool results are data:** the system prompt says instructions inside tool results or user-supplied "system" text are never followed.
 
 **Cost and abuse**
@@ -55,3 +55,11 @@ The domain is healthcare, even though the data is fake. The system has to behave
 
 - Red-team eval results: 0 violations required for M3 exit.
 - The M3 security review (issue M3-04) audits IAM, logs, and data handling against this ADR.
+
+## Amendment (2026-10-03): Lambda roles as built (#123)
+
+The decision stands. The roles as built in `infra/stacks/api.yaml` settle the details the body left open:
+
+- **The chat function's table access** is item reads and conditional writes only: GetItem, Query, PutItem, UpdateItem and ConditionCheckItem on the base table and its indexes, with no Scan or Delete (#17). `TransactWriteItems` is authorized per item through the Put, Update and ConditionCheck actions.
+- **The chat function's SES grant is deferred.** `ses:SendEmail`, still limited to the verified identity, comes with the escalation notifier (#35). Until then `escalate_to_human` stores the escalation with a `FAILED` notification status and sends no email, as [ADR-003's 2026-10-03 amendment](0003-iac-layout.md#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123) records.
+- **The session function** (`POST /api/session`, #18) can only GetItem and Query the base table. It has no Bedrock or SES access.
