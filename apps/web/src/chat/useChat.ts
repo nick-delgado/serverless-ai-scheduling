@@ -14,8 +14,10 @@
  *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`). It
  *   resends the same text with the same `clientMessageId` and `conversationId`, without adding the
  *   message again. Any other error shows its message without Retry (the daily cap's front-desk number).
- * - A 401 (the session call's or a turn's) means the sign-in has ended: `onUnauthorized` is called,
- *   which signs the patient out and so routes to sign-in.
+ * - A 401 means the sign-in has ended: the session call's 401, a turn's 401 without an event body
+ *   (API Gateway's authorizer), and a turn's `UNAUTHORIZED` error event (the chat handler's own 401).
+ *   The page shows `SIGNED_OUT_ERROR` without Retry and calls `onUnauthorized`, which signs the
+ *   patient out and so routes to sign-in.
  *
  * Restore (FR-014, #27): on load, `POST /api/session`'s conversation is shown only if it is the one
  * this login session has been using (`loginSession.ts`); otherwise the chat starts empty and the next
@@ -194,6 +196,11 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         end();
         showError(message, retryable ? { kind: "turn", text, clientMessageId } : null);
       };
+      // The sign-in has ended: say so, without Retry, and hand over to sign-in.
+      const signedOut = () => {
+        failTurn(SIGNED_OUT_ERROR, false);
+        latest.current.onUnauthorized?.();
+      };
 
       const typewriter = new Typewriter({
         instant: reducedMotion(),
@@ -234,7 +241,9 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
             break;
           }
           case "error":
-            failTurn(event.message, event.retryable);
+            // The chat handler's own 401 is an `UNAUTHORIZED` error event (ADR-007), not a throw.
+            if (event.code === "UNAUTHORIZED") signedOut();
+            else failTurn(event.message, event.retryable);
             break;
         }
       };
@@ -253,8 +262,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
         .catch((failure: unknown) => {
           if (doneReceived) return;
           if (isUnauthorized(failure)) {
-            failTurn(SIGNED_OUT_ERROR, false);
-            latest.current.onUnauthorized?.();
+            signedOut();
             return;
           }
           failTurn(GENERIC_ERROR, isNetworkFailure(failure));
