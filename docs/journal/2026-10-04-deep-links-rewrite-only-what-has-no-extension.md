@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #99, PR #95 (SPEC-1 (a)), PR #132, ADR-003, ADR-007, PRD FR-001, FR-002, FR-003, FR-016
+**Related:** issue #99, PR #152, PR #95 (SPEC-1 (a)), PR #132, ADR-003, ADR-007, PRD FR-001, FR-002, FR-003, FR-016
 
 ## What happened
 
