@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.04.1"
+  harness-version: "2026.10.04.2"
 ---
 
 # Review an agent-authored PR
@@ -137,8 +137,15 @@ user, and say who should bring the branch up to date:
 
 - **The PR has no review yet:** merge the base branch into it now (whoever works on the
   PR), then review.
-- **It has a review whose fixes are not done yet:** run `address-pr-review`, which fixes
-  first and then merges the base branch in, so the fixes still answer the review.
+- **It has a review whose fixes are not done yet** (no response from the fixing agent to
+  the latest review): run `address-pr-review`, which fixes first and then merges the base
+  branch in, so the fixes still answer the review.
+- **Its fixes are done** (the fixing agent has responded to the latest review) and the base
+  moved before this re-review or re-check: ask for `address-pr-review` in sync-only mode
+  ("bring PR <n> up to date"), which merges the base branch in, resolves or raises the
+  conflicts, and confirms CI started. Then run this review again. The conflict
+  resolutions count as the PR's own changes and are reviewed; what came in from the base
+  is not.
 
 Review only if they say to go ahead anyway; if you cannot ask (for example, running as a
 forked review), stop and report the conflict. `behind` (the base moved, no conflict) is
