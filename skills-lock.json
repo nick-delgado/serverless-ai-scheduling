@@ -5,7 +5,7 @@
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/address-pr-review/SKILL.md",
-      "computedHash": "a48b2611fde5a10c35c9f1cd556cdac257d129c84f8e42817505fc3f2099b5f0"
+      "computedHash": "5f1ca6e7e0f9aecd2c577608b11750fb58281804b5426946c9ad03534006823d"
     },
     "improve-agent-process": {
       "source": "nick-delgado/agent-review-harness",
@@ -17,7 +17,7 @@
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/review-agent-pr/SKILL.md",
-      "computedHash": "45e017f703df9d7f85a1c85884963c503e822398526d9388959a5df6bf7b94a5"
+      "computedHash": "6e2098643eda4c21cddb75379893b72a8364d0484831a9e8dc69d035a9b9973c"
     }
   }
 }

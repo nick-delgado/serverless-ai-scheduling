@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.04.1"
+  harness-version: "2026.10.04.2"
 ---
 
 # Address a PR review
@@ -44,6 +44,17 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
   (`repos/{owner}/{repo}/...`). Do not use `gh pr`, `gh issue`, `gh repo` or `gh api
   graphql`: they go through GraphQL, which some environments (Claude Code cloud sessions,
   for one) block.
+
+## Sync only
+
+When the user asks only to bring a PR up to date with its base ("bring PR 70 up to date",
+"merge main into PR 70"), or a review stopped because the PR conflicts with its base after
+the fixes were done, there is nothing to fix: do steps 2, 5 and 7, then post a short
+response. Its first line names the latest review and the new head as usual, and it says
+"Sync only: merged `<base>` at `<sha>`" with the conflicts and how each was resolved, the
+checks run, and the "On GitHub" line. Skip the findings table. Ask the owner about
+conflicts in logic exactly as step 5 says. Then recommend a re-check (step 10's sizes
+leave out what came in from the base, so it will usually qualify).
 
 ## Steps
 
