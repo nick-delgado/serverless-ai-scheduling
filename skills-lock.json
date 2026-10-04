@@ -17,7 +17,7 @@
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/review-agent-issue/SKILL.md",
-      "computedHash": "5b03ee0468d1fed47e9ad8def568d1556f0dbb0c32969070c8b24e0d32708800"
+      "computedHash": "0979af99280551e2a5072bc97d46ede15c0b4662fd6653b0c7ec76e31dc5f64d"
     },
     "review-agent-pr": {
       "source": "nick-delgado/agent-review-harness",

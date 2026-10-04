@@ -39,13 +39,24 @@ data involved. Cite each with `path:line` and what it does. Record your searches
   (`gh api --paginate "repos/{owner}/{repo}/pulls?state=open&per_page=100"`, then
   `.../pulls/<p>/files` for each): who will conflict with whom.
 
-### 5. Size
+### 5. Sibling issues
+
+Other open issues may be settled differently on the same behaviour, especially when several
+issues are prepared in one wave. List the open issues
+(`gh api --paginate "repos/{owner}/{repo}/issues?state=open&per_page=100"`, leaving out pull
+requests) and keep those that name the same files, modules, commands or behaviour as this
+issue's map. For each, read its description's "Decisions and clarifications" section and
+its readiness comments (`<!-- agent-pr-review:readiness`), including questions still
+unanswered. Quote every settled answer or open question that this issue's work must agree
+with or could contradict.
+
+### 6. Size
 
 Estimate the change: files touched, new files, rough lines of source and tests. If the
 issue holds more than one PR's worth of work (more than roughly 1,500 changed lines, or
 separable groups of criteria), suggest a split along the criteria.
 
-### 6. Risks
+### 7. Risks
 
 Anything in the code that makes the work harder than the issue suggests: missing test
 infrastructure, a shared file several issues edit, an unclear ownership boundary, a
@@ -71,6 +82,10 @@ deprecated module the work would build on.
 
 ## Dependencies and overlaps
 <each with its state>
+
+## Sibling issues
+| Issue | Overlap | Settled answers or open questions that bear on this issue (quoted) |
+|---|---|---|
 
 ## Size
 <estimate; suggested split if any>

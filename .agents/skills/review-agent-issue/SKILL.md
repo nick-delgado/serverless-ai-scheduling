@@ -1,8 +1,8 @@
 ---
 name: review-agent-issue
-description: Readiness review of a GitHub issue before an AI coding agent starts it. Fresh subagents read the issue, the project's specs and decisions, and the code, then post one comment on the issue with the questions the owner should settle first (with options and a recommendation), the assumptions the agent will otherwise follow, exact suggested edits to the issue, and reuse pointers, dependencies and risks. After the owner answers on the issue, an apply step writes the answers and accepted edits into the issue's description. Advisory. Use when asked to check, review or prepare an issue, story or task before work starts, or to apply the answers to a readiness review.
+description: Readiness review of a GitHub issue before an AI coding agent starts it, and a refresh when the spec may have moved since. Fresh subagents read the issue, the project's specs and decisions, and the code, then post one comment on the issue with the questions the owner should settle first (with options and a recommendation), the assumptions the agent will otherwise follow, exact suggested edits to the issue, and reuse pointers, dependencies and risks. After the owner answers on the issue, an apply step writes the answers and accepted edits into the issue's description. Advisory. Use when asked to check, review or prepare an issue, story or task before work starts, or to apply the answers to a readiness review.
 metadata:
-  harness-version: "2026.10.04.4"
+  harness-version: "2026.10.04.5"
 ---
 
 # Readiness review of an issue
@@ -14,7 +14,8 @@ round. This skill moves those questions to the issue, and fixes the issue's own 
 
 It is advisory: it never blocks work. The owner decides when work starts.
 
-It has two modes: **review** (the default) and **apply** (after the owner has answered).
+It has three modes: **review** (the default), **apply** (after the owner has answered) and
+**refresh** (when the spec may have moved since the issue was settled).
 All paths below are relative to the directory that contains this file (`SKILL_DIR`);
 resolve it to an absolute path once.
 
@@ -70,7 +71,7 @@ one will be (`next-round`).
 Write `RUN_DIR/manifest.md`, paths and one-line descriptions only:
 
 1. **The issue:** number, title, URL, author, creation date, labels; this round's number;
-   the default branch and its commit.
+   the default branch and its full commit (the **spec commit** of this round).
 2. **Spec sources:** the issue file and the linked issues' files; the issue's
    "Decisions and clarifications" section if it has one; earlier rounds in `previous/`.
 3. **Direction sources:** PRD, ADRs, architecture and roadmap documents in the worktree.
@@ -154,12 +155,15 @@ answers on issue 88"):
      Settled before work started, by the owner, in answer to readiness reviews. Coding
      agents and PR reviewers treat these as part of the spec.
 
-     - **r<k>/Q-<m>:** <the question> → <the answer; for a letter, the option's text> ([answer](<comment URL>))
-     - **r<k>/A-<m>:** <the assumption> → corrected: <the correction> ([answer](<comment URL>))
-     - **r<k>, assumed:** <each assumption not corrected, one per line>
+     - **r<k>/Q-<m>** (settled against `<short spec commit>`): <the question> → <the answer; for a letter, the option's text> ([answer](<comment URL>))
+     - **r<k>/A-<m>** (settled against `<short spec commit>`): <the assumption> → corrected: <the correction> ([answer](<comment URL>))
+     - **r<k>, assumed** (as of `<short spec commit>`): <each assumption not corrected, one per line>
      ```
 
-     Keep earlier rounds' entries; add this round's below them.
+     The spec commit is the one on round k's data line. Keep earlier rounds' entries; add
+     this round's below them. When this round supersedes an earlier entry (a refresh says
+     "replaces r<j>/Q-2"), append " — superseded by r<k>/<ID>" to that earlier entry rather
+     than deleting it.
 3. **Write it** to `RUN_DIR/issue-body.new.md` and update the issue:
 
    ```sh
@@ -179,6 +183,37 @@ answers on issue 88"):
    The label is a signal, not a gate.
 6. Tell the user what changed and what is still open. If an answer changed the issue's
    scope substantially, suggest another review round.
+
+## Refresh mode
+
+When the user asks to refresh an issue's readiness ("refresh the readiness of issue 88"),
+typically after a PRD or ADR amendment merged, or before work starts on an issue that was
+settled a while ago:
+
+1. **Preflight and intake** as in review mode, steps 1 and 2. The issue needs at least one
+   earlier round; if it has none, run a review instead.
+2. **Find what moved.** Take the last round's spec commit from its data line in
+   `previous/round-<k>.md` (`Spec commit:`; for rounds that predate it, the commit on the
+   "Default branch" line). Write the diff of the direction documents (the PRD, ADRs,
+   architecture and roadmap files, as the manifest would list them) since then:
+
+   ```sh
+   git -C "$RUN_DIR/worktree" diff <spec commit> HEAD -- <direction document paths> > "$RUN_DIR/spec-changes.patch"
+   ```
+
+   If the patch is empty and no sibling issue's readiness answers changed since the last
+   round's date, stop: tell the user the issue is still ready, post nothing, and remove
+   the worktree.
+3. **Manifest** as in review mode, adding `spec-changes.patch`, the last round's spec
+   commit and this round's.
+4. **One fresh subagent** with the analyst prompt from review mode, the brief
+   `analysts/refresh-analyst.md`, and these inputs added: `<RUN_DIR>/previous/`,
+   `<RUN_DIR>/spec-changes.patch`. It writes `<RUN_DIR>/readiness.md` as round k+1.
+5. **Post** as in review mode, step 6. Answers to a refresh are applied by the apply step
+   like any round, which also marks the superseded entries.
+
+Run a refresh on every ready issue a spec amendment might touch, after the amendment
+merges and before their agents start.
 
 ## How the answers are used later
 

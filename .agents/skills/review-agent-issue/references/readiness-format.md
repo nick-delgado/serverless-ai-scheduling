@@ -16,7 +16,7 @@ answers as part of the spec. The readiness verifier writes it to
 <Two or three sentences: what the issue asks for, and what most needs settling before work
 starts. Nothing about who wrote the issue or why.>
 
-Round: <k> · Questions: <n> · Assumptions: <n> · Suggested edits: <n> · Harness version: <version>
+Round: <k> · Questions: <n> · Assumptions: <n> · Suggested edits: <n> · Spec commit: <full sha of the default branch read> · Harness version: <version>
 
 **To answer:** reply on this issue with one line per item, in the form shown under each
 (`Decision r<k>/<ID>: <answer>`): an option's letter or your own words for a question,
@@ -68,6 +68,12 @@ After:
 - **Dependencies:** <issues or PRs this work needs, and their state>
 - **Overlaps:** <open PRs touching the same files>
 - **Size:** <estimate, and a suggested split if the issue is too broad>
+- **Sibling issues:** <open issues touching the same files or behaviour, and any of their
+  settled answers this issue must agree with; or "None found.">
+
+**Relied on:** <the spec sections this review's questions, assumptions and recommendations
+rest on, as `path` and heading (for example `docs/PRD.md` "FR-030"); a later refresh checks
+whether any of them changed>
 
 <details>
 <summary>What was checked</summary>
@@ -86,6 +92,7 @@ tested; the sources read; what was not checked and why>
 | **Needs answers** | At least one question. |
 | **Ready with assumptions** | No questions, but assumptions or suggested edits worth a look. |
 | **Ready** | Nothing to settle. |
+| **Still ready** | Refresh only: nothing the issue relied on changed in a way that matters. |
 
 The review is advisory: the owner decides whether work starts.
 
