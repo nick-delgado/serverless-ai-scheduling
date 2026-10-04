@@ -48,7 +48,7 @@ Requirements:
 | AP-2 | List a patient's appointments | Query `PATIENT#sub`, `begins_with(SK, "APPT#")` |
 | AP-3 | Get provider(s) by specialty | Query GSI1 `PROVIDERS`, `begins_with(<specialty>#)` |
 | AP-4 | Open slots for a provider in a date range | Query `PROVIDER#id`, `SK between SLOT#from and SLOT#to`, filter `status = OPEN` |
-| AP-5 | Open slots for a specialty on a day | Query GSI1 `OPEN#<specialty>#<date>` (sparse, so only open slots) |
+| AP-5 | Open slots for a specialty on a day | Query GSI1 `OPEN#<specialty>#<date>` (sparse, so only open slots) *(Refined by the [2026-10-03 amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123): the day is the clinic-local date.)* |
 | AP-6 | Book a slot | `TransactWriteItems`: update Slot (condition `status = OPEN`) → BOOKED, set `appointmentId`, **remove GSI1 attrs**; put Appointment (condition `attribute_not_exists(PK)`) |
 | AP-7 | Reschedule | `TransactWriteItems`: release old slot (condition `appointmentId = :appt`), book new slot (condition `status = OPEN`), update Appointment (condition `status = BOOKED`, owned by patient) |
 | AP-8 | Append/read conversation messages | Query `CONV#id` ascending; put with `attribute_not_exists` on `MSG#seq` (append-only). **Superseded by the 2026-09-29 amendment** (ownership checks) |

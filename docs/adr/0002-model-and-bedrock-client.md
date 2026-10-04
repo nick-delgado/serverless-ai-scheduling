@@ -131,4 +131,4 @@ Agreement status across every Anthropic model on the account:
 - **Client:** `AnthropicBedrock` from `@anthropic-ai/bedrock-sdk` (bedrock-runtime), behind the `LlmClient` interface. Mantle is unavailable to this account.
 - **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
 - **IAM:** `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` on the US inference-profile ARNs plus the underlying foundation-model ARNs in the US regions they route to.
-- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default.
+- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default. *(Superseded by [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123): Opus 5 and Sonnet 5 aren't entitled and are out of the matrix.)*
