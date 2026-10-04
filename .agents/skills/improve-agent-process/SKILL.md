@@ -2,7 +2,7 @@
 name: improve-agent-process
 description: Turn the findings of several agent PR reviews into one batched pull request that improves the project's agent setup. Reads the tracking issue where the review-agent-pr skill logs why agents produced each finding, counts which causes recur across reviews, selects the proposed changes to docs, skills, prompts, tests and CI checks that are worth making, checks them against the current code, and opens a single PR after the user approves the selection. Use when asked to improve, update or fix the agent process, instructions or skills from review findings, or to act on the agent process tracking issue.
 metadata:
-  harness-version: "2026.10.02"
+  harness-version: "2026.10.04.1"
 ---
 
 # Improve the agent process from review findings
@@ -28,6 +28,9 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
   (`repos/{owner}/{repo}/...`). Do not use `gh pr`, `gh issue`, `gh repo` or `gh api
   graphql`: they go through GraphQL, which some environments (Claude Code cloud sessions,
   for one) block.
+- **Temporary files outside every checkout.** Notes and comment drafts go under
+  `${TMPDIR:-/tmp}/agent-pr-review/<owner>-<repo>-process/`, as absolute paths, never in a
+  repository checkout.
 - **Instruction files stay lean.** Prefer fixing a sentence to adding one, and a mechanical
   check to a sentence.
 
