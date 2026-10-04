@@ -10,52 +10,14 @@
  *
  * Identity comes from ctx.patientId / ctx.conversationId (bound by the caller), never from input.
  */
-import { CLINIC, type ConversationMessage, type Escalation } from "@sched/contracts";
+import { CLINIC, type Escalation } from "@sched/contracts";
 
-import { formatClinicDateTime } from "../clock";
-import type { EscalationNotice, TranscriptLine } from "../notify";
+import { sendEscalationNotice } from "../notify/notice";
 import { toolFail, toolOk, type ToolContext, type ToolHandler } from "../registry";
 
-const MAX_ERROR = 500;
-
-/** Patient/assistant text only. Tool results travel in user messages; they are skipped with every non-text block. */
-function transcriptOf(messages: readonly ConversationMessage[]): TranscriptLine[] {
-  const lines: TranscriptLine[] = [];
-  for (const m of messages) {
-    const text = m.content
-      .flatMap((block) => (block.type === "text" ? [block.text.trim()] : []))
-      .filter((t) => t.length > 0)
-      .join("\n");
-    if (text) lines.push({ role: m.role === "user" ? "patient" : "assistant", text, createdAt: m.createdAt });
-  }
-  return lines;
-}
-
-async function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalation["notification"]> {
-  if (!ctx.notifier) return { status: "FAILED", error: "No notifier configured" };
-  try {
-    const [patient, messages] = await Promise.all([
-      ctx.repos.patients.get(ctx.patientId),
-      ctx.repos.conversations.listMessages(ctx.patientId, ctx.conversationId),
-    ]);
-    const notice: EscalationNotice = {
-      escalationId: escalation.escalationId,
-      conversationId: escalation.conversationId,
-      patient: patient
-        ? { firstName: patient.firstName, lastName: patient.lastName, dateOfBirth: patient.dateOfBirth }
-        : null,
-      reason: escalation.reason,
-      summary: escalation.summary,
-      createdAt: escalation.createdAt,
-      createdLocal: formatClinicDateTime(escalation.createdAt),
-      transcript: transcriptOf(messages),
-    };
-    const { messageId } = await ctx.notifier.notifyEscalation(notice);
-    return { status: "SENT", messageId };
-  } catch (error) {
-    const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    return { status: "FAILED", error: text.slice(0, MAX_ERROR) || "Unknown error" };
-  }
+function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalation["notification"]> {
+  if (!ctx.notifier) return Promise.resolve({ status: "FAILED", error: "No notifier configured" });
+  return sendEscalationNotice(escalation, ctx.patientId, { repos: ctx.repos, notifier: ctx.notifier });
 }
 
 export const escalateToHuman: ToolHandler<"escalate_to_human"> = async (input, ctx) => {
