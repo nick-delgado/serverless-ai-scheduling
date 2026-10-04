@@ -234,7 +234,12 @@ describe("session (FR-002, FR-003)", () => {
     await screen.findByRole("heading", { name: "Chat" });
     first.unmount();
 
-    const { router } = renderApp("/chat");
+    // A reload starts the app over: fresh modules, so a fresh auth service that has only what the
+    // browser stored to go on.
+    vi.resetModules();
+    const fresh = await import("../app/routes");
+    const router = createMemoryRouter(fresh.appRoutes(), { initialEntries: ["/chat"] });
+    render(<RouterProvider router={router} />);
     expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/chat");
   });
