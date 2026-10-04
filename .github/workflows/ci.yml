@@ -35,7 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # scripts/adr-history.test.ts diffs the Accepted ADRs against origin/main
+          # Full history: scripts/adr-history.test.ts diffs the Accepted ADRs against origin/main, and the
+          # changed-line coverage gate diffs the branch against its base.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -43,7 +45,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      # The whole suite with v8 coverage, then the changed-line gate (#140): every line the PR adds must
+      # run in a test, or carry a `v8 ignore` hint with a reason. PR runs diff against the PR's base;
+      # push runs leave COVERAGE_BASE empty, so the script uses origin/main.
+      - run: npm run test:coverage
+      - run: npm run coverage:changed
+        env:
+          COVERAGE_BASE: ${{ github.event.pull_request.base.sha }}
 
   cfn-lint:
     name: cfn-lint

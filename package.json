@@ -18,6 +18,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "coverage:changed": "tsx scripts/coverage-changed.ts",
     "evals": "tsx packages/evals/src/cli.ts",
     "seed:data": "tsx scripts/seed-data.ts"
   },
@@ -29,6 +31,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1143.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.0",
+    "@vitest/coverage-v8": "5.0.2",
     "amazon-cognito-identity-js": "^6.3.20",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
