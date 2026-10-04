@@ -2,7 +2,7 @@
 name: improve-agent-process
 description: Turn the findings of several agent PR reviews into one batched pull request that improves the project's agent setup. Reads the tracking issue where the review-agent-pr skill logs why agents produced each finding, counts which causes recur across reviews, selects the proposed changes to docs, skills, prompts, tests and CI checks that are worth making, checks them against the current code, and opens a single PR after the user approves the selection. Use when asked to improve, update or fix the agent process, instructions or skills from review findings, or to act on the agent process tracking issue.
 metadata:
-  harness-version: "2026.10.04.3"
+  harness-version: "2026.10.04.4"
 ---
 
 # Improve the agent process from review findings
@@ -82,7 +82,10 @@ carefully.
    (`gh api repos/{owner}/{repo}/pulls/<n>/commits --jq '.[0].commit.author.date'`) and its
    additions plus deletions, and tag the findings' failure classes yourself, saying so.
 3. **Compare, for each change:** the target class in first reviews of PRs whose work began
-   before the change's batch PR merged, against PRs whose work began after. Give findings
+   before the change's batch PR merged, against PRs whose work began after. For a
+   `practice`, compare the PRs that followed it against those that did not, where you can
+   tell (for readiness reviews: whether the PR's issue has a readiness review comment,
+   `<!-- agent-pr-review:readiness`), and fall back to before and after its start date. Give findings
    per PR, findings per 1,000 changed lines, and the share of PRs with at least one, with
    the number of PRs on each side. Count first reviews only: re-reviews measure the fixes,
    not the agent's first attempt.
@@ -226,8 +229,11 @@ Reviews considered: PRs #<n>, #<n>, ...
 | B4-4 | <title> | words | spec-deviation | decision on #70 STD-1 | #70 | taken |
 
 "Kind" is `guardrail` (a test, lint rule, CI check, type or script), `words` (instruction
-text, templates, skill prose) or `removal` (text taken out). Every row has a target from the
-tracked list below.
+text, templates, skill prose), `removal` (text taken out) or `practice` (a step in how work
+is done that is not a file in the project, such as running a readiness review of each issue
+with `review-agent-issue` before work starts; the user tells you about these, and you record
+them with the date they began). Every row has a target from the tracked list below; a
+practice may have several.
 
 ### Measurements of earlier changes
 
