@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.04"
+  harness-version: "2026.10.04.1"
 ---
 
 # Address a PR review
@@ -35,6 +35,11 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
 - **Stay inside the task's scope.** The limits that applied to the original work (the
   issue's owned paths, files not to touch) still apply. Something you cannot do within them
   is a question for the owner (step 6), never a silent skip.
+- **Temporary files outside every checkout.** Drafts, notes and the response file go under
+  `${TMPDIR:-/tmp}/agent-pr-review/<owner>-<repo>-pr-<n>/fix/`, as absolute paths, never in a
+  repository checkout where they could be committed. If whoever started you named a
+  relative scratch directory, put it under that directory, not in the repository. If you
+  start subagents of your own, give them absolute paths only.
 - **GitHub through REST only.** Use the scripts in `scripts/` and `gh api` with REST paths
   (`repos/{owner}/{repo}/...`). Do not use `gh pr`, `gh issue`, `gh repo` or `gh api
   graphql`: they go through GraphQL, which some environments (Claude Code cloud sessions,
@@ -260,7 +265,8 @@ If the description needs no change, say so in the response.
 
 ### 9. Reply on the PR
 
-Write the response to a file and post it:
+Write the response to a file in your temporary directory (see "Temporary files" above)
+and post it:
 
 ```sh
 <SKILL_DIR>/scripts/post-response.sh <pr-number> <response-file>
