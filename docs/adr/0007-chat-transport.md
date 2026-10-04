@@ -39,7 +39,7 @@ The limitations don't affect us: no VTL response transforms, no integration cach
 {"type":"status","tool":"check_availability","label":"Checking Dr. Lee's availability…"}
 {"type":"text_delta","text":"I found three openings"}
 {"type":"text_reset","keepChars":0}
-{"type":"done","conversationId":"…","messageId":"…","usage":{"inputTokens":…,"outputTokens":…,"cacheReadTokens":…}}
+{"type":"done","messageId":"…","usage":{"inputTokens":…,"outputTokens":…,"cacheReadTokens":…}}
 {"type":"error","code":"AGENT_UNAVAILABLE","message":"…","retryable":true}
 ```
 
