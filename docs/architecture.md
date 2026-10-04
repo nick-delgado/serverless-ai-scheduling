@@ -2,6 +2,8 @@
 
 This is a one-page overview; each part links to the ADR that decided it. It will be updated as spikes land. Anything still marked *Proposed* in an ADR may change.
 
+Parts marked *planned* aren't deployed yet: the SES escalation email (#35) and voice (ADR-006, spike #10, #28/#29). Until #35 lands, escalations are stored with a `FAILED` notification status.
+
 ## System diagram
 
 ```
@@ -11,10 +13,10 @@ This is a one-page overview; each part links to the ADR that decided it. It will
                          └───────┬───────────────────────┬──────────────┘
                                  │ HTTPS                 │ WebSocket (SigV4, temp creds)
                                  ▼                       ▼
-                    ┌────────────────────────┐   ┌──────────────────────────┐
-                    │ CloudFront             │   │ Amazon Transcribe        │
-                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006)      │
-                    │  /api/* → REST API     │   └──────────────────────────┘
+                    ┌────────────────────────┐   ┌──────────────────────────────┐
+                    │ CloudFront             │   │ Amazon Transcribe            │
+                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006, planned) │
+                    │  /api/* → REST API     │   └──────────────────────────────┘
                     └───────────┬────────────┘            ▲
                                 │                         │ creds via Cognito
                                 ▼                         │ Identity Pool (ADR-005)
@@ -28,12 +30,12 @@ This is a one-page overview; each part links to the ADR that decided it. It will
                     ┌────────────────────────────────────────────┐    ┌──────────────────────────────┐
                     │ ChatFn (Lambda, Node 24, streamifyResponse)│    │ SessionFn (Lambda, Node 24)  │
                     │  runAgentTurn()  — packages/agent (ADR-001)│    │  JSON greeting + restore     │
-                    │   ├─ LlmClient → Claude on Bedrock (ADR-002)│   │  DynamoDB GetItem · Query    │
+                    │   ├─ LlmClient → Bedrock Converse (ADR-010)│    │  DynamoDB GetItem · Query    │
                     │   └─ ToolRegistry — packages/tools         │    │  no Bedrock                  │
                     │       find_providers · check_availability  │    └──────────────┬───────────────┘
                     │       get_my_appointments · get_patient_profile                │
                     │       book_appointment · reschedule_appointment                │
-                    │       escalate_to_human ──► Amazon SES     │                   │
+                    │       escalate_to_human ──► SES (planned)  │                   │
                     └───────────┬────────────────────────────────┘                   │
                                 ▼                                                    │
                     ┌────────────────────────────────────────────┐                   │
@@ -45,17 +47,23 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 
 ## A chat turn, end to end
 
-1. The SPA sends `POST /api/chat {conversationId, text}` with the Cognito ID token.
+1. The SPA sends `POST /api/chat {conversationId?, clientMessageId, text}` with the Cognito ID token.
 2. The REST API authorizer validates the JWT. The Lambda receives `claims.sub` as the patient ID.
-3. ChatFn loads the conversation history (DynamoDB) and appends the patient's new message before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. It then calls `runAgentTurn` with the history **as loaded before that append** (the loop adds the user message itself, as the first entry of `newMessages`), plus:
-   - a `ToolContext` carrying the patientId **from the JWT**, the clinic timezone, and the clock;
-   - the Bedrock `LlmClient`;
+3. ChatFn counts the turn against the patient's daily cap (50, ADR-009; 429 when reached). It then loads the conversation history through the owned read (DynamoDB; an unknown or foreign `conversationId` starts a new conversation, ADR-007 amendment) and appends the patient's new message before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. It then calls `runAgentTurn` with the history **as loaded before that append** (the loop adds the user message itself, as the first entry of `newMessages`), plus:
+   - a tool executor bound to a `ToolContext` carrying the patientId **from the JWT**, the clinic timezone, and the clock (the loop itself never sees the patient ID; ADR-001 amendment);
+   - `ConverseLlmClient`;
    - the configured `ModelProfile`.
-4. The loop calls Claude. When Claude requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to Claude. This repeats until Claude ends the turn, capped at 8 iterations.
+4. The loop calls the configured model (`AGENT_MODEL_PROFILE`, default Sonnet 4.6) through Converse (ADR-010). When the model requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to the model. This repeats until the model ends the turn, capped at 8 iterations.
 5. Text deltas stream to the browser as NDJSON `text_delta` events (ADR-007). The SPA's typewriter renders them character by character.
 6. ChatFn appends the turn's remaining messages, skipping the first entry of `newMessages` (the user message it already stored), so the assistant's replies and tool results plus the turn trace go to DynamoDB, then sends `done`.
 
+## Greeting and restore
+
+On page load the SPA sends `POST /api/session` (empty body, ID token). SessionFn reads the patient's profile, next appointment and newest conversation (DynamoDB GetItem/Query only, no Bedrock) and returns the templated greeting plus that conversation's messages, one bubble per turn, as JSON with `Cache-Control: no-store` (ADR-007 amendment, ADR-004 AP-10).
+
 ## Voice input
+
+*(Planned: ADR-006 is Proposed until spike S-3, #10.)*
 
 1. Mic tap → permission prompt (first time) → recording overlay with a timer.
 2. The AudioWorklet converts the mic audio to 16 kHz PCM and streams ~100 ms chunks to Transcribe over WebSocket, using Identity Pool credentials that can do nothing else.
@@ -75,10 +83,10 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 
 ## Deployment topology
 
-| Stack | Depends on | Publishes (SSM `/sched/<env>/…`) |
+| Stack | Depends on | Publishes (SSM) |
 |---|---|---|
-| `sched-bootstrap` | — | CFN exec role ARN, artifact bucket |
-| `sched-<env>-data` | bootstrap | table name/ARN |
-| `sched-<env>-auth` | bootstrap | user pool ID, client ID, identity pool ID |
-| `sched-<env>-api` | data, auth | REST API ID/URL |
-| `sched-<env>-web` | api | CloudFront domain, site bucket |
+| `sched-bootstrap` | — | `/sched/bootstrap/`: `cfn-exec-role-arn`, `permissions-boundary-arn`, `artifact-bucket` |
+| `sched-<env>-data` | bootstrap | `/sched/<env>/data/table-name`, `data/table-arn` |
+| `sched-<env>-auth` | bootstrap | `/sched/<env>/auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id`, `auth/identity-pool-id` |
+| `sched-<env>-api` | data, auth | `/sched/<env>/api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status` |
+| `sched-<env>-web` | api | `/sched/<env>/web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |

@@ -42,15 +42,15 @@ Per-model parameter differences are captured in a `ModelProfile` so the loop cod
 
 ## Decision
 
-- **Client:** `AnthropicBedrockMantle` (TypeScript, `@anthropic-ai/bedrock-sdk`), region `us-east-1`, global routing. It sits behind our `LlmClient` interface (ADR-001), so switching to the `bedrock-runtime` path later is a one-file change.
-- **Default model:** `anthropic.claude-opus-5`, starting at `effort: "medium"` for chat latency. We tune the setting with evals rather than guessing.
-- **The model is configuration.** Environment variable `AGENT_MODEL_PROFILE` selects a `ModelProfile`. The eval harness runs a **model × effort matrix** (Opus 5, Sonnet 5, Haiku 4.5), and the production default is chosen from measured **task success, pass^k reliability, p95 latency, and cost per completed conversation**. That decision gets recorded here when M3 completes.
+- **Client:** `AnthropicBedrockMantle` (TypeScript, `@anthropic-ai/bedrock-sdk`), region `us-east-1`, global routing. It sits behind our `LlmClient` interface (ADR-001), so switching to the `bedrock-runtime` path later is a one-file change. *(Superseded by ADR-010: `ConverseLlmClient` on bedrock-runtime.)*
+- **Default model:** `anthropic.claude-opus-5`, starting at `effort: "medium"` for chat latency. We tune the setting with evals rather than guessing. *(Superseded by the interim decision below: `sonnet-4.6` is the development default until the M3 matrix, #37.)*
+- **The model is configuration.** Environment variable `AGENT_MODEL_PROFILE` selects a `ModelProfile`. The eval harness runs a **model × effort matrix** (Opus 5, Sonnet 5, Haiku 4.5), and the production default is chosen from measured **task success, pass^k reliability, p95 latency, and cost per completed conversation**. That decision gets recorded here when M3 completes. *(Refined by ADR-010 and PRD FR-042 (#123): the matrix runs the six entitled profiles, `sonnet-4.6`, `haiku-4.5`, `nova-2-lite`, `nova-pro`, `gpt-oss-120b`, `gpt-oss-20b`, with effort levels only where a profile has a reasoning switch; Opus 5 and Sonnet 5 aren't entitled and are out of it. The production profile is the cheapest by agent cost per completed conversation that meets every PRD §7 target and NFR-001, with the lower p95 breaking ties; if none qualifies, `sonnet-4.6` stays and the reason is recorded.)*
 - **Refusals:** check `stop_reason === "refusal"` before reading content. Retry once on the fallback profile (the next model in the matrix). If that fails, show a safe message and offer escalation.
-- **Caching:** tools + system prompt are cached (stable prefix). Check `usage.cache_read_input_tokens` in traces to confirm caching works.
+- **Caching:** tools + system prompt are cached (stable prefix). Check `usage.cache_read_input_tokens` in traces to confirm caching works. *(Refined by ADR-010: `TokenUsage.cacheReadTokens` in traces.)*
 
 ## Consequences
 
-- Lambda roles need `bedrock-mantle:CreateInference` scoped to the chosen model resources. The bootstrap permission set needs it for local eval runs.
+- Lambda roles need `bedrock-mantle:CreateInference` scoped to the chosen model resources. The bootstrap permission set needs it for local eval runs. *(Superseded by ADR-010: `bedrock:InvokeModel*` on inference-profile and foundation-model ARNs.)*
 - If model invocation logging doesn't capture Mantle calls, our own per-turn trace (ADR-001) is the source of truth for observability. Spike S-1 checks this.
 - **Revisit if:**
   - spike S-1 shows Mantle is unavailable or unreliable for a model in `us-east-1`; or

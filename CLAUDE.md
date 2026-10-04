@@ -28,7 +28,7 @@ A serverless AI scheduling assistant, built as a portfolio proof-of-concept. A p
 
 ```
 apps/web/            React + Vite SPA (login, chat, voice)
-services/api/        Lambda handlers (chat stream, greeting, history)
+services/api/        Lambda handlers: POST /api/chat (streaming agent turn), POST /api/session (greeting + restore)
 packages/contracts/  Zod schemas: domain types, API stream events, tool inputs/outputs
 packages/agent/      Agent loop, LlmClient, model profiles, prompts
 packages/tools/      Tool implementations, repository interfaces, in-memory + DynamoDB repos
@@ -41,11 +41,11 @@ docs/                PRD, ADRs, research, runbooks, journal, backlog map
 .agents/skills/      Installed review-harness skills (npx skills; pinned in skills-lock.json, symlinked into .claude/skills/)
 ```
 
-These directories are created as the milestones land. If a directory doesn't exist yet, check `docs/backlog.md` for the issue that creates it rather than inventing a structure.
+New top-level directories come from an issue; check `docs/backlog.md` rather than inventing a structure.
 
 ## Commands
 
-Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`; package names `@sched/<dir>`):
+Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`, `spikes/*`; package names `@sched/<dir>`, spikes `@sched/spike-<dir>`). Spikes are installed and typechecked but have no Vitest project:
 
 ```bash
 npm ci                                   # install
@@ -63,7 +63,7 @@ npm run evals -- --suite smoke --mode l1 --profile sonnet-4.6 --trials 1        
 npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; an LLM plays the patient (--simulator-profile or SIMULATOR_MODEL_PROFILE, default sonnet-4.6), so it costs more than L1
 ```
 
-Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
+Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls), `--out <dir>`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
 
 Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
@@ -92,7 +92,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Profile: `sched-dev` (IAM Identity Center SSO). Region: `us-east-1`. If credentials are expired, ask Nick to run `aws sso login --profile sched-dev`.
 - **All AWS resources come from CloudFormation/SAM.** The only manual or CLI exceptions are listed in `docs/runbooks/aws-setup.md` (Identity Center, Bedrock model access, SES identity verification click, SPA asset sync + CloudFront invalidation, demo-user seeding).
 - Stacks are named `sched-<env>-<stack>` (e.g., `sched-dev-data`). Cross-stack values go through SSM parameters under `/sched/<env>/...`. Only touch `sched-*` stacks.
-- Deploys run through the CloudFormation execution role (`--role-arn` from the bootstrap stack output).
+- Deploys run through the CloudFormation execution role (`--role-arn` from SSM `/sched/bootstrap/cfn-exec-role-arn`, published by the bootstrap stack).
 - **Ask before destructive operations:** deleting a stack, deleting or overwriting table data, or anything touching the bootstrap stack.
 - Model profiles (`AGENT_MODEL_PROFILE`, `packages/agent/src/profiles.ts`), all called through Converse:
   - **Development default:** `sonnet-4.6` (`us.anthropic.claude-sonnet-4-6`).
@@ -125,7 +125,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 
 - Every acceptance criterion in the issue is met.
 - Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)). Start from the code you wrote, not from your tests: break each thing it does on its own (each `&&`/`||`/`??` operand, ternary or regex branch, flag, guard and threshold; each value it passes on, such as a default, a copied field, a key, or an injected clock or option; each ordering and wait) and see a test go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
-- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates.
+- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
   - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).
