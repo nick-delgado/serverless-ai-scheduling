@@ -9,7 +9,6 @@ import {
   cognitoMockStats,
   configureCognitoMock,
   expireCognitoSessions,
-  resetCognitoMock,
 } from "../mocks/cognito";
 import { MOCK_COGNITO_CONFIG, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { server } from "../mocks/node";
@@ -25,10 +24,7 @@ beforeEach(() => {
   auth = createAmplifyAuthService(() => MOCK_COGNITO_CONFIG);
 });
 
-afterEach(() => {
-  resetCognitoMock();
-  vi.restoreAllMocks();
-});
+afterEach(() => vi.restoreAllMocks());
 
 /** A JWT's payload (the mock's tokens are unsigned). */
 function claims(token: string | undefined): Record<string, unknown> {

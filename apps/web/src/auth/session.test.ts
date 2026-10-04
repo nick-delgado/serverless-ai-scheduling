@@ -4,7 +4,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetCognitoMock } from "../mocks/cognito";
 import { MOCK_COGNITO_CONFIG, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 
 beforeEach(() => {
@@ -16,7 +15,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  resetCognitoMock();
 });
 
 async function signInWithAppService() {

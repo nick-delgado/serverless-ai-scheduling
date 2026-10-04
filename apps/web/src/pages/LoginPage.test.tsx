@@ -14,7 +14,7 @@ import type { AuthService, SignInResult } from "../auth/authService";
 import { SignOutButton } from "../auth/SignOutButton";
 import { getIdToken } from "../auth/session";
 import { fakeAuthService } from "../auth/testing";
-import { configureCognitoMock, expireCognitoSessions, resetCognitoMock } from "../mocks/cognito";
+import { configureCognitoMock, expireCognitoSessions } from "../mocks/cognito";
 import { MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { LOGIN_ERRORS } from "./LoginPage";
 
@@ -22,10 +22,7 @@ import { LOGIN_ERRORS } from "./LoginPage";
 vi.setConfig({ testTimeout: 20_000 });
 
 beforeEach(() => localStorage.clear());
-afterEach(() => {
-  resetCognitoMock();
-  vi.restoreAllMocks();
-});
+afterEach(() => vi.restoreAllMocks());
 
 /** Render the app at `path`, with the real (mock-backed) auth service unless `auth` is given. */
 function renderApp(path: string, auth?: AuthService) {
