@@ -96,7 +96,8 @@ const ExportSource = z.object({
 interface Candidate {
   scenario: Scenario;
   trial: number;
-  status: "pass" | "fail";
+  /** Any status; selection only picks `pass` and `fail`. */
+  status: string;
   events: TranscriptEvent[];
 }
 
@@ -143,7 +144,7 @@ export async function exportCalibration(
     const scenario = byId.get(c.id);
     if (scenario === undefined || judgedDimensions(scenario).length === 0) return [];
     return c.trials.flatMap((t) =>
-      (t.status === "pass" || t.status === "fail") && t.events.length > 0
+      t.events.length > 0
         ? [{ scenario, trial: t.trial, status: t.status, events: t.events as TranscriptEvent[] }]
         : [],
     );
@@ -162,7 +163,7 @@ export async function exportCalibration(
       scenarioId: c.scenario.id,
       trial: c.trial,
       category: c.scenario.category,
-      status: c.status,
+      status: c.status as "pass" | "fail", // selectCalibrationTrials picks only these
       dimensions: judgedDimensions(c.scenario),
       agentSystemPrompt: agentPromptText(prompt),
       events: c.events,
@@ -194,7 +195,7 @@ export function emptyLabels(
 
 /** Whether a labels file holds any human score (an export must not overwrite one that does). */
 export const hasLabels = (labels: LabelsFile): boolean =>
-  labels.labels.some((l) => Object.values(l.scores).some((s) => s !== null && s !== undefined));
+  labels.labels.some((l) => Object.values(l.scores).some((s) => typeof s === "number"));
 
 /** One (transcript, dimension) pair with both a human and a judge score. */
 export interface ScorePair {

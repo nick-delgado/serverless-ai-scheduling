@@ -172,6 +172,9 @@ describe("labels", () => {
     expect(hasLabels(empty)).toBe(false);
     expect(hasLabels({ ...empty, labels: [{ id: "a#1", scores: { tone: null, clarity: 4 } }] })).toBe(true);
     expect(hasLabels({ ...empty, labels: [{ id: "a#1", scores: {} }] })).toBe(false);
+    // A labels file built in code (not parsed JSON) may hold an explicit undefined.
+    const undef = { tone: undefined } as unknown as LabelsFile["labels"][number]["scores"];
+    expect(hasLabels({ ...empty, labels: [{ id: "a#1", scores: undef }] })).toBe(false);
   });
 
   it("labelledDimensions keeps only filled-in scores of listed dimensions", () => {

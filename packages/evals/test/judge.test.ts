@@ -31,7 +31,7 @@ import {
   type JudgeInput,
   type RubricDimension,
 } from "../src";
-import { call, systemText, userText } from "./helpers";
+import { assistant, call, systemText, userText } from "./helpers";
 import { cost, EVENTS, FixedJudge, QUOTE, reply, scored } from "./judge-helpers";
 
 /** A scenario's `expect`, with only what dimension selection reads. */
@@ -163,6 +163,8 @@ describe("parseJudgeReply", () => {
   it("matches a quote with its whitespace re-wrapped, but not an invented one", () => {
     expect(parse(reply({ tone: 4 }, "Shall   I\nbook it?")).ok).toBe(true);
     expect(normalizeWhitespace("  a \n\t b  ")).toBe("a b");
+    const wrapped = renderJudgeTranscript([assistant("Shall  I\n  book it?")]);
+    expect(parseJudgeReply(reply({ tone: 4 }, "Shall I book it?"), ["tone"], wrapped).ok).toBe(true);
     expect(parse(reply({ tone: 4 }, "I booked it for you."))).toEqual({
       ok: false,
       problems: ['tone: the quote "I booked it for you." is not in the transcript'],

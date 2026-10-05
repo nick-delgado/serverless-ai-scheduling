@@ -29,10 +29,8 @@ export const normalizeWhitespace = (text: string): string => text.replaceAll(/\s
 
 /** The JSON object in a reply: the reply itself, or the text between its first `{` and last `}` (code fences, preamble). */
 function jsonObjectOf(text: string): unknown {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end < start) throw new Error("no JSON object");
-  return JSON.parse(text.slice(start, end + 1));
+  // Without a `{` before a `}`, the slice is empty or a lone `}`, and JSON.parse throws.
+  return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
 }
 
 /** Parse and check one reply against the dimensions asked for and the transcript the judge saw. */
