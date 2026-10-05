@@ -1,10 +1,19 @@
 /**
  * Runs a suite (many cases × k trials) and aggregates the ADR-008 metrics: pass@1, pass^k, safety
- * violations, L1 tool-call accuracy, latency, cost, and wall-clock.
+ * violations, L1 tool-call accuracy, latency, cost, and wall-clock. In scenario mode it also reports the
+ * LLM judge's scores beside them (#32): they never change a case's status.
  */
 import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
+import type { GraderResult } from "./graders";
+import {
+  JUDGE_RUBRIC_VERSION,
+  RUBRIC_DIMENSIONS,
+  unrubricedInUse,
+  type RubricDimension,
+  type TrialJudge,
+} from "./judge";
 import { L1_ACTION, runL1Trial, type L1TrialResult } from "./l1";
 import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";
@@ -33,6 +42,24 @@ export interface CaseResult {
   trials: (TrialResult | L1TrialResult)[];
 }
 
+/** The LLM judge's part of a scenario run (#32, r1/A-12). Reported beside pass@1, never inside it. */
+export interface JudgeSummary {
+  /** The judge's calls, outside `RunSummary.costUsd` (r1/Q-2 (a)). */
+  costUsd: number;
+  /** Trials with at least one score. */
+  judgedTrials: number;
+  /** `judge.*` results below the pass score, over every trial. */
+  fails: number;
+  /** Trials the judge gave no verdict for (`TrialResult.judgeError`). */
+  errors: number;
+  /** Mean score per rubric dimension that was scored. */
+  meanScores: Partial<Record<RubricDimension, number>>;
+  /** Mean of every `tone` and `clarity` score (PRD §7's judge rubric average), when there are any. */
+  rubricAverage?: number;
+  /** `judge:` entries with no rubric, which report `skip`, and the scenarios of this run that list them. */
+  unrubriced: { dimension: string; scenarioIds: string[] }[];
+}
+
 export interface RunSummary {
   cases: number;
   ran: number;
@@ -57,6 +84,8 @@ export interface RunSummary {
   costUsd: number;
   /** Scenario mode: the patient simulator's share of `costUsd` (#31). */
   simulatorCostUsd?: number;
+  /** Scenario mode: the LLM judge (#32). */
+  judge?: JudgeSummary;
 }
 
 export interface RunReport {
@@ -69,6 +98,8 @@ export interface RunReport {
   pricesAsOf: string;
   trialsPerCase: number;
   simulator?: string;
+  /** Scenario mode with the judge on: which judge, on which model, with which rubrics (#32). */
+  judge?: { name: string; profile: string; modelId: string; rubricVersion: string };
   llm: string;
   startedAt: string;
   finishedAt: string;
@@ -92,6 +123,8 @@ export interface RunSuiteOptions {
   systemPrompt?: SystemPromptFactory;
   registry?: ToolRegistry;
   simulator?: PatientSimulator;
+  /** Scenario mode: the LLM judge and its profile (#32). Undefined: the judge is off. */
+  judge?: { judge: TrialJudge; profile: ModelProfile };
   /** Stop starting new trials once estimated spend reaches this (USD); the trial in flight can go over. */
   maxCostUsd?: number;
   /** Counters of the rate-limited client, read into the report when the run ends. */
@@ -112,7 +145,44 @@ function caseStatus(trials: readonly { status: string }[]): CaseStatus {
   return trials.every((t) => t.status === "pass") ? "pass" : "fail";
 }
 
-export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary {
+const mean = (values: readonly number[]): number | undefined =>
+  values.length === 0 ? undefined : values.reduce((a, b) => a + b, 0) / values.length;
+
+const judgeResults = (t: TrialResult | L1TrialResult): GraderResult[] =>
+  t.graders.filter((g) => g.kind === "judge");
+
+/** The judge's summary over the trials that ran. */
+export function summarizeJudge(
+  trials: readonly (TrialResult | L1TrialResult)[],
+  unrubriced: JudgeSummary["unrubriced"],
+): JudgeSummary {
+  const scenarioTrials = trials.filter((t): t is TrialResult => t.kind === "scenario");
+  const scores = (d: string) =>
+    scenarioTrials.flatMap((t) =>
+      judgeResults(t).flatMap((g) => (g.name === `judge.${d}` && g.score !== undefined ? [g.score] : [])),
+    );
+  const meanScores: JudgeSummary["meanScores"] = {};
+  for (const d of RUBRIC_DIMENSIONS) {
+    const m = mean(scores(d));
+    if (m !== undefined) meanScores[d] = m;
+  }
+  const rubricAverage = mean([...scores("tone"), ...scores("clarity")]);
+  return {
+    costUsd: scenarioTrials.reduce((s, t) => s + t.judgeCost.costUsd, 0),
+    judgedTrials: scenarioTrials.filter((t) => judgeResults(t).some((g) => g.score !== undefined)).length,
+    fails: scenarioTrials.reduce((s, t) => s + judgeResults(t).filter((g) => g.status === "fail").length, 0),
+    errors: scenarioTrials.filter((t) => t.judgeError !== undefined).length,
+    meanScores,
+    ...(rubricAverage === undefined ? {} : { rubricAverage }),
+    unrubriced,
+  };
+}
+
+export function summarize(
+  mode: Mode,
+  cases: readonly CaseResult[],
+  unrubriced: JudgeSummary["unrubriced"] = [],
+): RunSummary {
   const ran = cases.filter((c) => c.status !== "skip");
   const trials = ran.flatMap((c) => c.trials);
   const latencies =
@@ -138,6 +208,7 @@ export function summarize(mode: Mode, cases: readonly CaseResult[]): RunSummary 
             (s, t) => s + (t.kind === "scenario" ? t.simulatorCost.costUsd : 0),
             0,
           ),
+          judge: summarizeJudge(trials, unrubriced),
         }
       : {}),
     ...(mode === "l1"
@@ -179,6 +250,7 @@ export async function runSuite(
             ...(options.registry === undefined ? {} : { registry: options.registry }),
           },
           ...(options.simulator === undefined ? {} : { simulator: options.simulator }),
+          ...(options.judge === undefined ? {} : { judge: options.judge.judge }),
         });
   };
 
@@ -191,7 +263,8 @@ export async function runSuite(
         break;
       }
       const result = await runTrial(c, trial);
-      spent += result.costUsd;
+      // The budget sees every call: the conversation's, and the judge's (r1/Q-2 (a)).
+      spent += result.costUsd + (result.kind === "scenario" ? result.judgeCost.costUsd : 0);
       trials.push(result);
       options.onTrial?.(c.id, result);
       if (result.status === "skip") break; // a skip reason holds for every trial
@@ -226,24 +299,64 @@ export async function runSuite(
     pricesAsOf: PRICES_AS_OF,
     trialsPerCase: options.trials,
     ...(options.mode === "scenario" ? { simulator: (options.simulator ?? scriptOnlySimulator).name } : {}),
+    ...(options.mode === "scenario" && options.judge !== undefined
+      ? {
+          judge: {
+            name: options.judge.judge.name,
+            profile: options.judge.profile.name,
+            modelId: options.judge.profile.modelId,
+            rubricVersion: JUDGE_RUBRIC_VERSION,
+          },
+        }
+      : {}),
     llm: options.llmName,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     wallClockMs: Math.round(performance.now() - t0),
     ...(options.maxCostUsd === undefined ? {} : { maxCostUsd: options.maxCostUsd }),
     ...(options.rateLimit === undefined ? {} : { rateLimit: { ...options.rateLimit.stats } }),
-    summary: summarize(options.mode, results),
+    summary: summarize(
+      options.mode,
+      results,
+      unrubricedInUse(cases.filter((c): c is Scenario => !isL1Case(c))),
+    ),
     cases: results,
   };
 }
 
-/** What went wrong in a trial: each failed grader as `name: detail`, then the trial's reason, if any. */
+/**
+ * What went wrong in a trial: each failed deterministic grader as `name: detail`, then the trial's
+ * reason, if any. Judge scores below the pass mark are `judgeFails`, since they don't fail a trial.
+ */
 export const failedChecks = (t: TrialResult | L1TrialResult): string[] => [
-  ...t.graders.filter((g) => g.status === "fail").map((g) => `${g.name}: ${g.detail ?? ""}`),
+  ...t.graders
+    .filter((g) => g.kind !== "judge" && g.status === "fail")
+    .map((g) => `${g.name}: ${g.detail ?? ""}`),
   ...(t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
 ];
 
+/** The judge's scores below the pass mark in a trial, as `judge.<dimension> <score>/5`. */
+export const judgeFails = (t: TrialResult | L1TrialResult): string[] =>
+  judgeResults(t)
+    .filter((g) => g.status === "fail")
+    .map((g) => `${g.name} ${String(g.score)}/5`);
+
 const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+
+/** The judge's line in the markdown summary, and the unrubriced dimensions, if any. */
+function judgeLines(report: RunReport, j: JudgeSummary): string[] {
+  const means = Object.entries(j.meanScores)
+    .map(([d, m]) => `${d} ${m.toFixed(2)}`)
+    .join(", ");
+  return [
+    `- Judge: ${report.judge === undefined ? "off" : `${report.judge.name} (\`${report.judge.modelId}\`)`} · cost $${j.costUsd.toFixed(4)} (not in the estimate above) · ${j.judgedTrials} trial(s) judged · ${j.fails} score(s) below 4 · ${j.errors} judge error(s)${j.rubricAverage === undefined ? "" : ` · rubric average (tone, clarity) ${j.rubricAverage.toFixed(2)}`}${means === "" ? "" : ` · means: ${means}`}`,
+    ...(j.unrubriced.length === 0
+      ? []
+      : [
+          `- Judge dimensions without a rubric (skipped): ${j.unrubriced.map((u) => `${u.dimension} (${u.scenarioIds.join(", ")})`).join("; ")}`,
+        ]),
+  ];
+}
 
 /** A short markdown summary for the terminal and the `.md` next to the JSON. */
 export function markdownSummary(report: RunReport): string {
@@ -256,16 +369,18 @@ export function markdownSummary(report: RunReport): string {
     `- pass@1 ${pct(s.passAt1)} · pass^k ${pct(s.passHatK)}${s.toolCallAccuracy === undefined ? "" : ` · tool-call accuracy ${pct(s.toolCallAccuracy)}`} · safety violations ${s.safetyViolations}${s.budgetStopped > 0 ? ` · budget guard stopped ${s.budgetStopped} case(s)` : ""}${s.llmRetries === undefined ? "" : ` · model retries ${s.llmRetries}`}`,
     `- Latency p50 ${s.latencyMs.p50} ms · p95 ${s.latencyMs.p95} ms · wall-clock ${(report.wallClockMs / 1000).toFixed(1)} s`,
     `- Estimated cost $${s.costUsd.toFixed(4)}${s.simulatorCostUsd === undefined ? "" : ` (simulator $${s.simulatorCostUsd.toFixed(4)})`} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
+    ...(s.judge === undefined ? [] : judgeLines(report, s.judge)),
     "",
-    "| Case | Status | Pass rate | Failed checks |",
-    "|---|---|---|---|",
+    "| Case | Status | Pass rate | Failed checks | Judge below 4 |",
+    "|---|---|---|---|---|",
   ];
   for (const c of report.cases) {
     const failed = [
       ...new Set([...(c.reason === undefined ? [] : [c.reason]), ...c.trials.flatMap(failedChecks)]),
     ];
+    const judged = [...new Set(c.trials.flatMap(judgeFails))];
     lines.push(
-      `| ${c.id} | ${c.status} | ${c.status === "skip" ? "–" : pct(c.passRate)} | ${failed.join("<br>").replaceAll("|", "\\|").slice(0, 400)} |`,
+      `| ${c.id} | ${c.status} | ${c.status === "skip" ? "–" : pct(c.passRate)} | ${failed.join("<br>").replaceAll("|", "\\|").slice(0, 400)} | ${judged.join("<br>")} |`,
     );
   }
   return lines.join("\n");

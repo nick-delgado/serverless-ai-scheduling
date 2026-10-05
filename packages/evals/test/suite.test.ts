@@ -18,6 +18,7 @@ import {
   markdownSummary,
   runSuite,
   summarize,
+  zeroJudgeCost,
   type RateLimitStats,
   type TrialResult,
 } from "../src";
@@ -197,6 +198,7 @@ describe("runSuite / summarize", () => {
         costUsd: 0,
         llmCalls: 0,
       },
+      judgeCost: zeroJudgeCost(),
       durationMs: 5000,
       turnDurationsMs: [10, 20, 30],
     };

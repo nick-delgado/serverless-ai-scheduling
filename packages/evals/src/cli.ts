@@ -14,20 +14,29 @@
  * agent, so both share one per-model quota. `--replay <results.json>` replays a run's recorded
  * simulator turns instead (no simulator calls).
  *
+ * Scenario runs are judged by the LLM judge (#32) on `--judge-profile` (default `JUDGE_MODEL_PROFILE`,
+ * else `haiku-4.5`), through the same client; `--no-judge` turns it off. Its scores are reported beside
+ * each trial's status and never change it; its cost is reported apart and counts toward `--max-cost`.
+ * Calibration: `--export-calibration <results.json>` writes transcripts and an empty labels file to
+ * `--calibration-dir` (default `packages/evals/calibration`); `--calibrate` judges the labelled ones and
+ * reports judge–human agreement.
+ *
  * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
  * (list cases and the estimate, no calls), `--out <dir>`.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ConverseLlmClient } from "@sched/agent";
 
 import {
+  calibrationStep,
   caseSkipReason,
   CliArgError,
   estimateRunCost,
   exitCodeFor,
+  judgeSetup,
   parseCliArgs,
   resultsBasePath,
   selectCases,
@@ -58,14 +67,35 @@ function orUsageError<T>(step: () => T): T {
 async function main(): Promise<void> {
   const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR));
   const { mode, suite, trials, maxCostUsd, profile } = args;
-  const cases = selectCases(loadScenarios(), args);
-  if (cases.length === 0) fail("no cases match");
+  const loaded = loadScenarios();
 
-  // One rate-limited client for the agent and the simulator: one quota per model ID (#31).
+  // One rate-limited client for the agent, the simulator and the judge: one quota per model ID (#31, #32).
   const llm = rateLimited(new ConverseLlmClient({ maxAttempts: 1 }), {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
+  const judging = orUsageError(() => judgeSetup(args, { llm }));
+  if (args.calibration !== undefined) {
+    const readJson = (path: string): unknown =>
+      existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    const writeFile = (path: string, text: string) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+    };
+    const step = calibrationStep(args, judging, {
+      readJson,
+      writeFile,
+      scenarios: loaded.scenarios,
+      log: console.log,
+    });
+    await step.catch((error: unknown) =>
+      error instanceof CliArgError ? fail(error.message) : Promise.reject(error),
+    );
+    return;
+  }
+
+  const cases = selectCases(loaded, args);
+  if (cases.length === 0) fail("no cases match");
   const setup = orUsageError(() =>
     simulatorSetup(args, {
       llm,
@@ -78,9 +108,9 @@ async function main(): Promise<void> {
     const why = caseSkipReason(c, simulator);
     return why === undefined ? [] : [`  skip ${c.id}: ${why}`];
   });
-  const estimate = estimateRunCost(cases, profile, trials, setup);
+  const estimate = estimateRunCost(cases, profile, trials, setup, judging);
   console.log(
-    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}. Estimated cost ≈ $${estimate.toFixed(4)} (budget guard $${maxCostUsd}).`,
+    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}${judging.kind === "llm" ? `, judge ${judging.judge.name}` : ""}. Estimated cost ≈ $${estimate.toFixed(4)}, judge included (budget guard $${maxCostUsd}).`,
   );
   for (const line of skips) console.log(line);
   if (args.dryRun) return;
@@ -95,6 +125,7 @@ async function main(): Promise<void> {
     maxCostUsd,
     rateLimit: llm,
     ...(simulator === undefined ? {} : { simulator }),
+    ...(judging.kind === "llm" ? { judge: { judge: judging.judge, profile: judging.profile } } : {}),
     onTrial: (id, t) =>
       console.log(
         `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,

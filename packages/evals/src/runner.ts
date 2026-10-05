@@ -2,7 +2,8 @@
  * Multi-turn scenario runner (L2/L3, ADR-008). Each trial gets a fresh `TrialEnvironment` and drives the
  * real `runAgentTurn` turn by turn: scripted patient messages first, then the `PatientSimulator` (#31),
  * until the simulator stops or `max_turns` is reached. The transcript and the before/after repository
- * snapshots then go to the deterministic graders.
+ * snapshots then go to the deterministic graders, and the transcript to the LLM judge (#32), whose
+ * results are reported beside the trial's status and never change it.
  */
 import {
   estimateCostUsd,
@@ -17,6 +18,7 @@ import type { ToolRegistry } from "@sched/tools";
 import { errorReason } from "./util";
 import { createTrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
+import { agentPromptText, gradeWithJudge, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge";
 import type { Scenario } from "./schema";
 import {
   addUsage,
@@ -70,6 +72,10 @@ export interface TrialResult {
   costUsd: number;
   /** The simulator's share of the conversation: tokens, model calls and cost (#31). */
   simulatorCost: SimulatorCost;
+  /** The judge's calls (#32): not part of `costUsd` (r1/Q-2 (a)); the budget guard adds it. */
+  judgeCost: JudgeCost;
+  /** Why the judge gave no verdict for this trial (its results are then `skip`, r1/A-9). */
+  judgeError?: string;
   durationMs: number;
   /** Per-turn wall-clock durations, ms. */
   turnDurationsMs: number[];
@@ -78,6 +84,8 @@ export interface TrialResult {
 export interface RunScenarioOptions {
   agent: AgentUnderTest;
   simulator?: PatientSimulator;
+  /** The LLM judge (#32). Undefined: the judge is off, and its dimensions report `skip`. */
+  judge?: TrialJudge;
   trial?: number;
 }
 
@@ -101,6 +109,7 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
     llmRetries: 0,
     costUsd: 0,
     simulatorCost: zeroSimulatorCost(),
+    judgeCost: zeroJudgeCost(),
     durationMs: 0,
     turnDurationsMs: [],
   };
@@ -225,6 +234,16 @@ export async function runScenarioTrial(
       slotIds: env.faultsFired.flatMap((f) => (f.takenSlotId ? [f.takenSlotId] : [])),
     },
   });
+  // The trial's duration is the conversation's; judging comes after.
+  const durationMs = Math.round(performance.now() - started);
+  const judged = await gradeWithJudge({
+    scenario,
+    events,
+    agentSystemPrompt: agentPromptText(system),
+    judge: options.judge,
+    trialErrored: error !== undefined,
+  });
+  graders.push(...judged.graders);
   const passed = trialPassed(graders);
   return {
     kind: "scenario",
@@ -244,7 +263,9 @@ export async function runScenarioTrial(
     llmRetries,
     costUsd: costUsd + simulatorCost.costUsd,
     simulatorCost,
-    durationMs: Math.round(performance.now() - started),
+    judgeCost: judged.cost,
+    ...(judged.error === undefined ? {} : { judgeError: judged.error }),
+    durationMs,
     turnDurationsMs,
   };
 }

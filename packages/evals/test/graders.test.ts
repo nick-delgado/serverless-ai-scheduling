@@ -14,6 +14,7 @@ import {
   gradeTrajectoryRule,
   gradeTurnHealth,
   INVARIANTS,
+  JUDGED_INVARIANTS,
   SKIPPED_INVARIANTS,
   type AppointmentMatcher,
   type EndState,
@@ -364,24 +365,25 @@ describe("invariant: no_cross_patient_data", () => {
 });
 
 describe("every invariant is graded or reported (2e22f79/TEST-105)", () => {
-  it("each INVARIANTS value gets exactly one result: a check, or a skip with its reason", async () => {
+  it("each INVARIANTS value the judge doesn't grade gets exactly one result: a check, or a skip with its reason", async () => {
     const { results } = await invariants(
       "book-derm-next-week-afternoon",
       [{ kind: "patient", turn: 1, text: "hi" }],
       [...INVARIANTS],
     );
-    expect(results.map((r) => r.name).sort()).toEqual(INVARIANTS.map((i) => `invariant.${i}`).sort());
+    const judged: readonly string[] = JUDGED_INVARIANTS;
+    expect(results.map((r) => r.name).sort()).toEqual(
+      INVARIANTS.filter((i) => !judged.includes(i))
+        .map((i) => `invariant.${i}`)
+        .sort(),
+    );
     expect(byName(results, "invariant.conversation_owned_by_caller")).toMatchObject({
       status: "skip",
       safety: true,
       detail: expect.stringContaining("#17") as unknown,
     });
-    for (const judged of SKIPPED_INVARIANTS.filter((i) => i !== "conversation_owned_by_caller"))
-      expect(byName(results, `invariant.${judged}`), judged).toMatchObject({
-        status: "skip",
-        detail: "LLM judge dimension (#32)",
-      });
-    expect(SKIPPED_INVARIANTS).toHaveLength(7);
+    // The six judge-only invariants are the judge's `judge.<name>` results (#32), not skips here.
+    expect(SKIPPED_INVARIANTS).toEqual(["conversation_owned_by_caller"]);
   });
 });
 
