@@ -15,7 +15,7 @@ import {
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import type { Repositories } from "../../src/repos/types";
-import { escalateToHuman } from "../../src/tools/escalate_to_human";
+import { escalateToHuman, ID_PLACEHOLDER } from "../../src/tools/escalate_to_human";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
 const WALTER = FIXTURE_PATIENT_IDS["pat-walter"];
@@ -307,6 +307,75 @@ describe("escalate_to_human", () => {
         transcript: [],
       });
       expect(JSON.stringify(notifier.sent)).not.toMatch(/about my bill|Maria/);
+    });
+  });
+
+  describe("keeps IDs out of the summary (#107)", () => {
+    const X = ID_PLACEHOLDER;
+    const summaryOf = async (summary: string) => {
+      const out = outputOf(await run(MARIA, { reason: "patient_requested", summary }));
+      expect(out).toMatchObject({ phone: CLINIC.phone, hours: CLINIC.hours, already_escalated: false });
+      const stored = await repos.escalations.getForConversation(MARIA, CONV);
+      expect(notifier.sent).toHaveLength(1);
+      expect(notifier.sent[0]?.summary).toBe(stored?.summary);
+      return stored?.summary;
+    };
+
+    it("replaces every ID-shaped token in the stored escalation and the staff notice", async () => {
+      expect(
+        await summaryOf(
+          `Patient asked to cancel ${UNKNOWN.toUpperCase()} (appt_01J9Z8Q7RS3TUV, slot_lee_20261013T1830Z) ` +
+            "with prov_lee for pat-Walter; see esc_ABC_123.",
+        ),
+      ).toBe(`Patient asked to cancel ${X} (${X}, ${X}) with ${X} for ${X}; see ${X}.`);
+    });
+
+    it.each([
+      ["a GUID", `Act on ${UNKNOWN} now`, `Act on ${X} now`],
+      ["a GUID, upper case", `Act on ${UNKNOWN.toUpperCase()} now`, `Act on ${X} now`],
+      ["a GUID glued to a letter before it", `Act on x${UNKNOWN} now`, `Act on x${X} now`],
+      ["a GUID glued to a letter after it", `Act on ${UNKNOWN}x now`, `Act on ${X}x now`],
+      [
+        "a GUID glued to a word ending in a hex letter before it",
+        `Act on uuid${UNKNOWN} now`,
+        `Act on uuid${X} now`,
+      ],
+      ["a GUID glued to hex letters after it", `Act on ${UNKNOWN}abc now`, `Act on ${X}abc now`],
+      ["a GUID glued to an underscore before it", `Act on patient_${UNKNOWN} now`, `Act on patient_${X} now`],
+      ["a GUID glued to an underscore after it", `Act on ${UNKNOWN}_x now`, `Act on ${X}_x now`],
+      ["a GUID glued to hyphens", `Act on 1234-${UNKNOWN}-x now`, `Act on 1234-${X}-x now`],
+      ["a GUID inside an appointment prefix", `Cancel appt_${UNKNOWN} please`, `Cancel appt_${X} please`],
+      ["an appointment ID, typed short", "Cancel appt_123 please", `Cancel ${X} please`],
+      ["an appointment ID, any case", "Cancel APPT_123 please", `Cancel ${X} please`],
+      ["a slot ID", "Wants slot_lee_20261013T1830Z", `Wants ${X}`],
+      ["a provider ID", "Asked about prov_lee today", `Asked about ${X} today`],
+      ["an escalation ID", "Earlier ticket esc_01J9Z8Q7RS was closed", `Earlier ticket ${X} was closed`],
+      ["a fixture alias", "Booking for pat-walter, not me", `Booking for ${X}, not me`],
+      ["a fixture alias, any case", "Booking for PAT-Walter, not me", `Booking for ${X}, not me`],
+    ])("replaces %s", async (_name, summary, expected) => {
+      expect(await summaryOf(summary)).toBe(expected);
+    });
+
+    it("replaces every occurrence, not just the first", async () => {
+      expect(await summaryOf(`${UNKNOWN} ${MARIA} pat-maria pat-walter appt_1 slot_2`)).toBe(
+        `${X} ${X} ${X} ${X} ${X} ${X}`,
+      );
+    });
+
+    it("leaves text that only looks like an ID alone", async () => {
+      const summary =
+        "Patient asked about appt_ times, slots, my_appt_1, pat-walter2, a spat-like call, and " +
+        `0${UNKNOWN} or ${UNKNOWN}0 after the patient's appointment.`;
+      expect(await summaryOf(summary)).toBe(summary);
+    });
+
+    it("keeps a summary that was only an ID above the minimum length", async () => {
+      expect(await summaryOf("appt_12345")).toBe(X);
+    });
+
+    it("caps a summary that grew past the maximum length", async () => {
+      const summary = "esc_1 ".repeat(166); // 996 characters, each ID grows to the placeholder
+      expect(await summaryOf(summary)).toBe(`${X} `.repeat(166).slice(0, 1000).trim());
     });
   });
 });

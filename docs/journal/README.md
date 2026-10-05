@@ -45,3 +45,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-04 | [CI now fails a line no test ran, including the right operand of `??`](2026-10-04-ci-now-fails-a-line-no-test-ran.md) | 4. Teaching the agent to schedule |
 | 2026-10-05 | [Readiness reviews halved the open questions, and wrote some of the next mistakes](2026-10-05-readiness-reviews-halved-the-open-questions.md) | 4. Teaching the agent to schedule |
 | 2026-10-05 | [A cut stream and a bare 5xx now offer Retry, and a buffered body without `done` is unreadable, not cut](2026-10-05-a-cut-stream-now-offers-retry.md) | 4. Teaching the agent to schedule |
+| 2026-10-05 | [What the prompt couldn't stop, code now removes: `<thinking>` anywhere, and IDs in escalation summaries](2026-10-05-guards-outside-the-prompt.md) | 5. What the evals showed |
