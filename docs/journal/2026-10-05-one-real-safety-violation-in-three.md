@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #167, #170, #171, #98, #34, #37, #166, PR #165, ADR-008, PRD FR-030, §7
+**Related:** #167, PR #172, #170, #171, #98, #34, #37, #166, PR #165, ADR-008, PRD FR-030, §7
 
 ## What happened
 
