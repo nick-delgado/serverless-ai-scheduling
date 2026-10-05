@@ -305,6 +305,17 @@ describe("LlmPatientSimulator", () => {
     expect(haiku !== undefined && "inlineReasoningTag" in haiku).toBe(false);
   });
 
+  it("puts a system cache point after its prompt exactly when the profile asks for one (#105)", async () => {
+    const system = async (profile: ModelProfile) => {
+      const llm = new ScriptedLlmClient([scriptedText("need a derm appt next week")]);
+      await new LlmPatientSimulator({ llm, profile }).next(ctx({ turn: 1 }));
+      return llm.requests[0]?.system;
+    };
+    const prompt = { type: "text", text: simulatorSystemPrompt(BOOK) };
+    expect(await system(MODEL_PROFILES["haiku-4.5"])).toEqual([prompt, { type: "cache_point" }]);
+    expect(await system(MODEL_PROFILES["gpt-oss-20b"])).toEqual([prompt]);
+  });
+
   it("shows the model the visible conversation so far", async () => {
     const llm = new ScriptedLlmClient([scriptedText("the 2:00 one")]);
     await sim(llm).next(

@@ -1,8 +1,8 @@
 /**
- * L1 builds its own request (`l1Request`) because the agent loop's builder is private to `@sched/agent`
- * (owner decision on PR #71, SMELL-101, option b: a parity test now, the export in #85). This
- * test sends the same conversation through the real `runAgentTurn` and checks that the two requests
- * agree, so a field the loop adds later can't silently go missing from L1.
+ * L1 and the agent loop share the profile-derived part of their requests (`profileRequest`, #105, tested
+ * in `packages/agent`). What each still builds itself is its tools and messages, so this test sends the
+ * same conversation through the real `runAgentTurn` and checks that L1's tools and messages equal the
+ * loop's, apart from the rolling message cache point L1 lacks on purpose (it makes one call only).
  */
 import { MODEL_PROFILES, runAgentTurn, ScriptedLlmClient, scriptedText, scriptedToolUse } from "@sched/agent";
 import { describe, expect, it } from "vitest";
@@ -15,7 +15,7 @@ const c = l1Case("l1-emergency-911");
 describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
   "l1Request matches the agent loop (%s)",
   (name) => {
-    it("same fields, system blocks, tools, and conversation", async () => {
+    it("same tools and conversation", async () => {
       const profile = MODEL_PROFILES[name];
       const env = await createTrialEnvironment(c);
       const system = interimSystemPrompt(env.clock.now(), "Walter");
@@ -41,15 +41,7 @@ describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
       if (loop === undefined) throw new Error("the loop made no request");
       const ours = l1Request(c, profile, system);
 
-      expect(Object.keys(ours).sort()).toEqual(Object.keys(loop).sort());
-      expect(ours.system).toEqual(loop.system);
       expect(ours.tools).toEqual(loop.tools);
-      expect({ ...ours, system: [], tools: [], messages: [] }).toEqual({
-        ...loop,
-        system: [],
-        tools: [],
-        messages: [],
-      });
       // Known difference: the loop adds a rolling cache point to the last user message (for the next call);
       // L1 makes exactly one call, so it has no use for one.
       expect(withoutCachePoints(ours)).toEqual(withoutCachePoints(loop));
