@@ -11,16 +11,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NDJSON_CONTENT_TYPE } from "../mocks/handlers";
 import { configureMockApi, server } from "../mocks/node";
-import { REPLIES } from "../mocks/fixtures";
-import { createChatApi } from "./api";
+import { REPLIES, SESSIONS } from "../mocks/fixtures";
+import { type ChatApi, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
+import { ChatProtocolError } from "./streamClient";
 import {
   captureChatBodies,
   doneEvent,
+  fakeTime,
   instant,
   log,
   retryButton,
+  sendNow,
   typingIndicator as typing,
+  until,
 } from "./testUtils";
 import { GENERIC_ERROR, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
@@ -39,6 +43,7 @@ beforeEach(() => localStorage.clear());
 afterEach(() => {
   server.events.removeAllListeners();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 async function renderPage(props: { onUnauthorized?: () => void } = {}) {
@@ -206,16 +211,78 @@ describe("ChatPage: Retry (FR-015)", () => {
     expect(within(log()).getByText("Hi")).toBeVisible();
   });
 
+  it("shows a 500's non-retryable INTERNAL event's message, without Retry (the asymmetry at 500)", async () => {
+    const event = {
+      type: "error",
+      code: "INTERNAL",
+      message: "Something went wrong on our side.",
+      retryable: false,
+    } as const;
+    server.use(
+      http.post(
+        "/api/chat",
+        () =>
+          new HttpResponse(encodeStreamEvent(event), {
+            status: 500,
+            headers: { "Content-Type": NDJSON_CONTENT_TYPE },
+          }),
+      ),
+    );
+    const { sendMessage } = await renderPage();
+    await sendMessage("Hi");
+    expect(await screen.findByRole("alert")).toHaveTextContent(event.message);
+    expect(retryButton()).not.toBeInTheDocument();
+  });
+
   it("keeps the reply, with no error, when the stream sends an event after done", async () => {
     const reply = "All set for Wednesday at 10 AM.";
     server.use(http.post("/api/chat", () => ndjson([delta(reply), doneEvent(), delta(" More.")])));
-    // Typed out, so the protocol error arrives while the reply is still typing (not yet ended).
-    render(<ChatPage reducedMotion={() => false} />);
-    const user = userEvent.setup();
-    await user.type(screen.getByRole("textbox", { name: "Message" }), "Hi{Enter}");
-    expect(await within(log()).findByText(reply, {}, { timeout: 5_000 })).toBeVisible();
+    let sent: Promise<ChatStreamEvent[]> | undefined;
+    const real = createChatApi();
+    const api: ChatApi = {
+      getSession: (signal) => real.getSession(signal),
+      sendChat: (request, onEvent, signal) => {
+        sent = real.sendChat(request, onEvent, signal);
+        return sent;
+      },
+    };
+    fakeTime();
+    render(<ChatPage api={api} reducedMotion={() => false} />);
+    await until(() => within(log()).queryByText(SESSIONS.upcoming.greeting) !== null);
+    sendNow("Hi");
+    // The stream rejects while fake time stands still, so the protocol error lands before the reply has typed.
+    await act(() => sent?.catch(() => undefined));
+    await expect(sent).rejects.toBeInstanceOf(ChatProtocolError);
+    expect(within(log()).queryByText(reply)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(within(log()).getByText(reply)).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(retryButton()).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["sends more (a protocol error)", () => new ChatProtocolError("An event came after the terminal one.")],
+    ["drops (a network failure)", () => new TypeError("connection reset")],
+  ])("keeps a retryable error event's message and Retry when the stream then %s", async (_, failure) => {
+    const message = "The assistant hit a snag. Please try again.";
+    let failed: Promise<ChatStreamEvent[]> | undefined;
+    const real = createChatApi();
+    const api: ChatApi = {
+      getSession: (signal) => real.getSession(signal),
+      sendChat: (_request, onEvent) => {
+        onEvent({ type: "error", code: "AGENT_UNAVAILABLE", message, retryable: true });
+        failed = Promise.reject(failure());
+        return failed;
+      },
+    };
+    render(<ChatPage api={api} reducedMotion={instant} />);
+    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    sendNow("Hi");
+    await act(() => failed?.catch(() => undefined));
+    expect(screen.getByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("alert")).not.toHaveTextContent(GENERIC_ERROR);
+    expect(retryButton()).toBeInTheDocument();
   });
 
   it("on API Gateway's 401 (no event body), says the sign-in has ended, without Retry, and hands over to sign-in", async () => {
