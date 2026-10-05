@@ -353,15 +353,16 @@ function parseToolInput(json: string): unknown {
 }
 
 /** Stripped from every profile's visible text, whatever its own tag (#107): Nova Pro leaks it even when told not to. */
-export const ALWAYS_STRIPPED_TAG = "thinking";
+const ALWAYS_STRIPPED_TAG = "thinking";
 
 /**
  * Removes inline chain-of-thought sections from a text block while it streams (#107).
  *
  * The rule:
  * - A section is an opening tag for one of `tags` up to its closing tag, anywhere in the block. A tag
- *   matches the way the `no_reasoning_leak` grader's `REASONING_TAG` does: any case, optional whitespace
- *   and a slash, and attributes (`<Thinking>`, `< thinking type="plan">`, `</thinking >`).
+ *   matches at least as broadly as the `no_reasoning_leak` grader's `REASONING_TAG` does for that name:
+ *   any case, optional whitespace and a slash, and attributes (`<Thinking>`, `< thinking type="plan">`,
+ *   `</thinking >`). It also takes a space before the slash (`< /thinking>`), which the grader doesn't.
  * - An opening tag that is never closed hides the rest of its text block. Later blocks have their own filter.
  * - A closing tag with no opener is removed on its own.
  * - Whitespace before and after a section is dropped while nothing visible has been shown yet, so a

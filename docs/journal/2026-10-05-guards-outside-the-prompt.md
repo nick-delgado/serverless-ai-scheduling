@@ -1,14 +1,14 @@
 # 2026-10-05 — What the prompt couldn't stop, code now removes: `<thinking>` anywhere, and IDs in escalation summaries
 
-**Chapter:** 4. Teaching the agent to schedule
+**Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #107, PR #162, #16 (PR #102), #37, ADR-008, ADR-009, ADR-010, PRD FR-034
+**Related:** #107, PR #162, #16 (PR #102), #37, ADR-008, ADR-009, ADR-010, PRD FR-034, FR-037
 
 ## What happened
 
-System prompt v1 (#16) took Sonnet 4.6 to 66 of 66 L1 trials, but Nova Pro kept three safety violations in 66 trials that no prompt wording removed ([the v1 entry](2026-10-02-system-prompt-v1.md)): `<thinking>` leaked into the visible reply twice on `l1-escalate-billing`, and once it put a UUID the patient typed into an `escalate_to_human` summary. ADR-009 says violations a prompt can't fix go to measures outside the prompt, so #107 added two code guards. An agent built both; Nick settled the open questions on the issue before work started (readiness review round 1, every recommendation accepted).
+System prompt v1 (#16) took Sonnet 4.6 to 66 of 66 L1 trials, but Nova Pro kept three safety violations in 66 trials that no prompt wording removed ([the v1 entry](2026-10-02-system-prompt-v1.md)): `<thinking>` leaked into the visible reply twice on `l1-escalate-billing`, and once it put a UUID the patient typed into an `escalate_to_human` summary. ADR-009 adds a Bedrock Guardrail only if the L3 red-team set shows violations that prompt and policy changes can't fix. These were L1 failures, not L3 ones, and each has a code fix at its source (the client's text filter, the escalation handler), so the Guardrail stays deferred and #107 added two code guards instead. An agent built both; Nick settled the open questions on the issue before work started (readiness review round 1, every recommendation accepted).
 
-1. **The `<thinking>` filter now works anywhere, for every profile.** `ConverseLlmClient` already had an `InlineReasoningFilter`, but it only split off a section at the *start* of a text block. It now removes every tagged section wherever it sits, matching tags the way the `no_reasoning_leak` grader does (any case, spaces, attributes, a stray closing tag). `<thinking>` is stripped for every profile, plus the profile's own tag (gpt-oss: `<reasoning>`). Profiles with a tag keep the removed text as a reasoning block; Claude and Nova 2 Lite drop it, because the loop replays reasoning to Claude and Claude rejects a reasoning block without its signature (ADR-010).
+1. **The `<thinking>` filter now works anywhere, for every profile.** `ConverseLlmClient` already had an `InlineReasoningFilter`, but it only split off a section at the *start* of a text block. It now removes every tagged section wherever it sits, matching tags at least as broadly as the `no_reasoning_leak` grader does (any case, spaces, attributes, a stray closing tag; it also takes a space before the slash, which the grader doesn't). `<thinking>` is stripped for every profile, plus the profile's own tag (gpt-oss: `<reasoning>`). Profiles with a tag keep the removed text as a reasoning block; Claude and Nova 2 Lite drop it, because the loop replays reasoning to Claude and Claude rejects a reasoning block without its signature (ADR-010).
 2. **The escalation summary can't carry an ID.** Before `escalate_to_human` records the escalation, every GUID, `appt_`/`slot_`/`prov_`/`esc_` ID and `pat-` alias in the summary becomes `[ID removed]`. The stored record, the staff email and any retry re-send all read the cleaned text. The guard never rejects, so the patient always gets the phone number and hours.
 
 ## Why we chose what we chose
@@ -24,6 +24,8 @@ The spec left these open; the agent decided them while building:
 - **Tag names are word characters, so they aren't regex-escaped.** All profile tags are; escaping would be code no test can reach.
 - **Every ID pattern is case-insensitive** (the spec said so for GUIDs). A typed `APPT_123` or `PAT-Walter` is as much an ID as the lower-case form.
 - **The 1,000-character cap can cut a placeholder in half.** It only bites when a summary near the limit is full of short IDs (each grows to 12 characters); the alternative was rejecting, which the spec rules out.
+- **Where a GUID ends.** A GUID is caught wherever no hex digit touches it, so `patient_<GUID>`, `x<GUID>`, `appt_<GUID>` and `1234-<GUID>-x` lose the GUID, while a 13th hex digit (`<GUID>0`) means it isn't a GUID. Our first cut used word boundaries, which let a GUID glued to a letter, digit or underscore through untouched; the review of PR #162 caught it. We didn't exclude hyphens as well (the review's suggestion), because then a GUID inside a longer hyphenated run would pass whole.
+- **The `appt_`/`slot_`/`prov_`/`esc_` IDs must start a word.** `my_appt_1` stays, and so does an ID glued to a word before it (`id_appt_…`). A tool-issued ID the model copies stands on its own, and a GUID inside one is caught by the GUID rule anyway.
 - **Accepted false positives:** `pat-` followed by letters is redacted as a whole word, so "a pat-down" becomes "a [ID removed]". Staff lose a word; a missed ID would be worse.
 
 ## What surprised us
@@ -33,7 +35,7 @@ The spec left these open; the agent decided them while building:
 
 ## Evidence
 
-- Mutation checks, one break at a time, each run against the test file: 38 breaks of the filter (each tag-regex part, each part of the partial-tag check, both case flags, each `||`/`&&` operand, the hold-back, the profile-tag and always-`thinking` parts of the tag set, keep-vs-drop of the removed text) and 22 of the summary guard (each pattern, each prefix, each flag and word boundary, the placeholder, the cap, the call itself) all turned a test red. One break (keeping held whitespace when a tag is removed before anything is shown) is equivalent: the next visible text is trimmed anyway.
+- Mutation checks, one break at a time, each run against the test file: 38 breaks of the filter (both tag regexes' whitespace, attribute and word-boundary parts, the partial-tag check's prefix strip, word split and case fold, both case flags, each `||`/`&&` operand, the hold-back, the profile-tag and always-`thinking` parts of the tag set, keep-vs-drop of the removed text) and 22 of the summary guard (each pattern, each prefix, each flag and word boundary, the placeholder, the cap, the call itself) all turned a test red. After the review, the GUID's two hex-digit lookarounds were each removed, and each widened to also exclude a hyphen, an underscore or a letter; every one of those breaks turned a test red too. The PR lists them. One break (keeping held whitespace when a tag is removed before anything is shown) is equivalent: the next visible text is trimmed anyway.
 - L1 full suite, three trials, prompt `system.v1`, run by the agent on 2026-10-05 on this branch (result files are git-ignored; summaries below):
 
   | Profile | Passed | pass@1 | pass^k | Tool-call acc. | Safety violations | Cost |

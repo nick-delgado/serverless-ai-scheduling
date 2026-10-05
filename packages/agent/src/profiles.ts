@@ -165,7 +165,9 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
   },
   /**
    * Amazon Nova Pro (v1). No reasoning switch; it writes `<thinking>…</thinking>` inline, usually before
-   * tool calls and sometimes mid-reply (#107), which the adapter hides from the patient wherever it is. It rejects reasoning blocks in history.
+   * tool calls, which the adapter hides from the patient wherever it is in the text. In #107's L1 runs it
+   * leaked past the old filter, which only looked at the start of a text block and matched exact case.
+   * It rejects reasoning blocks in history.
    */
   "nova-pro": {
     name: "nova-pro",
