@@ -14,14 +14,14 @@
   {
     "id": "kill-direct-child",
     "file": "scripts/mutate.ts",
-    "find": "process.kill(-(child.pid as number), \"SIGKILL\");",
-    "replace": "child.kill(\"SIGKILL\");"
+    "find": "process.kill(-running.pid, \"SIGKILL\");",
+    "replace": "process.kill(running.pid, \"SIGKILL\");"
   },
   {
     "id": "kill-none-on-timeout",
     "file": "scripts/mutate.ts",
-    "find": "      process.kill(-(child.pid as number), \"SIGKILL\");\n",
-    "replace": ""
+    "find": "      timedOut = true;\n      stopRunning();\n",
+    "replace": "      timedOut = true;\n"
   },
   {
     "id": "stop-kill",

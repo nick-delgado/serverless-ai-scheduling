@@ -1,8 +1,8 @@
 /**
  * scripts/mutate.ts against a throwaway directory: a target file, a small Node checker standing in for a test
  * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes a
- * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; two
- * spawn the script, for its exit code and for the file it restores on SIGINT.
+ * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; three
+ * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM.
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -31,6 +31,7 @@ import {
   main,
   occurrences,
   parseCliArgs,
+  runCommand,
   stopRunning,
 } from "./mutate";
 
@@ -53,13 +54,16 @@ if (text.includes("slow")) {
 `;
 
 // A stand-in for Vitest: with --reporter=json, writes a JSON report to --outputFile.json=<path> naming a failed
-// test when target.txt says "bad"; crashes without a report (printing why) when it says "crash"; else passes.
+// test when target.txt says "bad"; crashes without a report when it says "crash", printing 2,500 characters of
+// filler, then the reporter flags it was given, then why; else passes.
 const FAKE_VITEST = `#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
 const out = process.argv.find((a) => a.startsWith("--outputFile.json=")).slice("--outputFile.json=".length);
 const text = fs.readFileSync("target.txt", "utf8");
 if (text.includes("crash")) {
+  console.log("x".repeat(2500));
+  console.log("reporters: " + process.argv.filter((a) => a.startsWith("--reporter=")).join(" "));
   console.log("fake vitest crashed");
   process.exit(1);
 }
@@ -79,6 +83,9 @@ let out: string[];
 let errors: string[];
 const deps = () => ({ cwd: dir, log: (l: string) => out.push(l), logError: (l: string) => errors.push(l) });
 const checker = () => ["node", join(dir, "checker.cjs")];
+// The checker under sh, which stays its parent (the "; true" keeps sh from exec'ing node): killing only the process
+// the runner started would leave the checker running, so only a kill of the whole process group stops it.
+const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
 const target = () => readFileSync(join(dir, "target.txt"), "utf8");
 /** True while the process with this pid runs. */
 const alive = (pid: number) => {
@@ -186,6 +193,13 @@ describe("classify", () => {
 });
 
 describe("parseCliArgs", () => {
+  it("takes an option's value after =", () => {
+    expect(parseCliArgs(["e.json", "--timeout=7", "--only=a", "--", "npm"])).toMatchObject({
+      timeout: 7,
+      only: ["a"],
+    });
+  });
+
   it("reads the edits file, the options and the command after --", () => {
     expect(
       parseCliArgs([
@@ -224,15 +238,17 @@ describe("parseCliArgs", () => {
     [["e.json"], "usage:"],
     [["e.json", "--"], "usage:"],
     [["--", "npm", "test"], "no edits file"],
-    [["e.json", "--timeout", "--", "npm"], "--timeout needs a value"],
-    [["e.json", "--json", "--", "npm"], "--json needs a value"],
-    [["e.json", "--only", "--", "npm"], "--only needs a value"],
+    [["e.json", "--timeout", "--", "npm"], "Option '--timeout <value>' argument missing"],
+    [["e.json", "--json", "--", "npm"], "Option '--json <value>' argument missing"],
+    [["e.json", "--only", "--", "npm"], "Option '--only <value>' argument missing"],
     [["e.json", "--only"], "usage:"],
+    [["e.json", "--bogus", "--", "npm"], "Unknown option '--bogus'"],
     [["e.json", "f.json", "--", "npm"], "unexpected argument f.json"],
     [["e.json", "--timeout", "0", "--", "npm"], "--timeout must be"],
     [["e.json", "--timeout", "x", "--", "npm"], "--timeout must be"],
   ])("rejects %j", (argv, message) => {
     expect(() => parseCliArgs(argv)).toThrow(message);
+    expect(() => parseCliArgs(argv)).toThrow("usage: mutate");
   });
 });
 
@@ -258,13 +274,6 @@ describe("formatResult", () => {
   it("prints no detail line for an error, whose detail is the command's output", () => {
     expect(formatResult({ ...result, status: "ERROR", failedTests: [], detail: "output" })).toEqual([
       "ERROR 7 a.ts: x⏎y → z",
-    ]);
-  });
-
-  it("prints an empty reason for a refused edit with no detail", () => {
-    expect(formatResult({ ...result, status: "REFUSED", failedTests: [] })).toEqual([
-      "REFUSED 7 a.ts: x⏎y → z",
-      "    ()",
     ]);
   });
 
@@ -307,13 +316,9 @@ describe("main", () => {
   });
 
   it("kills a timed-out command's whole process group, not only the process it started", async () => {
-    // sh stays the parent of the checker (the "; true" keeps it from exec'ing node), so killing sh alone would
-    // leave the checker running and holding the output pipe open.
+    // Killing sh alone would leave the checker running and holding the output pipe open.
     const edits = editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
-    const code = await main(
-      [edits, "--timeout", "1", "--", "sh", "-c", `node ${join(dir, "checker.cjs")}; true`],
-      deps(),
-    );
+    const code = await main([edits, "--timeout", "1", "--", ...checkerUnderSh()], deps());
     expect(out[0]).toBe("TIMEOUT t target.txt: ok ? 1 → slow ? 1");
     expect(code).toBe(0);
     await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 50 });
@@ -391,7 +396,70 @@ describe("main", () => {
       ["e", "ERROR", []],
     ]);
     expect(written.results[0]?.detail).toBeUndefined();
-    expect(written.results[1]?.detail).toContain("fake vitest crashed");
+  });
+
+  it("adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output", async () => {
+    const edits = editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "crash ? 1" }]);
+    await main([edits, "--json", "out.json", "--", join(dir, "vitest"), "run"], deps());
+    const { results } = JSON.parse(readFileSync(join(dir, "out.json"), "utf8")) as { results: EditResult[] };
+    const detail = results[0]?.detail ?? "";
+    expect(detail).toHaveLength(2000);
+    expect(detail).toContain(`reporters: --reporter=dot --reporter=json\nfake vitest crashed\n`);
+    expect(detail.endsWith("fake vitest crashed\n")).toBe(true);
+  });
+
+  it("exits 1 when an edit survived, even beside a refused edit", async () => {
+    const edits = editsFile([
+      { id: "s", file: "target.txt", find: "const ok", replace: "const fine" },
+      { id: "r", file: "target.txt", find: "missing", replace: "x" },
+    ]);
+    expect(await main([edits, "--", ...checker()], deps())).toBe(1);
+  });
+
+  it("refuses an edit whose file can't be read, saying why", async () => {
+    const edits = editsFile([{ id: "m", file: "missing.txt", find: "a", replace: "b" }]);
+    const code = await main([edits, "--", ...checker()], deps());
+    expect(out[0]).toBe("REFUSED m missing.txt: a → b");
+    expect(out[1]).toMatch(/^ {4}\(can't read the file: ENOENT/);
+    expect(code).toBe(2);
+    expect(existsSync(join(dir, "missing.txt"))).toBe(false);
+  });
+
+  it.each([
+    ["a missing file", undefined, "can't read the edits file"],
+    ["a file that isn't JSON", "[{", "can't read the edits file"],
+    ["JSON that isn't a list", "{}", "isn't a list of edits"],
+    ["a null entry", "[null]", "edit 1 in"],
+    ["an entry with no file", '[{"find":"ok ? 1","replace":"bad"}]', "edit 1 in"],
+    ["an entry with no find", '[{"file":"target.txt","replace":"bad"}]', "edit 1 in"],
+    ["an entry with no replace", '[{"file":"target.txt","find":"ok ? 1"}]', "edit 1 in"],
+    ["a numeric id", '[{"id":1,"file":"target.txt","find":"ok ? 1","replace":"bad"}]', "edit 1 in"],
+  ])("exits 2 for %s, running and writing nothing", async (_, content, message) => {
+    if (content !== undefined) writeFileSync(join(dir, "edits.json"), content);
+    const code = await main(["edits.json", "--", ...checker()], deps());
+    expect(code).toBe(2);
+    expect(errors[0]).toContain(message);
+    expect(out).toEqual([]);
+    expect(target()).toBe(TARGET);
+  });
+
+  it("exits 2 naming an --only id that no edit has, before running anything", async () => {
+    const edits = editsFile([
+      { id: "a", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
+      { id: "b", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" },
+    ]);
+    const code = await main([edits, "--only", "a,zz", "--", ...checker()], deps());
+    expect(code).toBe(2);
+    expect(errors).toEqual(["mutate: --only names no edit with the id zz"]);
+    expect(out).toEqual([]);
+  });
+
+  it("exits 2 when the command can't be started", async () => {
+    editsFile([{ id: "a", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
+    const code = await main(["edits.json", "--", join(dir, "no-such-command")], deps());
+    expect(code).toBe(2);
+    expect(errors[0]).toContain("the unedited run failed (exit null)");
+    expect(errors[0]).toContain("ENOENT");
   });
 
   it("runs only the edits --only names", async () => {
@@ -443,7 +511,7 @@ describe("main", () => {
     vi.stubEnv("TMPDIR", tmp);
     try {
       const edits = editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
-      const done = main([edits, "--", ...checker()], deps());
+      const done = main([edits, "--", ...checkerUnderSh()], deps());
       await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
         timeout: 5_000,
         interval: 20,
@@ -471,6 +539,15 @@ describe("main", () => {
     } finally {
       kill.mockRestore();
     }
+  });
+
+  it("reads a command that can't be started as ERROR, and holds no process group for it", async () => {
+    const started = runCommand([join(dir, "no-such-command")], 5, dir);
+    // Before the spawn error arrives: a signal now must not try to kill a process group with no pid.
+    expect(() => stopRunning()).not.toThrow();
+    const outcome = await started;
+    expect(outcome.output).toContain("ENOENT");
+    expect(classify(outcome)).toBe("ERROR");
   });
 
   it("removes its signal handlers when it returns", async () => {
@@ -501,7 +578,7 @@ describe("the script", () => {
       editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
       const tmp = join(dir, "tmp");
       mkdirSync(tmp);
-      const child = spawn(process.execPath, [...tsx, script, "edits.json", "--", ...checker()], {
+      const child = spawn(process.execPath, [...tsx, script, "edits.json", "--", ...checkerUnderSh()], {
         cwd: dir,
         env: { ...process.env, TMPDIR: tmp },
       });

@@ -2,15 +2,26 @@ KILLED gate-buffer scripts/coverage-changed.ts: { cwd: deps.cwd, encoding: "utf8
     ✗ scripts/coverage-changed.test.ts > main reads a diff longer than execFileSync's default 1 MB buffer
 KILLED gate-buffer-size scripts/coverage-changed.ts: export const GIT_MAX_BUFFER = 256 * 1024 * 1024; → export const GIT_MAX_BUFFER = 1024 * 1024;
     ✗ scripts/coverage-changed.test.ts > main reads a diff longer than execFileSync's default 1 MB buffer
-KILLED kill-direct-child scripts/mutate.ts: process.kill(-(child.pid as number), "SIGKILL"); → child.kill("SIGKILL");
+KILLED kill-direct-child scripts/mutate.ts: process.kill(-running.pid, "SIGKILL"); → process.kill(running.pid, "SIGKILL");
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-KILLED kill-none-on-timeout scripts/mutate.ts:       process.kill(-(child.pid as number), "SIGKILL");⏎ → 
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED kill-none-on-timeout scripts/mutate.ts:       timedOut = true;⏎      stopRunning();⏎ →       timedOut = true;⏎
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
 KILLED stop-kill scripts/mutate.ts:   process.kill(-running.pid, "SIGKILL");⏎ → 
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT

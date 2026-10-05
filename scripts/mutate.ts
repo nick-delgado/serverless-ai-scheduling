@@ -18,13 +18,17 @@
  * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT.
  * The command first runs once unedited; if that run fails, nothing is mutated.
  *
+ * An edit whose file can't be read is REFUSED; a command that can't be started is ERROR (or, unedited, a failed run).
+ *
  * Exit codes: 0 every edit was killed or timed out; 1 an edit survived; 2 an edit was refused or errored, the
- * unedited run failed, or the arguments were wrong.
+ * unedited run failed, or the arguments were wrong (including an edits file that can't be read or isn't a list of
+ * edits, and an `--only` id no edit has).
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
 export interface Edit {
   id?: string;
@@ -35,16 +39,18 @@ export interface Edit {
 
 export type Status = "KILLED" | "SURVIVED" | "ERROR" | "TIMEOUT" | "REFUSED";
 
-export interface EditResult {
+interface EditResultBase {
   id: string;
   file: string;
   find: string;
   replace: string;
-  status: Status;
   failedTests: string[];
-  detail?: string;
   seconds: number;
 }
+
+/** One edit's result: a refused edit always says why; an errored one carries the command's output. */
+export type EditResult = EditResultBase &
+  ({ status: "REFUSED"; detail: string } | { status: Exclude<Status, "REFUSED">; detail?: string });
 
 export interface RunOutcome {
   code: number | null;
@@ -57,8 +63,8 @@ export interface RunOutcome {
 export interface CliArgs {
   editsFile: string;
   timeout: number;
-  json?: string;
-  only?: string[];
+  json?: string | undefined;
+  only?: string[] | undefined;
   cmd: string[];
 }
 
@@ -96,33 +102,72 @@ export function failedTestNames(report: unknown, cwd: string): string[] {
 }
 
 /** The status of one edited run. */
-export function classify(outcome: Pick<RunOutcome, "code" | "timedOut" | "failedTests">): Status {
+export function classify(
+  outcome: Pick<RunOutcome, "code" | "timedOut" | "failedTests">,
+): Exclude<Status, "REFUSED"> {
   if (outcome.timedOut) return "TIMEOUT";
   if (outcome.code === 0) return "SURVIVED";
   if (outcome.failedTests === undefined) return "KILLED";
   return outcome.failedTests.length > 0 ? "KILLED" : "ERROR";
 }
 
+/** The arguments before the first `--` are the runner's own; everything after it is the test command. */
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const dash = argv.indexOf("--");
   if (dash < 0 || dash === argv.length - 1) throw new Error(USAGE);
-  const args: CliArgs = { editsFile: "", timeout: DEFAULT_TIMEOUT_SECONDS, cmd: argv.slice(dash + 1) };
-  const own = argv.slice(0, dash);
-  for (let i = 0; i < own.length; i++) {
-    const arg = own[i] as string;
-    const value = own[i + 1];
-    if (arg === "--timeout" || arg === "--json" || arg === "--only") {
-      if (value === undefined) throw new Error(`${arg} needs a value. ${USAGE}`);
-      i++;
-      if (arg === "--timeout") args.timeout = Number(value);
-      else if (arg === "--json") args.json = value;
-      else args.only = value.split(",");
-    } else if (args.editsFile === "") args.editsFile = arg;
-    else throw new Error(`unexpected argument ${arg}. ${USAGE}`);
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: argv.slice(0, dash),
+      allowPositionals: true,
+      strict: true,
+      options: { timeout: { type: "string" }, json: { type: "string" }, only: { type: "string" } },
+    });
+  } catch (err) {
+    throw new Error(`${(err as Error).message}. ${USAGE}`, { cause: err });
   }
-  if (args.editsFile === "") throw new Error(`no edits file. ${USAGE}`);
-  if (!(args.timeout > 0)) throw new Error(`--timeout must be a positive number of seconds. ${USAGE}`);
-  return args;
+  const { values, positionals } = parsed;
+  const [editsFile, ...rest] = positionals;
+  if (editsFile === undefined) throw new Error(`no edits file. ${USAGE}`);
+  if (rest.length > 0) throw new Error(`unexpected argument ${rest.join(" ")}. ${USAGE}`);
+  const timeout = Number(values.timeout ?? DEFAULT_TIMEOUT_SECONDS);
+  if (!(timeout > 0)) throw new Error(`--timeout must be a positive number of seconds. ${USAGE}`);
+  return {
+    editsFile,
+    timeout,
+    json: values.json,
+    only: values.only?.split(","),
+    cmd: argv.slice(dash + 1),
+  };
+}
+
+/** True for a `{ id?, file, find, replace }` entry with string fields (other fields are notes). */
+function isEdit(entry: unknown): entry is Edit {
+  const { id, file, find, replace } = (entry ?? {}) as Record<string, unknown>;
+  return (
+    (id === undefined || typeof id === "string") &&
+    typeof file === "string" &&
+    typeof find === "string" &&
+    typeof replace === "string"
+  );
+}
+
+/** The edits in `path`, each with an id (its 1-based position when it has none); throws why it can't. */
+export function readEdits(path: string): (Edit & { id: string })[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(`can't read the edits file ${path}: ${(err as Error).message}`, { cause: err });
+  }
+  if (!Array.isArray(parsed)) throw new Error(`the edits file ${path} isn't a list of edits`);
+  return parsed.map((entry: unknown, i) => {
+    if (!isEdit(entry))
+      throw new Error(
+        `edit ${i + 1} in ${path} isn't { "id"?, "file", "find", "replace" } with string values`,
+      );
+    return { ...entry, id: entry.id ?? String(i + 1) };
+  });
 }
 
 /** The command running now: its process group, and the directory its report goes to. */
@@ -138,7 +183,10 @@ export function stopRunning(): void {
   rmSync(running.reportDir, { recursive: true, force: true });
 }
 
-/** Runs the command in its own process group, adding Vitest's JSON reporter when it is Vitest. */
+/**
+ * Runs the command in its own process group, adding Vitest's JSON reporter when it is Vitest. A command that can't be
+ * started ends with no exit code and no failed tests (ERROR, by `classify`), its error in the output.
+ */
 export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: string): Promise<RunOutcome> {
   const vitest = isVitest(cmd);
   const scratch = mkdtempSync(join(tmpdir(), "mutate-"));
@@ -148,25 +196,33 @@ export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: 
     : cmd.slice(1);
   return new Promise((done) => {
     const child = spawn(cmd[0] as string, args, { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
-    running = { pid: child.pid as number, reportDir: scratch };
+    // A command that can't be started has no pid, and no process group to kill.
+    if (child.pid !== undefined) running = { pid: child.pid, reportDir: scratch };
     let output = "";
     child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
     child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      process.kill(-(child.pid as number), "SIGKILL");
+      stopRunning();
     }, timeoutSeconds * 1000);
-    child.on("close", (code) => {
+    // The first of these settles the promise: a spawn error is followed by a "close" that would read as an exit.
+    const finish = (outcome: RunOutcome) => {
       clearTimeout(timer);
       running = undefined;
+      rmSync(scratch, { recursive: true, force: true });
+      done(outcome);
+    };
+    child.on("error", (err) => {
+      finish({ code: null, timedOut, output: `${output}${err.message}`, failedTests: [] });
+    });
+    child.on("close", (code) => {
       const failedTests = !vitest
         ? undefined
         : existsSync(reportFile)
           ? failedTestNames(JSON.parse(readFileSync(reportFile, "utf8")), cwd)
           : [];
-      rmSync(scratch, { recursive: true, force: true });
-      done({ code, timedOut, output, failedTests });
+      finish({ code, timedOut, output, failedTests });
     });
   });
 }
@@ -179,7 +235,7 @@ export function formatResult(result: EditResult): string[] {
     `${result.status} ${result.id} ${result.file}: ${shown(result.find)} → ${shown(result.replace)}`,
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
-  if (result.status === "REFUSED") lines.push(`    (${result.detail ?? ""})`);
+  if (result.status === "REFUSED") lines.push(`    (${result.detail})`);
   return lines;
 }
 
@@ -202,11 +258,20 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
     logError((err as Error).message);
     return 2;
   }
-  const all = (JSON.parse(readFileSync(resolve(cwd, args.editsFile), "utf8")) as Edit[]).map((edit, i) => ({
-    ...edit,
-    id: edit.id ?? String(i + 1),
-  }));
-  const edits = args.only ? all.filter((edit) => args.only?.includes(edit.id)) : all;
+  let all: (Edit & { id: string })[];
+  try {
+    all = readEdits(resolve(cwd, args.editsFile));
+  } catch (err) {
+    logError(`mutate: ${(err as Error).message}`);
+    return 2;
+  }
+  const only = args.only;
+  const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));
+  if (unmatched.length > 0) {
+    logError(`mutate: --only names no edit with the id ${unmatched.join(", ")}`);
+    return 2;
+  }
+  const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;
 
   const baseline = await runCommand(args.cmd, args.timeout, cwd);
   if (baseline.code !== 0) {
@@ -232,18 +297,27 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   try {
     for (const edit of edits) {
       const path = resolve(cwd, edit.file);
-      const original = readFileSync(path, "utf8");
-      const count = occurrences(original, edit.find);
       const base = { id: edit.id, file: edit.file, find: edit.find, replace: edit.replace };
+      const refused = (detail: string): EditResult => ({
+        ...base,
+        status: "REFUSED",
+        failedTests: [],
+        detail,
+        seconds: 0,
+      });
+      let original = "";
+      let unreadable: string | undefined;
+      try {
+        original = readFileSync(path, "utf8");
+      } catch (err) {
+        unreadable = (err as Error).message;
+      }
+      const count = occurrences(original, edit.find);
       let result: EditResult;
-      if (count !== 1) {
-        result = {
-          ...base,
-          status: "REFUSED",
-          failedTests: [],
-          detail: `find occurs ${count} times`,
-          seconds: 0,
-        };
+      if (unreadable !== undefined) {
+        result = refused(`can't read the file: ${unreadable}`);
+      } else if (count !== 1) {
+        result = refused(`find occurs ${count} times`);
       } else {
         const started = Date.now();
         restore = () => writeFileSync(path, original);

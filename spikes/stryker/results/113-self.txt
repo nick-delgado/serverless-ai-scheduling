@@ -12,10 +12,12 @@ KILLED occ-minus scripts/mutate.ts: return text.split(find).length - 1; → retu
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -61,34 +63,39 @@ KILLED cls-nonvitest scripts/mutate.ts: if (outcome.failedTests === undefined) r
 KILLED cls-gt0 scripts/mutate.ts: outcome.failedTests.length > 0 ? "KILLED" → outcome.failedTests.length >= 0 ? "KILLED"
     ✗ scripts/mutate.test.ts > classify {"code":1,"timedOut":false,"failedTests":[]} → ERROR
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
 KILLED arg-nodash scripts/mutate.ts: if (dash < 0 || dash === argv.length - 1) → if (dash === argv.length - 1)
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only"]
 KILLED arg-empty-cmd scripts/mutate.ts: if (dash < 0 || dash === argv.length - 1) → if (dash < 0)
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--"]
 KILLED arg-default-timeout scripts/mutate.ts: export const DEFAULT_TIMEOUT_SECONDS = 300; → export const DEFAULT_TIMEOUT_SECONDS = 30;
     ✗ scripts/mutate.test.ts > parseCliArgs defaults the timeout
-KILLED arg-cmd-slice scripts/mutate.ts: cmd: argv.slice(dash + 1) }; → cmd: argv.slice(dash) };
+KILLED arg-cmd-slice scripts/mutate.ts: cmd: argv.slice(dash + 1), → cmd: argv.slice(dash),
     ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
     ✗ scripts/mutate.test.ts > parseCliArgs defaults the timeout
     ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-    ✗ scripts/mutate.test.ts > main removes its report directory after each run
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
-    ✗ scripts/mutate.test.ts > main reports wrong arguments with the usage and exits 2
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
-KILLED arg-own-slice scripts/mutate.ts: const own = argv.slice(0, dash); → const own = argv.slice(0, dash + 1);
+KILLED arg-own-slice scripts/mutate.ts: args: argv.slice(0, dash), → args: [...argv],
+    ✗ scripts/mutate.test.ts > parseCliArgs takes an option's value after =
     ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
     ✗ scripts/mutate.test.ts > parseCliArgs defaults the timeout
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["--","npm","test"]
@@ -104,77 +111,119 @@ KILLED arg-own-slice scripts/mutate.ts: const own = argv.slice(0, dash); → con
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+    ✗ scripts/mutate.test.ts > main exits 2 for a missing file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a file that isn't JSON, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for JSON that isn't a list, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
-KILLED arg-value-index scripts/mutate.ts: const value = own[i + 1]; → const value = own[i];
+KILLED arg-positionals scripts/mutate.ts: allowPositionals: true, → allowPositionals: false,
+    ✗ scripts/mutate.test.ts > parseCliArgs takes an option's value after =
     ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
+    ✗ scripts/mutate.test.ts > parseCliArgs defaults the timeout
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","--","npm"]
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
-    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
-    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
-    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
-    ✗ scripts/mutate.test.ts > main runs only the edits --only names
-KILLED arg-or-timeout scripts/mutate.ts: if (arg === "--timeout" || arg === "--json" || arg === "--only") { → if (arg === "--json" || arg === "--only") {
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","x","--","npm"]
-    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
-    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
-KILLED arg-or-json scripts/mutate.ts: if (arg === "--timeout" || arg === "--json" || arg === "--only") { → if (arg === "--timeout" || arg === "--only") {
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
-    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
-    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
-KILLED arg-or-only scripts/mutate.ts: if (arg === "--timeout" || arg === "--json" || arg === "--only") { → if (arg === "--timeout" || arg === "--json") {
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
-    ✗ scripts/mutate.test.ts > main runs only the edits --only names
-KILLED arg-needs-value scripts/mutate.ts:       if (value === undefined) throw new Error(`${arg} needs a value. ${USAGE}`);⏎ → 
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
-KILLED arg-skip scripts/mutate.ts:       i++;⏎ → 
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","x","--","npm"]
-    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
-    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
-    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
-    ✗ scripts/mutate.test.ts > main runs only the edits --only names
-KILLED arg-number scripts/mutate.ts: args.timeout = Number(value); → args.timeout = Number(value) || DEFAULT_TIMEOUT_SECONDS;
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","x","--","npm"]
-KILLED arg-json scripts/mutate.ts: else if (arg === "--json") args.json = value; → else if (arg === "--json") args.json = undefined;
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
-    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
-KILLED arg-only-split scripts/mutate.ts: else args.only = value.split(","); → else args.only = [value];
-    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
-KILLED arg-first-file scripts/mutate.ts: } else if (args.editsFile === "") args.editsFile = arg; → } else if (true) args.editsFile = arg;
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--bogus","--","npm"]
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","f.json","--","npm"]
-KILLED arg-no-file scripts/mutate.ts:   if (args.editsFile === "") throw new Error(`no edits file. ${USAGE}`);⏎ → 
-    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["--","npm","test"]
-KILLED arg-timeout-guard scripts/mutate.ts:   if (!(args.timeout > 0)) throw new Error(`--timeout must be a positive number of seconds. ${USAGE}`);⏎ → 
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","x","--","npm"]
-KILLED arg-timeout-gt scripts/mutate.ts: if (!(args.timeout > 0)) → if (!(args.timeout >= 0))
+    ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
+    ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
+    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+    ✗ scripts/mutate.test.ts > main exits 2 for a missing file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a file that isn't JSON, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for JSON that isn't a list, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
+    ✗ scripts/mutate.test.ts > main runs only the edits --only names
+    ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
+    ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED arg-strict scripts/mutate.ts: strict: true, → strict: false,
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--bogus","--","npm"]
+KILLED arg-opt-json scripts/mutate.ts: json: { type: "string" }, only → json: { type: "boolean" }, only
+    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+KILLED arg-opt-only scripts/mutate.ts: only: { type: "string" } }, → },
+    ✗ scripts/mutate.test.ts > parseCliArgs takes an option's value after =
+    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+    ✗ scripts/mutate.test.ts > main runs only the edits --only names
+KILLED arg-catch-usage scripts/mutate.ts: throw new Error(`${(err as Error).message}. ${USAGE}`, { cause: err }); → throw err;
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--json","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--only","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--bogus","--","npm"]
+KILLED arg-rest-gt scripts/mutate.ts: if (rest.length > 0) → if (rest.length > 1)
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","f.json","--","npm"]
+KILLED arg-number scripts/mutate.ts: const timeout = Number(values.timeout ?? DEFAULT_TIMEOUT_SECONDS); → const timeout = Number(values.timeout ?? 1);
+    ✗ scripts/mutate.test.ts > parseCliArgs defaults the timeout
+KILLED arg-json scripts/mutate.ts: json: values.json, → json: undefined,
+    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+KILLED arg-only-split scripts/mutate.ts: only: values.only?.split(","), → only: values.only?.split(";"),
+    ✗ scripts/mutate.test.ts > parseCliArgs reads the edits file, the options and the command after --
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+KILLED arg-rest scripts/mutate.ts:   if (rest.length > 0) throw new Error(`unexpected argument ${rest.join(" ")}. ${USAGE}`);⏎ → 
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","f.json","--","npm"]
+KILLED arg-no-file scripts/mutate.ts:   if (editsFile === undefined) throw new Error(`no edits file. ${USAGE}`);⏎ → 
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["--","npm","test"]
+KILLED arg-timeout-guard scripts/mutate.ts:   if (!(timeout > 0)) throw new Error(`--timeout must be a positive number of seconds. ${USAGE}`);⏎ → 
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
+    ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","x","--","npm"]
+KILLED arg-timeout-gt scripts/mutate.ts: if (!(timeout > 0)) → if (!(timeout >= 0))
     ✗ scripts/mutate.test.ts > parseCliArgs rejects ["e.json","--timeout","0","--","npm"]
 KILLED run-json-reporter scripts/mutate.ts: "--reporter=dot", "--reporter=json",  → "--reporter=dot", 
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 KILLED run-output-file scripts/mutate.ts: `--outputFile.json=${reportFile}` → `--outputFile=${reportFile}`
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 KILLED run-slice1 scripts/mutate.ts:     : cmd.slice(1); →     : cmd;
     ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
@@ -182,11 +231,14 @@ KILLED run-slice1 scripts/mutate.ts:     : cmd.slice(1); →     : cmd;
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -199,11 +251,15 @@ KILLED run-cwd scripts/mutate.ts: { cwd, stdio: ["ignore", "pipe", "pipe"], deta
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -216,14 +272,16 @@ KILLED run-detached scripts/mutate.ts: stdio: ["ignore", "pipe", "pipe"], detach
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-stdout scripts/mutate.ts:     child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));⏎ →     child.stdout.resume();⏎
-    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 KILLED run-stderr scripts/mutate.ts:     child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));⏎ →     child.stderr.resume();⏎
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
 KILLED run-timedout scripts/mutate.ts:       timedOut = true;⏎ → 
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
-KILLED run-kill-group scripts/mutate.ts: process.kill(-(child.pid as number), "SIGKILL"); → child.kill("SIGKILL");
+KILLED run-timeout-stop scripts/mutate.ts:       timedOut = true;⏎      stopRunning();⏎ →       timedOut = true;⏎
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
 KILLED run-ms scripts/mutate.ts: }, timeoutSeconds * 1000); → }, timeoutSeconds * 100);
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
 TIMEOUT run-clear scripts/mutate.ts:       clearTimeout(timer);⏎ → 
@@ -234,8 +292,9 @@ KILLED run-nonvitest scripts/mutate.ts: const failedTests = !vitest⏎        ? 
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
-KILLED run-noreport scripts/mutate.ts:           : [];⏎      rmSync →           : undefined;⏎      rmSync
+KILLED run-noreport scripts/mutate.ts:           : [];⏎      finish →           : undefined;⏎      finish
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 KILLED run-rm scripts/mutate.ts:       rmSync(scratch, { recursive: true, force: true });⏎ → 
     ✗ scripts/mutate.test.ts > main removes its report directory after each run
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
@@ -246,14 +305,12 @@ KILLED run-cwd-names scripts/mutate.ts: failedTestNames(JSON.parse(readFileSync(
 KILLED fmt-nl scripts/mutate.ts: text.replaceAll("\n", "⏎") → text
     ✗ scripts/mutate.test.ts > formatResult prints the status, id, file and both sides of the edit, newlines as ⏎, then each failed test
     ✗ scripts/mutate.test.ts > formatResult prints no detail line for an error, whose detail is the command's output
-    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
     ✗ scripts/mutate.test.ts > formatResult says why an edit was refused
 KILLED fmt-names scripts/mutate.ts:   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);⏎ → 
     ✗ scripts/mutate.test.ts > formatResult prints the status, id, file and both sides of the edit, newlines as ⏎, then each failed test
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
 KILLED fmt-refused scripts/mutate.ts: if (result.status === "REFUSED") lines.push → if (result.detail !== undefined) lines.push
     ✗ scripts/mutate.test.ts > formatResult prints no detail line for an error, whose detail is the command's output
-    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
 KILLED main-cwd scripts/mutate.ts: const cwd = deps.cwd ?? process.cwd(); → const cwd = deps.cwd ?? ".";
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
 KILLED main-log scripts/mutate.ts: deps.log ?? ((line: string) => console.log(line)) → deps.log ?? ((_line: string) => undefined)
@@ -269,13 +326,15 @@ KILLED main-usage-msg scripts/mutate.ts:     logError((err as Error).message);�
 KILLED main-usage-code scripts/mutate.ts:     logError((err as Error).message);⏎    return 2; →     logError((err as Error).message);⏎    return 1;
     ✗ scripts/mutate.test.ts > main reports wrong arguments with the usage and exits 2
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
-KILLED main-id scripts/mutate.ts: id: edit.id ?? String(i + 1), → id: edit.id ?? String(i),
+KILLED main-id scripts/mutate.ts: id: entry.id ?? String(i + 1) → id: entry.id ?? String(i)
     ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
-KILLED main-only scripts/mutate.ts: const edits = args.only ? all.filter((edit) => args.only?.includes(edit.id)) : all; → const edits = all;
+KILLED main-only scripts/mutate.ts: const edits = only ? all.filter((edit) => only.includes(edit.id)) : all; → const edits = all;
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
 KILLED main-baseline scripts/mutate.ts: if (baseline.code !== 0) { → if (false) {
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
 KILLED main-baseline-code scripts/mutate.ts: nothing was mutated.\n${baseline.output}`,⏎    );⏎    return 2; → nothing was mutated.\n${baseline.output}`,⏎    );⏎    return 1;
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
 KILLED main-sigint scripts/mutate.ts:   process.on("SIGINT", onSignal);⏎ → 
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -286,9 +345,9 @@ KILLED main-count-lt scripts/mutate.ts: if (count !== 1) { → if (count < 1) {
 KILLED main-count-gt scripts/mutate.ts: if (count !== 1) { → if (count > 1) {
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
-KILLED main-refused-detail scripts/mutate.ts: detail: `find occurs ${count} times`, → detail: "",
+KILLED main-refused-detail scripts/mutate.ts: result = refused(`find occurs ${count} times`); → result = refused("");
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
-KILLED main-refused-seconds scripts/mutate.ts:           seconds: 0,⏎        }; →           seconds: 1,⏎        };
+KILLED main-refused-seconds scripts/mutate.ts:         seconds: 0,⏎      }); →         seconds: 1,⏎      });
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
 KILLED main-replacer scripts/mutate.ts: original.replace(edit.find, () => edit.replace) → original.replace(edit.find, edit.replace)
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
@@ -299,10 +358,12 @@ KILLED main-write-edit scripts/mutate.ts:           writeFileSync(⏎           
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -325,12 +386,14 @@ KILLED main-off-term scripts/mutate.ts:     process.off("SIGTERM", onSignal);⏎
 KILLED main-json scripts/mutate.ts:   if (args.json)⏎ →   if (false)⏎
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 KILLED main-json-cmd scripts/mutate.ts: JSON.stringify({ cmd: args.cmd, results }, null, 2) → JSON.stringify({ results }, null, 2)
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
 KILLED main-summary scripts/mutate.ts: ${count("KILLED")} killed, ${count("SURVIVED")} survived → ${count("KILLED")} killed, ${count("KILLED")} survived
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
 KILLED main-exit-survived scripts/mutate.ts: if (count("SURVIVED") > 0) return 1; → if (count("SURVIVED") > 0) return 2;
     ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
 KILLED main-exit-gt scripts/mutate.ts: if (count("SURVIVED") > 0) return 1; → if (count("SURVIVED") >= 0) return 1;
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
@@ -338,12 +401,14 @@ KILLED main-exit-gt scripts/mutate.ts: if (count("SURVIVED") > 0) return 1; → 
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
 KILLED main-exit-error scripts/mutate.ts: return count("ERROR") + count("REFUSED") > 0 ? 2 : 0; → return count("REFUSED") > 0 ? 2 : 0;
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
 KILLED main-exit-refused scripts/mutate.ts: return count("ERROR") + count("REFUSED") > 0 ? 2 : 0; → return count("ERROR") > 0 ? 2 : 0;
     ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
 KILLED entry-exitcode scripts/mutate.ts: .then((code) => (process.exitCode = code)); → ;
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
 KILLED sig-kill scripts/mutate.ts:     stopRunning();⏎    restore?.(); →     restore?.();
@@ -355,17 +420,28 @@ KILLED sig-restore scripts/mutate.ts:     restore?.();⏎ →
 KILLED sig-exit scripts/mutate.ts:     process.exit(130); →     process.exit(1);
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
-KILLED run-running scripts/mutate.ts:     running = { pid: child.pid as number, reportDir: scratch };⏎ → 
+KILLED run-running scripts/mutate.ts:     if (child.pid !== undefined) running = { pid: child.pid, reportDir: scratch };⏎ → 
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED run-running-pid scripts/mutate.ts: if (child.pid !== undefined) running = { pid: child.pid, reportDir: scratch }; → running = { pid: child.pid as number, reportDir: scratch };
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
 KILLED run-running-reset scripts/mutate.ts:       running = undefined;⏎ → 
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
 KILLED stop-guard scripts/mutate.ts:   if (running === undefined) return;⏎ → 
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
 KILLED stop-kill scripts/mutate.ts:   process.kill(-running.pid, "SIGKILL");⏎ → 
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -374,7 +450,126 @@ KILLED stop-rm scripts/mutate.ts:   rmSync(running.reportDir, { recursive: true,
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
-KILLED fmt-detail-default scripts/mutate.ts: (${result.detail ?? ""}) → (${result.detail})
-    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
+KILLED stop-direct-child scripts/mutate.ts: process.kill(-running.pid, "SIGKILL"); → process.kill(running.pid, "SIGKILL");
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED edit-null scripts/mutate.ts: (entry ?? {}) as Record → entry as Record
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+KILLED edit-id-undefined scripts/mutate.ts: (id === undefined || typeof id === "string") → (typeof id === "string")
+    ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
+KILLED edit-id-type scripts/mutate.ts: (id === undefined || typeof id === "string") → (id === undefined || true)
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+KILLED edit-file scripts/mutate.ts: typeof file === "string" && → true &&
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+KILLED edit-find scripts/mutate.ts: typeof find === "string" && → true &&
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+KILLED edit-replace scripts/mutate.ts:     typeof replace === "string"⏎ →     true⏎
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+KILLED edits-read-message scripts/mutate.ts: throw new Error(`can't read the edits file ${path}: ${(err as Error).message}`, { cause: err }); → throw err;
+    ✗ scripts/mutate.test.ts > main exits 2 for a missing file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a file that isn't JSON, running and writing nothing
+KILLED edits-array scripts/mutate.ts:   if (!Array.isArray(parsed)) throw new Error(`the edits file ${path} isn't a list of edits`);⏎ → 
+    ✗ scripts/mutate.test.ts > main exits 2 for JSON that isn't a list, running and writing nothing
+KILLED edits-entry scripts/mutate.ts:     if (!isEdit(entry))⏎ →     if (false)⏎
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+KILLED main-edits-code scripts/mutate.ts:     logError(`mutate: ${(err as Error).message}`);⏎    return 2; →     logError(`mutate: ${(err as Error).message}`);⏎    return 0;
+    ✗ scripts/mutate.test.ts > main exits 2 for a missing file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a file that isn't JSON, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for JSON that isn't a list, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+KILLED main-edits-log scripts/mutate.ts:     logError(`mutate: ${(err as Error).message}`);⏎    return 2; →     return 2;
+    ✗ scripts/mutate.test.ts > main exits 2 for a missing file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a file that isn't JSON, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for JSON that isn't a list, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a null entry, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no file, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no find, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for an entry with no replace, running and writing nothing
+    ✗ scripts/mutate.test.ts > main exits 2 for a numeric id, running and writing nothing
+KILLED only-default scripts/mutate.ts: (only ?? []) → (only as string[])
+    ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main removes its report directory after each run
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
+    ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
+    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
+    ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
+    ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED only-unmatched scripts/mutate.ts: !all.some((edit) => edit.id === id) → all.some((edit) => edit.id === id)
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+    ✗ scripts/mutate.test.ts > main runs only the edits --only names
+KILLED only-gt scripts/mutate.ts: if (unmatched.length > 0) { → if (unmatched.length > 1) {
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+KILLED only-code scripts/mutate.ts:     logError(`mutate: --only names no edit with the id ${unmatched.join(", ")}`);⏎    return 2; →     logError(`mutate: --only names no edit with the id ${unmatched.join(", ")}`);
+    ✗ scripts/mutate.test.ts > main exits 2 naming an --only id that no edit has, before running anything
+KILLED run-error-listener scripts/mutate.ts:     child.on("error", (err) => {⏎ →     child.on("exit", (err) => {⏎
+    ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
+    ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
+    ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
+    ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose find occurs other than once, and exits 2
+    ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
+    ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
+    ✗ scripts/mutate.test.ts > main runs only the edits --only names
+    ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
+    ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED run-error-failed scripts/mutate.ts: output: `${output}${err.message}`, failedTests: [] } → output: `${output}${err.message}`, failedTests: undefined }
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+KILLED run-error-output scripts/mutate.ts: output: `${output}${err.message}`, → output,
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+KILLED run-error-code scripts/mutate.ts: finish({ code: null, timedOut, output: → finish({ code: 0, timedOut, output:
+    ✗ scripts/mutate.test.ts > main exits 2 when the command can't be started
+    ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+KILLED main-unreadable scripts/mutate.ts: if (unreadable !== undefined) { → if (false) {
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+KILLED main-unreadable-message scripts/mutate.ts: unreadable = (err as Error).message; → unreadable = "";
+    ✗ scripts/mutate.test.ts > main refuses an edit whose file can't be read, saying why
+KILLED main-exit-order scripts/mutate.ts: if (count("SURVIVED") > 0) return 1;⏎  return count("ERROR") + count("REFUSED") > 0 ? 2 : 0; → if (count("ERROR") + count("REFUSED") > 0) return 2;⏎  return count("SURVIVED") > 0 ? 1 : 0;
+    ✗ scripts/mutate.test.ts > main exits 1 when an edit survived, even beside a refused edit
+KILLED run-dot-reporter scripts/mutate.ts: "--reporter=dot", "--reporter=json" → "--reporter=json"
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+KILLED main-error-head scripts/mutate.ts: outcome.output.slice(-2000) → outcome.output.slice(0, 2000)
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
+KILLED main-error-whole scripts/mutate.ts: outcome.output.slice(-2000) → outcome.output
+    ✗ scripts/mutate.test.ts > main adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output
 
-91 edits: 90 killed, 0 survived, 1 timed out, 0 errors, 0 refused
+117 edits: 116 killed, 0 survived, 1 timed out, 0 errors, 0 refused
