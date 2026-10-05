@@ -44,6 +44,10 @@ The rubric anchors themselves were written by the agent and haven't been reviewe
 
 ## What surprised us
 
+- **The judge failed nothing.** Nick chose to run the full scenario suite live (40 cases, 1 trial each; agent and simulator on `sonnet-4.6`, judge on `haiku-4.5`). The judge scored all 38 trials it judged 4 or above. The means were `tone` 5.00 and `clarity` 4.85, and every judged invariant scored 5.00. That includes trials the deterministic graders failed for exactly the things `clarity` asks about: seven times in one message (`max_five_options`), and two questions in one message. Either the agent's replies really are clear enough, or the `clarity` anchors are too forgiving. Nick's labels in #159 will tell which. Until then a rubric average of 4.92 says little.
+- **Quoting is hard for the judge.** The judge made 47 calls for 39 trials, so about one trial in five needed the retry. One trial (`book-derm-next-week-afternoon`) still had no valid verdict after it. The judge quoted a markdown slot list it had re-flowed, and once its own narration ("The patient states…") instead of transcript text. The evidence check is doing its job, but it costs calls.
+- **The estimate was 6.6 times too high.** The pre-run estimate was $14.25. The run cost $2.16: agent $1.36, simulator $0.59, judge $0.22. #34 recalibrates the estimate from recorded runs.
+
 - The scenarios README listed `no_invented_providers` among the "judge-assisted" invariants, but it has been deterministic since #30 (`graders/invariants.ts`). Updating the README for the judge exposed it, so it now has its own row.
 - Of the 21 `judge:` dimension names in the schema, only `tone`, `clarity` and two judged invariants have rubrics. The scenario lint's new warning lists 16 unrubriced dimensions in use, so most `judge:` entries in the scenario files still measure nothing.
 
@@ -51,9 +55,13 @@ The rubric anchors themselves were written by the agent and haven't been reviewe
 
 - Code: `packages/evals/src/judge/` (rubrics, prompt, parse, judge, grade, calibration); wiring in `runner.ts`, `suite.ts`, `cli-args.ts`, `cli.ts`, `graders/index.ts` and `graders/invariants.ts`.
 - Tests: `packages/evals/test/judge.test.ts`, `judge-wiring.test.ts`, `calibration.test.ts`, `grader-fail-cases.test.ts` (61 cases, one per emittable grader name), and the scenario lint's warning.
-- Live smoke run with the judge on: pending (it costs money; the PR states the command and estimate before it runs).
+- Live run, by Nick's choice of the full suite over smoke only: `npm run evals -- --suite full --mode scenario --profile sonnet-4.6 --trials 1 --max-cost 15`, at commit `40dbee6`, results file `2026-10-05T112757Z-scenario-full-sonnet-4.6.json` (git-ignored).
+  - 40 cases: 39 ran, 28 passed, 11 failed, 0 errored, 1 skipped (the API-surface case). pass@1 72%, with 4 safety violations from the unchanged agent and graders: two `no_hallucinated_slots`, one `no_cross_patient_data` on the indirect-injection case, and one leak check. None was investigated here.
+  - Judge: 38 trials judged, 0 scores below 4, 1 judge error, 47 judge calls. Means: `tone` 5.00, `clarity` 4.85, the six invariants 5.00. Rubric average (tone, clarity) 4.92.
+  - Cost $2.16 against an estimate of $14.25: agent $1.36, simulator $0.59, judge $0.22. 471 model calls, 0 throttles, 49 minutes wall-clock.
+- Calibration set: `--export-calibration` on that file wrote 20 transcripts to `packages/evals/calibration/transcripts.json` (7 failing trials, 7 passing red-team trials, 6 others) and an all-`null` `labels.json`. The data is synthetic: fixture patients and providers, and the fictional front-desk number.
 
 ## What's next
 
-- #159: Nick labels the exported transcripts, and we measure agreement against the 80% target.
+- #159: Nick labels the 20 exported transcripts, and we measure agreement against the 80% target. With every judge score at 4 or 5, this run can't yet show whether the judge would catch a bad reply.
 - #34 builds baselines and the CI gate on the deterministic status, with the judge's scores reported beside it.
