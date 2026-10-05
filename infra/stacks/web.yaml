@@ -85,8 +85,8 @@ Resources:
         PriceClass: PriceClass_100
         DefaultRootObject: index.html
         # Deliberately no CustomErrorResponses: they are distribution-wide and would turn the API's
-        # 401/403/404 into index.html. SPA deep links, when needed, get a CloudFront Function on the
-        # default behavior only.
+        # 401/403/404 into index.html. SPA deep links get SpaDeepLinkFunction (below) on the default
+        # behavior only (#99).
         Origins:
           - Id: site
             DomainName: !GetAtt SiteBucket.RegionalDomainName
@@ -112,6 +112,9 @@ Resources:
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
           ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # Managed-SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaDeepLinkFunction.FunctionARN
         CacheBehaviors:
           - PathPattern: /api/*
             TargetOriginId: api
@@ -125,6 +128,36 @@ Resources:
       Tags:
         - { Key: project, Value: sched }
         - { Key: env, Value: !Ref Env }
+
+  # SPA deep links (#99): a viewer-request function on the default behavior only. An extensionless
+  # last path segment (/chat, /login, /, /chat/, /anything) becomes /index.html, so a refresh or a
+  # direct load serves the app and react-router picks the route (an unknown one gets NotFoundPage).
+  # Paths with an extension (/assets/x.js, /favicon.ico) pass through, so a missing asset is still
+  # S3's 403. /api and /api/... pass through too: /api/* never runs this function, but /api with no
+  # trailing slash matches the default behavior. Only the URI changes; query string and headers don't.
+  # scripts/web-template.test.ts runs FunctionCode as written here.
+  SpaDeepLinkFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      # Function names are unique per account, so the name carries Env.
+      Name: !Sub sched-${Env}-web-spa-deep-links
+      AutoPublish: true
+      FunctionConfig:
+        Comment: !Sub sched-${Env} SPA deep links -> /index.html (#99)
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          if (uri === '/api' || uri.startsWith('/api/')) {
+            return request;
+          }
+          var lastSegment = uri.substring(uri.lastIndexOf('/'));
+          if (lastSegment.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+          return request;
+        }
 
   # ---------------------------------------------------------------------------------------------
   # Outputs for the asset upload and scripts (/sched/<env>/web/...)
