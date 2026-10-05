@@ -61,6 +61,11 @@ describe("ChatPage: Retry after a first turn named its conversation (#160)", () 
 
   /** A 200 stream with the `conversation` line, then `end` (close it, or fail the read), once. */
   function nameThen(end: "close" | "error") {
+    const named: ChatStreamEvent = { type: "conversation", conversationId: NAMED };
+    if (end === "close") {
+      server.use(http.post("/api/chat", () => ndjson([named]), { once: true }));
+      return;
+    }
     server.use(
       http.post(
         "/api/chat",
@@ -70,18 +75,13 @@ describe("ChatPage: Retry after a first turn named its conversation (#160)", () 
             async pull(controller) {
               pulls += 1;
               if (pulls === 1) {
-                const line = encodeStreamEvent({ type: "conversation", conversationId: NAMED });
-                controller.enqueue(new TextEncoder().encode(line));
-              } else if (end === "close") controller.close();
-              else {
-                // fetch reads ahead, and an error drops what it buffered: fail the read only once the
-                // page has handled the line (it wrote the login session), as a drop mid-read would.
-                for (let hop = 0; readLoginSession()?.conversationId !== NAMED; hop += 1) {
-                  if (hop > 500) throw new Error("the page never handled the conversation line");
-                  await new Promise((resolve) => setImmediate(resolve));
-                }
-                controller.error(new TypeError("network error"));
+                controller.enqueue(new TextEncoder().encode(encodeStreamEvent(named)));
+                return;
               }
+              // fetch reads ahead, and an error drops what it buffered: fail the read only once the
+              // page has handled the line (it wrote the login session), as a drop mid-read would.
+              await until(() => readLoginSession()?.conversationId === NAMED);
+              controller.error(new TypeError("network error"));
             },
           });
           return new HttpResponse(body, { headers: { "Content-Type": NDJSON_CONTENT_TYPE } });
@@ -185,10 +185,23 @@ describe("ChatPage: Retry (FR-015)", () => {
     expect(bodies[1]).not.toHaveProperty("conversationId");
   });
 
+  /** The page shows `message` in an error bubble beside `sent`, with its Retry, and no typing indicator. */
+  async function expectRetryBubble(message: string, sent: string) {
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    expect(typing()).not.toBeInTheDocument();
+    expect(within(log()).getByText(sent)).toBeVisible();
+    // The error is a bubble in the conversation, with its Retry.
+    const bubble = within(log()).getByText(message).closest("li");
+    expect(bubble).not.toBeNull();
+    expect(within(bubble as HTMLElement).getByRole("button", { name: "Retry" })).toBeVisible();
+  }
+
+  // A first turn: the mock names the conversation, so its agent faults answer 200 (#160).
   it.each([
     ["a retryable error event mid-stream", "mid_stream", UNAVAILABLE],
-    ["a retryable 429 (busy model quota)", "rate_limited", BUSY],
-    ["a retryable 503", "unavailable", UNAVAILABLE],
+    ["a 200 with a retryable RATE_LIMITED event on a first turn", "rate_limited", BUSY],
+    ["a 200 with a retryable AGENT_UNAVAILABLE event on a first turn", "unavailable", UNAVAILABLE],
     ["a network failure", "network", GENERIC_ERROR],
   ] as const)(
     "offers Retry on %s, beside the error and the patient's message",
@@ -196,14 +209,28 @@ describe("ChatPage: Retry (FR-015)", () => {
       configureMockApi({ chatFault });
       const { sendMessage } = await renderPage();
       await sendMessage("Hi");
-      const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent(message);
-      expect(typing()).not.toBeInTheDocument();
-      expect(within(log()).getByText("Hi")).toBeVisible();
-      // The error is a bubble in the conversation, with its Retry.
-      const bubble = within(log()).getByText(message).closest("li");
-      expect(bubble).not.toBeNull();
-      expect(within(bubble as HTMLElement).getByRole("button", { name: "Retry" })).toBeVisible();
+      await expectRetryBubble(message, "Hi");
+    },
+  );
+
+  // A continued conversation, which the mock still answers 429/503 (#160).
+  it.each([
+    ["a retryable 429 (busy model quota)", "rate_limited", 429, BUSY],
+    ["a retryable 503", "unavailable", 503, UNAVAILABLE],
+  ] as const)(
+    "offers Retry on %s in a continued conversation, beside the error and the patient's message",
+    async (_, chatFault, status, message) => {
+      const statuses: number[] = [];
+      server.events.on("response:mocked", ({ request, response }) => {
+        if (new URL(request.url).pathname === "/api/chat") statuses.push(response.status);
+      });
+      const { sendMessage } = await renderPage();
+      await sendMessage("Hi");
+      await within(log()).findByText(REPLIES.tools.text);
+      configureMockApi({ chatFault });
+      await sendMessage("Book Wednesday");
+      await expectRetryBubble(message, "Book Wednesday");
+      expect(statuses).toEqual([200, status]);
     },
   );
 
