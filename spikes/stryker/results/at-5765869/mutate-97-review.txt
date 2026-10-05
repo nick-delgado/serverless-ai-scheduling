@@ -1,0 +1,13 @@
+SURVIVED TEST-101a packages/evals/src/simulator/llm.ts:           family: this.#profile.family,⏎ → 
+SURVIVED TEST-101b packages/evals/src/simulator/llm.ts:           maxTokens: this.#profile.maxTokens,⏎ → 
+SURVIVED TEST-101c packages/evals/src/simulator/llm.ts:           modelFields: this.#profile.modelFields,⏎ → 
+SURVIVED TEST-101d packages/evals/src/simulator/llm.ts: : { inlineReasoningTag: this.#profile.inlineReasoningTag } → : { inlineReasoningTag: "reasoning" }
+SURVIVED TEST-101e packages/evals/src/simulator/llm.ts: ...(this.#profile.inlineReasoningTag === undefined → ...(true
+SURVIVED TEST-102 packages/evals/src/simulator/replay.ts:  || "(root)" → 
+SURVIVED TEST-103 packages/evals/src/simulator/llm.ts: options.turnsAfterEscalation ?? 2 → options.turnsAfterEscalation ?? 1
+KILLED TEST-104 packages/evals/src/simulator/replay.ts: `${scenarioId}#${String(trial)}` → `${String(trial)}`
+    ✗ packages/evals/test/simulator.test.ts > ReplayPatientSimulator matches by trial number, and a turn it has no record of stops with replay exhausted
+    ✗ packages/evals/test/simulator.test.ts > ReplayPatientSimulator a conversation the recording doesn't have is a simulator error
+SURVIVED TEST-105 packages/evals/src/simulator/prompt.ts: ? "(none)" → ? ""
+
+9 edits: 1 killed, 8 survived, 0 timed out, 0 errors, 0 refused

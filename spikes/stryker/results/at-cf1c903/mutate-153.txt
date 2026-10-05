@@ -1,0 +1,344 @@
+KILLED a services/api/src/lib/chat-turn.ts: if (last?.clientMessageId !== request.clientMessageId) return { kind: "new" }; → if (last === undefined) return { kind: "new" };
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths continues an owned conversation: loads its history and appends after it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures closes a turn that was interrupted earlier before appending the new message
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a stale-history append conflict as retryable, without running the agent
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) matches only the last patient message: an earlier message's ID is a new send
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+KILLED a2 services/api/src/lib/chat-turn.ts: if (last?.clientMessageId !== request.clientMessageId) return { kind: "new" }; → return { kind: "new" };
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED b services/api/src/lib/chat-turn.ts:     if (textOf(last) !== request.text) return this.#fail(FAILURES.badRequest());⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED c1 services/api/src/lib/chat-turn.ts: index === stored.length - 1 ? "interrupted" : "answered" → "answered"
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+KILLED c2 services/api/src/lib/chat-turn.ts: index === stored.length - 1 ? "interrupted" : "answered" → "interrupted"
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+KILLED e services/api/src/lib/chat-turn.ts: if (send.kind === "new" && !(await this.#consumeDailyTurn(patientId))) return; → if (!(await this.#consumeDailyTurn(patientId))) return;
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+KILLED f1 services/api/src/lib/chat-turn.ts:     if (send.kind === "new" && !(await this.#consumeDailyTurn(patientId))) return;⏎    const turn = this.#openTurn(patientId, request.conversationId, stored);⏎ →     const turn = this.#openTurn(patientId, request.conversationId, stored);⏎    if (send.kind === "new" && !(await this.#consumeDailyTurn(patientId))) return;⏎
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED f2 services/api/src/lib/chat-turn.ts:     const send = this.#classify(stored, request);⏎    if (!send) return;⏎    this.#facts.retry = send.kind === "new" ? undefined : send.kind;⏎    if (send.kind === "new" && !(await this.#consumeDailyTurn(patientId))) return;⏎ →     if (!(await this.#consumeDailyTurn(patientId))) return;⏎    const send = this.#classify(stored, request);⏎    if (!send) return;⏎    this.#facts.retry = send.kind === "new" ? undefined : send.kind;⏎
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED g services/api/src/lib/chat-turn.ts:       this.#storedConversationId = conversationId;⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+KILLED h services/api/src/lib/chat-turn.ts:       this.#storedConversationId = turn.conversationId;⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+KILLED i services/api/src/lib/chat-turn.ts: conversationId === undefined ? failure.event : { ...failure.event, conversationId }, → failure.event,
+    ✗ apps/web/src/chat/ChatPage.test.tsx > ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+KILLED j services/api/src/lib/chat-turn.ts: const closing = needsClosingReply(fromPatientMessage) ? [closingReply()] : []; → const closing: LlmMessage[] = [];
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+KILLED k services/api/src/lib/chat-turn.ts: .find((m) => m.role === "assistant") → .find((m) => m.role === "patient")
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+KILLED l services/api/src/lib/chat-turn.ts: if (reply === undefined) throw new Error("Answered turn has no reply to replay"); → if (reply === undefined) return;
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+SURVIVED l2 services/api/src/lib/chat-turn.ts:     if (!appended) return;⏎    const reply →     const reply
+KILLED m1 services/api/src/lib/chat-turn.ts: text: reply.text }); → text: reply.text.slice(1) });
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+KILLED m2 services/api/src/lib/chat-turn.ts: messageId: reply.id, → messageId: messageIdForSeq(0),
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+KILLED m3 services/api/src/lib/chat-turn.ts: const NO_USAGE: TokenUsage = { inputTokens: 0, → const NO_USAGE: TokenUsage = { inputTokens: 1,
+    ✗ apps/web/src/chat/ChatPage.test.tsx > ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+KILLED m4 services/api/src/lib/chat-turn.ts:     this.#summary.terminal = "done";⏎    this.#summary.replayed = true; →     this.#summary.replayed = true;
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+KILLED m5 services/api/src/lib/chat-turn.ts:     this.#summary.replayed = true;⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+KILLED n services/api/src/lib/chat-turn.ts: history = toLlmHistory(stored.slice(0, send.index)); → history = toLlmHistory(stored);
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+KILLED o services/api/src/lib/chat-turn.ts: const closing = needsClosingReply(rest) ? [closingReply()] : []; → const closing = needsClosingReply([{ role: "user", content: [] }, ...rest]) ? [closingReply()] : [];
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+KILLED p1 services/api/src/lib/chat-turn.ts:         clientMessageId: request.clientMessageId,⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) stores the clientMessageId on the patient's message only
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED p2 services/api/src/lib/history.ts:     ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) stores the clientMessageId on the patient's message only
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED d1 services/api/src/lib/history.ts: m.role === "user" && m.content.some((b) => b.type === "text") → m.role === "user"
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+KILLED d2 services/api/src/lib/history.ts: m.role === "user" && m.content.some((b) => b.type === "text") → m.content.some((b) => b.type === "text")
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+KILLED t services/api/src/lib/history.ts: return messages.findLastIndex( → return messages.findIndex(
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) matches only the last patient message: an earlier message's ID is a new send
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+KILLED q services/api/src/lib/chat-turn.ts:     this.#facts.retry = send.kind === "new" ? undefined : send.kind;⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+SURVIVED q2 services/api/src/lib/chat-turn.ts: this.#facts.retry = send.kind === "new" ? undefined : send.kind; → this.#facts.retry = send.kind;
+KILLED r services/api/src/lib/chat-turn.ts:         replayed: this.#summary.replayed,⏎ → 
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+KILLED w1 services/api/src/lib/errors.ts: failure(429, "RATE_LIMITED", DAILY_CAP_MESSAGE, false) → failure(429, "RATE_LIMITED", `${DAILY_CAP_MESSAGE} `, false)
+    ✗ services/api/test/errors.test.ts > FAILURES.dailyCap answers with the shared daily-cap message, which names the front desk (#104)
+KILLED w2 packages/contracts/src/clinic.ts:  (${CLINIC.hours}) → 
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) shows the daily cap's message, with the front desk's number and hours, and no Retry (FR-017)
+    ✗ services/api/test/errors.test.ts > FAILURES.dailyCap answers with the shared daily-cap message, which names the front desk (#104)
+KILLED w3 packages/contracts/src/clinic.ts: at ${CLINIC.phone}  → at 
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) shows the daily cap's message, with the front desk's number and hours, and no Retry (FR-017)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects the daily cap as 429 with one RATE_LIMITED event that isn't retryable and names the front desk
+    ✗ services/api/test/errors.test.ts > FAILURES.dailyCap answers with the shared daily-cap message, which names the front desk (#104)
+KILLED x apps/web/src/mocks/handlers.ts: message: DAILY_CAP_MESSAGE, → message: `${DAILY_CAP_MESSAGE} `,
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects the daily cap as 429 with one RATE_LIMITED event that isn't retryable and names the front desk
+KILLED y1 apps/web/src/chat/useChat.ts:             if (event.conversationId !== undefined) rememberConversation(event.conversationId);⏎ → 
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) writes the login session from the error, before any done
+KILLED y2 apps/web/src/chat/useChat.ts: if (event.conversationId !== undefined) rememberConversation(event.conversationId); → rememberConversation(event.conversationId as string);
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) resends the same text, clientMessageId and conversationId, once, without adding the message again
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) keeps the conversation it has when an error names none
+KILLED y3 apps/web/src/chat/useChat.ts:         conversationId.current = id;⏎ → 
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) resends the same text, clientMessageId and conversationId, once, without adding the message again
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) sends the conversationId from the last done, which the retried turn keeps
+    ✗ apps/web/src/chat/ChatPage.test.tsx > ChatPage: a turn continues the conversation the first turn's done event started
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) keeps the conversation it has when an error names none
+KILLED y4 apps/web/src/chat/useChat.ts:         if (sub !== undefined) writeLoginSession({ sub, conversationId: id });⏎ → 
+    ✗ apps/web/src/chat/ChatPage.auth.test.tsx > ChatPage in the app: the login session remembers the conversation a turn starts under the signed-in patient's sub
+    ✗ apps/web/src/chat/ChatPage.restore.test.tsx > ChatPage: restore (FR-014) starts empty when nothing is stored (a new sign-in), and the next turn starts a new conversation it remembers
+    ✗ apps/web/src/chat/ChatPage.restore.test.tsx > ChatPage: restore (FR-014) starts empty when the stored login session is another patient's, and the next turn starts a new conversation it remembers
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+    ✗ apps/web/src/chat/useChat.test.tsx > useChat: the conversation an error names (#104) writes the login session from the error, before any done
+KILLED z1 packages/contracts/src/domain.ts:   clientMessageId: z.uuid().optional(),⏎ → 
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) a stored message may carry the clientMessageId it was sent with, which must be a UUID
+    ✗ services/api/test/chat-handler.test.ts > handlers/chat builds the stores from TABLE_NAME and logs each turn through the console
+    ✗ services/api/test/chat-handler.test.ts > handlers/chat applies DAILY_TURN_CAP from the environment
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths starts a conversation, streams the reply, and stores both messages and the trace
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths passes the patient's first name and the injected clock's time, in clinic time, to the system prompt
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths leaves the first name out of the prompt for a patient with no profile on file
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths runs tools, streams their status, and stores the tool messages verbatim
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths continues an owned conversation: loads its history and appends after it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths forwards text_reset when a streamed response is discarded, so the client shows what was stored
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a refusal turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a malformed_output turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a max_tokens turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a context_window_exceeded turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership binds tools to the JWT patient: the profile tool reads Maria's record
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership rejects a model-supplied patient id instead of using it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership never reads or extends another patient's conversation: it starts a new one instead
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership binds escalations to the loaded conversation, with the patient's message already in the transcript
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership binds an escalation in a replaced conversation to the new one, never the foreign id
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs enforces the daily turn cap per patient and per clinic day
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers AGENT_UNAVAILABLE for other model errors
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures keeps the tool messages when the model fails after a tool ran, and ends the stream with error
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures ends with an error when the deadline aborts the turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures closes a turn that was interrupted earlier before appending the new message
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a stale-history append conflict as retryable, without running the agent
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a conflict, not INTERNAL, when another turn wins the race to store the reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures still answers done when only the trace fails to save
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: logging logs the turn's timings from the injected monotonic clock
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: logging logs a tool name the model made up as <unknown>, since it can carry patient text
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: logging logs IDs, timings and tokens, but no message text or tool inputs
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) stores the clientMessageId on the patient's message only
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) matches only the last patient message: an earlier message's ID is a new send
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) never matches another patient's conversation: the same ID there starts a new conversation
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler streams NDJSON with a 200 prelude for the authorizer's sub
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler decodes a base64 body
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler with a Lambda context passes the deadline to the turn: a model call still running at the deadline ends in AGENT_UNAVAILABLE
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler with a Lambda context cancels the deadline timer when the turn ends first
+    ✗ packages/tools/test/repos/in-memory.test.ts > in-memory repositories: implementation specifics keeps a patient message's clientMessageId (#104)
+KILLED z2 packages/contracts/src/domain.ts:   clientMessageId: z.uuid().optional(), →   clientMessageId: z.string().optional(),
+    ✗ apps/web/src/chat/ChatPage.test.tsx > ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) a stored message may carry the clientMessageId it was sent with, which must be a UUID
+KILLED z3 packages/contracts/src/domain.ts:   clientMessageId: z.uuid().optional(), →   clientMessageId: z.uuid(),
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) a stored message may carry the clientMessageId it was sent with, which must be a UUID
+    ✗ packages/contracts/src/schemas.test.ts > ConversationMessage accepts its example
+    ✗ packages/contracts/src/schemas.test.ts > ConversationMessage round-trips through JSON unchanged
+    ✗ services/api/test/chat-handler.test.ts > handlers/chat builds the stores from TABLE_NAME and logs each turn through the console
+    ✗ services/api/test/chat-handler.test.ts > handlers/chat applies DAILY_TURN_CAP from the environment
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths starts a conversation, streams the reply, and stores both messages and the trace
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths leaves the first name out of the prompt for a patient with no profile on file
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths runs tools, streams their status, and stores the tool messages verbatim
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths continues an owned conversation: loads its history and appends after it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths forwards text_reset when a streamed response is discarded, so the client shows what was stored
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a refusal turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a malformed_output turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a max_tokens turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: happy paths ends a context_window_exceeded turn with done and the stored fallback reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership binds tools to the JWT patient: the profile tool reads Maria's record
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership rejects a model-supplied patient id instead of using it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: identity and ownership never reads or extends another patient's conversation: it starts a new one instead
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures keeps the tool messages when the model fails after a tool ran, and ends the stream with error
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures closes a turn that was interrupted earlier before appending the new message
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a stale-history append conflict as retryable, without running the agent
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures still answers done when only the trace fails to save
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) stores the clientMessageId on the patient's message only
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) closes, then replays, a turn whose storing stopped after a tool result
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) matches only the last patient message: an earlier message's ID is a new send
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler streams NDJSON with a 200 prelude for the authorizer's sub
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler decodes a base64 body
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler with a Lambda context cancels the deadline timer when the turn ends first
+    ✗ services/api/test/session.test.ts > restore returns the patient's newest conversation as display messages
+    ✗ services/api/test/session.test.ts > restore never returns another patient's conversation, even a newer one
+    ✗ services/api/test/session.test.ts > restore reads messages only through the caller's own patient-scoped reads
+    ✗ services/api/test/session.test.ts > restore restores nothing when the newest conversation's messages have expired
+    ✗ services/api/test/session.test.ts > restore returns the conversation ID while stored messages remain, even with nothing displayable
+    ✗ services/api/test/session.test.ts > restore starts the profile, appointment and conversation reads together, then the provider and messages
+    ✗ services/api/test/session.test.ts > restore answers 500, not a contract-breaking body, when a stored message can't be displayed
+    ✗ services/api/test/session.test.ts > logging logs one line with IDs, flags, counts and timings, never names or message text
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) appends and reads messages back in seq order, byte-for-byte
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) hides a conversation from other patients
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) never overwrites: re-appending an existing seq throws SEQ_CONFLICT and writes nothing
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) rejects restarting an existing conversation at seq 0
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) requires the patient's own predecessor message (no gaps, no appending to someone else's history)
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) rejects malformed batches before writing
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) two turns racing to append the same seq: exactly one wins
+    ✗ packages/tools/test/repos/in-memory.test.ts > repository contract: in-memory conversations (AP-8, append-only) lists a patient's conversations, newest first
+    ✗ packages/tools/test/repos/in-memory.test.ts > in-memory repositories: implementation specifics snapshot() captures the whole store for eval end-state diffs, deterministically
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human is registered in TOOL_REGISTRY, so the model is offered it and calls reach this handler
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human records the escalation, notifies staff once, and returns the phone and hours
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human never puts reasoning, tool calls, or tool results in the staff notice
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human answers a repeat call with already_escalated and no second notification
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human escalates exactly once under parallel calls
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human still records the escalation and returns the phone and hours when no notifier is configured
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human still records the escalation and returns the phone and hours when the notifier throws
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human clips a long notifier error to 500 characters
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human records FAILED and still returns the phone and hours when building the notice fails
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human still returns the phone and hours when saving the delivery status fails
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human sends a notice without a name when the patient has no profile
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human rejects invalid input and records nothing
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human cross-patient attempts rejects a model-supplied patient_id
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human cross-patient attempts can't piggyback on another patient's escalated conversation, and still gets the phone number
+    ✗ packages/tools/test/tools/escalate_to_human.test.ts > escalate_to_human cross-patient attempts never sends another patient's messages to staff
+KILLED z4 packages/contracts/src/stream.ts:   conversationId: ConversationId.optional(),⏎}); → });
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) an error event may name its conversation, which must be a conversation ID
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers AGENT_UNAVAILABLE for other model errors
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures keeps the tool messages when the model fails after a tool ran, and ends the stream with error
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures ends with an error when the deadline aborts the turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a stale-history append conflict as retryable, without running the agent
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures ends with INTERNAL, not done, when storing the reply fails after the agent ran
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers a conflict, not INTERNAL, when another turn wins the race to store the reply
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays the closing reply of a turn that failed after a tool ran, as restore shows it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) answers INTERNAL for a repeat whose stored turn has no reply text to replay
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) after a failed first turn, names the new conversation on error; Retry runs the agent again without storing the message twice or counting a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) re-runs an interrupted turn in a continued conversation on the history before it
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler with a Lambda context passes the deadline to the turn: a model call still running at the deadline ends in AGENT_UNAVAILABLE
+KILLED z5 packages/contracts/src/stream.ts:   conversationId: ConversationId.optional(),⏎}); →   conversationId: z.string().optional(),⏎});
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) an error event may name its conversation, which must be a conversation ID
+KILLED z6 packages/contracts/src/stream.ts:   conversationId: ConversationId.optional(),⏎}); →   conversationId: ConversationId,⏎});
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) resends the same text, clientMessageId and conversationId, once, without adding the message again
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) offers Retry on a retryable error event mid-stream, beside the error and the patient's message
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) offers Retry on a retryable 429 (busy model quota), beside the error and the patient's message
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) offers Retry on a retryable 503, beside the error and the patient's message
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) shows the daily cap's message, with the front desk's number and hours, and no Retry (FR-017)
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) on the chat handler's 401 (an UNAUTHORIZED error event), says the sign-in has ended, without Retry, and hands over to sign-in
+    ✗ apps/web/src/chat/ChatPage.errors.test.tsx > ChatPage: Retry (FR-015) keeps Retry keyboard-operable: Enter on the focused button retries
+    ✗ apps/web/src/chat/ChatPage.test.tsx > ChatPage: a turn ends the turn on an error event mid-stream and shows its message
+    ✗ apps/web/src/chat/api.test.ts > createChatApi delivers the error event of a rate_limited response instead of throwing
+    ✗ apps/web/src/chat/api.test.ts > createChatApi delivers the error event of a unavailable response instead of throwing
+    ✗ apps/web/src/chat/streamClient.test.ts > readChatStream delivers an error event as the last event
+    ✗ apps/web/src/chat/streamClient.test.ts > readChatStream rejects an event after the terminal one in NDJSON, without handing it over
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat answers a malformed body with 400 and one BAD_REQUEST event (chatFault none)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat answers a malformed body with 400 and one BAD_REQUEST event (chatFault rate_limited)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat answers a malformed body with 400 and one BAD_REQUEST event (chatFault unavailable)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat answers a malformed body with 400 and one BAD_REQUEST event (chatFault daily_cap)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat answers a malformed body with 400 and one BAD_REQUEST event (chatFault mid_stream)
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects rate_limited as 429 with one retryable RATE_LIMITED event
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects unavailable as 503 with one retryable AGENT_UNAVAILABLE event
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects the daily cap as 429 with one RATE_LIMITED event that isn't retryable and names the front desk
+    ✗ apps/web/src/mocks/handlers.test.ts > POST /api/chat injects a failure mid-stream: 200, part of the reply, then a retryable error
+    ✗ packages/contracts/src/rules.test.ts > stream events (ADR-007) require the buffered form to end with done or error
+    ✗ packages/contracts/src/rules.test.ts > chat retries (#104) an error event may name its conversation, which must be a conversation ID
+    ✗ packages/contracts/src/schemas.test.ts > ChatErrorEvent accepts its example
+    ✗ packages/contracts/src/schemas.test.ts > ChatErrorEvent round-trips through JSON unchanged
+    ✗ services/api/test/chat-handler.test.ts > handlers/chat applies DAILY_TURN_CAP from the environment
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 401 for no sub, and counts and stores nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 401 for a sub that isn't a UUID, and counts and stores nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 400 for no body, without consuming a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 400 for malformed JSON, without consuming a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 400 for an empty message, without consuming a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs answers 400 for a patientId field, without consuming a turn
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: rejections before the agent runs enforces the daily turn cap per patient and per clinic day
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: failures answers INTERNAL when a repository throws, and still ends the stream
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) replays even for a patient at the daily cap, since it makes no model call
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) refuses a repeated clientMessageId with different text, storing and counting nothing
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names a continued conversation on error, but not for the daily cap or a refused body
+    ✗ services/api/test/chat-turn.test.ts > handleChatTurn: retries (#104, FR-015) names the conversation on a conflict in a continued conversation, but not when a new one's first append fails
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler answers 401 with no authorizer
+    ✗ services/api/test/lambda.test.ts > chatStreamHandler answers 401 with a non-UUID sub
+SURVIVED z7 packages/tools/src/repos/dynamo/items.ts:   ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),⏎ → 
+SURVIVED z8 packages/tools/src/repos/dynamo/items.ts: ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }), → clientMessageId: m.clientMessageId ?? null,
+SURVIVED z9 packages/tools/src/repos/dynamo/items.ts: ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }), → ...{ clientMessageId: m.turnId },
+
+47 edits: 42 killed, 5 survived, 0 timed out, 0 errors, 0 refused
+real 847.14
+user 4046.38
+sys 329.83

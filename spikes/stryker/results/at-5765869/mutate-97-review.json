@@ -1,0 +1,104 @@
+{
+  "cmd": [
+    "npx",
+    "vitest",
+    "run",
+    "--project",
+    "@sched/evals"
+  ],
+  "results": [
+    {
+      "id": "TEST-101a",
+      "note": "#97 5765869/TEST-101: family dropped",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": "          family: this.#profile.family,\n",
+      "replace": "",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 11.452
+    },
+    {
+      "id": "TEST-101b",
+      "note": "5765869/TEST-101: maxTokens dropped",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": "          maxTokens: this.#profile.maxTokens,\n",
+      "replace": "",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 10.542
+    },
+    {
+      "id": "TEST-101c",
+      "note": "5765869/TEST-101: modelFields dropped",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": "          modelFields: this.#profile.modelFields,\n",
+      "replace": "",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 6.819
+    },
+    {
+      "id": "TEST-101d",
+      "note": "5765869/TEST-101: the tag hardcoded",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": ": { inlineReasoningTag: this.#profile.inlineReasoningTag }",
+      "replace": ": { inlineReasoningTag: \"reasoning\" }",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 11.341
+    },
+    {
+      "id": "TEST-101e",
+      "note": "5765869/TEST-101: the tag never sent",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": "...(this.#profile.inlineReasoningTag === undefined",
+      "replace": "...(true",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 6.205
+    },
+    {
+      "id": "TEST-102",
+      "note": "5765869/TEST-102: the (root) fallback",
+      "file": "packages/evals/src/simulator/replay.ts",
+      "find": " || \"(root)\"",
+      "replace": "",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 6.631
+    },
+    {
+      "id": "TEST-103",
+      "note": "5765869/TEST-103: the default escalation allowance",
+      "file": "packages/evals/src/simulator/llm.ts",
+      "find": "options.turnsAfterEscalation ?? 2",
+      "replace": "options.turnsAfterEscalation ?? 1",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 6.761
+    },
+    {
+      "id": "TEST-104",
+      "note": "5765869/TEST-104: replay keyed on the trial only",
+      "file": "packages/evals/src/simulator/replay.ts",
+      "find": "`${scenarioId}#${String(trial)}`",
+      "replace": "`${String(trial)}`",
+      "status": "KILLED",
+      "failedTests": [
+        "packages/evals/test/simulator.test.ts > ReplayPatientSimulator matches by trial number, and a turn it has no record of stops with replay exhausted",
+        "packages/evals/test/simulator.test.ts > ReplayPatientSimulator a conversation the recording doesn't have is a simulator error"
+      ],
+      "seconds": 7.667
+    },
+    {
+      "id": "TEST-105",
+      "note": "5765869/TEST-105: the (none) branch",
+      "file": "packages/evals/src/simulator/prompt.ts",
+      "find": "? \"(none)\"",
+      "replace": "? \"\"",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 7.921
+    }
+  ]
+}

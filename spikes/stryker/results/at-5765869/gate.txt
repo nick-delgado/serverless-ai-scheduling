@@ -1,0 +1,31 @@
+Added lines no test executes (28):
+packages/evals/src/cli-args.ts:133
+packages/evals/src/cli.ts:62
+packages/evals/src/cli.ts:63
+packages/evals/src/cli.ts:64
+packages/evals/src/cli.ts:65
+packages/evals/src/cli.ts:67
+packages/evals/src/cli.ts:68
+packages/evals/src/cli.ts:69
+packages/evals/src/cli.ts:70
+packages/evals/src/cli.ts:71
+packages/evals/src/cli.ts:72
+packages/evals/src/cli.ts:73
+packages/evals/src/cli.ts:74
+packages/evals/src/cli.ts:75
+packages/evals/src/cli.ts:76
+packages/evals/src/cli.ts:79
+packages/evals/src/cli.ts:82
+packages/evals/src/cli.ts:84
+packages/evals/src/cli.ts:98
+packages/evals/src/simulator/guards.ts:58
+packages/evals/src/simulator/guards.ts:67
+packages/evals/src/simulator/llm.ts:81
+packages/evals/src/simulator/llm.ts:87
+packages/evals/src/simulator/llm.ts:154
+packages/evals/src/simulator/prompt.ts:38
+packages/evals/src/simulator/replay.ts:74
+packages/evals/src/suite.ts:136
+packages/evals/src/suite.ts:138
+coverage-changed: give each line above a test, or an ignore hint with a reason (`/* v8 ignore next -- <reason> */`). Coverage shows a line ran, not that a test checks it.
+gate exit 1 in 0 s (base c7ac5d5, head 5765869df3814fc6d250cdaedd082272370018ad)

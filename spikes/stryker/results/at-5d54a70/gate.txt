@@ -1,0 +1,2 @@
+coverage-changed: every added source line since 4527fdb ran in a test.
+gate exit 0 in 1 s (base 4527fdb, head 5d54a7061de55074453f46d7015019f5e4c1cd26)

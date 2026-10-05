@@ -1,0 +1,115 @@
+KILLED 132-1 scripts/deploy-web.sh: VITE_USER_POOL_ID="$user_pool_id" VITE_SPA → VITE_USER_POOL_ID="" VITE_SPA
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-2 scripts/deploy-web.sh: VITE_SPA_CLIENT_ID="$spa_client_id" → VITE_SPA_CLIENT_ID=""
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-3 scripts/deploy-web.sh: VITE_IDENTITY_POOL_ID="$identity_pool_id" → VITE_IDENTITY_POOL_ID=""
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-4 scripts/deploy-web.sh: param "/sched/${env}/auth/spa-client-id" → param "/sched/${env}/auth/spa-client"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh reads the env's own parameters and refuses a bucket that isn't the env's site bucket
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (none)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-assets)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-pool)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh never publishes a stale build left in apps/web/dist
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-5 scripts/deploy-web.sh: param "/sched/${env}/auth/identity-pool-id" → param "/sched/${env}/auth/identity-pool"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh reads the env's own parameters and refuses a bucket that isn't the env's site bucket
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (none)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-assets)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-pool)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh never publishes a stale build left in apps/web/dist
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-6 scripts/deploy-web.sh: "auth/user-pool-id=$user_pool_id" → "auth/user-pool-id=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/user-pool-id is missing
+KILLED 132-7 scripts/deploy-web.sh: "auth/spa-client-id=$spa_client_id" → "auth/spa-client-id=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/spa-client-id is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh treats a parameter whose value is the CLI's None as missing
+KILLED 132-8 scripts/deploy-web.sh: "auth/identity-pool-id=$identity_pool_id" → "auth/identity-pool-id=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/identity-pool-id is missing
+KILLED 132-9 scripts/deploy-web.sh: "web/bucket-name=$bucket" → "web/bucket-name=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/bucket-name is missing
+KILLED 132-10 scripts/deploy-web.sh: "web/distribution-id=$distribution_id" → "web/distribution-id=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/distribution-id is missing
+KILLED 132-11 scripts/deploy-web.sh: "web/domain=$domain" → "web/domain=x"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/domain is missing
+KILLED 132-12 scripts/deploy-web.sh: printf '  %s\n' "${missing[@]}" >&2⏎  exit 1 → printf '  %s\n' "${missing[@]}" >&2⏎  exit 0
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/user-pool-id is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/spa-client-id is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/auth/identity-pool-id is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh treats a parameter whose value is the CLI's None as missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/bucket-name is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/distribution-id is missing
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh fails before building when /sched/<env>/web/domain is missing
+KILLED 132-13 scripts/deploy-web.sh: [[ "$value" == "None" ]] && value="" → true
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh treats a parameter whose value is the CLI's None as missing
+KILLED 132-14 scripts/deploy-web.sh: param "/sched/${env}/web/bucket-name" → param "/sched/dev/web/bucket-name"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh reads the env's own parameters and refuses a bucket that isn't the env's site bucket
+KILLED 132-15 scripts/deploy-web.sh: if [[ "$bucket" != sched-"${env}"-web-* ]]; then → if false; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh reads the env's own parameters and refuses a bucket that isn't the env's site bucket
+KILLED 132-16 scripts/deploy-web.sh: git status --porcelain) → git status --porcelain --untracked-files=no)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses a dirty working tree, untracked files included, before calling AWS
+KILLED 132-17 scripts/deploy-web.sh: if [[ -n "$(git status --porcelain)" ]]; then → if false; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses a dirty working tree, untracked files included, before calling AWS
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses a modified tracked file
+KILLED 132-18 scripts/deploy-web.sh: if ! aws sts get-caller-identity >/dev/null 2>&1; then → if false; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh stops when the credentials are missing or expired
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh uses the sched-dev profile in us-east-1 by default, and the caller's when set
+KILLED 132-19 scripts/deploy-web.sh: ${AWS_PROFILE:-sched-dev} → ${AWS_PROFILE:-default}
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh stops when the credentials are missing or expired
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh uses the sched-dev profile in us-east-1 by default, and the caller's when set
+KILLED 132-20 scripts/deploy-web.sh: ${AWS_REGION:-us-east-1} → ${AWS_REGION:-us-west-2}
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh uses the sched-dev profile in us-east-1 by default, and the caller's when set
+KILLED 132-21 scripts/deploy-web.sh: export AWS_PROFILE="${AWS_PROFILE:-sched-dev}" → export AWS_PROFILE="sched-dev"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh uses the sched-dev profile in us-east-1 by default, and the caller's when set
+KILLED 132-22 scripts/deploy-web.sh: if $is_protected && [[ "$git_branch" != "main" ]]; then → if [[ "$git_branch" != "main" ]]; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh warns when an unmerged branch publishes to a shared env, and not otherwise
+KILLED 132-23 scripts/deploy-web.sh: if $is_protected && [[ "$git_branch" != "main" ]]; then → if $is_protected; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh warns when an unmerged branch publishes to a shared env, and not otherwise
+KILLED 132-24 scripts/deploy-web.sh: rm -rf "$dist"⏎ → 
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh never publishes a stale build left in apps/web/dist
+SURVIVED 132-25 scripts/deploy-web.sh: [[ ! -f "$dist/index.html" ]] ||  → 
+KILLED 132-26 scripts/deploy-web.sh:  || [[ -z "$(find "$dist/assets" -type f 2>/dev/null | head -n 1)" ]] → 
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-assets)
+KILLED 132-27 scripts/deploy-web.sh: if ! grep -rqF -- "$user_pool_id" "$dist/assets"; then → if false; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-pool)
+KILLED 132-28 scripts/deploy-web.sh:   echo "dry run: nothing uploaded, deleted or invalidated"⏎  exit 0 →   echo "dry run: nothing uploaded, deleted or invalidated"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-29 scripts/deploy-web.sh: aws s3 sync "$dist" "$target" --delete --dryrun⏎ → 
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-30 scripts/deploy-web.sh: "$target" --delete --dryrun → "$target" --dryrun
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh --dry-run prints the plan and changes nothing
+KILLED 132-31 scripts/deploy-web.sh: ASSETS_CACHE_CONTROL="public, max-age=31536000, immutable" → ASSETS_CACHE_CONTROL="public, max-age=3600"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-32 scripts/deploy-web.sh: ROOT_CACHE_CONTROL="no-cache" → ROOT_CACHE_CONTROL="public, max-age=3600"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-33 scripts/deploy-web.sh: --exclude "assets/*" --delete → --exclude "assets/*"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-34 scripts/deploy-web.sh: "${target}/assets" --delete --cache-control → "${target}/assets" --cache-control
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-35 scripts/deploy-web.sh: --exclude "assets/*" --delete → --delete
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-36 scripts/deploy-web.sh: \⏎  --metadata "git-commit=${git_commit}" --only-show-errors →  --only-show-errors
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-37 scripts/deploy-web.sh: echo "==> uploading assets/"⏎aws s3 sync "$dist/assets" "${target}/assets" --cache-control "$ASSETS_CACHE_CONTROL" --only-show-errors⏎echo "==> uploading index.html and other root files"⏎aws s3 sync "$dist" "$target" --exclude "assets/*" --delete --cache-control "$ROOT_CACHE_CONTROL" \⏎  --metadata "git-commit=${git_commit}" --only-show-errors⏎ → echo "==> uploading index.html and other root files"⏎aws s3 sync "$dist" "$target" --exclude "assets/*" --delete --cache-control "$ROOT_CACHE_CONTROL" \⏎  --metadata "git-commit=${git_commit}" --only-show-errors⏎echo "==> uploading assets/"⏎aws s3 sync "$dist/assets" "${target}/assets" --cache-control "$ASSETS_CACHE_CONTROL" --only-show-errors⏎
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-38 scripts/deploy-web.sh: --paths "/*" → --paths "/index.html"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-39 scripts/deploy-web.sh: aws cloudfront wait invalidation-completed → true aws cloudfront wait invalidation-completed
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-40 scripts/deploy-web.sh: --id "$invalidation_id" → --id "$distribution_id"
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh builds with the three Cognito IDs from SSM, syncs with cache headers in a safe order, and invalidates
+KILLED 132-41 scripts/deploy-web.sh: =~ ^[a-z][a-z0-9-]{1,15}$ → =~ ^[a-zA-Z][a-z0-9-]{1,15}$
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh rejects bad arguments ["Dev"]
+KILLED 132-42 scripts/deploy-web.sh: $# -gt 2 ]] → $# -gt 3 ]]
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh rejects bad arguments ["dev","--dry-run","x"]
+KILLED 132-43 scripts/deploy-web.sh: [[ -z "$mode" || "$mode" == "--dry-run" ]] || usage → [[ -z "$mode" || "$mode" == --* ]] || usage
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh rejects bad arguments ["dev","--yes"]
+
+43 edits: 42 killed, 1 survived, 0 timed out, 0 errors, 0 refused
+real 390.33
+user 77.98
+sys 86.96

@@ -1,0 +1,66 @@
+a	cf1c903 KILLED (9)	718f82f KILLED (9)
+a2	cf1c903 KILLED (9)	718f82f KILLED (9)
+b	cf1c903 KILLED (2)	718f82f KILLED (3)	CHANGED
+    + red at 718f82f only: ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+c1	cf1c903 KILLED (2)	718f82f KILLED (2)
+c2	cf1c903 KILLED (5)	718f82f KILLED (6)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+e	cf1c903 KILLED (3)	718f82f KILLED (3)
+f1	cf1c903 KILLED (1)	718f82f KILLED (1)
+f2	cf1c903 KILLED (5)	718f82f KILLED (6)	CHANGED	claimed but green at 718f82f: starts a conversation… | enforces the daily turn cap…
+    + red at 718f82f only: ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+g	cf1c903 KILLED (1)	718f82f KILLED (2)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+h	cf1c903 KILLED (1)	718f82f KILLED (1)
+i	cf1c903 KILLED (5)	718f82f KILLED (5)	CHANGED
+    - red at cf1c903 only: ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+j	cf1c903 KILLED (1)	718f82f KILLED (2)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+k	cf1c903 KILLED (5)	718f82f KILLED (5)
+l	cf1c903 KILLED (1)	718f82f KILLED (1)
+l2	cf1c903 SURVIVED (0)	718f82f KILLED (1)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+m1	cf1c903 KILLED (3)	718f82f KILLED (3)
+m2	cf1c903 KILLED (4)	718f82f KILLED (4)
+m3	cf1c903 KILLED (4)	718f82f KILLED (3)	CHANGED
+    - red at cf1c903 only: ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+m4	cf1c903 KILLED (1)	718f82f KILLED (1)
+m5	cf1c903 KILLED (1)	718f82f KILLED (1)
+n	cf1c903 KILLED (2)	718f82f KILLED (2)
+o	cf1c903 KILLED (3)	718f82f KILLED (3)
+p1	cf1c903 KILLED (8)	718f82f KILLED (8)
+p2	cf1c903 KILLED (8)	718f82f KILLED (8)	claimed but green at 718f82f: the replay tests
+d1	cf1c903 KILLED (2)	718f82f KILLED (2)
+d2	cf1c903 KILLED (4)	718f82f KILLED (4)
+t	cf1c903 KILLED (3)	718f82f KILLED (3)
+q	cf1c903 KILLED (2)	718f82f KILLED (2)
+q2	cf1c903 SURVIVED (0)	718f82f KILLED (1)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) replays an answered message's stored reply, without a model call, a counted turn, a trace or a second copy
+r	cf1c903 KILLED (2)	718f82f KILLED (2)
+w1	cf1c903 KILLED (1)	718f82f KILLED (1)
+w2	cf1c903 KILLED (2)	718f82f KILLED (2)
+w3	cf1c903 KILLED (3)	718f82f KILLED (3)
+x	cf1c903 KILLED (1)	718f82f KILLED (1)
+y1	cf1c903 KILLED (2)	718f82f KILLED (2)	CHANGED
+    - red at cf1c903 only: useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+    + red at 718f82f only: useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry
+y2	cf1c903 KILLED (2)	718f82f KILLED (2)
+y3	cf1c903 KILLED (5)	718f82f KILLED (5)	CHANGED
+    - red at cf1c903 only: useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+    + red at 718f82f only: useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry
+y4	cf1c903 KILLED (5)	718f82f KILLED (4)	CHANGED	claimed but green at 718f82f: sends the conversation…
+    - red at cf1c903 only: useChat: the conversation an error names (#104) sends the conversation a failed first turn's error names with Retry, and remembers it for a reload
+z1	cf1c903 KILLED (48)	718f82f KILLED (49)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+z2	cf1c903 KILLED (2)	718f82f KILLED (1)	CHANGED
+    - red at cf1c903 only: ChatPage: turn details scrolls the end of the conversation into view when a chip appears and when reply text appears
+z3	cf1c903 KILLED (68)	718f82f KILLED (69)	CHANGED	claimed but green at 718f82f: the ConversationMessage example and round-trip
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+z4	cf1c903 KILLED (15)	718f82f KILLED (16)	CHANGED
+    + red at 718f82f only: handleChatTurn: retries (#104, FR-015) answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply
+z5	cf1c903 KILLED (1)	718f82f KILLED (1)
+z6	cf1c903 KILLED (40)	718f82f KILLED (40)	claimed but green at 718f82f: the buffered-form and example tests
+z7	cf1c903 SURVIVED (0)	718f82f SURVIVED (0)	claimed but green at 718f82f: dynamo.test.ts: stores a patient message's clientMessageId and reads it back… (DynamoDB Local)
+z8	cf1c903 SURVIVED (0)	718f82f SURVIVED (0)
+z9	cf1c903 SURVIVED (0)	718f82f SURVIVED (0)

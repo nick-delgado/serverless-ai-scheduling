@@ -1,0 +1,25 @@
+file	Killed	Timeout	Survived	NoCoverage	CompileError	RuntimeError	Ignored	score
+packages/tools/src/tools/book_appointment.ts	29	0	2	2	36	0	0	87.88%
+packages/tools/src/tools/check_availability.ts	56	0	3	0	41	0	0	94.92%
+packages/tools/src/tools/escalate_to_human.ts	5	0	0	0	16	0	0	100.00%
+packages/tools/src/tools/find_providers.ts	2	0	0	0	4	0	0	100.00%
+packages/tools/src/tools/get_my_appointments.ts	10	0	1	1	12	0	0	83.33%
+packages/tools/src/tools/get_patient_profile.ts	1	0	1	0	9	0	0	50.00%
+packages/tools/src/tools/reschedule_appointment.ts	49	0	2	2	57	0	0	92.45%
+total	152	0	9	5	175	0	0	91.57%
+
+Not killed (status, id, location, mutator, original → replacement):
+Survived	11	packages/tools/src/tools/book_appointment.ts:55:34	StringLiteral	`Slot ${slot.slotId} references unknown provider ${slot.providerId}`	→	``
+Survived	43	packages/tools/src/tools/book_appointment.ts:75:55	ConditionalExpression	a.status === "COMPLETED" || a.status === "BOOKED"	→	true
+NoCoverage	48	packages/tools/src/tools/book_appointment.ts:75:83	ConditionalExpression	a.status === "BOOKED"	→	false
+NoCoverage	49	packages/tools/src/tools/book_appointment.ts:75:83	EqualityOperator	a.status === "BOOKED"	→	a.status !== "BOOKED"
+Survived	101	packages/tools/src/tools/check_availability.ts:80:20	EqualityOperator	range.start_date < today	→	range.start_date <= today
+Survived	137	packages/tools/src/tools/check_availability.ts:107:9	StringLiteral	"Call check_availability again with only provider_id, or only specialty. Use find_providers to check who practices what.	→	""
+Survived	144	packages/tools/src/tools/check_availability.ts:114:49	ObjectLiteral	{ specialty }	→	{}
+Survived	214	packages/tools/src/tools/get_my_appointments.ts:40:36	StringLiteral	`Appointment references unknown provider ${providerId}`	→	``
+NoCoverage	222	packages/tools/src/tools/get_my_appointments.ts:47:38	StringLiteral	`Provider ${a.providerId} was not loaded`	→	``
+Survived	232	packages/tools/src/tools/get_patient_profile.ts:23:7	StringLiteral	"Continue without the patient's name. If they need their profile, offer to connect them with the front desk."	→	""
+Survived	297	packages/tools/src/tools/reschedule_appointment.ts:125:34	StringLiteral	`Slot ${slot.slotId} references unknown provider ${slot.providerId}`	→	``
+Survived	316	packages/tools/src/tools/reschedule_appointment.ts:138:55	ConditionalExpression	a.status === "COMPLETED" || a.status === "BOOKED"	→	true
+NoCoverage	321	packages/tools/src/tools/reschedule_appointment.ts:138:83	ConditionalExpression	a.status === "BOOKED"	→	false
+NoCoverage	322	packages/tools/src/tools/reschedule_appointment.ts:138:83	EqualityOperator	a.status === "BOOKED"	→	a.status !== "BOOKED"

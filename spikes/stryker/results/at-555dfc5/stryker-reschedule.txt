@@ -1,0 +1,17 @@
+file	Killed	Timeout	Survived	NoCoverage	CompileError	RuntimeError	Ignored	score
+packages/tools/src/tools/reschedule_appointment.ts	98	0	6	6	0	0	0	89.09%
+total	98	0	6	6	0	0	0	89.09%
+
+Not killed (status, id, location, mutator, original → replacement):
+NoCoverage	24	packages/tools/src/tools/reschedule_appointment.ts:90:20	BlockStatement	{ throw new Error( `Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`, ); 	→	{}
+NoCoverage	26	packages/tools/src/tools/reschedule_appointment.ts:92:9	StringLiteral	`Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`	→	``
+NoCoverage	87	packages/tools/src/tools/reschedule_appointment.ts:141:83	ConditionalExpression	a.status === "BOOKED"	→	false
+NoCoverage	88	packages/tools/src/tools/reschedule_appointment.ts:141:83	EqualityOperator	a.status === "BOOKED"	→	a.status !== "BOOKED"
+NoCoverage	89	packages/tools/src/tools/reschedule_appointment.ts:141:96	StringLiteral	"BOOKED"	→	""
+NoCoverage	110	packages/tools/src/tools/reschedule_appointment.ts:161:33	StringLiteral	`Appointment ${input.appointment_id} vanished after SAME_SLOT`	→	``
+Survived	23	packages/tools/src/tools/reschedule_appointment.ts:90:9	ConditionalExpression	!provider	→	false
+Survived	34	packages/tools/src/tools/reschedule_appointment.ts:105:7	ConditionalExpression	current.status !== "BOOKED"	→	false
+Survived	63	packages/tools/src/tools/reschedule_appointment.ts:128:34	StringLiteral	`Slot ${slot.slotId} references unknown provider ${slot.providerId}`	→	``
+Survived	82	packages/tools/src/tools/reschedule_appointment.ts:141:55	ConditionalExpression	a.status === "COMPLETED" || a.status === "BOOKED"	→	true
+Survived	61	packages/tools/src/tools/reschedule_appointment.ts:128:7	ConditionalExpression	!provider	→	false
+Survived	108	packages/tools/src/tools/reschedule_appointment.ts:161:9	ConditionalExpression	!moved	→	false

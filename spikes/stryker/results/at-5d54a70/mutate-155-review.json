@@ -1,0 +1,39 @@
+{
+  "cmd": [
+    "npx",
+    "vitest",
+    "run",
+    "--project",
+    "scripts",
+    "scripts/coverage-changed.test.ts"
+  ],
+  "results": [
+    {
+      "id": "VER-1",
+      "note": "#155 5d54a70/VER-1: main's default SOURCE_GLOBS replaced, the operand the PR's break list left",
+      "file": "scripts/coverage-changed.ts",
+      "find": "deps.sources ?? SOURCE_GLOBS",
+      "replace": "deps.sources ?? { include: [], exclude: [] }",
+      "status": "SURVIVED",
+      "failedTests": [],
+      "seconds": 5.749
+    },
+    {
+      "id": "VER-1-def",
+      "note": "the same default broken where it is defined",
+      "file": "scripts/coverage-changed.ts",
+      "find": "{ include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE }",
+      "replace": "{ include: [], exclude: COVERAGE_EXCLUDE }",
+      "status": "KILLED",
+      "failedTests": [
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test",
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test",
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test",
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test",
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include the web app's .tsx components",
+        "scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) are the ones the coverage run uses"
+      ],
+      "seconds": 5.792
+    }
+  ]
+}

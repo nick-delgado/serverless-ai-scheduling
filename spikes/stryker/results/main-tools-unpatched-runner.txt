@@ -1,0 +1,10 @@
+file	Killed	Timeout	Survived	NoCoverage	CompileError	RuntimeError	Ignored	score
+packages/tools/src/tools/book_appointment.ts	1	0	65	3	0	0	0	1.45%
+packages/tools/src/tools/get_my_appointments.ts	1	0	22	1	0	0	0	4.17%
+packages/tools/src/tools/reschedule_appointment.ts	18	0	89	3	0	0	0	16.36%
+packages/tools/src/tools/check_availability.ts	1	0	99	0	0	0	0	1.00%
+packages/tools/src/tools/escalate_to_human.ts	0	0	21	0	0	0	0	0.00%
+packages/tools/src/tools/find_providers.ts	1	0	5	0	0	0	0	16.67%
+packages/tools/src/tools/get_patient_profile.ts	1	0	10	0	0	0	0	9.09%
+total	23	0	311	7	0	0	0	6.74%
+

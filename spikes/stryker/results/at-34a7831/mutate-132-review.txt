@@ -1,0 +1,16 @@
+KILLED 132-25w scripts/deploy-web.sh: if [[ ! -f "$dist/index.html" ]] || [[ -z "$(find "$dist/assets" -type f 2>/dev/null | head -n 1)" ]]; then → if false; then
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (none)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh refuses to sync when the build output is incomplete (no-assets)
+    ✗ scripts/deploy-web.test.ts > deploy-web.sh never publishes a stale build left in apps/web/dist
+SURVIVED TEST-1 scripts/deploy-web.sh: [[ ! -f "$dist/index.html" ]] ||  → 
+SURVIVED TEST-2a scripts/deploy-web.sh: {1,15}$ ]] → {1,15} ]]
+SURVIVED TEST-2b scripts/deploy-web.sh: [a-z0-9-]{1,15}$ → [a-z0-9-]{0,15}$
+SURVIVED TEST-2c scripts/deploy-web.sh: [a-z0-9-]{1,15}$ → [a-z0-9-]{1,16}$
+SURVIVED TEST-2d scripts/deploy-web.sh: PROTECTED_ENVS=(dev demo) → PROTECTED_ENVS=(dev)
+SURVIVED TEST-3a scripts/deploy-web.sh:  \⏎  --query Invalidation.Id --output text) →  \⏎  --output text)
+SURVIVED TEST-3b scripts/deploy-web.sh: --query Invalidation.Id --output text) → --query Invalidation.Id)
+
+8 edits: 1 killed, 7 survived, 0 timed out, 0 errors, 0 refused
+real 92.50
+user 18.54
+sys 21.20
