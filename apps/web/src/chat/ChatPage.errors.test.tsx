@@ -207,10 +207,13 @@ describe("ChatPage: Retry (FR-015)", () => {
   });
 
   it("keeps the reply, with no error, when the stream sends an event after done", async () => {
-    server.use(http.post("/api/chat", () => ndjson([delta("All set."), doneEvent(), delta(" More.")])));
-    const { sendMessage } = await renderPage();
-    await sendMessage("Hi");
-    expect(await within(log()).findByText("All set.")).toBeVisible();
+    const reply = "All set for Wednesday at 10 AM.";
+    server.use(http.post("/api/chat", () => ndjson([delta(reply), doneEvent(), delta(" More.")])));
+    // Typed out, so the protocol error arrives while the reply is still typing (not yet ended).
+    render(<ChatPage reducedMotion={() => false} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "Hi{Enter}");
+    expect(await within(log()).findByText(reply, {}, { timeout: 5_000 })).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(retryButton()).not.toBeInTheDocument();
   });
