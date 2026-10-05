@@ -619,6 +619,10 @@ describe("ReplayPatientSimulator", () => {
     expect(() => ReplayPatientSimulator.fromReport({ runs: [] })).toThrow(/^not a results file: cases: /);
     // A file that isn't an object at all names no field: the problem is at the root (5765869/TEST-102).
     expect(() => ReplayPatientSimulator.fromReport(null)).toThrow(/^not a results file: \(root\): \S/);
+    // With two bad fields, only the first is named (f6d8ff8/SMELL-104: the shared issueText).
+    expect(() => ReplayPatientSimulator.fromReport({ cases: [{ id: 1, trials: "x" }] })).toThrow(
+      /^not a results file: cases\.0\.id: (?!.*trials)/,
+    );
   });
 
   it("a conversation the recording doesn't have is a simulator error", async () => {
