@@ -1,5 +1,6 @@
-# Every PR and every push to any branch runs the same checks agents run locally
-# (CLAUDE.md "Definition of done"). No path filters on purpose: required status
+# Every PR and every push to any branch runs the checks agents run locally
+# (CLAUDE.md "Definition of done"), plus the changed-line coverage gate (#140),
+# which fails any line the branch adds that no test ran. No path filters on purpose: required status
 # checks must always report, or docs-only PRs would sit "pending" forever.
 # A branch with an open PR gets two runs: the push run on its head, and the PR run
 # on its merge with the base. GitHub skips the PR run while the PR has a merge

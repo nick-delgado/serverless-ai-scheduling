@@ -510,8 +510,9 @@ describe("ChatPage: turn details", () => {
       2: restSent.promise,
     });
     // The page scrolls in an effect after each render, so each check waits for the call. Each step
-    // waits for its text with `until` (real I/O hops, no fixed timeout) rather than `findByText`'s 1 s,
-    // which a loaded runner can spend before the gated stream gets through (#122).
+    // waits for its text with `until` (real I/O hops, no fixed timeout) rather than `findByText`'s fixed
+    // timeout (set in src/test/setup.ts), which a loaded runner can spend before the gated stream gets
+    // through (#122).
     try {
       await renderPage();
       // Forget the mount and greeting scrolls (the greeting is shown, so its scroll has run), so only
