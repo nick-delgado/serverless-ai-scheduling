@@ -4,6 +4,11 @@
  * from the request (the model profile's `modelFields`, cache-point placement, and inline reasoning tag),
  * never from branches on model names here.
  *
+ * Inline chain-of-thought (#107): every text block runs through `InlineReasoningFilter`, which removes
+ * `<thinking>…</thinking>` for every profile, plus the profile's own `inlineReasoningTag` (gpt-oss:
+ * `<reasoning>`), anywhere in the text, before any of it streams. A profile with a tag keeps the removed
+ * text as a reasoning block; for one without, it is dropped. The full rule is on the class.
+ *
  * Credentials come from the default AWS provider chain (the Lambda role, or `AWS_PROFILE` locally).
  * IAM: `bedrock:InvokeModelWithResponseStream` on each inference-profile ARN and the foundation-model
  * ARNs it routes to (Converse uses the InvokeModel actions).
@@ -176,7 +181,7 @@ function toConverseBlock(block: ContentBlock | CachePoint): ConverseContentBlock
 // ---------------------------------------------------------------------------------------------
 
 type BlockState =
-  | { kind: "text"; text: string; filter?: InlineReasoningFilter }
+  | { kind: "text"; text: string; filter: InlineReasoningFilter }
   | { kind: "reasoning"; text: string; signature: string; redacted: Uint8Array[] }
   | { kind: "tool_use"; id: string; name: string; json: string };
 
@@ -251,7 +256,7 @@ export class ResponseAssembler {
       }
     } else if (event.contentBlockStop) {
       const block = this.#blocks.get(event.contentBlockStop.contentBlockIndex ?? 0);
-      if (block?.kind === "text" && block.filter) this.#emit(block, block.filter.end());
+      if (block?.kind === "text") this.#emit(block, block.filter.end());
     } else if (event.messageStop) {
       this.#rawStop = event.messageStop.stopReason;
     } else if (event.metadata?.usage) {
@@ -271,8 +276,11 @@ export class ResponseAssembler {
     const tag = { family: this.#request.family, modelId: this.#request.modelId };
     for (const [, block] of [...this.#blocks].sort(([a], [b]) => a - b)) {
       if (block.kind === "text") {
-        const reasoning = block.filter?.reasoning;
-        if (reasoning) content.push({ type: "reasoning", ...tag, text: reasoning });
+        // Only a profile that declares a tag keeps the removed text, as an unsigned reasoning block. For
+        // the others (Claude) it is dropped: Claude rejects a reasoning block without its signature on replay.
+        const reasoning = block.filter.reasoning;
+        if (reasoning && this.#request.inlineReasoningTag)
+          content.push({ type: "reasoning", ...tag, text: reasoning });
         if (block.text.length > 0) content.push({ type: "text", text: block.text });
       } else if (block.kind === "reasoning") {
         if (block.redacted.length > 0) {
@@ -316,14 +324,14 @@ export class ResponseAssembler {
     const existing = this.#blocks.get(index);
     if (existing) return existing;
     if (kind === "reasoning") return this.#open(index, { kind, text: "", signature: "", redacted: [] });
-    const tag = this.#request.inlineReasoningTag;
-    return this.#open(index, { kind, text: "", ...(tag ? { filter: new InlineReasoningFilter(tag) } : {}) });
+    const tags = new Set([ALWAYS_STRIPPED_TAG, this.#request.inlineReasoningTag ?? ALWAYS_STRIPPED_TAG]);
+    return this.#open(index, { kind, text: "", filter: new InlineReasoningFilter([...tags]) });
   }
 
   #text(index: number, text: string): void {
     const block = this.#blockOf(index, "text");
     if (block?.kind !== "text") return;
-    this.#emit(block, block.filter ? block.filter.push(text) : text);
+    this.#emit(block, block.filter.push(text));
   }
 
   #emit(block: { text: string }, visible: string): void {
@@ -344,22 +352,46 @@ function parseToolInput(json: string): unknown {
   }
 }
 
+/** Stripped from every profile's visible text, whatever its own tag (#107): Nova Pro leaks it even when told not to. */
+const ALWAYS_STRIPPED_TAG = "thinking";
+
 /**
- * Splits a text block that starts with `<tag>…</tag>` (after optional whitespace) into hidden reasoning
- * and visible text, while streaming. Text is held back only while it could still be the opening tag, so
- * ordinary answers stream with no delay beyond a few characters. The visible part is exactly what's
- * streamed, so the stored text always matches what the patient saw.
+ * Removes inline chain-of-thought sections from a text block while it streams (#107).
+ *
+ * The rule:
+ * - A section is an opening tag for one of `tags` up to its closing tag, anywhere in the block. A tag
+ *   matches at least as broadly as the `no_reasoning_leak` grader's `REASONING_TAG` does for that name:
+ *   any case, optional whitespace and a slash, and attributes (`<Thinking>`, `< thinking type="plan">`,
+ *   `</thinking >`). It also takes a space before the slash (`< /thinking>`), which the grader doesn't.
+ * - An opening tag that is never closed hides the rest of its text block. Later blocks have their own filter.
+ * - A closing tag with no opener is removed on its own.
+ * - Whitespace before and after a section is dropped while nothing visible has been shown yet, so a
+ *   reply that starts with a section doesn't start with blank lines. Elsewhere it is kept.
+ * - Text is held back only while it could still become a tag (a `<` with a partial tag name after it,
+ *   or a full tag name whose `>` hasn't arrived), including a tag split across deltas. At the end of the
+ *   block, held-back text that never became a tag is shown.
+ *
+ * The removed sections are joined in `reasoning`; the caller decides whether to keep them. The visible
+ * part is exactly what's streamed, so the stored text always matches what the patient saw.
  */
 export class InlineReasoningFilter {
-  readonly #open: string;
-  readonly #close: string;
-  #state: "undecided" | "inside" | "after" | "plain" = "undecided";
+  readonly #names: readonly string[];
+  readonly #tagAtStart: RegExp;
+  #inside: RegExp | undefined;
   #buffer = "";
-  reasoning = "";
+  #shown = false;
+  #removed = false;
+  #sections: string[] = [];
 
-  constructor(tag: string) {
-    this.#open = `<${tag}>`;
-    this.#close = `</${tag}>`;
+  /** `tags`: the tag names to remove (word characters only), matched case-insensitively. */
+  constructor(tags: readonly string[]) {
+    this.#names = tags.map((t) => t.toLowerCase());
+    this.#tagAtStart = new RegExp(`^<\\s*(\\/?)\\s*(${this.#names.join("|")})\\b[^>]*>`, "i");
+  }
+
+  /** The removed sections, trimmed and joined by a blank line. */
+  get reasoning(): string {
+    return this.#sections.join("\n\n");
   }
 
   /** Feed a delta; returns the text to show now. */
@@ -370,46 +402,69 @@ export class InlineReasoningFilter {
 
   /** The block ended; returns any held-back text to show. */
   end(): string {
-    if (this.#state === "inside") {
-      this.reasoning += this.#buffer; // never closed: all of it was reasoning
+    if (this.#inside) {
+      this.#section(this.#buffer); // never closed: all of it was reasoning
       this.#buffer = "";
       return "";
     }
-    const rest = this.#state === "after" ? this.#buffer.trimStart() : this.#buffer;
+    const rest = this.#buffer;
     this.#buffer = "";
-    return rest;
+    return this.#show(rest);
   }
 
   #drain(): string {
-    if (this.#state === "undecided") {
-      const lead = this.#buffer.trimStart();
-      if (lead.startsWith(this.#open)) {
-        this.#state = "inside";
-        this.#buffer = lead.slice(this.#open.length);
-      } else if (this.#open.startsWith(lead)) {
-        return ""; // could still become the tag
-      } else {
-        this.#state = "plain";
+    let out = "";
+    for (;;) {
+      if (this.#inside) {
+        const close = this.#inside.exec(this.#buffer);
+        if (!close) return out;
+        this.#section(this.#buffer.slice(0, close.index));
+        this.#buffer = this.#buffer.slice(close.index + close[0].length);
+        this.#inside = undefined;
+        continue;
       }
-    }
-    if (this.#state === "inside") {
-      const end = this.#buffer.indexOf(this.#close);
-      if (end === -1) return "";
-      this.reasoning += this.#buffer.slice(0, end).trim();
-      this.#buffer = this.#buffer.slice(end + this.#close.length);
-      this.#state = "after";
-    }
-    if (this.#state === "after") {
-      const trimmed = this.#buffer.trimStart();
-      if (trimmed.length === 0) {
-        this.#buffer = "";
-        return "";
+      const lt = this.#buffer.indexOf("<");
+      const before = lt === -1 ? this.#buffer : this.#buffer.slice(0, lt);
+      // Leading whitespace is held until we know whether a section follows it.
+      if (this.#shown || before.trim().length > 0) {
+        out += this.#show(before);
+        this.#buffer = this.#buffer.slice(before.length);
       }
-      this.#state = "plain";
-      this.#buffer = trimmed;
+      if (lt === -1) return out;
+      const at = this.#buffer.indexOf("<");
+      const rest = this.#buffer.slice(at);
+      const tag = this.#tagAtStart.exec(rest);
+      if (tag) {
+        const [whole, slash, name = ""] = tag;
+        if (slash === "") this.#inside = new RegExp(`<\\s*\\/\\s*${name}\\b[^>]*>`, "i");
+        this.#removed = true;
+        this.#buffer = rest.slice(whole.length);
+        continue;
+      }
+      if (this.#couldBeTag(rest)) return out;
+      out += this.#show(this.#buffer.slice(0, at + 1));
+      this.#buffer = this.#buffer.slice(at + 1);
     }
-    const out = this.#buffer;
-    this.#buffer = "";
-    return out;
+  }
+
+  /** `text` starts with `<` and isn't one of our tags yet: could more input make it one? */
+  #couldBeTag(text: string): boolean {
+    const rest = text.replace(/^<\s*\/?\s*/, "");
+    const word = rest.replace(/\W[\s\S]*$/, "");
+    const after = rest.slice(word.length);
+    const lower = word.toLowerCase();
+    if (after === "") return this.#names.some((name) => name.startsWith(lower));
+    return this.#names.includes(lower); // the full name, then attributes whose `>` hasn't arrived
+  }
+
+  #section(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed.length > 0) this.#sections.push(trimmed);
+  }
+
+  #show(text: string): string {
+    const visible = !this.#shown && this.#removed ? text.trimStart() : text;
+    this.#shown = true;
+    return visible;
   }
 }

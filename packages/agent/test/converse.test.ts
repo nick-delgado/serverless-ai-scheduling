@@ -302,6 +302,84 @@ describe("ConverseLlmClient", () => {
     ]);
   });
 
+  it("strips <thinking> for a profile with no tag (Claude), and drops it rather than storing unsigned reasoning", async () => {
+    const { response, deltas } = await run([
+      textDelta(0, "Let me look. <thin"),
+      textDelta(0, "king>The patient wants</THINKING>"),
+      textDelta(0, " Tuesday works."),
+      { contentBlockStop: { contentBlockIndex: 0 } },
+      stop("end_turn"),
+    ]);
+    expect(deltas.join("")).toBe("Let me look.  Tuesday works.");
+    expect(response.content).toEqual([{ type: "text", text: "Let me look.  Tuesday works." }]);
+  });
+
+  it("shows text held back as a possible tag when its block ends", async () => {
+    const { response, deltas } = await run([
+      textDelta(0, "Is 3 <"),
+      { contentBlockStop: { contentBlockIndex: 0 } },
+      stop("end_turn"),
+    ]);
+    expect(deltas).toEqual(["Is 3 ", "<"]);
+    expect(response.content).toEqual([{ type: "text", text: "Is 3 <" }]);
+  });
+
+  it("gives each text block its own filter, so an unclosed tag hides only the rest of its block", async () => {
+    const { response, deltas } = await run([
+      textDelta(0, "Hi. <thinking>never closed"),
+      { contentBlockStop: { contentBlockIndex: 0 } },
+      textDelta(1, "Tuesday works."),
+      { contentBlockStop: { contentBlockIndex: 1 } },
+      stop("end_turn"),
+    ]);
+    expect(deltas).toEqual(["Hi. ", "Tuesday works."]);
+    expect(response.content).toEqual([
+      { type: "text", text: "Hi. " },
+      { type: "text", text: "Tuesday works." },
+    ]);
+  });
+
+  it("removes a mid-text section for Nova Pro, keeping it as reasoning before the visible text", async () => {
+    const { response, deltas } = await run(
+      [
+        textDelta(0, "Sure. <thinking>check billing"),
+        textDelta(0, "</thinking> I'll connect you."),
+        { contentBlockStop: { contentBlockIndex: 0 } },
+        stop("end_turn"),
+      ],
+      baseRequest({
+        family: "amazon.nova",
+        modelId: "us.amazon.nova-pro-v1:0",
+        inlineReasoningTag: "thinking",
+      }),
+    );
+    expect(deltas.join("")).toBe("Sure.  I'll connect you.");
+    expect(response.content).toEqual([
+      { type: "reasoning", family: "amazon.nova", modelId: "us.amazon.nova-pro-v1:0", text: "check billing" },
+      { type: "text", text: "Sure.  I'll connect you." },
+    ]);
+  });
+
+  it("strips both the profile's own tag and <thinking> (gpt-oss)", async () => {
+    const { response, deltas } = await run(
+      [
+        textDelta(0, "<reasoning>r</reasoning>Hi. <thinking>t</thinking>Bye."),
+        { contentBlockStop: { contentBlockIndex: 0 } },
+        stop("end_turn"),
+      ],
+      baseRequest({
+        family: "openai.gpt-oss",
+        modelId: "openai.gpt-oss-20b-1:0",
+        inlineReasoningTag: "reasoning",
+      }),
+    );
+    expect(deltas.join("")).toBe("Hi. Bye.");
+    expect(response.content).toEqual([
+      { type: "reasoning", family: "openai.gpt-oss", modelId: "openai.gpt-oss-20b-1:0", text: "r\n\nt" },
+      { type: "text", text: "Hi. Bye." },
+    ]);
+  });
+
   it("rethrows an in-stream exception event", async () => {
     const throttled = Object.assign(new Error("Too many requests"), { name: "ThrottlingException" });
     await expect(
@@ -340,26 +418,118 @@ describe("toLlmStopReason", () => {
 });
 
 describe("InlineReasoningFilter", () => {
-  const feed = (chunks: string[]) => {
-    const filter = new InlineReasoningFilter("thinking");
-    const shown = chunks.map((c) => filter.push(c)).join("") + filter.end();
-    return { shown, reasoning: filter.reasoning };
+  const feed = (chunks: string[], tags: string[] = ["thinking"]) => {
+    const filter = new InlineReasoningFilter(tags);
+    const pushed = chunks.map((c) => filter.push(c));
+    const shown = pushed.join("") + filter.end();
+    return { shown, reasoning: filter.reasoning, pushed };
+  };
+  const strip = (chunks: string[], tags?: string[]) => {
+    const { shown, reasoning } = feed(chunks, tags);
+    return { shown, reasoning };
   };
 
   it("streams ordinary text untouched once it can't be the tag", () => {
-    expect(feed(["Dr. Lee ", "is free."])).toEqual({ shown: "Dr. Lee is free.", reasoning: "" });
-    expect(feed(["<b>", "bold"])).toEqual({ shown: "<b>bold", reasoning: "" });
+    expect(strip(["Dr. Lee ", "is free."])).toEqual({ shown: "Dr. Lee is free.", reasoning: "" });
+    expect(strip(["<b>", "bold"])).toEqual({ shown: "<b>bold", reasoning: "" });
+    expect(strip(["<b>x</b><thinking>t</thinking>"])).toEqual({ shown: "<b>x</b>", reasoning: "t" });
+    expect(strip(["  Hi ", "there"])).toEqual({ shown: "  Hi there", reasoning: "" });
+    expect(strip(["1 < 2 and ", "<thinkingly>"])).toEqual({ shown: "1 < 2 and <thinkingly>", reasoning: "" });
   });
 
   it("splits a leading tagged section from the answer that follows", () => {
-    expect(feed(["<thinking>plan</thinking>", "  Tuesday works."])).toEqual({
+    expect(strip(["<thinking>plan</thinking>", "  Tuesday works."])).toEqual({
       shown: "Tuesday works.",
+      reasoning: "plan",
+    });
+    expect(strip(["\n <thinking>plan</thinking>\n\nTuesday."])).toEqual({
+      shown: "Tuesday.",
       reasoning: "plan",
     });
   });
 
-  it("treats an unclosed tag as all reasoning, and a lone prefix as text", () => {
-    expect(feed(["<thinking>never closed"])).toEqual({ shown: "", reasoning: "never closed" });
-    expect(feed(["<thi"])).toEqual({ shown: "<thi", reasoning: "" });
+  it("removes a section in the middle of the text, keeping the text around it", () => {
+    expect(strip(["Let me check. <thinking>She wants Tuesday.</thinking> Tuesday works."])).toEqual({
+      shown: "Let me check.  Tuesday works.",
+      reasoning: "She wants Tuesday.",
+    });
+  });
+
+  it("removes every section, joining the non-empty ones in reasoning", () => {
+    expect(strip(["<thinking> </thinking>Hi.<thinking>a</thinking>"])).toEqual({
+      shown: "Hi.",
+      reasoning: "a",
+    });
+    expect(strip(["<thinking>a</thinking>Hi.<thinking> b </thinking> Bye."])).toEqual({
+      shown: "Hi. Bye.",
+      reasoning: "a\n\nb",
+    });
+  });
+
+  it("matches the tag in any case, with spaces and attributes", () => {
+    expect(strip(["Hi.<THINKING>a</Thinking>"])).toEqual({ shown: "Hi.", reasoning: "a" });
+    expect(strip(['Hi.< thinking type="plan">a</ thinking >'])).toEqual({ shown: "Hi.", reasoning: "a" });
+    expect(strip(["Hi.<thinking\n>a< /thinking>"])).toEqual({ shown: "Hi.", reasoning: "a" });
+  });
+
+  it("removes a closing tag that has no opener", () => {
+    expect(strip(["Sure.</thinking> Tuesday."])).toEqual({ shown: "Sure. Tuesday.", reasoning: "" });
+    expect(strip(["Sure.< / thinking> Tuesday."])).toEqual({ shown: "Sure. Tuesday.", reasoning: "" });
+  });
+
+  it("treats an unclosed tag as reasoning to the end of the block, and a lone prefix as text", () => {
+    expect(strip(["<thinking>never closed"])).toEqual({ shown: "", reasoning: "never closed" });
+    expect(strip(["Hi. <thinking>never ", "closed"])).toEqual({ shown: "Hi. ", reasoning: "never closed" });
+    expect(strip(["<thi"])).toEqual({ shown: "<thi", reasoning: "" });
+    expect(strip(["Hi <thinking about it"])).toEqual({ shown: "Hi <thinking about it", reasoning: "" });
+  });
+
+  it("holds back only text that could still become a tag, even split across deltas", () => {
+    expect(feed(["Hi <th", "inKing>x</thi", "nking>there"])).toEqual({
+      shown: "Hi there",
+      reasoning: "x",
+      pushed: ["Hi ", "", "there"],
+    });
+    expect(feed(["Hi <", " /", "thinking", " >", "there"]).pushed).toEqual(["Hi ", "", "", "", "there"]);
+    expect(feed(["x<", "b"]).pushed).toEqual(["x", "<b"]);
+    expect(feed(["Hi <thinking ", 'type="plan">x</thinking>!']).pushed).toEqual(["Hi ", "!"]);
+    expect(feed(["a <b c", "d"]).pushed).toEqual(["a <b c", "d"]);
+    expect(feed(["Hi <THIN", "KING>x</thinking>!"]).pushed).toEqual(["Hi ", "!"]);
+    expect(feed(["Hi.", " <thinking>x</thinking>", "Bye"]).pushed).toEqual(["Hi.", " ", "Bye"]);
+    expect(feed(["<thinking", "2>"]).pushed).toEqual(["", "<thinking2>"]);
+  });
+
+  it("closes a section only at its own closing tag", () => {
+    expect(strip(["<thinking>a</thinkingly>b</thinking>Hi"])).toEqual({
+      shown: "Hi",
+      reasoning: "a</thinkingly>b",
+    });
+    expect(strip(["<thinking>a</reasoning>b</thinking>Hi"], ["thinking", "reasoning"])).toEqual({
+      shown: "Hi",
+      reasoning: "a</reasoning>b",
+    });
+  });
+
+  it("matches the tag names it was given in any case", () => {
+    expect(feed(["<thin", "king>x</thinking>Hi"], ["THINKING"])).toEqual({
+      shown: "Hi",
+      reasoning: "x",
+      pushed: ["", "Hi"],
+    });
+  });
+
+  it("removes only the tags it was given", () => {
+    expect(strip(["<reasoning>r</reasoning><thinking>t</thinking>Hi"], ["thinking", "reasoning"])).toEqual({
+      shown: "Hi",
+      reasoning: "r\n\nt",
+    });
+    expect(strip(["<think>x</think>Hi"], ["thinking"])).toEqual({
+      shown: "<think>x</think>Hi",
+      reasoning: "",
+    });
+    expect(strip(["<reasoning>x</thinking>Hi"], ["reasoning"])).toEqual({
+      shown: "",
+      reasoning: "x</thinking>Hi",
+    });
   });
 });

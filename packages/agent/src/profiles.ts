@@ -164,8 +164,10 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
     pricing: { input: 0.3, output: 2.5, cacheRead: 0.075, cacheWrite: 0 },
   },
   /**
-   * Amazon Nova Pro (v1). No reasoning switch; it writes `<thinking>…</thinking>` inline before tool
-   * calls, which the adapter hides from the patient. It rejects reasoning blocks in history.
+   * Amazon Nova Pro (v1). No reasoning switch; it writes `<thinking>…</thinking>` inline, usually before
+   * tool calls, which the adapter hides from the patient wherever it is in the text. In #107's L1 runs it
+   * leaked past the old filter, which only looked at the start of a text block and matched exact case.
+   * It rejects reasoning blocks in history.
    */
   "nova-pro": {
     name: "nova-pro",
@@ -186,8 +188,8 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
   /**
    * OpenAI gpt-oss-120b (open weights), only through Bedrock (ADR-010). `reasoning_effort` is the chat
    * completions field, passed through Converse (Bedrock validates it). No prompt caching on Converse.
-   * Besides its `reasoningContent` blocks, it sometimes writes `<reasoning>…</reasoning>` at the start of
-   * visible text (S-1c: 2 of 5 turns), which the adapter hides.
+   * Besides its `reasoningContent` blocks, it sometimes writes `<reasoning>…</reasoning>` in visible text
+   * (S-1c: 2 of 5 turns, at the start), which the adapter hides wherever it is.
    */
   "gpt-oss-120b": {
     name: "gpt-oss-120b",
