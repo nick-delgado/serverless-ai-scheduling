@@ -41,7 +41,7 @@ Nick's answers settled the transport and the scope. These are the decisions the 
 - Server: `services/api/test/chat-turn.test.ts`, 57 tests. A new block (#160) records the order of a first turn's side effects: `append:user`, `open:200`, `write:conversation`, `model`. Other tests in it cover a replaced conversation, a continued one (no event), a failed first append (409, no event), and a client that goes away after the first line and then resends. The 429/503 tests became 200 for first turns, and a new test keeps 429/503 for continued turns.
 - Client: the hook tests and the page tests resend with the named ID after a cut stream and after a mid-read network error, through the real `fetch` and `readChatStream`. A bare 502 or a network failure before any byte still resends without one.
 - We broke the code it guards with `npm run mutate`, 30 exact edits, and every one turned a test red: 9 in the chat handler, 5 in the contract, 1 in the hook and 15 in the mock. The PR lists each edit and the tests it turned red.
-- `npm run test:coverage`: 2344 passed, 6 skipped. `npm run coverage:changed`: every added source line ran.
+- `npm run test:coverage` (DynamoDB Local running): 2351 passed in 100 files. `npm run coverage:changed`: every added source line ran.
 - `dev` check (an early first line, then a resend after a disconnect): pending, by the orchestrator. Results go here.
 
 ## What's next
