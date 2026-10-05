@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M3
-**Related:** #32, ADR-008 (amendment 2026-10-05), PRD §7, follow-up #159
+**Related:** #32, PR #165, ADR-008 (amendment 2026-10-05), PRD §7, follow-up #159
 
 ## What happened
 
