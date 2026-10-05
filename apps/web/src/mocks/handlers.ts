@@ -4,7 +4,10 @@
  * real shapes without a test failing.
  *
  * - `POST /api/session`: a `SessionResponse`.
- * - `POST /api/chat`: `ChatStreamEvent`s as NDJSON, ending in `done` or `error` (ADR-007).
+ * - `POST /api/chat`: `ChatStreamEvent`s as NDJSON, ending in `done` or `error` (ADR-007). A turn
+ *   that starts a conversation (no `conversationId`, or one this mock hasn't seen, which the real API
+ *   reads as empty) opens with a `conversation` event once the message is "stored", as the chat
+ *   handler does (#160), and its agent failures then answer 200 with an `error` event.
  */
 import {
   type ApiError,
@@ -40,20 +43,22 @@ function ndjson(events: readonly ChatStreamEvent[], status: number): Response {
 }
 
 /**
- * A 200 NDJSON stream: the first event right away (the caller has already waited `firstEventMs`, so
- * headers and first event arrive together), then one event per `intervalMs`. Stops early if the
- * client aborts. Exported for its abort test.
+ * A 200 NDJSON stream: the first event right away (the caller has already waited, so headers and
+ * first event arrive together), then one event per `intervalMs`, except that the second waits
+ * `afterFirstMs` when given (the model's time to first token after a `conversation` event). Stops
+ * early if the client aborts. Exported for its tests.
  */
 export function ndjsonStream(
   events: readonly ChatStreamEvent[],
   intervalMs: number,
   signal: AbortSignal,
+  afterFirstMs: number = intervalMs,
 ): Response {
   const encoder = new TextEncoder();
   let next = 0;
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      if (next > 0) await sleep(intervalMs);
+      if (next > 0) await sleep(next === 1 ? afterFirstMs : intervalMs);
       const event = events[next];
       if (signal.aborted || event === undefined) {
         controller.close();
@@ -70,7 +75,7 @@ export function ndjsonStream(
 /** The chat handler's error answers, by kind: each `ChatErrorCode` the mock uses, plus the daily cap. */
 function errorEvent(
   kind: "BAD_REQUEST" | "RATE_LIMITED" | "DAILY_CAP" | "AGENT_UNAVAILABLE",
-): ChatStreamEvent {
+): Extract<ChatStreamEvent, { type: "error" }> {
   switch (kind) {
     case "BAD_REQUEST":
       return {
@@ -160,45 +165,62 @@ export function createMockApi(getOptions: () => MockApiOptions): MockApi {
       await sleep(options.latencyMs);
       return ndjson([errorEvent("BAD_REQUEST")], 400);
     }
-    if (
-      options.chatFault === "rate_limited" ||
-      options.chatFault === "unavailable" ||
-      options.chatFault === "daily_cap"
-    ) {
+    if (options.chatFault === "daily_cap") {
+      // Refused before the message is stored: no conversation to name.
       await sleep(options.latencyMs);
-      switch (options.chatFault) {
-        case "rate_limited":
-          return ndjson([errorEvent("RATE_LIMITED")], 429);
-        case "daily_cap":
-          return ndjson([errorEvent("DAILY_CAP")], 429);
-        case "unavailable":
-          return ndjson([errorEvent("AGENT_UNAVAILABLE")], 503);
-      }
+      return ndjson([errorEvent("DAILY_CAP")], 429);
     }
 
-    // The model's time to first token: no headers until the first event (ADR-007).
-    await sleep(options.firstEventMs);
+    // The patient's message is stored. A conversation this mock hasn't seen reads as empty, so the
+    // turn starts a new one, named in a first `conversation` event before the model runs (#160).
+    const requested = parsed.data.conversationId;
+    const opens = requested === undefined || !lastSeq.has(requested);
+    const conversationId = opens ? crypto.randomUUID() : requested;
+    const patientSeq = (lastSeq.get(conversationId) ?? 0) + 1;
+    lastSeq.set(conversationId, patientSeq);
 
+    // An agent failure names the stored conversation, as the chat handler's does (#104).
+    const failure = (kind: "RATE_LIMITED" | "AGENT_UNAVAILABLE") => ({ ...errorEvent(kind), conversationId });
+    const agentFault =
+      options.chatFault === "rate_limited"
+        ? { event: failure("RATE_LIMITED"), status: 429 }
+        : options.chatFault === "unavailable"
+          ? { event: failure("AGENT_UNAVAILABLE"), status: 503 }
+          : undefined;
     const reply = REPLIES[options.chatReply];
-    if (options.chatFault === "mid_stream") {
+    let events: ChatStreamEvent[];
+    if (agentFault) {
+      if (!opens) {
+        // A continued conversation keeps the status: nothing was written before the model failed.
+        await sleep(options.latencyMs);
+        return ndjson([agentFault.event], agentFault.status);
+      }
+      events = [agentFault.event];
+    } else if (options.chatFault === "mid_stream") {
       const partial = reply.events.slice(0, Math.ceil(reply.events.length / 2));
+      events = [...partial, failure("AGENT_UNAVAILABLE")];
+    } else {
+      const seq = patientSeq + 1; // this reply
+      lastSeq.set(conversationId, seq);
+      events = [
+        ...reply.events,
+        { type: "done", conversationId, messageId: messageIdForSeq(seq), usage: SAMPLE_USAGE },
+      ];
+    }
+
+    if (opens) {
+      // The `conversation` event goes out once the message is stored, then the model's time to first token.
+      await sleep(options.latencyMs);
       return ndjsonStream(
-        [...partial, errorEvent("AGENT_UNAVAILABLE")],
+        [{ type: "conversation", conversationId }, ...events],
         options.eventIntervalMs,
         request.signal,
+        options.firstEventMs,
       );
     }
-
-    const conversationId = parsed.data.conversationId ?? crypto.randomUUID();
-    const seq = (lastSeq.get(conversationId) ?? 0) + 2; // the patient's message, then this reply
-    lastSeq.set(conversationId, seq);
-    const done: ChatStreamEvent = {
-      type: "done",
-      conversationId,
-      messageId: messageIdForSeq(seq),
-      usage: SAMPLE_USAGE,
-    };
-    return ndjsonStream([...reply.events, done], options.eventIntervalMs, request.signal);
+    // The model's time to first token: no headers until the first event (ADR-007).
+    await sleep(options.firstEventMs);
+    return ndjsonStream(events, options.eventIntervalMs, request.signal);
   });
 
   return { handlers: [session, chat, ...cognitoHandlers], reset };

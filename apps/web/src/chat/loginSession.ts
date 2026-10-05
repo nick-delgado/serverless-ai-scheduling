@@ -5,7 +5,8 @@
  * (refresh token expired or revoked). `POST /api/session` returns the patient's newest conversation
  * ever, with no login-session cutoff, so only the SPA can tell a reload (restore it) from a new
  * sign-in (start empty). It keeps `{ sub, conversationId }` in `localStorage`, shared by every tab:
- * - written when a turn's `done` names the conversation (useChat);
+ * - written when a turn names its conversation: a `conversation` event (#160), `done`, or an `error`
+ *   that names one (#104) (useChat);
  * - cleared on sign-in, on sign-out, and when Amplify reports that the sign-in ended
  *   (`signedOut`, `tokenRefresh_failure`), by `AuthProvider`.
  *

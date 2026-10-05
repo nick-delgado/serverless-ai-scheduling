@@ -14,6 +14,7 @@ import { configureMockApi, server } from "../mocks/node";
 import { REPLIES, SESSIONS } from "../mocks/fixtures";
 import { type ChatApi, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
+import { readLoginSession } from "./loginSession";
 import { ChatProtocolError } from "./streamClient";
 import {
   captureChatBodies,
@@ -46,13 +47,81 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function renderPage(props: { onUnauthorized?: () => void } = {}) {
+async function renderPage(props: { onUnauthorized?: () => void; sub?: string } = {}) {
   render(<ChatPage reducedMotion={instant} {...props} />);
   const user = userEvent.setup();
   const input = screen.getByRole("textbox", { name: "Message" });
   const sendMessage = (text: string) => user.type(input, `${text}{Enter}`);
   return { user, input, sendMessage };
 }
+
+describe("ChatPage: Retry after a first turn named its conversation (#160)", () => {
+  const NAMED = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+  const SUB = "c2a4e6b8-1d3f-4a5b-8c7d-9e0f1a2b3c4d";
+
+  /** A 200 stream with the `conversation` line, then `end` (close it, or fail the read), once. */
+  function nameThen(end: "close" | "error") {
+    server.use(
+      http.post(
+        "/api/chat",
+        () => {
+          let pulls = 0;
+          const body = new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              pulls += 1;
+              if (pulls === 1) {
+                const line = encodeStreamEvent({ type: "conversation", conversationId: NAMED });
+                controller.enqueue(new TextEncoder().encode(line));
+              } else if (end === "close") controller.close();
+              else {
+                // fetch reads ahead, and an error drops what it buffered: fail the read only once the
+                // page has handled the line (it wrote the login session), as a drop mid-read would.
+                for (let hop = 0; readLoginSession()?.conversationId !== NAMED; hop += 1) {
+                  if (hop > 500) throw new Error("the page never handled the conversation line");
+                  await new Promise((resolve) => setImmediate(resolve));
+                }
+                controller.error(new TypeError("network error"));
+              }
+            },
+          });
+          return new HttpResponse(body, { headers: { "Content-Type": NDJSON_CONTENT_TYPE } });
+        },
+        { once: true },
+      ),
+    );
+  }
+
+  it.each([
+    ["the stream is cut after it", "close"],
+    ["the connection drops mid-read", "error"],
+  ] as const)("when %s, Retry resends with that conversationId", async (_, end) => {
+    const bodies = captureChatBodies();
+    nameThen(end);
+    const { user, sendMessage } = await renderPage({ sub: SUB });
+    await sendMessage("Hi");
+    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
+    await user.click(retryButton() as HTMLElement);
+    await within(log()).findByText(REPLIES.tools.text);
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[0]).not.toHaveProperty("conversationId");
+    expect(bodies[1]).toEqual({ ...bodies[0], conversationId: NAMED });
+  });
+
+  it("resends without a conversationId after a bare 5xx before any byte (a gateway's own)", async () => {
+    const bodies = captureChatBodies();
+    server.use(
+      http.post("/api/chat", () => HttpResponse.text("Bad gateway", { status: 502 }), { once: true }),
+    );
+    const { user, sendMessage } = await renderPage();
+    await sendMessage("Hi");
+    await screen.findByRole("alert");
+    await user.click(retryButton() as HTMLElement);
+    await within(log()).findByText(REPLIES.tools.text);
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(bodies[1]).not.toHaveProperty("conversationId");
+  });
+});
 
 describe("ChatPage: Retry (FR-015)", () => {
   it("resends the same text, clientMessageId and conversationId, once, without adding the message again", async () => {
@@ -102,7 +171,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     expect(bodies[2]?.conversationId).toBe(bodies[1]?.conversationId);
   });
 
-  it("retries a failed first turn without a conversationId (the client has none yet)", async () => {
+  it("retries a first turn that failed before any byte without a conversationId (the client has none yet)", async () => {
     const bodies = captureChatBodies();
     configureMockApi({ chatFault: "network" });
     const { user, sendMessage } = await renderPage();
