@@ -45,7 +45,7 @@ New top-level directories come from an issue; check `docs/backlog.md` rather tha
 
 ## Commands
 
-Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`, `spikes/*`; package names `@sched/<dir>`, spikes `@sched/spike-<dir>`). Spikes are installed and typechecked but have no Vitest project:
+Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`, `spikes/*`; package names `@sched/<dir>`, spikes `@sched/spike-<dir>`). Spikes are installed and typechecked, except a spike with no `package.json` (such as `spikes/stryker`), which is linted only; no spike has a Vitest project:
 
 ```bash
 npm ci                                   # install
