@@ -324,6 +324,21 @@ describe("ConverseLlmClient", () => {
     expect(response.content).toEqual([{ type: "text", text: "Is 3 <" }]);
   });
 
+  it("gives each text block its own filter, so an unclosed tag hides only the rest of its block", async () => {
+    const { response, deltas } = await run([
+      textDelta(0, "Hi. <thinking>never closed"),
+      { contentBlockStop: { contentBlockIndex: 0 } },
+      textDelta(1, "Tuesday works."),
+      { contentBlockStop: { contentBlockIndex: 1 } },
+      stop("end_turn"),
+    ]);
+    expect(deltas).toEqual(["Hi. ", "Tuesday works."]);
+    expect(response.content).toEqual([
+      { type: "text", text: "Hi. " },
+      { type: "text", text: "Tuesday works." },
+    ]);
+  });
+
   it("removes a mid-text section for Nova Pro, keeping it as reasoning before the visible text", async () => {
     const { response, deltas } = await run(
       [
@@ -451,7 +466,7 @@ describe("InlineReasoningFilter", () => {
     });
   });
 
-  it("matches the tag in any case, with spaces and attributes, like the grader", () => {
+  it("matches the tag in any case, with spaces and attributes", () => {
     expect(strip(["Hi.<THINKING>a</Thinking>"])).toEqual({ shown: "Hi.", reasoning: "a" });
     expect(strip(['Hi.< thinking type="plan">a</ thinking >'])).toEqual({ shown: "Hi.", reasoning: "a" });
     expect(strip(["Hi.<thinking\n>a< /thinking>"])).toEqual({ shown: "Hi.", reasoning: "a" });
@@ -488,6 +503,10 @@ describe("InlineReasoningFilter", () => {
     expect(strip(["<thinking>a</thinkingly>b</thinking>Hi"])).toEqual({
       shown: "Hi",
       reasoning: "a</thinkingly>b",
+    });
+    expect(strip(["<thinking>a</reasoning>b</thinking>Hi"], ["thinking", "reasoning"])).toEqual({
+      shown: "Hi",
+      reasoning: "a</reasoning>b",
     });
   });
 
