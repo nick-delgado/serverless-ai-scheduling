@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "coverage:changed": "tsx scripts/coverage-changed.ts",
+    "mutate": "tsx scripts/mutate.ts",
     "evals": "tsx packages/evals/src/cli.ts",
     "seed:data": "tsx scripts/seed-data.ts"
   },
