@@ -33,7 +33,7 @@ The spec left these open; the agent decided them while building:
 
 ## Evidence
 
-- Mutation checks, one break at a time, each run against the test file: 35 breaks of the filter (each tag-regex part, both case flags, each `||`/`&&` operand, the hold-back, the profile-tag and always-`thinking` parts of the tag set, keep-vs-drop of the removed text) and 22 of the summary guard (each pattern, each prefix, each flag and word boundary, the placeholder, the cap, the call itself) all turned a test red. One break (keeping held whitespace when a tag is removed before anything is shown) is equivalent: the next visible text is trimmed anyway.
+- Mutation checks, one break at a time, each run against the test file: 38 breaks of the filter (each tag-regex part, each part of the partial-tag check, both case flags, each `||`/`&&` operand, the hold-back, the profile-tag and always-`thinking` parts of the tag set, keep-vs-drop of the removed text) and 22 of the summary guard (each pattern, each prefix, each flag and word boundary, the placeholder, the cap, the call itself) all turned a test red. One break (keeping held whitespace when a tag is removed before anything is shown) is equivalent: the next visible text is trimmed anyway.
 - L1, three trials, on `nova-pro` and `sonnet-4.6`: *pending; the numbers go here, in the PR and on #37.*
 
 ## What's next

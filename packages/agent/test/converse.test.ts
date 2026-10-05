@@ -477,6 +477,7 @@ describe("InlineReasoningFilter", () => {
     });
     expect(feed(["Hi <", " /", "thinking", " >", "there"]).pushed).toEqual(["Hi ", "", "", "", "there"]);
     expect(feed(["x<", "b"]).pushed).toEqual(["x", "<b"]);
+    expect(feed(["Hi <thinking ", 'type="plan">x</thinking>!']).pushed).toEqual(["Hi ", "!"]);
     expect(feed(["a <b c", "d"]).pushed).toEqual(["a <b c", "d"]);
     expect(feed(["Hi <THIN", "KING>x</thinking>!"]).pushed).toEqual(["Hi ", "!"]);
     expect(feed(["Hi.", " <thinking>x</thinking>", "Bye"]).pushed).toEqual(["Hi.", " ", "Bye"]);

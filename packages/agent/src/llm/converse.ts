@@ -448,7 +448,9 @@ export class InlineReasoningFilter {
 
   /** `text` starts with `<` and isn't one of our tags yet: could more input make it one? */
   #couldBeTag(text: string): boolean {
-    const [, word = "", after = ""] = /^<\s*\/?\s*(\w*)([\s\S]*)$/.exec(text) ?? [];
+    const rest = text.replace(/^<\s*\/?\s*/, "");
+    const word = rest.replace(/\W[\s\S]*$/, "");
+    const after = rest.slice(word.length);
     const lower = word.toLowerCase();
     if (after === "") return this.#names.some((name) => name.startsWith(lower));
     return this.#names.includes(lower); // the full name, then attributes whose `>` hasn't arrived
