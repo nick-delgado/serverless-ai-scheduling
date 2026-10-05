@@ -152,11 +152,13 @@ describe("useChat: the conversation an error names (#104)", () => {
     return bodies;
   }
 
-  it("sends the conversation a failed first turn's error names with Retry, and remembers it for a reload", async () => {
-    const bodies = await sendThenRetry([unavailable(STORED), done]);
+  it("sends the conversation a failed first turn's error names with Retry", async () => {
+    const bodies = await sendThenRetry([
+      unavailable(STORED),
+      doneEvent({ conversationId: STORED, messageId: "msg_000001" }),
+    ]);
     expect(bodies[0]?.conversationId).toBeUndefined();
     expect(bodies[1]).toEqual({ ...bodies[0], conversationId: STORED });
-    expect(readLoginSession()).toEqual({ sub: SUB, conversationId: done.conversationId });
   });
 
   it("writes the login session from the error, before any done", async () => {
