@@ -1,7 +1,7 @@
 # 2026-10-05 — The LLM judge scores beside the trial, never inside it
 
 **Chapter:** 4. Teaching the agent to schedule
-**Milestone:** M3
+**Milestone:** M2
 **Related:** #32, PR #165, ADR-008 (amendment 2026-10-05), PRD §7, follow-up #159
 
 ## What happened
@@ -16,7 +16,7 @@ The agent built the judge under `packages/evals/src/judge/`:
 - a JSON reply checked with Zod, where every evidence quote must appear in the transcript, and one retry with the problems listed;
 - grader results named `judge.<dimension>` with a new grader kind that `trialPassed` ignores.
 
-It also built the calibration export and the agreement computation, and a test that enumerates every grader name the harness can emit and fails when one has no case seen failing (AC 7).
+It also built the calibration export and the agreement computation, and a test that lists the grader names the harness can emit and fails when one has no case seen failing (AC 7). Most names are derived from the schema and the graders' constants; nine that the graders spell as literals are listed by hand, so a new literal-named grader needs adding there.
 
 ## Why we chose what we chose
 
@@ -26,7 +26,7 @@ Nick settled the four questions above. These are the decisions the spec left ope
 2. **Judge results live in `TrialResult.graders`** (kind `judge`), as r1/A-4 says. A separate field would have hidden them from tools that already walk `graders`. `failedChecks` leaves them out, and the markdown table gets its own "Judge below 4" column, so a passing case doesn't list "failed checks".
 3. **A trial's `durationMs` stops before the judge call.** Including it would make trial time depend on the judge's model.
 4. **The reply is a JSON object in plain text, not a tool call.** This is model-agnostic, like the simulator's protocol.
-5. **When a dimension's situation never came up** (nobody tried an injection), the rubric says to score 5. The alternative, a "not applicable" score, would need a sixth value in the schema and in the agreement maths.
+5. **When a dimension's situation never came up** (nobody tried an injection), the judge's prompt says to score 5. The alternative, a "not applicable" score, would need a sixth value in the schema and in the agreement maths. The PR review found that the human labeller wasn't told the same rule, so their disagreements would have been blamed on the judge. Nick decided the labeller follows it too (`f6d8ff8/SPEC-4`, (a)): the `rubrics.ts` header and the labels file's instructions now state it, and add that a situation that only partly came up is scored on its anchors. The judge's prompt, and so `judge.v1`, didn't change.
 6. **Evidence quotes are checked against the rendered transcript only**, not against the system-prompt block, because evidence of disclosure is what the assistant said.
 7. **Tool results longer than 1,500 characters are cut** in the judge's transcript. The judge needs their gist, and it keeps the call small.
 8. **The pre-run estimate assumes about 6k input and 600 output tokens per judge call.** #34 recalibrates it from recorded runs.
@@ -35,10 +35,13 @@ Nick settled the four questions above. These are the decisions the spec left ope
    - the export refuses to overwrite a labels file that already holds scores;
    - `--calibrate` judges only the labelled dimensions, honours `--dry-run`, and writes `<timestamp>-calibration-<judge profile>.{json,md}` to the results directory.
 10. **The export rebuilds the agent's system prompt** for each picked trial and refuses a results file from another prompt version. The alternative was to store the prompt in every trial result, which would add several KB to every trial of every run to serve one rare step.
-11. **The export picks round-robin** over failing trials, passing red-team (`safety`) trials, then the rest, taking first trials before repeats.
+11. **The export covers every rubric dimension first.** The first version picked round-robin over failing trials, passing red-team trials, then the rest, in alphabetical order. The PR review counted the shipped set: `no_invented_policies` and `no_false_claims_of_action` were in no transcript, and both failing red-team trials were left out. Nick chose to cover the dimensions first (`f6d8ff8/SPEC-1`, (a)). Taking the rarest dimension first, the export picks trials that list it until it appears in two transcripts, or in every candidate when fewer exist, failing trials first. It then fills the remaining slots round-robin by category. The set was re-exported from the same results file before any labelling.
 12. **`invariant.conversation_owned_by_caller` is the one name exempt from AC 7's test.** It is only ever `skip`, and #80 retires it to L0.
-13. **`cli.ts`'s `main()` is marked with a reasoned `v8 ignore`** hint, and the calibration logic moved into a tested `calibrationStep` in `cli-args.ts`. Without that, the coverage gate would flag the new entry-point lines, which no test runs.
-14. **The judge builds its own Converse request**, a copy of the simulator's (`simulator/llm.ts`), until #105's shared builder exists. `JudgeCost` is an alias of `SimulatorCost`.
+13. **`cli.ts`'s `main()` is marked with a reasoned `v8 ignore`** hint, and only calls tested functions in `cli-args.ts`: the calibration step, its file adapters (`fileCalibrationDeps`), the run's options with the judge (`runOptions`), and the usage-error mapping (`orUsageError`, `orUsageErrorAsync`). The first version left the file adapters and the judge option inside `main()`, untested. The PR review caught it (`f6d8ff8/TEST-202`).
+14. **The judge builds its own Converse request**, a copy of the simulator's (`simulator/llm.ts`), until #105's shared builder exists. `JudgeCost` is an alias of `SimulatorCost`. Nick widened #105 to extract the retry loop too, which the judge also copies from the simulator.
+15. **The judge's rejected replies are kept in the results**, as `TrialResult.judgeRejected`, like the simulator's (`f6d8ff8/SMELL-107`, (a)). A `JudgeError` carries them as well, so a trial with no verdict shows what the judge sent.
+16. **The calibration files are validated fully.** A complete transcript-event schema, local to `calibration.ts`, replaces the check of `kind` and `turn` only, so a malformed event is a usage error naming the field (`f6d8ff8/SMELL-205`, (a)).
+17. **The calibration steps ignore the run flags**, `--max-cost` included, and `--calibrate` prints its estimate before calling the judge. The `cli.ts` header and `CLAUDE.md` now say so (`f6d8ff8/SMELL-211`, (c)). At about 20 `haiku-4.5` calls, a budget stop isn't worth the code yet.
 
 The rubric anchors themselves were written by the agent and haven't been reviewed by Nick. Labelling for #159 is where he finds out whether they say what he means.
 
@@ -59,7 +62,7 @@ The rubric anchors themselves were written by the agent and haven't been reviewe
   - 40 cases: 39 ran, 28 passed, 11 failed, 0 errored, 1 skipped (the API-surface case). pass@1 72%, with 4 safety violations from the unchanged agent and graders: two `no_hallucinated_slots`, one `no_cross_patient_data` on the indirect-injection case, and one leak check. None was investigated here.
   - Judge: 38 trials judged, 0 scores below 4, 1 judge error, 47 judge calls. Means: `tone` 5.00, `clarity` 4.85, the six invariants 5.00. Rubric average (tone, clarity) 4.92.
   - Cost $2.16 against an estimate of $14.25: agent $1.36, simulator $0.59, judge $0.22. 471 model calls, 0 throttles, 49 minutes wall-clock.
-- Calibration set: `--export-calibration` on that file wrote 20 transcripts to `packages/evals/calibration/transcripts.json` (7 failing trials, 7 passing red-team trials, 6 others) and an all-`null` `labels.json`. The data is synthetic: fixture patients and providers, and the fictional front-desk number.
+- Calibration set: `--export-calibration` on that file wrote 20 transcripts to `packages/evals/calibration/transcripts.json` and an all-`null` `labels.json`. After the SPEC-1 decision, the re-export from the same file has 10 failing trials (both failing red-team trials among them) and 10 passing ones, over all six categories. Each rubric dimension appears in at least two transcripts: `clarity` 19, `tone` 14, `no_medical_advice` 5, `ignores_injected_instructions` 3, `no_claim_to_be_human` 3, `no_invented_policies` 2, `no_false_claims_of_action` 2. The exception is `no_system_prompt_disclosure` at 1, because only one trial in the run lists it. The data is synthetic: fixture patients and providers, and the fictional front-desk number.
 
 ## What's next
 

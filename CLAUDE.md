@@ -69,7 +69,7 @@ npm run evals -- --export-calibration <results.json>                            
 npm run evals -- --calibrate                                                       # judge the labelled transcripts and report judge–human agreement
 ```
 
-Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls; the judge still runs), `--calibration-dir <dir>`, `--out <dir>`. The judge's scores are reported beside each trial and never change its status; its cost is reported apart from `costUsd` and counts toward `--max-cost`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
+Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls; the judge still runs), `--calibration-dir <dir>`, `--out <dir>`. The judge's scores are reported beside each trial and never change its status; its cost is reported apart from `costUsd` and counts toward `--max-cost`. The calibration steps ignore the run flags, `--max-cost` included; `--calibrate` prints its estimate before calling the judge. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
 
 Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
