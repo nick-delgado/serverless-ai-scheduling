@@ -33,11 +33,16 @@ resource: a review that asks twenty questions is not read.
    the project's ADRs and PRD, and owner decisions recorded on PRs. Cite them as the basis
    of an assumption.
 5. **Write each question** with real options, each with its consequence and scope label,
-   and your own recommendation, citing why. Prefer the option that stays within the issue.
+   and your own recommendation, citing why. Each option's text must stand on its own,
+   conditions included: the apply step records the chosen option, not your
+   recommendation. Each assumption names the doc lines it makes stale, and one you could
+   not check (an external library's or service's behaviour) is marked "(verify first)". Prefer the option that stays within the issue.
    Order questions by consequence; keep at most seven; turn the rest into assumptions
    marked "(would have asked)".
 6. **Write each edit** with its exact "Before" text, copied from
-   `<RUN_DIR>/issue-body.md` (the description as it is now), and the "After" text.
+   `<RUN_DIR>/issue-body.md` (the description as it is now), and the "After" text, following
+   the format's rules for edits to acceptance criteria (observable first, precedents
+   checked, browser-only criteria routed to Verification).
 7. **Choose the verdict** by the table in the format reference. "Not ready" says what to do
    instead (split along these criteria; rewrite the goal).
 8. **Write `<RUN_DIR>/readiness.md`** in the format's layout, including the summary, the
