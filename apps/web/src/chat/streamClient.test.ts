@@ -1,7 +1,7 @@
 import { type ChatStreamEvent, encodeStreamEvent, TOOL_STATUS_LABELS } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
-import { ChatProtocolError, readChatStream } from "./streamClient";
+import { ChatProtocolError, ChatStreamEndedError, readChatStream } from "./streamClient";
 import { doneEvent } from "./testUtils";
 
 const status: ChatStreamEvent = {
@@ -99,10 +99,25 @@ describe("readChatStream", () => {
 
   it.each([
     ["NDJSON", () => [encodeStreamEvent(status) + encodeStreamEvent(delta("Hi"))]],
-    ["a buffered array", () => [JSON.stringify([status, delta("Hi")])]],
     ["an empty body", () => []],
-  ])("rejects %s that ends without done or error", async (_, chunks) => {
-    await expect(read(chunks())).rejects.toBeInstanceOf(ChatProtocolError);
+    ["a blank body", () => [" \n"]],
+  ])("rejects %s that ends without done or error as a ChatStreamEndedError (#138)", async (_, chunks) => {
+    const reading = read(chunks());
+    await expect(reading).rejects.toBeInstanceOf(ChatStreamEndedError);
+    // Still a contract failure for anything that only asks that.
+    await expect(reading).rejects.toBeInstanceOf(ChatProtocolError);
+  });
+
+  it.each([
+    ["a final line cut mid-way", () => [encodeStreamEvent(delta("Hi")) + '{"type":"text_del']],
+    ["an unreadable buffered array", () => ["[{"]],
+    // The contract reads a buffered body whole, so one without done or error is unreadable, not cut.
+    ["a buffered array without done or error", () => [JSON.stringify([status, delta("Hi")])]],
+    ["an event after the terminal one", () => [encodeStreamEvent(done) + encodeStreamEvent(delta("more"))]],
+  ])("rejects %s as a ChatProtocolError, not a ChatStreamEndedError", async (_, chunks) => {
+    const reading = read(chunks());
+    await expect(reading).rejects.toBeInstanceOf(ChatProtocolError);
+    await expect(reading).rejects.not.toBeInstanceOf(ChatStreamEndedError);
   });
 
   it.each([

@@ -5,9 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { REPLIES, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi, server } from "../mocks/node";
-import { type ChatApi, createChatApi } from "./api";
+import { type ChatApi, ChatHttpError, createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
 import { readLoginSession } from "./loginSession";
+import { ChatProtocolError, ChatStreamEndedError } from "./streamClient";
 import {
   doneEvent,
   fakeTime,
@@ -19,7 +20,7 @@ import {
   typingIndicator as typing,
   until,
 } from "./testUtils";
-import { FALLBACK_GREETING, prefersReducedMotion, useChat } from "./useChat";
+import { FALLBACK_GREETING, GENERIC_ERROR, prefersReducedMotion, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
 const done = doneEvent({ messageId: "msg_000042" });
 const delta = (text: string): ChatStreamEvent => ({ type: "text_delta", text });
@@ -178,6 +179,64 @@ describe("useChat: the conversation an error names (#104)", () => {
     const bodies = await sendThenRetry([other, unavailable(), done]);
     expect(bodies[1]?.conversationId).toBe(STORED);
     expect(bodies[2]?.conversationId).toBe(STORED);
+  });
+});
+
+describe("useChat: which failures without an error event offer Retry (#138)", () => {
+  /** A ChatApi whose first send rejects with `failure` and whose later sends succeed; records the requests. */
+  function failingApi(failure: unknown) {
+    const bodies: ChatRequest[] = [];
+    const api: ChatApi = {
+      getSession: () => Promise.resolve(SESSIONS.no_upcoming),
+      sendChat: (request, onEvent) => {
+        bodies.push(request);
+        if (bodies.length === 1) return Promise.reject(failure);
+        onEvent(done);
+        return Promise.resolve([done]);
+      },
+    };
+    return { api, bodies };
+  }
+
+  async function sendFailing(failure: unknown, onUnauthorized = vi.fn()) {
+    const { api, bodies } = failingApi(failure);
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant, onUnauthorized }));
+    await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
+    act(() => {
+      result.current.send("Hi");
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    return { result, bodies, onUnauthorized };
+  }
+
+  it.each([
+    ["a 500 without an event (the threshold)", new ChatHttpError(500)],
+    ["a 504 without an event", new ChatHttpError(504)],
+    ["a stream that ended before done or error", new ChatStreamEndedError("ended")],
+    ["a network failure", new TypeError("Failed to fetch")],
+  ])("offers Retry for %s, which resends the same request", async (_, failure) => {
+    const { result, bodies } = await sendFailing(failure);
+    expect(result.current.error).toEqual({ message: GENERIC_ERROR, retryable: true });
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual(bodies[0]);
+  });
+
+  it.each([
+    ["a 499 without an event (just under the threshold)", new ChatHttpError(499)],
+    ["a 429 without an event (API Gateway's throttle)", new ChatHttpError(429)],
+    ["a malformed stream", new ChatProtocolError("unreadable")],
+  ])("shows the generic error without Retry for %s", async (_, failure) => {
+    const { result, onUnauthorized } = await sendFailing(failure);
+    expect(result.current.error).toEqual({ message: GENERIC_ERROR, retryable: false });
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("signs out on a 401 without an event, without Retry, before any 5xx or network rule", async () => {
+    const { result, onUnauthorized } = await sendFailing(new ChatHttpError(401));
+    expect(result.current.error).toEqual({ message: SIGNED_OUT_ERROR, retryable: false });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });
 
