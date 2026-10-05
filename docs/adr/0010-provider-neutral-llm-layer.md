@@ -1,6 +1,6 @@
 # ADR-010: Provider-neutral LLM layer via Bedrock Converse
 
-- **Status:** Accepted (2026-09-29, spike S-1c)
+- **Status:** Accepted (2026-09-29, spike S-1c; amended 2026-10-05: inline chain-of-thought is removed anywhere in the text, for every profile, #107; see [Amendment](#amendment-2026-10-05-inline-chain-of-thought-is-removed-anywhere-in-the-text-107))
 - **Date:** 2026-09-29
 - **Deciders:** Nick Delgado (+ Claude, drafting and measuring)
 - **Related:** PRD FR-035, FR-051, NFR-001, NFR-003; ADR-001, ADR-002 (client decision superseded), ADR-007, ADR-008; issues #60, #57
@@ -89,7 +89,7 @@ The M3 eval matrix (#37) still chooses the production default.
   - **gpt-oss rejects any cache point** ("AccessDeniedException: … did not allow prompt caching").
   - **Nova Pro rejects reasoning blocks in history** ("User messages cannot contain reasoning content"). So `replaysReasoning: false`.
   - **Claude validates the signature** on replay. A fake one is rejected.
-  - **Inline chain-of-thought in visible text.** Nova Pro writes `<thinking>…</thinking>`, and gpt-oss-120b sometimes writes `<reasoning>…</reasoning>`. The adapter moves a leading tagged section into a reasoning block and never streams it.
+  - **Inline chain-of-thought in visible text.** Nova Pro writes `<thinking>…</thinking>`, and gpt-oss-120b sometimes writes `<reasoning>…</reasoning>`. The adapter moves a leading tagged section into a reasoning block and never streams it. *(Refined by the [2026-10-05 amendment](#amendment-2026-10-05-inline-chain-of-thought-is-removed-anywhere-in-the-text-107): any section, anywhere, and `<thinking>` for every profile.)*
   - **gpt-oss sends an empty text block**; the adapter drops it.
   - **Converse sends `contentBlockStart` only for tool calls.** Text and reasoning blocks start at their first delta.
   - **gpt-oss streams only 2–4 text deltas per turn.** The UI's typewriter smoothing (ADR-007) matters more for it.
@@ -149,3 +149,12 @@ Raw data:
 **Finding fixed during the spike.** In the first run, gpt-oss-120b put `<reasoning>…</reasoning>` in patient-visible text in 2 of 5 turns. After we enabled the inline-tag filter for gpt-oss, the rerun had 0 leaks in 10 turns.
 
 **gpt-oss-120b's two "incorrect" turns** called `find_providers` before `check_availability`. That's a reasonable plan, but the spike's executor answers only `check_availability`, so the model gave up and offered the front desk. This is a trajectory difference for the eval harness to judge (#30), not a transport failure.
+
+## Amendment (2026-10-05): inline chain-of-thought is removed anywhere in the text (#107)
+
+The decision stands. The inline-tag filter in `ConverseLlmClient` grew after system prompt v1 (#16): in three L1 trials Nova Pro still leaked `<thinking>` into visible text twice on `l1-escalate-billing`, which a filter that only looked at the start of a text block couldn't catch. Nick settled the details on #107:
+
+- **Anywhere, not just leading.** `InlineReasoningFilter` removes every tagged section in a text block, wherever it sits, before any of it streams. The tag matches the way the `no_reasoning_leak` grader's `REASONING_TAG` does: any case, optional whitespace and slash, attributes. A closing tag with no opener is removed on its own, and an unclosed tag hides the rest of its block. Text is held back only while it could still become a tag.
+- **`<thinking>` for every profile.** The client always strips `thinking`, plus the profile's own `inlineReasoningTag` (gpt-oss: `reasoning`). It's a constant in the client, not a branch on model names, and the request shape doesn't change.
+- **Where the removed text goes.** A profile with a tag keeps it as one unsigned reasoning block per text block, before that block's visible text, as before. A profile without one (Claude, Nova 2 Lite) drops it: the loop replays reasoning to Claude, and Claude rejects a reasoning block without its signature.
+- **Not a Guardrail.** This is a code guard; ADR-009 keeps Bedrock Guardrails deferred until the L3 red-team set calls for one.
