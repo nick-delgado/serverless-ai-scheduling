@@ -1,8 +1,9 @@
 /**
- * The error bubble and Retry (FR-015, FR-017, #27). Retry shows only for a retryable stream `error`
- * event or a network failure, and resends the same text, `clientMessageId` and `conversationId`.
+ * The error bubble and Retry (FR-015, FR-017, #27, #138). Retry shows only for a retryable stream
+ * `error` event, a network failure, a 5xx without an event, or a stream that ends without `done` or
+ * `error`, and resends the same text, `clientMessageId` and `conversationId`.
  */
-import { CLINIC, encodeStreamEvent } from "@sched/contracts";
+import { CLINIC, type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -13,11 +14,26 @@ import { configureMockApi, server } from "../mocks/node";
 import { REPLIES } from "../mocks/fixtures";
 import { createChatApi } from "./api";
 import { ChatPage } from "./ChatPage";
-import { captureChatBodies, instant, log, retryButton, typingIndicator as typing } from "./testUtils";
+import {
+  captureChatBodies,
+  doneEvent,
+  instant,
+  log,
+  retryButton,
+  typingIndicator as typing,
+} from "./testUtils";
 import { GENERIC_ERROR, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
 const UNAVAILABLE = "The assistant isn't available right now. Please try again.";
 const BUSY = "Lots of people are chatting right now. Please try again in a moment.";
+
+const delta = (text: string): ChatStreamEvent => ({ type: "text_delta", text });
+
+/** A 200 NDJSON body with exactly these events, which then ends. */
+const ndjson = (events: ChatStreamEvent[]) =>
+  new HttpResponse(events.map(encodeStreamEvent).join(""), {
+    headers: { "Content-Type": NDJSON_CONTENT_TYPE },
+  });
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -129,13 +145,57 @@ describe("ChatPage: Retry (FR-015)", () => {
   });
 
   it.each([
+    ["a 500 without an error event", () => new HttpResponse("Internal Server Error", { status: 500 })],
+    ["a 502 from the gateway", () => new HttpResponse("Bad Gateway", { status: 502 })],
+    ["a 503 without an error event", () => new HttpResponse("Service Unavailable", { status: 503 })],
+    ["a 504 from CloudFront", () => new HttpResponse("Gateway Timeout", { status: 504 })],
+    ["a stream that ends before done or error", () => ndjson([delta("Let me check")])],
+    ["an empty 200 body", () => ndjson([])],
+  ])(
+    "offers Retry on %s, which resends the same text, clientMessageId and conversationId (#138)",
+    async (_, respond) => {
+      const bodies = captureChatBodies();
+      const { user, sendMessage } = await renderPage();
+      await sendMessage("Hi");
+      await within(log()).findByText(REPLIES.tools.text);
+
+      // Only the next send fails; the Retry after it reaches the mock API again.
+      server.use(http.post("/api/chat", respond, { once: true }));
+      await sendMessage("Book Wednesday");
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(GENERIC_ERROR);
+      const bubble = within(log()).getByText(GENERIC_ERROR).closest("li");
+      expect(within(bubble as HTMLElement).getByRole("button", { name: "Retry" })).toBeVisible();
+      expect(within(log()).getByText("Book Wednesday")).toBeVisible();
+
+      await user.click(retryButton() as HTMLElement);
+      await waitFor(() => expect(within(log()).getAllByText(REPLIES.tools.text)).toHaveLength(2));
+      await waitFor(() => expect(bodies).toHaveLength(3));
+      const [, failed, retried] = bodies;
+      expect(failed?.conversationId).toBeDefined();
+      expect(retried).toEqual(failed);
+      expect(within(log()).getAllByText("Book Wednesday")).toHaveLength(1);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["a 400 without an error event", () => new HttpResponse("Bad Request", { status: 400 })],
     [
-      "an HTTP error without an error event (a 502 from the gateway)",
-      () => new HttpResponse("Bad Gateway", { status: 502 }),
+      "a 429 without an error event (API Gateway's throttle)",
+      () => new HttpResponse("Too Many Requests", { status: 429 }),
     ],
+    ["a 499 without an error event", () => new HttpResponse("", { status: 499 })],
     [
       "a stream that breaks the contract",
       () => new HttpResponse('{"type":"nope"}\n', { headers: { "Content-Type": NDJSON_CONTENT_TYPE } }),
+    ],
+    [
+      "a stream whose last line is cut mid-way",
+      () =>
+        new HttpResponse(`${encodeStreamEvent(delta("Let me"))}{"type":"text_del`, {
+          headers: { "Content-Type": NDJSON_CONTENT_TYPE },
+        }),
     ],
   ])("shows the generic error without Retry for %s", async (_, respond) => {
     server.use(http.post("/api/chat", respond));
@@ -144,6 +204,15 @@ describe("ChatPage: Retry (FR-015)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
     expect(retryButton()).not.toBeInTheDocument();
     expect(within(log()).getByText("Hi")).toBeVisible();
+  });
+
+  it("keeps the reply, with no error, when the stream sends an event after done", async () => {
+    server.use(http.post("/api/chat", () => ndjson([delta("All set."), doneEvent(), delta(" More.")])));
+    const { sendMessage } = await renderPage();
+    await sendMessage("Hi");
+    expect(await within(log()).findByText("All set.")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(retryButton()).not.toBeInTheDocument();
   });
 
   it("on API Gateway's 401 (no event body), says the sign-in has ended, without Retry, and hands over to sign-in", async () => {
