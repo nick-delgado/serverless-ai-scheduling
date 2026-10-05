@@ -36,14 +36,16 @@ import {
 
 const TARGET = "const ok = true;\nexport const value = ok ? 1 : 2;\n";
 
-// Exits 1 (saying so on stderr) when target.txt says "bad" or holds a "$", exits 0 otherwise, and never ends
-// when it says "slow", after writing its pid to checker.pid.
+// Exits 1 (saying so on stderr) when target.txt says "bad" or holds a "$", exits 0 otherwise. When it says
+// "slow" it writes its pid to checker.pid and hangs, but for 30 s at most (far beyond any test's wait), then exits
+// 1: a checker a broken kill path leaves behind still ends, and never looks like a passing run.
 const CHECKER = `
 const fs = require("node:fs");
 const text = fs.readFileSync("target.txt", "utf8");
 if (text.includes("slow")) {
   fs.writeFileSync("checker.pid", String(process.pid));
   setInterval(() => {}, 1000);
+  setTimeout(() => process.exit(1), 30_000);
 } else if (text.includes("bad") || text.includes("$")) {
   console.error("checker: bad");
   process.exit(1);

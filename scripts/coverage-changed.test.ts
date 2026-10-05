@@ -352,6 +352,16 @@ describe("main", () => {
     expect(errors.join("\n")).toMatch(/give each line above a test, or an ignore hint with a reason/);
   });
 
+  it("reads a diff longer than execFileSync's default 1 MB buffer", () => {
+    // A 2 MB file the gate ignores (not source) still goes through `git diff`, which used to end in ENOBUFS.
+    write("results/big.txt", `${"x".repeat(99)}\n`.repeat(20_000));
+    write("src/a.ts", `${BASE}export const four = 4;\n`);
+    commit("add four and a large file");
+    writeCoverage({ "src/a.ts": fileCoverage([[1, 4, 1]]) });
+    expect(run()).toBe(0);
+    expect(out).toEqual(["coverage-changed: every added source line since main ran in a test."]);
+  });
+
   it("passes a covered added line", () => {
     write("src/a.ts", `${BASE}export const four = 4;\n`);
     commit("add four");
