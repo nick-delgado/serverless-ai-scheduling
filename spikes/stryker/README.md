@@ -24,14 +24,14 @@ The findings and the recommendation are in [the journal entry](../../docs/journa
 
 | File | What it is |
 |---|---|
-| `stryker.config.mjs` | Stryker config, driven by `STRYKER_PACKAGE`, `STRYKER_CHECKER`, `STRYKER_LABEL`, `STRYKER_RESULTS` |
+| `stryker.config.mjs` | Stryker config, driven by `STRYKER_PACKAGE`, `STRYKER_CHECKER`, `STRYKER_LABEL`, `STRYKER_CONCURRENCY` and `STRYKER_RESULTS` (`run.ts` sets the first four) |
 | `vitest.package.config.ts` | Points Vitest at one package (`STRYKER_PACKAGE`), so Stryker runs that package's tests, not the root `test.projects` set |
 | `run.ts` | Runs Stryker on one package's changed source files (`git diff --name-only <base>...HEAD -- <package>/src`), or on `--files` |
 | `patch-vitest5.sh` | The local patch the Vitest runner needs under Vitest 5 (below) |
 | `at-commit.sh` | Checks out a reviewed commit in a throwaway worktree, runs the suite with coverage and the #140 gate there |
 | `summarize.mjs` | Turns a Stryker JSON report into the summaries in `results/` |
 | `compare-rows.mjs` | Compares two runs of one edit list, row by row (AC 7) |
-| `cases/<pr>.json` | Each PR's own recorded break list as exact edits (readiness review Q-3 (a)) |
+| `cases/<pr>.json` | Each PR's own recorded break list as exact edits (readiness review Q-3 (a)). It can also hold breaks a review added, tagged in their `translation` field (`153.json`'s `l2` and `q2`), so a re-run at the fixed commit covers both |
 | `cases/<pr>-review.json` | The breaks the PR's review found, as exact edits |
 | `cases/155-not-applicable.json` | #155 list items that no longer name code at the reviewed commit |
 | `cases/113-self.json` | This PR's own seen-failing list for `scripts/mutate.ts` (output: `results/113-self.txt`) |

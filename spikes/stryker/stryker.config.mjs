@@ -3,6 +3,7 @@
 //   STRYKER_CHECKER  "on" adds the TypeScript checker (mutants that don't compile become CompileError)
 //   STRYKER_LABEL    names the reports in spikes/stryker/results/
 //   STRYKER_CONCURRENCY  worker count (default 4)
+//   STRYKER_RESULTS  where the reports go (default spikes/stryker/results; run.ts doesn't set it)
 const pkg = process.env.STRYKER_PACKAGE;
 if (!pkg) throw new Error("Set STRYKER_PACKAGE");
 const checker = process.env.STRYKER_CHECKER === "on";

@@ -5,13 +5,15 @@
  *                                 [--checker on|off] [--label <name>] [--concurrency <n>] [--dry]
  *
  * Without `--files`, the files are `git diff --name-only <base>...HEAD`, limited to `<package>/src` and to source
- * files (`.ts`/`.tsx`, not tests or `.d.ts`), as `npm run coverage:changed` counts them. `--files` overrides that
+ * files by the coverage gate's own rule (`isSourceFile` with `SOURCE_GLOBS`, from scripts/coverage-changed.ts). `--files` overrides that
  * with an explicit list (globs allowed, as Stryker's `--mutate` takes them). Only that package's Vitest project
  * runs (spikes/stryker/vitest.package.config.ts). Reports go to spikes/stryker/results/<label>.{json,html}.
  * `--dry` prints the file list and the command without running Stryker.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
+
+import { isSourceFile, SOURCE_GLOBS } from "../../scripts/coverage-changed";
 
 const { values } = parseArgs({
   options: {
@@ -28,15 +30,13 @@ const { values } = parseArgs({
 const pkg = values.package?.replace(/\/$/, "");
 if (!pkg) throw new Error("--package is required, e.g. --package packages/tools");
 
-export const isSource = (file: string): boolean => /\.tsx?$/.test(file) && !/\.test\.|\.d\.ts$/.test(file);
-
 const files = values.files
   ? values.files.split(",")
   : execFileSync("git", ["diff", "--name-only", `${values.base}...HEAD`, "--", `${pkg}/src`], {
       encoding: "utf8",
     })
       .split("\n")
-      .filter((file) => file !== "" && isSource(file));
+      .filter((file) => file !== "" && isSourceFile(file, SOURCE_GLOBS));
 
 if (files.length === 0) {
   console.log(`No changed source files under ${pkg}/src against ${values.base}; nothing to mutate.`);
