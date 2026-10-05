@@ -210,13 +210,19 @@ describe("POST /api/chat", () => {
   });
 
   // Every response that doesn't wait on the model: the faults that answer before the body is read,
-  // the 400 for a malformed body, and the 429/503 faults.
+  // the 400 for a malformed body, the daily cap, and the 429/503 faults in a continued conversation
+  // (on a first turn they answer 200 after the `conversation` event, timed above).
+  const continued = {
+    conversationId: RESTORE_CONVERSATION_ID,
+    clientMessageId: CLIENT_MESSAGE_ID,
+    text: "Yes please.",
+  };
   it.each([
     ["network", undefined],
     ["unauthorized", undefined],
     ["none", { clientMessageId: "not-a-uuid", text: "" }],
-    ["rate_limited", undefined],
-    ["unavailable", undefined],
+    ["rate_limited", continued],
+    ["unavailable", continued],
     ["daily_cap", undefined],
   ] as const)("waits latencyMs before answering with chatFault %s", async (chatFault, body) => {
     configureMockApi({ chatFault, latencyMs: 80 });
@@ -281,6 +287,23 @@ describe("POST /api/chat", () => {
           conversationId: named.conversationId,
         }),
       ]);
+    },
+  );
+
+  it.each(["rate_limited", "unavailable"] as const)(
+    "stores the patient's message on a continued turn that fails with %s, so the next reply counts it",
+    async (chatFault) => {
+      configureMockApi({ chatFault });
+      await (await postChat(continued)).text();
+      configureMockApi({ chatFault: "none" });
+      const { events } = await readEvents(await postChat(continued));
+      // The restored conversation's next message is msg_000003: the failed turn stored it, so the
+      // resend is msg_000004 (the mock ignores clientMessageId) and its reply msg_000005.
+      expect(events.at(-1)).toMatchObject({
+        type: "done",
+        conversationId: RESTORE_CONVERSATION_ID,
+        messageId: "msg_000005",
+      });
     },
   );
 
