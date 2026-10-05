@@ -254,6 +254,11 @@ describe("selection (f6d8ff8/SPEC-1 decision)", () => {
     expect(ids(selectCalibrationTrials(CANDIDATES, 3))).toEqual(["sp#1", "zf-book#1", "p-pol-a#1"]);
   });
 
+  it("picks 20 by default when more are eligible (de04bd8/TEST-202)", () => {
+    const many = Array.from({ length: 25 }, (_, i) => c(`s-${i}`, "book", "pass", ["tone"]));
+    expect(selectCalibrationTrials(many)).toHaveLength(20);
+  });
+
   it("picks only pass and fail trials", () => {
     expect(selectCalibrationTrials([c("a", "book", "error", ["tone"]), c("b", "book", "skip", [])])).toEqual(
       [],
@@ -307,6 +312,18 @@ describe("exportCalibration", () => {
       agentPromptText(promptFor(undefined, new Date(scenario(EMERGENCY).clock), "Walter")),
     );
     expect(labels).toEqual(emptyLabels(set.transcripts));
+  });
+
+  it("exports 20 by default when more are eligible (de04bd8/TEST-202)", async () => {
+    const trials = Array.from({ length: 25 }, (_, i) => ({
+      kind: "scenario",
+      trial: i + 1,
+      status: "pass",
+      events: EVENTS,
+    }));
+    const file = { ...resultsFile(), cases: [{ id: BOOK, trials }] };
+    const { set } = await exportCalibration(file, scenarios, "r.json");
+    expect(set.transcripts).toHaveLength(20);
   });
 
   it("caps the export at the size", async () => {

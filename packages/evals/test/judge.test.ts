@@ -180,6 +180,16 @@ describe("parseJudgeReply", () => {
     });
   });
 
+  it("checks every quote, not only the first: a real quote doesn't excuse an invented second one (de04bd8/TEST-102)", () => {
+    const text = JSON.stringify({
+      scores: [{ dimension: "tone", score: 4, evidence: [QUOTE, "I booked it for you."], reason: "" }],
+    });
+    expect(parse(text)).toEqual({
+      ok: false,
+      problems: ['tone: the quote "I booked it for you." is not in the transcript'],
+    });
+  });
+
   it.each([
     ["no JSON", "I'd give it a 4.", "it is not one JSON object"],
     ["broken JSON", "{ scores: [", "it is not one JSON object"],
