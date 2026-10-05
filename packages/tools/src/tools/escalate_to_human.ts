@@ -12,9 +12,11 @@
  *   replaced with `[ID removed]`, so the stored record, the staff notice and any retry re-send are clean.
  *   The prompt already asks for this, and Nova Pro once ignored it. This is a guard, not a check: it
  *   never rejects the call. An ID-shaped token is any of these (case-insensitive):
- *   - a GUID, 8-4-4-4-12 hex (patient IDs are Cognito subs);
+ *   - a GUID, 8-4-4-4-12 hex (patient IDs are Cognito subs), wherever no hex digit touches it: a GUID
+ *     glued to a letter past `f`, an underscore or a hyphen (`patient_<GUID>`) is still caught, while
+ *     a longer hex run is not a GUID;
  *   - `appt_`, `slot_`, `prov_` or `esc_` followed by letters, digits or underscores (looser than the
- *     contract formats, so a typed `appt_123` is caught too);
+ *     contract formats, so a typed `appt_123` is caught too), starting a word: `my_appt_1` stays;
  *   - a fixture alias, `pat-` followed by letters, as a whole word.
  *   The placeholder keeps a summary that was only an ID above the 10-character minimum; the result is
  *   capped at the 1,000-character maximum, since a short ID can grow. It covers the summary only: the
@@ -35,13 +37,13 @@ function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalati
 export const ID_PLACEHOLDER = "[ID removed]";
 
 const ID_SHAPED_TOKENS: readonly RegExp[] = [
-  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+  /(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])/gi,
   /\b(?:appt|slot|prov|esc)_\w+/gi,
   /\bpat-[a-z]+\b/gi,
 ];
 
 /** `summary` with every ID-shaped token replaced (see the header), capped at the stored maximum. */
-export function redactIds(summary: string): string {
+function redactIds(summary: string): string {
   const redacted = ID_SHAPED_TOKENS.reduce((text, pattern) => text.replace(pattern, ID_PLACEHOLDER), summary);
   return redacted.slice(0, LIMITS.escalationSummaryMaxChars);
 }

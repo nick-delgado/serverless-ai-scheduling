@@ -333,6 +333,11 @@ describe("escalate_to_human", () => {
     it.each([
       ["a GUID", `Act on ${UNKNOWN} now`, `Act on ${X} now`],
       ["a GUID, upper case", `Act on ${UNKNOWN.toUpperCase()} now`, `Act on ${X} now`],
+      ["a GUID glued to a letter before it", `Act on x${UNKNOWN} now`, `Act on x${X} now`],
+      ["a GUID glued to an underscore before it", `Act on patient_${UNKNOWN} now`, `Act on patient_${X} now`],
+      ["a GUID glued to an underscore after it", `Act on ${UNKNOWN}_x now`, `Act on ${X}_x now`],
+      ["a GUID glued to hyphens", `Act on 1234-${UNKNOWN}-x now`, `Act on 1234-${X}-x now`],
+      ["a GUID inside an appointment prefix", `Cancel appt_${UNKNOWN} please`, `Cancel appt_${X} please`],
       ["an appointment ID, typed short", "Cancel appt_123 please", `Cancel ${X} please`],
       ["an appointment ID, any case", "Cancel APPT_123 please", `Cancel ${X} please`],
       ["a slot ID", "Wants slot_lee_20261013T1830Z", `Wants ${X}`],
@@ -353,7 +358,7 @@ describe("escalate_to_human", () => {
     it("leaves text that only looks like an ID alone", async () => {
       const summary =
         "Patient asked about appt_ times, slots, my_appt_1, pat-walter2, a spat-like call, and " +
-        `x${UNKNOWN} or ${UNKNOWN}0 after the patient's appointment.`;
+        `0${UNKNOWN} or ${UNKNOWN}0 after the patient's appointment.`;
       expect(await summaryOf(summary)).toBe(summary);
     });
 
