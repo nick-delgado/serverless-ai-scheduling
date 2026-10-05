@@ -37,11 +37,13 @@ import {
 
 const TARGET = "const ok = true;\nexport const value = ok ? 1 : 2;\n";
 
-// Exits 1 (saying so on stderr) when target.txt says "bad" or holds a "$", exits 0 otherwise. When it says
-// "slow" it writes its pid to checker.pid and hangs, but for 30 s at most (far beyond any test's wait), then exits
+// Appends a word to ran.log beside itself each time it starts (whatever its working directory), so a test can tell
+// whether it ran at all. Exits 1 (saying so on stderr) when target.txt says "bad" or holds a "$", exits 0 otherwise.
+// When it says "slow" it writes its pid to checker.pid and hangs, but for 30 s at most (far beyond any test's wait), then exits
 // 1: a checker a broken kill path leaves behind still ends, and never looks like a passing run.
 const CHECKER = `
 const fs = require("node:fs");
+fs.appendFileSync(require("node:path").join(__dirname, "ran.log"), "ran ");
 const text = fs.readFileSync("target.txt", "utf8");
 if (text.includes("slow")) {
   fs.writeFileSync("checker.pid", String(process.pid));
@@ -96,6 +98,7 @@ const alive = (pid: number) => {
     return false;
   }
 };
+const ran = () => existsSync(join(dir, "ran.log"));
 const checkerPid = () => Number(readFileSync(join(dir, "checker.pid"), "utf8"));
 const editsFile = (edits: unknown[]) => {
   writeFileSync(join(dir, "edits.json"), JSON.stringify(edits));
@@ -440,6 +443,7 @@ describe("main", () => {
     expect(code).toBe(2);
     expect(errors[0]).toContain(message);
     expect(out).toEqual([]);
+    expect(ran()).toBe(false);
     expect(target()).toBe(TARGET);
   });
 
@@ -452,6 +456,7 @@ describe("main", () => {
     expect(code).toBe(2);
     expect(errors).toEqual(["mutate: --only names no edit with the id zz"]);
     expect(out).toEqual([]);
+    expect(ran()).toBe(false);
   });
 
   it("exits 2 when the command can't be started", async () => {
@@ -548,6 +553,20 @@ describe("main", () => {
     const outcome = await started;
     expect(outcome.output).toContain("ENOENT");
     expect(classify(outcome)).toBe("ERROR");
+  });
+
+  it("keeps the next command stoppable after one that can't be started", async () => {
+    await runCommand([join(dir, "no-such-command")], 5, dir);
+    // Started at once, as the next edit's command is: the failed spawn's late "close" arrives after this.
+    writeFileSync(join(dir, "target.txt"), "slow\n");
+    const next = runCommand(checkerUnderSh(), 30, dir);
+    await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
+      timeout: 5_000,
+      interval: 20,
+    });
+    stopRunning();
+    await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
+    expect((await next).code).not.toBe(0);
   });
 
   it("removes its signal handlers when it returns", async () => {

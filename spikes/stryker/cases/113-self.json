@@ -700,5 +700,29 @@
     "file": "scripts/mutate.ts",
     "find": "outcome.output.slice(-2000)",
     "replace": "outcome.output"
+  },
+  {
+    "id": "order-edits-after-run",
+    "file": "scripts/mutate.ts",
+    "find": "  let all: (Edit & { id: string })[];\n  try {\n    all = readEdits(resolve(cwd, args.editsFile));\n  } catch (err) {\n    logError(`mutate: ${(err as Error).message}`);\n    return 2;\n  }\n  const only = args.only;\n  const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));\n  if (unmatched.length > 0) {\n    logError(`mutate: --only names no edit with the id ${unmatched.join(\", \")}`);\n    return 2;\n  }\n  const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;\n\n  const baseline = await runCommand(args.cmd, args.timeout, cwd);\n  if (baseline.code !== 0) {\n    logError(\n      `mutate: the unedited run failed (exit ${String(baseline.code)}); nothing was mutated.\\n${baseline.output}`,\n    );\n    return 2;\n  }\n",
+    "replace": "  const baseline = await runCommand(args.cmd, args.timeout, cwd);\n  if (baseline.code !== 0) {\n    logError(\n      `mutate: the unedited run failed (exit ${String(baseline.code)}); nothing was mutated.\\n${baseline.output}`,\n    );\n    return 2;\n  }\n\n  let all: (Edit & { id: string })[];\n  try {\n    all = readEdits(resolve(cwd, args.editsFile));\n  } catch (err) {\n    logError(`mutate: ${(err as Error).message}`);\n    return 2;\n  }\n  const only = args.only;\n  const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));\n  if (unmatched.length > 0) {\n    logError(`mutate: --only names no edit with the id ${unmatched.join(\", \")}`);\n    return 2;\n  }\n  const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;\n"
+  },
+  {
+    "id": "order-only-after-run",
+    "file": "scripts/mutate.ts",
+    "find": "  const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));\n  if (unmatched.length > 0) {\n    logError(`mutate: --only names no edit with the id ${unmatched.join(\", \")}`);\n    return 2;\n  }\n  const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;\n\n  const baseline = await runCommand(args.cmd, args.timeout, cwd);\n  if (baseline.code !== 0) {\n    logError(\n      `mutate: the unedited run failed (exit ${String(baseline.code)}); nothing was mutated.\\n${baseline.output}`,\n    );\n    return 2;\n  }\n",
+    "replace": "  const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;\n\n  const baseline = await runCommand(args.cmd, args.timeout, cwd);\n  if (baseline.code !== 0) {\n    logError(\n      `mutate: the unedited run failed (exit ${String(baseline.code)}); nothing was mutated.\\n${baseline.output}`,\n    );\n    return 2;\n  }\n  const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));\n  if (unmatched.length > 0) {\n    logError(`mutate: --only names no edit with the id ${unmatched.join(\", \")}`);\n    return 2;\n  }\n"
+  },
+  {
+    "id": "run-settle-guard",
+    "file": "scripts/mutate.ts",
+    "find": "      if (settled) return;\n",
+    "replace": ""
+  },
+  {
+    "id": "run-settle-flag",
+    "file": "scripts/mutate.ts",
+    "find": "      settled = true;\n",
+    "replace": ""
   }
 ]

@@ -7,6 +7,7 @@ KILLED kill-direct-child scripts/mutate.ts: process.kill(-running.pid, "SIGKILL"
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
     ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main keeps the next command stoppable after one that can't be started
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -22,6 +23,7 @@ KILLED stop-kill scripts/mutate.ts:   process.kill(-running.pid, "SIGKILL");⏎ 
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
     ✗ scripts/mutate.test.ts > main reads a command that can't be started as ERROR, and holds no process group for it
+    ✗ scripts/mutate.test.ts > main keeps the next command stoppable after one that can't be started
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
@@ -31,6 +33,7 @@ KILLED detached scripts/mutate.ts: stdio: ["ignore", "pipe", "pipe"], detached: 
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
     ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main keeps the next command stoppable after one that can't be started
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 

@@ -206,8 +206,12 @@ export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: 
       timedOut = true;
       stopRunning();
     }, timeoutSeconds * 1000);
-    // The first of these settles the promise: a spawn error is followed by a "close" that would read as an exit.
+    // The first of these settles the promise, and only the first: a spawn error is followed by a "close" that would
+    // read as an exit, and comes after the next command has started, whose handle it must not clear.
+    let settled = false;
     const finish = (outcome: RunOutcome) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       running = undefined;
       rmSync(scratch, { recursive: true, force: true });
