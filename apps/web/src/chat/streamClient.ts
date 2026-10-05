@@ -19,7 +19,16 @@ import {
  * stream with a malformed line, an unknown event, or no `done`/`error` at the end.
  */
 export class ChatProtocolError extends Error {
-  override readonly name = "ChatProtocolError";
+  override readonly name: string = "ChatProtocolError";
+}
+
+/**
+ * The stream ended cleanly without its `done` or `error` event, including an empty body: the turn was
+ * cut short, not malformed, so the chat page offers Retry for it (#138). A final line cut mid-way is
+ * still an unreadable event, a plain `ChatProtocolError`.
+ */
+export class ChatStreamEndedError extends ChatProtocolError {
+  override readonly name = "ChatStreamEndedError";
 }
 
 function parseLine(line: string): ChatStreamEvent {
@@ -40,7 +49,8 @@ function parseBuffered(body: string): ChatStreamEvent[] {
 
 /**
  * Read `body` to its end, calling `onEvent` once per event, in order. Resolves with every event
- * (the last one is `done` or `error`); rejects with `ChatProtocolError` on a contract violation, or
+ * (the last one is `done` or `error`); rejects with `ChatProtocolError` on a contract violation (its
+ * subclass `ChatStreamEndedError` when the body ends without `done` or `error`), or
  * with the reader's own error if the connection fails or the request is aborted. A contract violation
  * found while the body is still open cancels it.
  */
@@ -101,7 +111,7 @@ export async function readChatStream(
   }
 
   if (!isTerminalEvent(events[events.length - 1])) {
-    throw new ChatProtocolError("The chat stream ended before the reply was complete.");
+    throw new ChatStreamEndedError("The chat stream ended before the reply was complete.");
   }
   return events;
 }

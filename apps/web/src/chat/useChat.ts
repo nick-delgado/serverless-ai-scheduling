@@ -12,10 +12,14 @@
  * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list. An
  *   `error` event that names a conversation (the server stored the message, #104) sets it as `done`
  *   does, so Retry after a failed first turn continues that conversation, and so does a reload.
- * - Retry is offered only for a stream `error` event with `retryable: true`, or a network failure
- *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`). It
- *   resends the same text with the same `clientMessageId` and `conversationId`, without adding the
- *   message again. Any other error shows its message without Retry (the daily cap's front-desk number).
+ * - Retry is offered only for a stream `error` event with `retryable: true`, a network failure
+ *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`), a 5xx
+ *   without an `error` event, or a stream that ends without `done` or `error` (`ChatStreamEndedError`,
+ *   #138). It resends the same text with the same `clientMessageId` and `conversationId`, without
+ *   adding the message again; the server de-duplicates it (#104). Any other error shows its message
+ *   without Retry (the daily cap's front-desk number); so do a 4xx without an event and a malformed
+ *   stream. A failed first turn whose failure named no conversation resends without one, which stores
+ *   the message again in a new conversation (#160).
  * - A 401 means the sign-in has ended: the session call's 401, a turn's 401 without an event body
  *   (API Gateway's authorizer), and a turn's `UNAUTHORIZED` error event (the chat handler's own 401).
  *   The page shows `SIGNED_OUT_ERROR` without Retry and calls `onUnauthorized`, which signs the
@@ -31,7 +35,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { type ChatApi, ChatHttpError } from "./api";
 import { conversationToRestore, readLoginSession, writeLoginSession } from "./loginSession";
-import { ChatProtocolError } from "./streamClient";
+import { ChatProtocolError, ChatStreamEndedError } from "./streamClient";
 import { Typewriter } from "./typewriter";
 
 export interface ChatMessage {
@@ -97,9 +101,16 @@ function isUnauthorized(error: unknown): boolean {
   return error instanceof ChatHttpError && error.status === 401;
 }
 
-/** A network failure: what `fetch` or the reader throws, as opposed to an answer the API gave. */
-function isNetworkFailure(error: unknown): boolean {
-  return !(error instanceof ChatHttpError) && !(error instanceof ChatProtocolError);
+/**
+ * Whether a turn that failed without an `error` event offers Retry (#138): a 5xx with no event body
+ * (from API Gateway or CloudFront), a stream cut short before its terminal event, or a network
+ * failure (what `fetch` or the reader throws, as opposed to an answer the API gave). A 4xx without an
+ * event (a 401 is handled before this) and a malformed or unreadable stream don't.
+ */
+function isRetryableFailure(error: unknown): boolean {
+  if (error instanceof ChatHttpError) return error.status >= 500;
+  if (error instanceof ChatStreamEndedError) return true;
+  return !(error instanceof ChatProtocolError);
 }
 
 export function useChat(api: ChatApi, options: UseChatOptions = {}) {
@@ -274,7 +285,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
             signedOut();
             return;
           }
-          failTurn(GENERIC_ERROR, isNetworkFailure(failure));
+          failTurn(GENERIC_ERROR, isRetryableFailure(failure));
         });
     },
     [api, reducedMotion, showError, clearError],

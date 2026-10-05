@@ -2,7 +2,7 @@
 name: review-agent-issue
 description: Readiness review of a GitHub issue before an AI coding agent starts it, and a refresh when the spec may have moved since. Fresh subagents read the issue, the project's specs and decisions, and the code, then post one comment on the issue with the questions the owner should settle first (with options and a recommendation), the assumptions the agent will otherwise follow, exact suggested edits to the issue, and reuse pointers, dependencies and risks. After the owner answers on the issue, an apply step writes the answers and accepted edits into the issue's description. Advisory. Use when asked to check, review or prepare an issue, story or task before work starts, or to apply the answers to a readiness review.
 metadata:
-  harness-version: "2026.10.04.5"
+  harness-version: "2026.10.05"
 ---
 
 # Readiness review of an issue
@@ -157,7 +157,7 @@ answers on issue 88"):
 
      - **r<k>/Q-<m>** (settled against `<short spec commit>`): <the question> → <the answer; for a letter, the option's text> ([answer](<comment URL>))
      - **r<k>/A-<m>** (settled against `<short spec commit>`): <the assumption> → corrected: <the correction> ([answer](<comment URL>))
-     - **r<k>, assumed** (as of `<short spec commit>`): <each assumption not corrected, one per line>
+     - **r<k>, assumed** (as of `<short spec commit>`): <each assumption not corrected, one per line, keeping its "(verify first)" mark and the doc lines it makes stale>
      ```
 
      The spec commit is the one on round k's data line. Keep earlier rounds' entries; add
