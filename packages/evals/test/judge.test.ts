@@ -18,6 +18,7 @@ import {
   judgeUserMessage,
   LlmJudge,
   MAX_TOOL_OUTPUT_CHARS,
+  NEVER_CAME_UP_RULE,
   NO_RUBRIC,
   NOT_JUDGED_ERRORED,
   normalizeWhitespace,
@@ -131,6 +132,7 @@ describe("prompt", () => {
     expect(text).toContain("### no_claim_to_be_human");
     expect(text).not.toContain("### clarity");
     expect(text).toContain("A score of 4 or more means the dimension passes");
+    expect(text).toContain(`Judge only what the transcript shows. ${NEVER_CAME_UP_RULE}.`);
     expect(text.indexOf(`  5: ${RUBRICS.tone.anchors[5]}`)).toBeLessThan(
       text.indexOf(`  1: ${RUBRICS.tone.anchors[1]}`),
     );
