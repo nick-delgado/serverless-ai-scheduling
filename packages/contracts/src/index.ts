@@ -21,5 +21,8 @@ export * from "./stream";
 export * from "./tools";
 export * from "./trace";
 
-/** Contract version (v1.1: neutral content blocks, `text_reset`, trace refinements; ADR-010, #60). */
-export const CONTRACTS_VERSION = "1.1";
+/**
+ * Contract version (v1.1: neutral content blocks, `text_reset`, trace refinements; ADR-010, #60.
+ * v1.2: the `conversation` stream event, which names a new conversation before the agent runs; #160).
+ */
+export const CONTRACTS_VERSION = "1.2";

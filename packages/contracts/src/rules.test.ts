@@ -176,6 +176,19 @@ describe("chat retries (#104)", () => {
   });
 });
 
+describe("contracts v1.2: the conversation event (#160)", () => {
+  it("names a conversation by its ID, with no other field, and isn't terminal", () => {
+    const event = EXAMPLES.ChatConversationEvent;
+    expect(parseStreamEventLine(encodeStreamEvent(event))).toEqual(event);
+    expect(ChatStreamEvent.safeParse({ ...event, conversationId: "conv-1" }).success).toBe(false);
+    expect(ChatStreamEvent.safeParse({ type: "conversation" }).success).toBe(false);
+    expect(ChatStreamEvent.safeParse({ ...event, messageId: "msg_000001" }).success).toBe(false);
+    expect(C.isTerminalEvent(event)).toBe(false);
+    expect(ChatStreamEventList.safeParse([event]).success).toBe(false);
+    expect(ChatStreamEventList.safeParse([event, EXAMPLES.ChatErrorEvent]).success).toBe(true);
+  });
+});
+
 describe("PatientId (the Cognito sub)", () => {
   it("accepts a real Cognito sub shape, which isn't always an RFC 9562 UUID", () => {
     // Synthetic, with the shape seen on the dev pool (#17): version digit 7, variant digit d.
