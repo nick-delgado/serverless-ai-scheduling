@@ -3,28 +3,36 @@
  * `npm run test:coverage` writes (istanbul entries from Vitest's v8 provider). The tests call `main`
  * in-process, because a child process records no coverage (#140).
  */
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { globSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import vitestConfig from "../vitest.config";
 
 import {
   checkChanged,
   coverageByFile,
   type FileCoverage,
   hintWithoutReason,
+  isSourceFile,
   main,
   parseAddedLines,
   parseCliArgs,
+  SOURCE_GLOBS,
+  type SourceGlobs,
   uncoveredLines,
 } from "./coverage-changed";
+
+/** Source globs for the throwaway repositories, whose source lives in `src/`. */
+const TEST_GLOBS: SourceGlobs = { include: ["src/**/*.{ts,tsx}"], exclude: SOURCE_GLOBS.exclude };
 
 /** A statement on lines `from`..`to` that ran `count` times. */
 type Statement = [from: number, to: number, count: number];
 /** A branch whose arms start on the given lines (undefined: no location) and ran the given counts. */
-type Branch = { type?: string; arms: [line: number | undefined, count: number][] };
+type Branch = { arms: [line: number | undefined, count: number][] };
 
 function fileCoverage(statements: Statement[], branches: Branch[] = []): FileCoverage {
   const coverage: FileCoverage = { statementMap: {}, s: {}, branchMap: {}, b: {} };
@@ -32,8 +40,8 @@ function fileCoverage(statements: Statement[], branches: Branch[] = []): FileCov
     coverage.statementMap[i] = { start: { line: from }, end: { line: to } };
     coverage.s[i] = count;
   });
-  branches.forEach(({ type = "binary-expr", arms }, i) => {
-    coverage.branchMap[i] = { type, locations: arms.map(([line]) => ({ start: line ? { line } : {} })) };
+  branches.forEach(({ arms }, i) => {
+    coverage.branchMap[i] = { locations: arms.map(([line]) => ({ start: line ? { line } : {} })) };
     coverage.b[i] = arms.map(([, count]) => count);
   });
   return coverage;
@@ -86,22 +94,22 @@ describe("uncoveredLines", () => {
 
   it("flags the start line of an arm that never ran, but not an arm without a location", () => {
     const branches: Branch[] = [
+      // A binary-expr (`a ?? b`) whose right operand never ran.
       {
-        type: "binary-expr",
         arms: [
           [4, 3],
           [4, 0],
         ],
       },
+      // An `if` with no `else`: the implicit else arm has no location.
       {
-        type: "if",
         arms: [
           [7, 3],
           [undefined, 0],
         ],
       },
+      // A cond-expr (ternary) whose first arm never ran.
       {
-        type: "cond-expr",
         arms: [
           [9, 0],
           [10, 1],
@@ -125,6 +133,13 @@ describe("hintWithoutReason", () => {
     ["const remaining = count -- 1; /* v8 ignore next */", true],
     ["/* c8 ignore file */", true],
     ["/* node:coverage ignore next */", true],
+    ["/** v8 ignore next */", true],
+    ["/** v8 ignore if */ if (aws()) run();", true],
+    ["/* TODO v8 ignore start */", true],
+    ["code(); // later: v8 ignore stop", true],
+    ["const s = 'v8 ignore start'; // the provider reads start/stop anywhere on a line", true],
+    ["/** v8 ignore next -- only on AWS */", false],
+    ["/* TODO v8 ignore start -- the AWS-only path */", false],
     ["// v8 ignore next -- x", false],
     ["/* v8 ignore nextline */", false],
     ["/* v8 ignore next -- CLI entry */", false],
@@ -137,8 +152,61 @@ describe("hintWithoutReason", () => {
   });
 });
 
+describe("isSourceFile", () => {
+  it.each([
+    ["src/a.ts", true],
+    ["src/ui/b.tsx", true],
+    ["src/a.test.ts", false],
+    ["src/types.d.ts", false],
+    ["docs/note.md", false],
+    ["lib/a.ts", false],
+  ])("%s → %s", (file, expected) => {
+    expect(isSourceFile(file, TEST_GLOBS)).toBe(expected);
+  });
+});
+
+describe("the coverage globs in vitest.config.ts (AC 1)", () => {
+  // The expected sets come from the repository's layout: each workspace's `src` tree and `scripts/`.
+  const root = join(import.meta.dirname, "..");
+  const list = (pattern: string) => globSync(pattern, { cwd: root }).sort();
+  const trees = {
+    packages: list("packages/*/src/**/*.{ts,tsx}"),
+    services: list("services/*/src/**/*.{ts,tsx}"),
+    apps: list("apps/*/src/**/*.{ts,tsx}"),
+    scripts: list("scripts/*.ts"),
+  };
+  const isTest = (file: string) => /\.test\.tsx?$/.test(file);
+
+  it.each(Object.entries(trees))("include every non-test source file under %s, and no test", (_, files) => {
+    const sources = files.filter((f) => !isTest(f) && !f.endsWith(".d.ts"));
+    expect(sources.length).toBeGreaterThan(0);
+    expect(files.some(isTest)).toBe(true);
+    expect(sources.filter((f) => !isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+    expect(files.filter(isTest).filter((f) => isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+  });
+
+  it("include the web app's .tsx components", () => {
+    const components = trees.apps.filter((f) => f.endsWith(".tsx") && !isTest(f));
+    expect(components.length).toBeGreaterThan(0);
+    expect(components.filter((f) => !isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+  });
+
+  it("are the ones the coverage run uses", () => {
+    expect(vitestConfig.test?.coverage).toMatchObject({
+      include: SOURCE_GLOBS.include,
+      exclude: SOURCE_GLOBS.exclude,
+    });
+  });
+
+  it("leave out spikes", () => {
+    const spikes = list("spikes/*/**/*.ts").filter((f) => !f.includes("node_modules"));
+    expect(spikes.length).toBeGreaterThan(0);
+    expect(spikes.filter((f) => isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+  });
+});
+
 describe("checkChanged", () => {
-  it("reports uncovered and unexplained added lines only for files with coverage", () => {
+  it("reports uncovered lines for files with coverage, and unexplained hints for source files", () => {
     // A file without coverage comes first, so the files after it must still be checked.
     const added = new Map([
       ["docs/note.md", [{ line: 2, text: "/* v8 ignore next */" }]],
@@ -150,6 +218,8 @@ describe("checkChanged", () => {
           { line: 3, text: "/* v8 ignore next */" },
         ],
       ],
+      // Source, but absent from the coverage JSON (as an `ignore file` hint leaves it).
+      ["src/b.ts", [{ line: 1, text: "/* v8 ignore file */" }]],
     ]);
     const coverage = new Map([
       [
@@ -160,9 +230,12 @@ describe("checkChanged", () => {
         ]),
       ],
     ]);
-    expect(checkChanged(added, coverage)).toEqual({
+    expect(checkChanged(added, coverage, TEST_GLOBS)).toEqual({
       uncovered: [{ file: "src/a.ts", line: 2 }],
-      unexplained: [{ file: "src/a.ts", line: 3 }],
+      unexplained: [
+        { file: "src/a.ts", line: 3 },
+        { file: "src/b.ts", line: 1 },
+      ],
     });
   });
 });
@@ -185,9 +258,10 @@ describe("parseCliArgs", () => {
       coverage: "c.json",
     });
     expect(parseCliArgs([])).toEqual({});
+    expect(parseCliArgs(["--base=abc"])).toEqual({ base: "abc" });
   });
 
-  it.each([[["--bse", "x"]], [["--base"]], [["--coverage", "--base"]]])("rejects %j", (argv) => {
+  it.each([[["--bse", "x"]], [["--base"]], [["--coverage", "--base"]], [["stray"]]])("rejects %j", (argv) => {
     expect(() => parseCliArgs(argv)).toThrow(/usage: coverage-changed/);
   });
 });
@@ -212,7 +286,12 @@ describe("main", () => {
       JSON.stringify(Object.fromEntries(Object.entries(files).map(([f, c]) => [join(repo, f), c]))),
     );
   const run = (argv: string[] = ["--base", "main"], vars: Record<string, string | undefined> = {}) =>
-    main(argv, vars, { cwd: repo, log: (l) => out.push(l), logError: (l) => errors.push(l) });
+    main(argv, vars, {
+      cwd: repo,
+      log: (l) => out.push(l),
+      logError: (l) => errors.push(l),
+      sources: TEST_GLOBS,
+    });
 
   // src/a.ts on main: lines 1-3. The branch then adds line 4 (and edits below per test).
   // src/old.ts: five kept lines and one the branch edits, so git sees a rename with an edit.
@@ -307,6 +386,14 @@ describe("main", () => {
     expect(out).toEqual(['Coverage ignore hints without a reason after "--" (1):', "src/a.ts:4"]);
   });
 
+  it("fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)", () => {
+    write("src/b.ts", "/* v8 ignore file */\nexport const b = never();\n");
+    commit("add b");
+    writeCoverage({ "src/a.ts": fileCoverage([[1, 3, 1]]) });
+    expect(run()).toBe(1);
+    expect(out).toEqual(['Coverage ignore hints without a reason after "--" (1):', "src/b.ts:1"]);
+  });
+
   it("ignores removed and unchanged lines, even uncovered ones", () => {
     write("src/a.ts", "export const one = 1;\nexport const three = 3;\n");
     commit("remove two");
@@ -321,10 +408,10 @@ describe("main", () => {
   });
 
   it("ignores files outside the coverage include: shell, Markdown, CSS and tests", () => {
-    write("scripts/deploy.sh", "echo never\n");
+    write("scripts/deploy.sh", "echo never # v8 ignore start\n");
     write("docs/note.md", "/* v8 ignore next */\n");
-    write("src/style.css", "a { color: red; }\n");
-    write("src/a.test.ts", "never();\n");
+    write("src/style.css", "a { color: red; } /* v8 ignore next */\n");
+    write("src/a.test.ts", "/* v8 ignore next */\nnever();\n");
     commit("non-source");
     writeCoverage({ "src/a.ts": fileCoverage([[1, 3, 0]]) });
     expect(run()).toBe(0);
@@ -419,6 +506,29 @@ describe("main", () => {
       expect(run(["--base", "no-such-ref"], {})).toBe(0);
       expect(errors.at(-1)).toMatch(/SKIPPING: no merge base with no-such-ref/);
     });
+  });
+
+  it("sets the process exit code from main when run as a script", () => {
+    write("src/a.ts", `${BASE}export const four = never();\n`);
+    commit("add four");
+    writeCoverage({ "src/a.ts": fileCoverage([[4, 4, 0]]) });
+    const script = join(import.meta.dirname, "coverage-changed.ts");
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        import.meta.resolve("tsx"),
+        script,
+        "--base",
+        "main",
+        "--coverage",
+        "coverage/coverage-final.json",
+      ],
+      { cwd: repo, encoding: "utf8" },
+    );
+    // The default source globs don't cover the throwaway repo's src/, so only the uncovered line counts.
+    expect(result.stdout).toContain("src/a.ts:4");
+    expect(result.status).toBe(1);
   });
 
   it("logs to the console by default", () => {

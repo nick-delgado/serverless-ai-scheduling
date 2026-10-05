@@ -1,7 +1,7 @@
 /**
  * Changed-line coverage gate (#140): fails when a line this branch adds is never executed by a test.
  *
- *   npm run test:coverage && npm run coverage:changed [-- --base <ref>] [--coverage <path>]
+ *   npm run test:coverage && npm run coverage:changed [-- [--base <ref>] [--coverage <path>]]
  *
  * It reads `coverage/coverage-final.json` (written by `npm run test:coverage`) and the lines added by
  * `git diff -U0 -M <base>...HEAD`, and prints each added line of a covered source file that is
@@ -12,13 +12,14 @@
  * because its implicit `else` didn't. Only committed changes count; the working tree is not read.
  *
  * The base is `--base`, else `COVERAGE_BASE` (CI passes the PR's base SHA; an empty value counts as unset,
- * as on push runs), else `origin/main`. Files missing from the coverage JSON (tests, docs, shell scripts,
- * spikes: anything outside the coverage `include` in vitest.config.ts) are ignored.
+ * as on push runs), else `origin/main`. Files outside the coverage `include`/`exclude` in vitest.config.ts
+ * (tests, docs, shell scripts, spikes) are ignored.
  *
  * A deliberate exception is a coverage ignore hint in the diff with a reason after `--`:
  * `/* v8 ignore next -- <reason> *\/` (or `start`/`stop`; Vitest 5 honours it without `@preserve`, which
  * doesn't count as a reason). An added source line that holds a hint with no reason fails too (r1/Q-1),
- * so every exception says why.
+ * so every exception says why. That check runs on every added line of a source file, including one the
+ * coverage JSON leaves out (an `ignore file` hint drops its file from the JSON).
  * Coverage shows that a line ran, not that a test checks it: breaking each thing the code does
  * (CLAUDE.md, definition of done) still applies.
  *
@@ -27,7 +28,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, matchesGlob, relative } from "node:path";
+import { parseArgs } from "node:util";
+
+import { COVERAGE_EXCLUDE, COVERAGE_INCLUDE } from "../vitest.config";
 
 export const DEFAULT_BASE = "origin/main";
 export const DEFAULT_COVERAGE_FILE = "coverage/coverage-final.json";
@@ -44,7 +48,7 @@ interface Range {
 export interface FileCoverage {
   statementMap: Record<string, Range>;
   s: Record<string, number>;
-  branchMap: Record<string, { type: string; locations: { start: { line?: number } }[] }>;
+  branchMap: Record<string, { locations: { start: { line?: number } }[] }>;
   b: Record<string, number[]>;
 }
 
@@ -100,39 +104,69 @@ export function uncoveredLines(coverage: FileCoverage): Set<number> {
   return lines;
 }
 
-const HINT = /(?:\/\/|\/\*)\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:if|else|next|file|start|stop)\b/;
+/**
+ * The hints Vitest's v8 provider honours, mirroring `ast-v8-to-istanbul` 1.0.7 (`src/ignore-hints.ts`):
+ * `if`/`else`/`next`/`file` at the start of a `//`, `/*` or `/**` comment, and `start`/`stop` anywhere on a
+ * source line, with no comment opener needed. The provider reads comments with a tokenizer; this reads one
+ * line at a time.
+ */
+const HINTS = [
+  /(?:\/\/|\/\*\*?)\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:if|else|next|file)(?=\W|$)/,
+  /(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:start|stop)(?=\W|$)/,
+];
 
 /** True when the line holds a coverage ignore hint whose comment gives no reason after `--`. */
 export function hintWithoutReason(text: string): boolean {
-  const hint = HINT.exec(text);
-  if (!hint) return false;
-  const rest = text.slice(hint.index + hint[0].length);
-  const close = rest.indexOf("*/");
-  const comment = close < 0 ? rest : rest.slice(0, close);
-  const dashes = comment.indexOf("--");
-  if (dashes < 0) return true;
+  return HINTS.some((pattern) => {
+    const hint = pattern.exec(text);
+    if (!hint) return false;
+    const rest = text.slice(hint.index + hint[0].length);
+    const close = rest.indexOf("*/");
+    const comment = close < 0 ? rest : rest.slice(0, close);
+    const dashes = comment.indexOf("--");
+    if (dashes < 0) return true;
+    return (
+      comment
+        .slice(dashes + 2)
+        .replace("@preserve", "")
+        .trim() === ""
+    );
+  });
+}
+
+/** Which repo-relative paths are source files: the coverage `include`/`exclude` globs. */
+export interface SourceGlobs {
+  include: readonly string[];
+  exclude: readonly string[];
+}
+
+export const SOURCE_GLOBS: SourceGlobs = { include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE };
+
+export function isSourceFile(file: string, globs: SourceGlobs): boolean {
   return (
-    comment
-      .slice(dashes + 2)
-      .replace("@preserve", "")
-      .trim() === ""
+    globs.include.some((glob) => matchesGlob(file, glob)) &&
+    !globs.exclude.some((glob) => matchesGlob(file, glob))
   );
 }
 
-/** Uncovered added lines and added hints without a reason, for every added file present in `coverage`. */
+/**
+ * Uncovered added lines, for added files present in `coverage`, and added hints without a reason, for added
+ * source files (`globs`), whether or not `coverage` holds them.
+ */
 export function checkChanged(
   added: Map<string, AddedLine[]>,
   coverage: Map<string, FileCoverage>,
+  globs: SourceGlobs,
 ): { uncovered: Finding[]; unexplained: Finding[] } {
   const uncovered: Finding[] = [];
   const unexplained: Finding[] = [];
   for (const [file, lines] of added) {
     const fileCoverage = coverage.get(file);
-    if (!fileCoverage) continue;
-    const missed = uncoveredLines(fileCoverage);
+    const missed = fileCoverage ? uncoveredLines(fileCoverage) : new Set<number>();
+    const source = isSourceFile(file, globs);
     for (const { line, text } of lines) {
       if (missed.has(line)) uncovered.push({ file, line });
-      if (hintWithoutReason(text)) unexplained.push({ file, line });
+      if (source && hintWithoutReason(text)) unexplained.push({ file, line });
     }
   }
   return { uncovered, unexplained };
@@ -154,16 +188,16 @@ export interface CliArgs {
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
-  const args: CliArgs = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const flag = argv[i];
-    const value = argv[i + 1];
-    if ((flag !== "--base" && flag !== "--coverage") || value === undefined || value.startsWith("--"))
-      throw new Error(`usage: coverage-changed [--base <ref>] [--coverage <path>] (got ${flag})`);
-    args[flag === "--base" ? "base" : "coverage"] = value;
-    i += 1;
+  try {
+    const { values } = parseArgs({
+      args: [...argv],
+      options: { base: { type: "string" }, coverage: { type: "string" } },
+      strict: true,
+    });
+    return { base: values.base, coverage: values.coverage };
+  } catch (err) {
+    throw new Error(`usage: coverage-changed [--base <ref>] [--coverage <path>] (${(err as Error).message})`);
   }
-  return args;
 }
 
 export interface CliDeps {
@@ -171,6 +205,8 @@ export interface CliDeps {
   cwd?: string;
   log?: (line: string) => void;
   logError?: (line: string) => void;
+  /** Which files are source; defaults to the coverage globs in vitest.config.ts. */
+  sources?: SourceGlobs;
 }
 
 /** The script's entry point; returns the exit code (see the header). `vars` is the process environment. */
@@ -222,7 +258,11 @@ export function main(
     JSON.parse(readFileSync(coverageFile, "utf8")) as Record<string, FileCoverage>,
     root,
   );
-  const { uncovered, unexplained } = checkChanged(parseAddedLines(diff), coverage);
+  const { uncovered, unexplained } = checkChanged(
+    parseAddedLines(diff),
+    coverage,
+    deps.sources ?? SOURCE_GLOBS,
+  );
 
   if (uncovered.length > 0) {
     log(`Added lines no test executes (${uncovered.length}):`);
