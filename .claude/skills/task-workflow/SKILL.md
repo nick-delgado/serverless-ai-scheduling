@@ -69,7 +69,7 @@ Worktrees let several agents build and test at the same time without stepping on
    - atomic bookings;
    - injected dependencies;
    - append-only history.
-3. **The ADRs and PRD requirements the issue cites.** If the issue conflicts with an ADR, the PRD, `packages/contracts` or a skill, stop and ask. Don't silently pick one. If you can't ask, take the reading that satisfies both, and list it under "Decisions the spec left open" in the PR.
+3. **The ADRs and PRD requirements the issue cites.** If the issue conflicts with an ADR, the PRD, `packages/contracts` or a skill, stop and ask. Don't silently pick one. If you can't ask, take the reading that satisfies both, and list it with the decisions the spec left open (in the journal entry, which the PR's "Decisions the spec left open" links).
 
 ## 5. Implement inside your owned paths
 

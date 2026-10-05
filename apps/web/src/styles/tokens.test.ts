@@ -1,6 +1,9 @@
 /** WCAG 2.2 AA contrast for the design tokens in both themes (NFR-005). */
 import { describe, expect, it } from "vitest";
 
+// `?raw` reads this file only because `vite.config.ts` lets Vitest process `tokens.css` (`css.include`). For any
+// other CSS file it returns an empty string; read that file from disk instead, as `global.test.ts` does (#154,
+// owner decision `04f8fc4/SPEC-2`).
 import tokensCss from "./tokens.css?raw";
 
 type Tokens = Record<string, string>;

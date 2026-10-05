@@ -1,3 +1,4 @@
+# sync-start:ci-checks (restated in CLAUDE.md, "How work flows", the CI bullet)
 # Every PR and every push to any branch runs the checks agents run locally
 # (CLAUDE.md "Definition of done"), plus the changed-line coverage gate (#140),
 # which fails any line the branch adds that no test ran. No path filters on purpose: required status
@@ -5,6 +6,7 @@
 # A branch with an open PR gets two runs: the push run on its head, and the PR run
 # on its merge with the base. GitHub skips the PR run while the PR has a merge
 # conflict, so the push run guarantees every head is tested at least once.
+# sync-end:ci-checks
 name: CI
 
 on:

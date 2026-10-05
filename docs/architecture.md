@@ -47,6 +47,8 @@ Parts marked *planned* aren't live yet: the SES escalation email (#35 built the 
 
 ## A chat turn, end to end
 
+<!-- sync-start:chat-turn-order (restated in the header of services/api/src/lib/chat-turn.ts) -->
+
 1. The SPA sends `POST /api/chat {conversationId?, clientMessageId, text}` with the Cognito ID token.
 2. The REST API authorizer validates the JWT. The Lambda receives `claims.sub` as the patient ID.
 3. ChatFn loads the conversation history through the owned read (DynamoDB; an unknown or foreign `conversationId` starts a new conversation, ADR-007 amendment). It then matches the send's `clientMessageId` against the last patient message stored there ([ADR-007 2026-10-04 amendment](adr/0007-chat-transport.md#amendment-2026-10-04-chat-retries-as-built-104)). A repeat of an answered message replays the stored reply without a model call; a repeat of an interrupted message re-runs the agent on the history before that message, without storing it again. Neither counts a turn. Only a new message counts against the patient's daily cap (50, ADR-009; 429 when reached), and only a new message is appended before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. ChatFn then calls `runAgentTurn` with the history **as loaded before that append** (the loop adds the user message itself, as the first entry of `newMessages`), plus:
@@ -56,6 +58,8 @@ Parts marked *planned* aren't live yet: the SES escalation email (#35 built the 
 4. The loop calls the configured model (`AGENT_MODEL_PROFILE`, default Sonnet 4.6) through Converse (ADR-010). When the model requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to the model. This repeats until the model ends the turn, capped at 8 iterations.
 5. Text deltas stream to the browser as NDJSON `text_delta` events (ADR-007). The SPA's typewriter renders them character by character.
 6. ChatFn appends the turn's remaining messages, skipping the first entry of `newMessages` (the user message it already stored), so the assistant's replies and tool results plus the turn trace go to DynamoDB, then sends `done`.
+
+<!-- sync-end:chat-turn-order -->
 
 ## Greeting and restore
 
