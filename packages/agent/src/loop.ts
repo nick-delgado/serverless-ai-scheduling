@@ -47,11 +47,11 @@ import {
   type LlmRequestMessage,
   type LlmResponse,
   type LlmStreamHandlers,
-  type LlmSystemText,
-  type CachePoint,
 } from "./llm/types";
+import { profileRequest } from "./llm/request";
 import type { Clock, ToolExecutionResult, ToolExecutor } from "./ports";
 import { fallbackProfileFor, type ModelProfile } from "./profiles";
+import { addUsage, zeroUsage } from "./usage";
 
 /** The system prompt, split for prompt caching. The real prompt comes from `prompts/` (#16). */
 export interface SystemPrompt {
@@ -275,14 +275,9 @@ class AgentTurn {
   async #callModel(): Promise<LlmResponse | undefined> {
     const profile = this.#profile;
     const request: LlmRequest = {
-      modelId: profile.modelId,
-      family: profile.family,
-      system: systemBlocks(this.#in.system, profile),
+      ...profileRequest(profile, this.#in.system, { maxTokens: this.#maxTokens }),
       tools: this.#in.executor.definitions,
       messages: requestMessages([...this.#in.history, ...this.#newMessages], profile),
-      maxTokens: this.#maxTokens,
-      modelFields: profile.modelFields,
-      ...(profile.inlineReasoningTag === undefined ? {} : { inlineReasoningTag: profile.inlineReasoningTag }),
     };
     const index = this.#llmCalls.length;
     const attempt = this.#attempt;
@@ -492,17 +487,6 @@ const INTERNAL_TOOL_ERROR = toolError(
 );
 
 /**
- * Tools render first, then system. A cache point after the stable block caches tools + stable system
- * together; the volatile block comes after it. Markers go only where the profile says the model takes them.
- */
-function systemBlocks(prompt: SystemPrompt, profile: ModelProfile): (LlmSystemText | CachePoint)[] {
-  const blocks: (LlmSystemText | CachePoint)[] = [{ type: "text", text: prompt.stable }];
-  if (profile.cachePoints.system) blocks.push(CACHE_POINT);
-  if (prompt.dynamic) blocks.push({ type: "text", text: prompt.dynamic });
-  return blocks;
-}
-
-/**
  * The request's copy of the conversation:
  * - reasoning blocks the target model can't take (another family, or a model that rejects them) are
  *   left out;
@@ -525,17 +509,4 @@ function storedText(messages: LlmMessage[]): string {
     .flatMap((m) => m.content.map((b) => (b.type === "text" ? b.text : "")))
     .filter((text) => text.length > 0)
     .join(TEXT_BLOCK_SEPARATOR);
-}
-
-function zeroUsage(): TokenUsage {
-  return { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-}
-
-function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
-  return {
-    inputTokens: a.inputTokens + b.inputTokens,
-    outputTokens: a.outputTokens + b.outputTokens,
-    cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
-    cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
-  };
 }

@@ -60,7 +60,8 @@ import {
 } from "@sched/tools";
 
 import { toDisplayMessages } from "./display";
-import { FAILURES, classifyAgentError, type ChatFailure } from "./errors";
+import { classifyAgentError } from "./agent-errors";
+import { FAILURES, type ChatFailure } from "./errors";
 import {
   closingReply,
   lastPatientMessageIndex,

@@ -1,7 +1,9 @@
 /**
  * @sched/agent: the agent loop (`runAgentTurn`), the provider-neutral `LlmClient` seam with its Bedrock
  * Converse implementation and a scripted fake, and the model profiles (S3-01 #15, S3-01b #60).
- * The system prompt lives in `prompts/` (#16).
+ * The system prompt lives in `prompts/` (#16). Shared with the API and the eval harness (#105): the
+ * profile-to-request builder (`profileRequest`), the throttle rule (`isThrottle`, `httpStatusOf`) and the
+ * token-usage sums (`zeroUsage`, `addUsage`).
  */
 export {
   DEFAULT_LIMITS,
@@ -51,6 +53,9 @@ export {
   type ToolResultBlock,
   type ToolUseBlock,
 } from "./llm/types";
+export { profileRequest, type ProfileRequest, type RequestSystem } from "./llm/request";
+export { THROTTLE_NAMES, httpStatusOf, isThrottle } from "./throttle";
+export { addUsage, zeroUsage } from "./usage";
 export { ConverseLlmClient, type ConverseLlmClientOptions, type ConverseSender } from "./llm/converse";
 export {
   ScriptedLlmClient,
