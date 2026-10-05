@@ -2,13 +2,14 @@
  * Scenario lint (#33, replaced by the real schema in #30). Structure is the loader's job: every file must
  * parse and satisfy the Zod schema (`src/schema.ts`), id = file name, category = folder. On top of that,
  * this checks what a schema can't: ids that exist in the `clinic-default` fixture, the ADR-008 budget,
- * and the coverage the scenarios README promises.
+ * and the coverage the scenarios README promises. It also warns, without failing, about judge dimensions
+ * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
 import { LIMITS } from "@sched/contracts";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
-import { allStrings, loadScenarios, selectSuite, type L1Case, type Scenario } from "../src";
+import { allStrings, loadScenarios, selectSuite, unrubricedInUse, type L1Case, type Scenario } from "../src";
 
 /** ADR-008 scenario budget (v1). */
 const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 10 };
@@ -117,5 +118,14 @@ describe("eval scenarios (coverage)", () => {
 
   it("includes scenarios after the Nov 1 DST change", () => {
     expect(scenarios.filter((s) => s.tags.includes("dst")).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("eval scenarios (judge rubrics)", () => {
+  it("warns, without failing, about each judge dimension that has no rubric (#32)", () => {
+    for (const { dimension, scenarioIds } of unrubricedInUse(scenarios))
+      console.warn(
+        `scenario lint: judge dimension "${dimension}" has no rubric and reports skip (${scenarioIds.join(", ")})`,
+      );
   });
 });

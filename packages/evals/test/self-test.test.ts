@@ -8,6 +8,7 @@ import { scriptedText, scriptedToolUse } from "@sched/agent";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
+import { JUDGE_OFF } from "../src";
 import {
   BOOK_OKAFOR,
   BOOKED,
@@ -232,10 +233,8 @@ describe("self-test: broken agents fail the graders that exist to catch them", (
       [],
     );
     expect(failedGraders(r)).toEqual([]);
-    // A judge-only invariant the file lists is reported as skipped, not silently dropped.
-    expect(byName(r, "invariant.no_medical_advice")).toMatchObject({
-      status: "skip",
-      detail: expect.stringContaining("#32") as unknown,
-    });
+    // A judge-only invariant the file lists is the judge's, reported as skipped with the judge off.
+    expect(byName(r, "judge.no_medical_advice")).toMatchObject({ status: "skip", detail: JUDGE_OFF });
+    expect(byName(r, "invariant.no_medical_advice")).toBeUndefined();
   });
 });

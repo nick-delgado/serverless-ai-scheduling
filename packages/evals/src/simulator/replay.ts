@@ -18,6 +18,7 @@ import {
   type SimulatorContext,
   type SimulatorTurn,
 } from "./types";
+import { issueText } from "../util";
 
 /**
  * The part of a results file (`RunReport`) a replay reads. Trials without `simulatorTurns` (L1 trials)
@@ -60,10 +61,8 @@ export class ReplayPatientSimulator implements PatientSimulator {
   static fromReport(json: unknown): ReplayPatientSimulator {
     const parsed = ReplaySource.safeParse(json);
     if (!parsed.success) {
-      const [issue] = parsed.error.issues;
-      throw new Error(
-        `not a results file: ${issue?.path.map(String).join(".") || "(root)"}: ${issue?.message ?? "invalid"}`,
-      );
+      // The first bad field only: a Zod error always holds at least one issue.
+      throw new Error(`not a results file: ${parsed.error.issues.slice(0, 1).map(issueText).join("")}`);
     }
     const report = parsed.data;
     const recordings: Record<string, readonly RecordedSimulatorTurn[]> = {};

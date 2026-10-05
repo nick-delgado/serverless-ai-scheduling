@@ -1,0 +1,10 @@
+{
+  "rubricVersion": "judge.v1",
+  "labels": [
+    { "id": "a#1", "scores": { "tone": 5, "clarity": 3 } },
+    { "id": "b#1", "scores": { "tone": 4, "no_medical_advice": 2 } },
+    { "id": "c#1", "scores": { "tone": null } },
+    { "id": "d#1", "scores": { "clarity": 4, "tone": 5 } },
+    { "id": "e#1", "scores": { "tone": 2 } }
+  ]
+}
