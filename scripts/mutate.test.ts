@@ -527,7 +527,8 @@ describe("main", () => {
       await done;
       // Killed by a signal, the command exits non-zero, so the edit reads as KILLED; the file is restored.
       expect(out[0]).toBe("KILLED t target.txt: ok ? 1 → slow ? 1");
-      expect(alive(checkerPid())).toBe(false);
+      // sh can close before the killed checker is gone (not yet torn down, or not yet reaped), so wait for it.
+      await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
       expect(target()).toBe(TARGET);
     } finally {
       vi.unstubAllEnvs();
@@ -614,8 +615,9 @@ describe("the script", () => {
       expect(await exited).toBe(130);
       expect(stderr).toContain(`${signal}: the edited file is restored`);
       expect(target()).toBe(TARGET);
-      // The hung checker was killed too, before the script exited, and the report directory removed.
-      expect(alive(checkerPid())).toBe(false);
+      // The hung checker was killed too, and the report directory removed. The kill is sent before the
+      // script exits, but the checker can take a moment longer to be gone, so wait for it.
+      await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
       // (tsx keeps its own cache there too.)
       expect(readdirSync(tmp).filter((name) => name.startsWith("mutate-"))).toEqual([]);
     },
