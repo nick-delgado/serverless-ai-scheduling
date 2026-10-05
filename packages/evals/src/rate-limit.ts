@@ -1,7 +1,8 @@
 /**
  * Pacing for live model calls (#34 note, ADR-002/ADR-010): one token bucket per model ID, shared by every
  * live call in the process (agent, patient simulator #31, judge #32), plus retry with exponential
- * backoff on throttling (429) and transient 5xx errors.
+ * backoff on throttling and transient 5xx errors. Which errors are throttling is `@sched/agent`'s
+ * `isThrottle` (names and HTTP status, #105); the 5xx check reads the status with its `httpStatusOf`.
  *
  * Wrap every live `LlmClient` with `rateLimited(client)`; they all draw from `SHARED_RATE_LIMITER` unless
  * given another limiter. The SDK's own retries should be off (`maxAttempts: 1`) so a retry also waits for
@@ -9,6 +10,8 @@
  */
 import {
   MODEL_PROFILES,
+  httpStatusOf,
+  isThrottle,
   type LlmCallOptions,
   type LlmClient,
   type LlmRequest,
@@ -136,7 +139,6 @@ export class RateLimiter {
 /** The process-wide limiter every live call shares. */
 export const SHARED_RATE_LIMITER = new RateLimiter();
 
-const THROTTLE_NAMES = new Set(["ThrottlingException", "TooManyRequestsException", "Throttling"]);
 const TRANSIENT_NAMES = new Set([
   "ServiceUnavailableException",
   "InternalServerException",
@@ -144,30 +146,13 @@ const TRANSIENT_NAMES = new Set([
   "ModelStreamErrorException",
 ]);
 
-/** A field of an unknown error value, if it is an object that has it. */
-const field = (value: unknown, key: string): unknown =>
-  typeof value === "object" && value !== null && key in value
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
-
-function statusOf(error: unknown): number | undefined {
-  const status =
-    field(field(error, "$metadata"), "httpStatusCode") ??
-    field(error, "statusCode") ??
-    field(error, "status");
-  return typeof status === "number" ? status : undefined;
-}
-
-/** A 429 / throttling error (retry after a wait). */
-export function isThrottle(error: unknown): boolean {
-  const name = field(error, "name");
-  return (typeof name === "string" && THROTTLE_NAMES.has(name)) || statusOf(error) === 429;
-}
+/** Re-exported: the throttle rule is `@sched/agent`'s, shared with the chat handler (#105). */
+export { isThrottle };
 
 /** Worth retrying: throttling, or a transient 5xx from the service. */
 export function isRetryable(error: unknown): boolean {
-  const name = field(error, "name");
-  const status = statusOf(error);
+  const name = error !== null && typeof error === "object" && "name" in error ? error.name : undefined;
+  const status = httpStatusOf(error);
   return (
     isThrottle(error) ||
     (typeof name === "string" && TRANSIENT_NAMES.has(name)) ||

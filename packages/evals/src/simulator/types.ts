@@ -2,9 +2,10 @@
  * The simulator's shared types and the `SimulatorError` it throws, in a leaf module so `llm.ts` and
  * `replay.ts` don't import `simulator.ts`, which re-exports them (#31). The shapes a results file
  * records (`RejectedReply`, `RecordedSimulatorTurn`) are Zod schemas, declared once here: replay
- * validates with them and the types are inferred from them. Also the token-usage sums the simulator
- * and the runner both keep.
+ * validates with them and the types are inferred from them. The token-usage sums are `@sched/agent`'s
+ * (`zeroUsage`, `addUsage`, #105).
  */
+import { zeroUsage } from "@sched/agent";
 import type { TokenUsage } from "@sched/contracts";
 import { z } from "zod";
 
@@ -75,20 +76,6 @@ export class SimulatorError extends Error {
     this.cost = cost;
   }
 }
-
-export const zeroUsage = (): TokenUsage => ({
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-});
-
-export const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
-  inputTokens: a.inputTokens + b.inputTokens,
-  outputTokens: a.outputTokens + b.outputTokens,
-  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
-  cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
-});
 
 /** A simulator cost of nothing yet: no tokens, no calls. */
 export const zeroSimulatorCost = (): SimulatorCost => ({ usage: zeroUsage(), costUsd: 0, llmCalls: 0 });

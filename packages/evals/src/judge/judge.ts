@@ -9,13 +9,21 @@
  * reply, or a model call that throws (`rateLimited()` has already retried the transport), is a
  * `JudgeError` carrying what the calls cost; the grading step turns it into `skip` results (r1/A-9).
  *
- * The request is built here, like the simulator's (`simulator/llm.ts`); #105 plans one shared builder.
+ * The retry loop is `callWithFeedback` (`feedback-retry.ts`), shared with the simulator, and the request
+ * comes from `@sched/agent`'s `profileRequest`, so it carries a system cache point when the profile asks
+ * for one (#105).
  */
-import { estimateCostUsd, type LlmClient, type ModelProfile, type ModelProfileName } from "@sched/agent";
+import {
+  addUsage,
+  profileRequest,
+  type LlmClient,
+  type ModelProfile,
+  type ModelProfileName,
+} from "@sched/agent";
 
-import { addUsage, zeroSimulatorCost, type RejectedReply, type SimulatorCost } from "../simulator/types";
-import { textOf, type TranscriptEvent } from "../transcript";
-import { errorReason } from "../util";
+import { callWithFeedback } from "../feedback-retry";
+import { zeroSimulatorCost, type RejectedReply, type SimulatorCost } from "../simulator/types";
+import type { TranscriptEvent } from "../transcript";
 import { parseJudgeReply, type DimensionScore } from "./parse";
 import { judgeSystemPrompt, judgeUserMessage, renderJudgeTranscript } from "./prompt";
 import { JUDGE_RUBRIC_VERSION, type RubricDimension } from "./rubrics";
@@ -97,58 +105,37 @@ export class LlmJudge implements TrialJudge {
     const transcript = renderJudgeTranscript(input.events);
     const showPrompt = input.dimensions.includes("no_system_prompt_disclosure");
     const system = judgeSystemPrompt(input.dimensions);
-    const cost = zeroJudgeCost();
-    const rejected: RejectedReply[] = [];
     const profile = this.profile;
-
-    for (let attempt = 1; attempt <= JUDGE_MAX_ATTEMPTS; attempt++) {
-      let response;
-      try {
-        response = await this.#llm.streamMessage({
-          modelId: profile.modelId,
-          family: profile.family,
-          system: [{ type: "text", text: system }],
-          tools: [],
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: judgeUserMessage(
-                    transcript,
-                    showPrompt ? input.agentSystemPrompt : undefined,
-                    rejected,
-                  ),
-                },
-              ],
-            },
-          ],
-          maxTokens: profile.maxTokens,
-          modelFields: profile.modelFields,
-          ...(profile.inlineReasoningTag === undefined
-            ? {}
-            : { inlineReasoningTag: profile.inlineReasoningTag }),
-        });
-      } catch (callError) {
-        throw new JudgeError(`model call failed: ${errorReason(callError)}`, cost, rejected);
-      }
-      cost.llmCalls += 1;
-      cost.usage = addUsage(cost.usage, response.usage);
-      cost.costUsd = estimateCostUsd(profile, cost.usage);
-
-      const text = textOf(response.content);
-      const parsed =
-        response.stopReason === "end_turn"
-          ? parseJudgeReply(text, input.dimensions, transcript)
-          : { ok: false as const, problems: [`the model stopped with ${response.stopReason}`] };
-      if (parsed.ok) return { scores: parsed.scores, cost, ...(rejected.length === 0 ? {} : { rejected }) };
-      rejected.push({ reply: text, problems: parsed.problems });
-    }
-    throw new JudgeError(
-      `no valid verdict in ${JUDGE_MAX_ATTEMPTS} attempts: ${rejected.map((r) => r.problems.join(", ")).join(" | ")}`,
-      cost,
-      rejected,
-    );
+    const { value, cost, rejected } = await callWithFeedback({
+      llm: this.#llm,
+      profile,
+      maxAttempts: JUDGE_MAX_ATTEMPTS,
+      request: (rejectedSoFar) => ({
+        ...profileRequest(profile, { stable: system }),
+        tools: [],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: judgeUserMessage(
+                  transcript,
+                  showPrompt ? input.agentSystemPrompt : undefined,
+                  rejectedSoFar,
+                ),
+              },
+            ],
+          },
+        ],
+      }),
+      parse: (text) => {
+        const parsed = parseJudgeReply(text, input.dimensions, transcript);
+        return parsed.ok ? { ok: true, value: parsed.scores } : parsed;
+      },
+      error: (message, spent, rejectedSoFar) => new JudgeError(message, spent, rejectedSoFar),
+      exhausted: `no valid verdict in ${JUDGE_MAX_ATTEMPTS} attempts`,
+    });
+    return { scores: value, cost, ...(rejected === undefined ? {} : { rejected }) };
   }
 }

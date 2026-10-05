@@ -6,8 +6,10 @@
  * results are reported beside the trial's status and never change it.
  */
 import {
+  addUsage,
   estimateCostUsd,
   runAgentTurn,
+  zeroUsage,
   type LlmClient,
   type LlmMessage,
   type ModelProfile,
@@ -23,12 +25,10 @@ import { addCost, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge
 import { agentPromptText } from "./judge/prompt";
 import type { Scenario } from "./schema";
 import {
-  addUsage,
   scriptOnlySimulator,
   type RejectedReply,
   SimulatorError,
   zeroSimulatorCost,
-  zeroUsage,
   type PatientSimulator,
   type RecordedSimulatorTurn,
   type SimulatorCost,
