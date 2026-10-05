@@ -73,7 +73,7 @@ scripts/deploy-web.sh <env>             # build, sync to the site bucket, invali
 - **Refusals:** a dirty working tree (untracked files included), expired credentials, a bucket that isn't `sched-<env>-web-*`, and a build without `index.html`, without files under `assets/`, or without the env's user pool ID in its bundle.
 - **Caching:** `assets/*` (content-hashed by Vite) get `public, max-age=31536000, immutable`; everything else (`index.html`) gets `no-cache`. Order: new assets, then `index.html` (tagged with `git-commit` metadata), then stale files are deleted, then the invalidation, so the live `index.html` never points at a missing asset.
 - **Shared `dev`:** the same rule as `deploy.sh`. It prints a note when an unmerged branch publishes to `dev` or `demo`; prefer an ephemeral env for branch work. It runs as `SchedDeployer` (S3 on `sched-*` buckets, `cloudfront:CreateInvalidation`); CloudFormation and the exec role aren't involved.
-- **Check it:** `curl -sI https://<domain>/` shows `cache-control: no-cache`; an `/assets/...` file shows the one-year `max-age`. Deep links such as `/chat` on refresh return an S3 error (403) until #99.
+- **Check it:** `curl -sI https://<domain>/` shows `cache-control: no-cache`; an `/assets/...` file shows the one-year `max-age`. Deep links such as `/chat` return `index.html` (the web stack's `SpaDeepLinkFunction`, #99), while a missing `/assets/...` file is still S3's 403.
 - **Tests:** `scripts/deploy-web.test.ts` runs the script against stand-in `aws` and `npm` commands; change both together.
 
 ## Rules when editing templates
