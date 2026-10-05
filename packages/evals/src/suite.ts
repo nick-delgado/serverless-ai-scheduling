@@ -7,14 +7,14 @@ import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
 import type { GraderResult } from "./graders";
+import type { TrialJudge } from "./judge/judge";
 import {
   JUDGE_RUBRIC_VERSION,
   PASS_SCORE,
   RUBRIC_DIMENSIONS,
   unrubricedInUse,
   type RubricDimension,
-  type TrialJudge,
-} from "./judge";
+} from "./judge/rubrics";
 import { L1_ACTION, runL1Trial, type L1TrialResult } from "./l1";
 import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";

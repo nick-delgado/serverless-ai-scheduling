@@ -18,14 +18,9 @@ import type { ToolRegistry } from "@sched/tools";
 import { errorReason } from "./util";
 import { createTrialEnvironment, type TrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
-import {
-  addCost,
-  agentPromptText,
-  gradeWithJudge,
-  zeroJudgeCost,
-  type JudgeCost,
-  type TrialJudge,
-} from "./judge";
+import { gradeWithJudge } from "./judge/grade";
+import { addCost, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge/judge";
+import { agentPromptText } from "./judge/prompt";
 import type { Scenario } from "./schema";
 import {
   addUsage,
