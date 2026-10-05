@@ -1132,8 +1132,14 @@ describe("handleChatTurn: naming a new conversation before the agent runs (#160)
     expectWellFormed(retry.response);
     expect(retry.response.events.at(-1)).toMatchObject({ type: "done", conversationId });
     expect(retry.summary.conversationReplaced).toBe(false);
+    // The first turn's agent stopped at the failed write, before any tool ran, so the resend re-runs it.
+    expect(first.outcome).toBe("error");
+    expect(retry.summary.replayed).toBe(false);
     const stored = await messagesOf(w.repos, MARIA, conversationId);
-    expect(stored.filter((m) => m.role === "user").map(textOf)).toEqual(["Hello"]);
+    expect(stored.map((m) => [m.role, textOf(m)])).toEqual([
+      ["user", "Hello"],
+      ["assistant", "Hi again!"],
+    ]);
     expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
   });
 });
