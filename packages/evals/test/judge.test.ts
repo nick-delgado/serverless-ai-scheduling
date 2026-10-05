@@ -303,29 +303,28 @@ describe("LlmJudge", () => {
       scriptedText(reply({ tone: 9 }), { usage: { inputTokens: 2000, outputTokens: 200 } }),
       scriptedText(reply({ tone: 4 })),
     ]);
-    const error = (await new LlmJudge({ llm, profile })
-      .judge(input(["tone"]))
-      .catch((e: unknown) => e)) as JudgeError;
+    const error = await new LlmJudge({ llm, profile }).judge(input(["tone"])).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(JudgeError);
-    expect(error.message).toMatch(
-      /^no valid verdict in 2 attempts: it is not one JSON object \| scores\.0\.score/,
-    );
-    expect(error.cost.llmCalls).toBe(2);
-    expect(error.cost.costUsd).toBeCloseTo((3000 * 1 + 300 * 5) / 1e6, 12); // f6d8ff8/TEST-102
-    // Both rejected replies travel with the error (f6d8ff8/SMELL-107 decision).
-    expect(error.rejected.map((r) => r.reply)).toEqual(["no", reply({ tone: 9 })]);
+    expect(error).toMatchObject({
+      message: expect.stringMatching(
+        /^no valid verdict in 2 attempts: it is not one JSON object \| scores\.0\.score/,
+      ),
+      cost: { llmCalls: 2, costUsd: expect.closeTo((3000 * 1 + 300 * 5) / 1e6, 12) }, // f6d8ff8/TEST-102
+      // Both rejected replies travel with the error (f6d8ff8/SMELL-107 decision).
+      rejected: [{ reply: "no" }, { reply: reply({ tone: 9 }) }],
+    });
     expect(llm.remaining).toBe(1);
   });
 
   it("turns a failed model call into a JudgeError with the cost of the calls before it", async () => {
     const llm = new ScriptedLlmClient([scriptedText("no"), { error: new Error("throttled") }]);
-    const error = (await new LlmJudge({ llm, profile })
-      .judge(input(["tone"]))
-      .catch((e: unknown) => e)) as JudgeError;
+    const error = await new LlmJudge({ llm, profile }).judge(input(["tone"])).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(JudgeError);
-    expect(error.message).toBe("model call failed: Error: throttled");
-    expect(error.cost.llmCalls).toBe(1);
-    expect(error.rejected).toEqual([{ reply: "no", problems: ["it is not one JSON object"] }]);
+    expect(error).toMatchObject({
+      message: "model call failed: Error: throttled",
+      cost: { llmCalls: 1 },
+      rejected: [{ reply: "no", problems: ["it is not one JSON object"] }],
+    });
   });
 });
 
