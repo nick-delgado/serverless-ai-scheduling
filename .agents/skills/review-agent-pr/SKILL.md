@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.04.4"
+  harness-version: "2026.10.05"
 ---
 
 # Review an agent-authored PR
@@ -87,7 +87,8 @@ it to an absolute path once and use absolute paths whenever you hand a path to a
    stopped rather than start again:
    - **Same PR, same head commit, same mode, and phase 7 not finished:** resume. Recreate
      the worktree if it is gone, read the manifest and the outputs already written, and
-     continue from the first unfinished phase. In phase 4, re-spawn only the reviewers (or
+     continue from the first unfinished phase (move aside the output file of any subagent you
+re-spawn, as phase 4 says). In phase 4, re-spawn only the reviewers (or
      parts) whose output `check-outputs.sh` reports missing or incomplete. Never post
      anything `progress.txt` says was posted already.
    - **Anything else** (no `progress.txt`, another head commit or mode, or a finished
@@ -336,7 +337,9 @@ It lists any reviewer (or part) whose output is missing or lacks a required sect
 including the extra tables some briefs require, and any part whose finding IDs fall outside
 its range. Send that reviewer back to finish (continue the same
 subagent if your runtime allows; otherwise spawn a fresh one with the same prompt and the
-list of what is missing), and run the check again. Also send back a reviewer whose findings
+list of what is missing), and run the check again. Before spawning a fresh reviewer for an
+output, move the old file aside (`<file>.old`) so the new one starts empty and cannot leave
+stale sections behind; a reviewer continued in place keeps its file. Also send back a reviewer whose findings
 lack evidence.
 
 ## Phase 5: Verification

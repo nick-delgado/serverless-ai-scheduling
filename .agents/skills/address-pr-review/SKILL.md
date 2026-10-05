@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.04.2"
+  harness-version: "2026.10.05"
 ---
 
 # Address a PR review
@@ -53,8 +53,15 @@ the fixes were done, there is nothing to fix: do steps 2, 5 and 7, then post a s
 response. Its first line names the latest review and the new head as usual, and it says
 "Sync only: merged `<base>` at `<sha>`" with the conflicts and how each was resolved, the
 checks run, and the "On GitHub" line. Skip the findings table. Ask the owner about
-conflicts in logic exactly as step 5 says. Then recommend a re-check (step 10's sizes
-leave out what came in from the base, so it will usually qualify).
+conflicts in logic exactly as step 5 says. Then recommend, using `diff-size.sh` as in
+step 10:
+
+- **No further review** when the PR's own changes are unchanged (the merge needed no
+  conflict resolutions, so source, tests and other all show 0), provided CI passes on the
+  new head. Mention any file the base changed that the PR's code uses, so the owner can ask
+  for a re-check if it matters.
+- **A re-check** when you resolved conflicts or adapted the PR's code: those are new lines
+  no one has reviewed.
 
 ## Steps
 
@@ -119,6 +126,9 @@ Take them in order (blockers and majors first). For each finding:
    about, see the test fail, then restore it. Break each part on its own: every condition
    of a compound check, every operand of a comparison, every flag or option. A test that
    fails when the whole line is deleted can still pass when one half of an `&&` is wrong.
+   If you change a test that a recorded break cites (in the PR description's evidence, a
+   journal entry or an earlier response), redo that break against the changed test and
+   update the record: a changed test can stop catching what it used to.
    - **Fix the class, not just the instance.** If the finding is one case of a pattern
      (one missing case among similar ones, one parser rule among several), search the PR's
      own changes for the same mistake and fix every instance, testing each.
@@ -256,8 +266,11 @@ gh api repos/{owner}/{repo}/commits/<new head sha>/check-runs --jq '.total_count
 ```
 
 GitHub takes a moment: ask again a few times over a minute or two. Record in the response
-whether the PR is mergeable and whether CI started on the new head. If it is `dirty`, or CI
-has not started after a couple of minutes, say so first in the response and to the user.
+whether the PR is mergeable and whether CI **started** on the new head, with a link to its
+checks. Do not report CI as passing or failing unless it has finished when you write the
+response: a result written while CI is running goes stale, and the next review reads CI's
+final state anyway. If the PR is `dirty`, or CI has not started after a couple of minutes,
+say so first in the response and to the user.
 
 ### 8. Bring the PR description up to date
 
@@ -295,7 +308,7 @@ conversation shows each round in order. Format:
 - **Result:** [`<new head short sha>`](<PR URL>/commits/<full sha>) <or "no new commits">
 - **Checks run locally:** <commands and result>
 - **Synced with base:** <no sync needed | merged `<base>` at `<sha>`: no conflicts | conflicts resolved in <files> | conflict waiting for the owner>
-- **On GitHub:** <mergeable state>; CI <started | not started: why> on `<new head>`
+- **On GitHub:** <mergeable state>; CI <started, [checks](<URL>) | finished: passing / failing: names | not started: why> on `<new head>`
 - **Harness version:** <`metadata.harness-version` from this skill's frontmatter>
 - **PR description:** <updated (what changed) | no change needed>
 - **Waiting for the owner:** <every `waiting for decision` and `not fixed: needs owner` finding, one line each with its question; or "nothing">

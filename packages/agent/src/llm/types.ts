@@ -63,7 +63,9 @@ export interface LlmRequest {
   modelFields: Readonly<Record<string, unknown>>;
   /**
    * For models that write chain-of-thought inline in visible text (Nova Pro: `<thinking>…</thinking>`):
-   * the tag name. The client moves a leading tagged section into a reasoning block and never streams it.
+   * the tag name. The client removes every section in that tag, and in `<thinking>` (stripped for every
+   * profile, #107), from the visible text before it streams, and keeps the removed text as a reasoning
+   * block. Without a tag, `<thinking>` sections are still removed, and dropped.
    */
   inlineReasoningTag?: string;
 }
