@@ -324,7 +324,8 @@ describe("exportCalibration", () => {
     const file = { ...resultsFile(), cases: [{ id: BOOK, trials }] };
     const { set } = await exportCalibration(file, scenarios, "r.json");
     expect(set.transcripts).toHaveLength(20);
-  });
+    // 20 trial environments take about 1.5 s locally; the timeout leaves room on a slower CI runner.
+  }, 15_000);
 
   it("caps the export at the size", async () => {
     const { set } = await exportCalibration(resultsFile(), scenarios, "r.json", 1);
