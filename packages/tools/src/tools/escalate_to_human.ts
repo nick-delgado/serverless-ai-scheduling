@@ -8,9 +8,21 @@
  * - The patient is never left without the human path: if the notifier is missing or fails, the
  *   escalation is still recorded (notification FAILED) and the phone number and hours are still returned.
  *
+ * - The summary carries no IDs (#107): before the escalation is recorded, every ID-shaped token in it is
+ *   replaced with `[ID removed]`, so the stored record, the staff notice and any retry re-send are clean.
+ *   The prompt already asks for this, and Nova Pro once ignored it. This is a guard, not a check: it
+ *   never rejects the call. An ID-shaped token is any of these (case-insensitive):
+ *   - a GUID, 8-4-4-4-12 hex (patient IDs are Cognito subs);
+ *   - `appt_`, `slot_`, `prov_` or `esc_` followed by letters, digits or underscores (looser than the
+ *     contract formats, so a typed `appt_123` is caught too);
+ *   - a fixture alias, `pat-` followed by letters, as a whole word.
+ *   The placeholder keeps a summary that was only an ID above the 10-character minimum; the result is
+ *   capped at the 1,000-character maximum, since a short ID can grow. It covers the summary only: the
+ *   staff transcript still shows the patient's own words, and traces keep the model's raw input.
+ *
  * Identity comes from ctx.patientId / ctx.conversationId (bound by the caller), never from input.
  */
-import { CLINIC, type Escalation } from "@sched/contracts";
+import { CLINIC, LIMITS, type Escalation } from "@sched/contracts";
 
 import { sendEscalationNotice } from "../notify/notice";
 import { toolFail, toolOk, type ToolContext, type ToolHandler } from "../registry";
@@ -20,12 +32,26 @@ function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalati
   return sendEscalationNotice(escalation, ctx.patientId, { repos: ctx.repos, notifier: ctx.notifier });
 }
 
+export const ID_PLACEHOLDER = "[ID removed]";
+
+const ID_SHAPED_TOKENS: readonly RegExp[] = [
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+  /\b(?:appt|slot|prov|esc)_\w+/gi,
+  /\bpat-[a-z]+\b/gi,
+];
+
+/** `summary` with every ID-shaped token replaced (see the header), capped at the stored maximum. */
+export function redactIds(summary: string): string {
+  const redacted = ID_SHAPED_TOKENS.reduce((text, pattern) => text.replace(pattern, ID_PLACEHOLDER), summary);
+  return redacted.slice(0, LIMITS.escalationSummaryMaxChars);
+}
+
 export const escalateToHuman: ToolHandler<"escalate_to_human"> = async (input, ctx) => {
   const recorded = await ctx.repos.escalations.record({
     patientId: ctx.patientId,
     conversationId: ctx.conversationId,
     reason: input.reason,
-    summary: input.summary,
+    summary: redactIds(input.summary),
   });
   if (!recorded.ok) {
     // The conversation id belongs to someone else: a caller bug or tampering. Say nothing about the
