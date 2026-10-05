@@ -1,0 +1,38 @@
+[
+  {
+    "id": "gate-buffer",
+    "file": "scripts/coverage-changed.ts",
+    "find": "{ cwd: deps.cwd, encoding: \"utf8\", maxBuffer: GIT_MAX_BUFFER }",
+    "replace": "{ cwd: deps.cwd, encoding: \"utf8\" }"
+  },
+  {
+    "id": "gate-buffer-size",
+    "file": "scripts/coverage-changed.ts",
+    "find": "export const GIT_MAX_BUFFER = 256 * 1024 * 1024;",
+    "replace": "export const GIT_MAX_BUFFER = 1024 * 1024;"
+  },
+  {
+    "id": "kill-direct-child",
+    "file": "scripts/mutate.ts",
+    "find": "process.kill(-running.pid, \"SIGKILL\");",
+    "replace": "process.kill(running.pid, \"SIGKILL\");"
+  },
+  {
+    "id": "kill-none-on-timeout",
+    "file": "scripts/mutate.ts",
+    "find": "      timedOut = true;\n      stopRunning();\n",
+    "replace": "      timedOut = true;\n"
+  },
+  {
+    "id": "stop-kill",
+    "file": "scripts/mutate.ts",
+    "find": "  process.kill(-running.pid, \"SIGKILL\");\n",
+    "replace": ""
+  },
+  {
+    "id": "detached",
+    "file": "scripts/mutate.ts",
+    "find": "stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: true }",
+    "replace": "stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: false }"
+  }
+]

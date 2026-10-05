@@ -1,0 +1,9 @@
+Added lines no test executes (6):
+apps/web/src/voice/MockTranscriber.ts:72
+apps/web/src/voice/MockTranscriber.ts:80
+apps/web/src/voice/RecordingOverlay.tsx:59
+apps/web/src/voice/RecordingOverlay.tsx:64
+apps/web/src/voice/useRecording.ts:118
+apps/web/src/voice/useRecording.ts:138
+coverage-changed: give each line above a test, or an ignore hint with a reason (`/* v8 ignore next -- <reason> */`). Coverage shows a line ran, not that a test checks it.
+gate exit 1 in 1 s (base 633a4ce, head 04f8fc4554c01afa4e150d31a33aec6ef38555ea)

@@ -1,0 +1,13 @@
+SURVIVED VER-1 scripts/coverage-changed.ts: deps.sources ?? SOURCE_GLOBS → deps.sources ?? { include: [], exclude: [] }
+KILLED VER-1-def scripts/coverage-changed.ts: { include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE } → { include: [], exclude: COVERAGE_EXCLUDE }
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include the web app's .tsx components
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) are the ones the coverage run uses
+
+2 edits: 1 killed, 1 survived, 0 timed out, 0 errors, 0 refused
+real 17.58
+user 9.19
+sys 7.09

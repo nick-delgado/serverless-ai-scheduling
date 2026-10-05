@@ -47,3 +47,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-05 | [A cut stream and a bare 5xx now offer Retry, and a buffered body without `done` is unreadable, not cut](2026-10-05-a-cut-stream-now-offers-retry.md) | 4. Teaching the agent to schedule |
 | 2026-10-05 | [What the prompt couldn't stop, code now removes: `<thinking>` anywhere, and IDs in escalation summaries](2026-10-05-guards-outside-the-prompt.md) | 5. What the evals showed |
 | 2026-10-05 | [The LLM judge scores beside the trial, never inside it](2026-10-05-the-judge-scores-beside-the-trial.md) | 4. Teaching the agent to schedule |
+| 2026-10-05 | [Stryker finds breaks nobody listed, once patched for Vitest 5; an edit list re-checks only what it lists](2026-10-05-mutation-tools-find-what-nobody-wrote-down.md) | 4. Teaching the agent to schedule |

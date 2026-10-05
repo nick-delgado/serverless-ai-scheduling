@@ -1,0 +1,51 @@
+[
+  {
+    "id": "TEST-2",
+    "note": "#97 8bea70b/TEST-1, TEST-2: the key.includes(\"_\") operand",
+    "file": "packages/evals/src/simulator/guards.ts",
+    "find": "key.includes(\"_\") && ",
+    "replace": ""
+  },
+  {
+    "id": "TEST-3a",
+    "note": "8bea70b/TEST-3: the open curly quote dropped from the unwrap",
+    "file": "packages/evals/src/simulator/llm.ts",
+    "find": "/^([\"“])([\\s\\S]*)([\"”])$/",
+    "replace": "/^([\"])([\\s\\S]*)([\"”])$/"
+  },
+  {
+    "id": "TEST-3b",
+    "note": "8bea70b/TEST-3: the close curly quote dropped",
+    "file": "packages/evals/src/simulator/llm.ts",
+    "find": "/^([\"“])([\\s\\S]*)([\"”])$/",
+    "replace": "/^([\"“])([\\s\\S]*)([\"])$/"
+  },
+  {
+    "id": "TEST-3c",
+    "note": "8bea70b/TEST-3: \\s dropped from the stop-reason normalisation",
+    "file": "packages/evals/src/simulator/llm.ts",
+    "find": ".replaceAll(/[\\s-]+/g, \"_\")",
+    "replace": ".replaceAll(/[-]+/g, \"_\")"
+  },
+  {
+    "id": "TEST-3d",
+    "note": "8bea70b/TEST-3: - dropped from the stop-reason normalisation",
+    "file": "packages/evals/src/simulator/llm.ts",
+    "find": ".replaceAll(/[\\s-]+/g, \"_\")",
+    "replace": ".replaceAll(/[\\s]+/g, \"_\")"
+  },
+  {
+    "id": "TEST-1-kind",
+    "note": "8bea70b/TEST-1: replay's kind === \"scenario\" operand",
+    "file": "packages/evals/src/simulator/replay.ts",
+    "find": "t.kind === \"scenario\" && ",
+    "replace": ""
+  },
+  {
+    "id": "TEST-105",
+    "note": "5765869/TEST-105 (also present at 8bea70b): the (none) branch",
+    "file": "packages/evals/src/simulator/prompt.ts",
+    "find": "? \"(none)\"",
+    "replace": "? \"\""
+  }
+]

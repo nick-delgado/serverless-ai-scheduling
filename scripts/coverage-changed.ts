@@ -35,6 +35,11 @@ import { COVERAGE_EXCLUDE, COVERAGE_INCLUDE } from "../vitest.config";
 
 export const DEFAULT_BASE = "origin/main";
 export const DEFAULT_COVERAGE_FILE = "coverage/coverage-final.json";
+/**
+ * Output limit for the git commands. `execFileSync`'s default is 1 MB, and a branch whose `git diff` is longer
+ * (generated files, committed results) made the gate crash with ENOBUFS instead of checking it (#113).
+ */
+export const GIT_MAX_BUFFER = 256 * 1024 * 1024;
 
 interface Range {
   start: { line: number };
@@ -223,7 +228,8 @@ export function main(
 ): number {
   const log = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8" });
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER });
   let args: CliArgs;
   try {
     args = parseCliArgs(argv);

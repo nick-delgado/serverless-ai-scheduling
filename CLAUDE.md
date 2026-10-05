@@ -45,7 +45,7 @@ New top-level directories come from an issue; check `docs/backlog.md` rather tha
 
 ## Commands
 
-Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`, `spikes/*`; package names `@sched/<dir>`, spikes `@sched/spike-<dir>`). Spikes are installed and typechecked but have no Vitest project:
+Node 24 (`.nvmrc`), npm workspaces (`packages/*`, `services/*`, `apps/*`, `spikes/*`; package names `@sched/<dir>`, spikes `@sched/spike-<dir>`). Spikes are installed and typechecked, except a spike with no `package.json` (such as `spikes/stryker`), which is linted only; no spike has a Vitest project:
 
 ```bash
 npm ci                                   # install
@@ -56,6 +56,7 @@ npm test                                 # all Vitest projects
 npm test -w packages/contracts           # one workspace
 npm run test:coverage                    # all Vitest projects with v8 coverage (coverage/coverage-final.json)
 npm run coverage:changed                 # fail on any line this branch adds that no test ran (vs origin/main; -- --base <ref>)
+npm run mutate -- <edits.json> -- <cmd>  # apply each { file, find, replace } edit alone, run <cmd>, restore; prints KILLED/SURVIVED and the failed tests
 ```
 
 The coverage gate checks committed changes only. A deliberate exception is a `/* v8 ignore next -- <reason> */` hint (or `start`/`stop`) in the diff; a hint without a reason fails. Lines only DynamoDB Local reaches show as uncovered locally unless it is running (`npm run dynamodb:local -w packages/tools`).

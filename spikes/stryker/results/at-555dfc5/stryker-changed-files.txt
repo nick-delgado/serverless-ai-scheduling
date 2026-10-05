@@ -1,0 +1,21 @@
+file	Killed	Timeout	Survived	NoCoverage	CompileError	RuntimeError	Ignored	score
+packages/tools/src/tools/reschedule_appointment.ts	98	0	6	6	0	0	0	89.09%
+packages/tools/src/repos/types.ts	6	0	3	0	0	0	0	66.67%
+total	104	0	9	6	0	0	0	87.39%
+
+Not killed (status, id, location, mutator, original → replacement):
+NoCoverage	33	packages/tools/src/tools/reschedule_appointment.ts:90:20	BlockStatement	{ throw new Error( `Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`, ); 	→	{}
+NoCoverage	35	packages/tools/src/tools/reschedule_appointment.ts:92:9	StringLiteral	`Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`	→	``
+NoCoverage	96	packages/tools/src/tools/reschedule_appointment.ts:141:83	ConditionalExpression	a.status === "BOOKED"	→	false
+NoCoverage	97	packages/tools/src/tools/reschedule_appointment.ts:141:83	EqualityOperator	a.status === "BOOKED"	→	a.status !== "BOOKED"
+NoCoverage	98	packages/tools/src/tools/reschedule_appointment.ts:141:96	StringLiteral	"BOOKED"	→	""
+NoCoverage	119	packages/tools/src/tools/reschedule_appointment.ts:161:33	StringLiteral	`Appointment ${input.appointment_id} vanished after SAME_SLOT`	→	``
+Survived	32	packages/tools/src/tools/reschedule_appointment.ts:90:9	ConditionalExpression	!provider	→	false
+Survived	43	packages/tools/src/tools/reschedule_appointment.ts:105:7	ConditionalExpression	current.status !== "BOOKED"	→	false
+Survived	72	packages/tools/src/tools/reschedule_appointment.ts:128:34	StringLiteral	`Slot ${slot.slotId} references unknown provider ${slot.providerId}`	→	``
+Survived	70	packages/tools/src/tools/reschedule_appointment.ts:128:7	ConditionalExpression	!provider	→	false
+Survived	91	packages/tools/src/tools/reschedule_appointment.ts:141:55	ConditionalExpression	a.status === "COMPLETED" || a.status === "BOOKED"	→	true
+Survived	117	packages/tools/src/tools/reschedule_appointment.ts:161:9	ConditionalExpression	!moved	→	false
+Survived	8	packages/tools/src/repos/types.ts:216:11	StringLiteral	`${code}: conversation ${conversationId}, seq ${seq}`	→	``
+Survived	7	packages/tools/src/repos/types.ts:210:28	StringLiteral	"ConversationAppendError"	→	""
+Survived	5	packages/tools/src/repos/types.ts:181:14	StringLiteral	"INVALID_INPUT"	→	""

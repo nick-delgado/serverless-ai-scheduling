@@ -1,0 +1,16 @@
+[
+  {
+    "id": "VER-1",
+    "note": "#155 5d54a70/VER-1: main's default SOURCE_GLOBS replaced, the operand the PR's break list left",
+    "file": "scripts/coverage-changed.ts",
+    "find": "deps.sources ?? SOURCE_GLOBS",
+    "replace": "deps.sources ?? { include: [], exclude: [] }"
+  },
+  {
+    "id": "VER-1-def",
+    "note": "the same default broken where it is defined",
+    "file": "scripts/coverage-changed.ts",
+    "find": "{ include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE }",
+    "replace": "{ include: [], exclude: COVERAGE_EXCLUDE }"
+  }
+]

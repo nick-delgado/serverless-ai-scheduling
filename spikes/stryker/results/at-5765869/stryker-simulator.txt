@@ -1,0 +1,90 @@
+file	Killed	Timeout	Survived	NoCoverage	CompileError	RuntimeError	Ignored	score
+packages/evals/src/simulator/llm.ts	148	0	24	3	0	0	0	84.57%
+packages/evals/src/simulator/prompt.ts	58	1	15	1	0	0	0	78.67%
+packages/evals/src/simulator/replay.ts	42	1	7	2	0	0	0	82.69%
+packages/evals/src/simulator/guards.ts	97	4	27	0	0	0	0	78.91%
+packages/evals/src/simulator/types.ts	9	0	2	0	0	0	0	81.82%
+total	354	6	75	6	0	0	0	81.63%
+
+Not killed (status, id, location, mutator, original → replacement):
+NoCoverage	174	packages/evals/src/simulator/llm.ts:81:34	StringLiteral	""	→	"Stryker was here!"
+NoCoverage	186	packages/evals/src/simulator/llm.ts:87:57	StringLiteral	""	→	"Stryker was here!"
+NoCoverage	280	packages/evals/src/simulator/llm.ts:154:15	ObjectLiteral	{ inlineReasoningTag: this.#profile.inlineReasoningTag }	→	{}
+Survived	146	packages/evals/src/simulator/llm.ts:67:11	MethodExpression	text.trim()	→	text
+Survived	145	packages/evals/src/simulator/llm.ts:67:11	MethodExpression	text.trim().replace(SPEAKER_LABEL, "").trim()	→	text.trim().replace(SPEAKER_LABEL, "")
+Survived	148	packages/evals/src/simulator/llm.ts:68:19	Regex	/^(["“])([\s\S]*)(["”])$/	→	/(["“])([\s\S]*)(["”])$/
+Survived	149	packages/evals/src/simulator/llm.ts:68:19	Regex	/^(["“])([\s\S]*)(["”])$/	→	/^(["“])([\s\S]*)(["”])/
+Survived	164	packages/evals/src/simulator/llm.ts:69:68	MethodExpression	wrapped[2].trim()	→	wrapped[2]
+Survived	175	packages/evals/src/simulator/llm.ts:84:19	Regex	/[\s-]+/g	→	/[\s-]/g
+Survived	179	packages/evals/src/simulator/llm.ts:85:18	MethodExpression	reply.replace(marker[0], "").trim()	→	reply.replace(marker[0], "")
+Survived	224	packages/evals/src/simulator/llm.ts:101:38	ConditionalExpression	e.kind === "tool_call"	→	true
+Survived	240	packages/evals/src/simulator/llm.ts:103:45	EqualityOperator	e.kind === "patient"	→	e.kind !== "patient"
+Survived	232	packages/evals/src/simulator/llm.ts:102:7	EqualityOperator	at < 0	→	at <= 0
+Survived	252	packages/evals/src/simulator/llm.ts:123:9	ConditionalExpression	sinceEscalation !== undefined	→	true
+Survived	273	packages/evals/src/simulator/llm.ts:141:21	StringLiteral	"user"	→	""
+Survived	277	packages/evals/src/simulator/llm.ts:152:15	ConditionalExpression	this.#profile.inlineReasoningTag === undefined	→	true
+Survived	278	packages/evals/src/simulator/llm.ts:152:15	ConditionalExpression	this.#profile.inlineReasoningTag === undefined	→	false
+Survived	279	packages/evals/src/simulator/llm.ts:152:15	EqualityOperator	this.#profile.inlineReasoningTag === undefined	→	this.#profile.inlineReasoningTag !== undefined
+Survived	290	packages/evals/src/simulator/llm.ts:168:21	StringLiteral	"invalid"	→	""
+Survived	311	packages/evals/src/simulator/llm.ts:175:83	ArrowFunction	(r) => r.problems.join(", ")	→	() => undefined
+Survived	312	packages/evals/src/simulator/llm.ts:175:106	StringLiteral	", "	→	""
+Survived	313	packages/evals/src/simulator/llm.ts:175:118	StringLiteral	" | "	→	""
+Survived	137	packages/evals/src/simulator/llm.ts:63:23	Regex	/^\s*(patient|me|user|you)\s*:\s*/i	→	/\s*(patient|me|user|you)\s*:\s*/i
+Survived	139	packages/evals/src/simulator/llm.ts:63:23	Regex	/^\s*(patient|me|user|you)\s*:\s*/i	→	/^\S*(patient|me|user|you)\s*:\s*/i
+Survived	141	packages/evals/src/simulator/llm.ts:63:23	Regex	/^\s*(patient|me|user|you)\s*:\s*/i	→	/^\s*(patient|me|user|you)\S*:\s*/i
+Survived	142	packages/evals/src/simulator/llm.ts:63:23	Regex	/^\s*(patient|me|user|you)\s*:\s*/i	→	/^\s*(patient|me|user|you)\s*:\s/i
+Survived	143	packages/evals/src/simulator/llm.ts:63:23	Regex	/^\s*(patient|me|user|you)\s*:\s*/i	→	/^\s*(patient|me|user|you)\s*:\S*/i
+NoCoverage	381	packages/evals/src/simulator/prompt.ts:90:73	ArrayDeclaration	[]	→	["Stryker was here"]
+Survived	344	packages/evals/src/simulator/prompt.ts:37:53	MethodExpression	v.trim()	→	v
+Survived	351	packages/evals/src/simulator/prompt.ts:45:9	StringLiteral	"(none)"	→	""
+Survived	388	packages/evals/src/simulator/prompt.ts:98:121	StringLiteral	"; "	→	""
+Survived	389	packages/evals/src/simulator/prompt.ts:100:21	StringLiteral	"\n\n"	→	""
+Survived	315	packages/evals/src/simulator/prompt.ts:23:27	ArrowFunction	(reason: SimulatorStopReason): string => `[[STOP:${reason}]]`	→	() => undefined
+Survived	316	packages/evals/src/simulator/prompt.ts:23:68	StringLiteral	`[[STOP:${reason}]]`	→	``
+Survived	331	packages/evals/src/simulator/prompt.ts:36:7	ConditionalExpression	Array.isArray(value) && value.every((v) => typeof v === "string")	→	true
+Survived	333	packages/evals/src/simulator/prompt.ts:36:7	LogicalOperator	Array.isArray(value) && value.every((v) => typeof v === "string")	→	Array.isArray(value) || value.every(v => typeof v === "string")
+Survived	334	packages/evals/src/simulator/prompt.ts:36:31	MethodExpression	value.every((v) => typeof v === "string")	→	value.some(v => typeof v === "string")
+Survived	336	packages/evals/src/simulator/prompt.ts:36:50	ConditionalExpression	typeof v === "string"	→	true
+Survived	342	packages/evals/src/simulator/prompt.ts:37:37	MethodExpression	v.trim()	→	v
+Survived	349	packages/evals/src/simulator/prompt.ts:44:5	ConditionalExpression	facts.length === 0	→	false
+Survived	356	packages/evals/src/simulator/prompt.ts:46:95	StringLiteral	"\n"	→	""
+Survived	358	packages/evals/src/simulator/prompt.ts:71:16	StringLiteral	"goal_achieved"	→	""
+Survived	359	packages/evals/src/simulator/prompt.ts:72:16	StringLiteral	"gave_up"	→	""
+NoCoverage	418	packages/evals/src/simulator/replay.ts:74:69	StringLiteral	"(root)"	→	""
+NoCoverage	421	packages/evals/src/simulator/replay.ts:74:100	StringLiteral	"invalid"	→	""
+Survived	400	packages/evals/src/simulator/replay.ts:58:94	StringLiteral	"replay"	→	""
+Survived	416	packages/evals/src/simulator/replay.ts:74:32	OptionalChaining	issue?.path	→	issue.path
+Survived	419	packages/evals/src/simulator/replay.ts:74:82	LogicalOperator	issue?.message ?? "invalid"	→	issue?.message && "invalid"
+Survived	420	packages/evals/src/simulator/replay.ts:74:82	OptionalChaining	issue?.message	→	issue.message
+Survived	422	packages/evals/src/simulator/replay.ts:81:13	ConditionalExpression	t.simulatorTurns !== undefined	→	true
+Survived	426	packages/evals/src/simulator/replay.ts:84:7	ConditionalExpression	report.simulator === undefined	→	false
+Survived	428	packages/evals/src/simulator/replay.ts:84:40	StringLiteral	"replay"	→	""
+Survived	4	packages/evals/src/simulator/guards.ts:20:26	StringLiteral	"'"	→	""
+Survived	1	packages/evals/src/simulator/guards.ts:18:3	MethodExpression	text .toLowerCase() .replaceAll(/[’‘]/g, "'") .split(/[^a-z0-9']+/) .map((w) => w.replaceAll(/^'+|'+$/g, "")) .filter(Bo	→	text.toLowerCase().replaceAll(/[’‘]/g, "'").split(/[^a-z0-9']+/).map(w => w.replaceAll(/^'+|'+$/g, ""))
+Survived	5	packages/evals/src/simulator/guards.ts:21:12	Regex	/[^a-z0-9']+/	→	/[^a-z0-9']/
+Survived	8	packages/evals/src/simulator/guards.ts:22:30	Regex	/^'+|'+$/g	→	/'+|'+$/g
+Survived	9	packages/evals/src/simulator/guards.ts:22:30	Regex	/^'+|'+$/g	→	/^'|'+$/g
+Survived	10	packages/evals/src/simulator/guards.ts:22:30	Regex	/^'+|'+$/g	→	/^'+|'+/g
+Survived	11	packages/evals/src/simulator/guards.ts:22:30	Regex	/^'+|'+$/g	→	/^'+|'$/g
+Survived	12	packages/evals/src/simulator/guards.ts:22:42	StringLiteral	""	→	"Stryker was here!"
+Survived	20	packages/evals/src/simulator/guards.ts:33:17	Regex	/(^|[\s:(])"[^"]*"(?=[\s.,;:!?)]|$)/g	→	/(^|[\s:(])"[^"]*"(?=[\s.,;:!?)])/g
+Survived	23	packages/evals/src/simulator/guards.ts:33:56	StringLiteral	"$1 … "	→	""
+Survived	24	packages/evals/src/simulator/guards.ts:34:17	Regex	/(^|[\s:(])'.*?'(?=[\s.,;:!?)]|$)/g	→	/([\s:(])'.*?'(?=[\s.,;:!?)]|$)/g
+Survived	33	packages/evals/src/simulator/guards.ts:35:17	Regex	/(^|[\s:(])“[^”]*”/g	→	/([\s:(])“[^”]*”/g
+Survived	45	packages/evals/src/simulator/guards.ts:41:21	ArithmeticOperator	i + size	→	i - size
+Survived	53	packages/evals/src/simulator/guards.ts:53:19	EqualityOperator	i + VERBATIM_WINDOW_WORDS <= replyWords.length	→	i + VERBATIM_WINDOW_WORDS < replyWords.length
+Survived	55	packages/evals/src/simulator/guards.ts:53:19	ArithmeticOperator	i + VERBATIM_WINDOW_WORDS	→	i - VERBATIM_WINDOW_WORDS
+Survived	126	packages/evals/src/simulator/guards.ts:111:23	StringLiteral	"it talks about the role-play; stay in character"	→	""
+Survived	85	packages/evals/src/simulator/guards.ts:74:3	Regex	/^\s*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\s*:/im	→	/\s*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\s*:/im
+Survived	87	packages/evals/src/simulator/guards.ts:74:3	Regex	/^\s*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\s*:/im	→	/^\S*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\s*:/im
+Survived	89	packages/evals/src/simulator/guards.ts:74:3	Regex	/^\s*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\s*:/im	→	/^\s*(assistant|agent|ai|bot|scheduler|scheduling assistant|receptionist|system|staff)\S*:/im
+Survived	96	packages/evals/src/simulator/guards.ts:81:3	StringLiteral	"i"	→	""
+Survived	101	packages/evals/src/simulator/guards.ts:91:3	Regex	/\blet me (check|look up|pull up|search) (the |our )?(availability|schedule|calendar|openings)\b/i	→	/\blet me (check|look up|pull up|search) (the |our )(availability|schedule|calendar|openings)\b/i
+Survived	102	packages/evals/src/simulator/guards.ts:92:3	Regex	/\bhere are (the |some )?(available|open) (times|slots|appointments)\b/i	→	/\bhere are (the |some )(available|open) (times|slots|appointments)\b/i
+Survived	103	packages/evals/src/simulator/guards.ts:93:3	Regex	/\bour (providers|doctors|clinic) (have|has) (the following )?(availability|openings)\b/i	→	/\bour (providers|doctors|clinic) (have|has) (the following )(availability|openings)\b/i
+Survived	120	packages/evals/src/simulator/guards.ts:107:3	Regex	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i	→	/\b(role-play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i
+Survived	122	packages/evals/src/simulator/guards.ts:107:3	Regex	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i	→	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts|private facts?|my persona|test scenario|stop marker)\b/i
+Survived	121	packages/evals/src/simulator/guards.ts:107:3	Regex	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i	→	/\b(role-?play(ing)|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i
+Survived	123	packages/evals/src/simulator/guards.ts:107:3	Regex	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts?|my persona|test scenario|stop marker)\b/i	→	/\b(role-?play(ing)?|simulat(ed|or|ion)|hidden facts?|private facts|my persona|test scenario|stop marker)\b/i
+Survived	450	packages/evals/src/simulator/types.ts:86:20	ArithmeticOperator	a.cacheReadTokens + b.cacheReadTokens	→	a.cacheReadTokens - b.cacheReadTokens
+Survived	451	packages/evals/src/simulator/types.ts:87:21	ArithmeticOperator	a.cacheWriteTokens + b.cacheWriteTokens	→	a.cacheWriteTokens - b.cacheWriteTokens

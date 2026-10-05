@@ -1,0 +1,560 @@
+KILLED 155-1 scripts/coverage-changed.ts: if (raw.startsWith("diff --git ")) { → if (false) {
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-2 scripts/coverage-changed.ts:       inHeader = true; →       inHeader = false;
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-3 scripts/coverage-changed.ts:       lines = undefined;⏎ → 
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+KILLED 155-4 scripts/coverage-changed.ts: inHeader && raw.startsWith("+++ b/") → raw.startsWith("+++ b/")
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+KILLED 155-5 scripts/coverage-changed.ts: } else if (inHeader && raw.startsWith("+++ b/")) { → } else if (inHeader) {
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-6 scripts/coverage-changed.ts: raw.slice("+++ b/".length) → raw.slice(4)
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-7 scripts/coverage-changed.ts:       inHeader = false;⏎ → 
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+KILLED 155-8 scripts/coverage-changed.ts: raw.startsWith("@@ ") → raw.startsWith("@@@")
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-9 scripts/coverage-changed.ts: next = Number(/^@@ -\S+ \+(\d+)/.exec(raw)?.[1]); → next = 1;
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-10 scripts/coverage-changed.ts: lines && raw.startsWith("+") → lines && true
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+    ✗ scripts/coverage-changed.test.ts > main ignores removed and unchanged lines, even uncovered ones
+KILLED 155-11 scripts/coverage-changed.ts:       next += 1;⏎ → 
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+KILLED 155-12 scripts/coverage-changed.ts: text: raw.slice(1) } → text: raw }
+    ✗ scripts/coverage-changed.test.ts > parseAddedLines numbers each added line from its hunk's new start, per new path, and skips deleted files
+KILLED 155-13 scripts/coverage-changed.ts: if (coverage.s[id] !== 0) continue; → if (coverage.s[id] === 0) continue;
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags every line of a statement that never ran, and none of one that ran
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags the start line of an arm that never ran, but not an arm without a location
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-14 scripts/coverage-changed.ts:     if (coverage.s[id] !== 0) continue;⏎ → 
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags every line of a statement that never ran, and none of one that ran
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags the start line of an arm that never ran, but not an arm without a location
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+KILLED 155-15 scripts/coverage-changed.ts: line <= end.line → line < end.line
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags every line of a statement that never ran, and none of one that ran
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-16 scripts/coverage-changed.ts: let line = start.line; → let line = end.line;
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags every line of a statement that never ran, and none of one that ran
+KILLED 155-17 scripts/coverage-changed.ts: coverage.b[id]?.[i] === 0 && → true &&
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags the start line of an arm that never ran, but not an arm without a location
+KILLED 155-18 scripts/coverage-changed.ts:  && arm.start.line !== undefined → 
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags the start line of an arm that never ran, but not an arm without a location
+KILLED 155-19 scripts/coverage-changed.ts: lines.add(arm.start.line); → lines.add(arm.start.line + 1);
+    ✗ scripts/coverage-changed.test.ts > uncoveredLines flags the start line of an arm that never ran, but not an arm without a location
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+KILLED 155-20 scripts/coverage-changed.ts: if (!hint) return false; → if (!hint) return true;
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore next -- only on AWS */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* TODO v8 ignore start -- the AWS-only path */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // v8 ignore next -- x → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore nextline */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- CLI entry */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore stop -- end of the AWS-only path */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // c8 ignore next -- @preserve only reached in the browser → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const s = 'v8 ignore next'; // a string, not a hint → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason call(); // no hint here → false
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+KILLED 155-21 scripts/coverage-changed.ts: text.slice(hint.index + hint[0].length) → text.slice(hint[0].length)
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const remaining = count -- 1; /* v8 ignore next */ → true
+KILLED 155-22 scripts/coverage-changed.ts: close < 0 ? rest : rest.slice(0, close) → rest
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- @preserve */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- */ after(); // -- not the hint's reason → true
+KILLED 155-23 scripts/coverage-changed.ts: close < 0 ? rest : rest.slice(0, close) → rest.slice(0, close)
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // v8 ignore next -- x → false
+KILLED 155-24 scripts/coverage-changed.ts: if (dashes < 0) return true; → if (dashes < 0) return false;
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason   /* v8 ignore start */ code(); → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // v8 ignore next → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* istanbul ignore if */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore else */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore stop */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const remaining = count -- 1; /* v8 ignore next */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* c8 ignore file */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* node:coverage ignore next */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore next */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore if */ if (aws()) run(); → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* TODO v8 ignore start */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason code(); // later: v8 ignore stop → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const s = 'v8 ignore start'; // the provider reads start/stop anywhere on a line → true
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-25 scripts/coverage-changed.ts: .slice(dashes + 2) → .slice(dashes)
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- @preserve */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- */ after(); // -- not the hint's reason → true
+KILLED 155-26 scripts/coverage-changed.ts:         .replace("@preserve", "")⏎ → 
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- @preserve */ → true
+KILLED 155-27 scripts/coverage-changed.ts: .trim() === "" → .trim() !== ""
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- @preserve */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- */ after(); // -- not the hint's reason → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore next -- only on AWS */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* TODO v8 ignore start -- the AWS-only path */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // v8 ignore next -- x → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- CLI entry */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore stop -- end of the AWS-only path */ → false
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason // c8 ignore next -- @preserve only reached in the browser → false
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+KILLED 155-28 scripts/coverage-changed.ts:         .trim() === "" →         === ""
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- @preserve */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore next -- */ after(); // -- not the hint's reason → true
+KILLED 155-29 scripts/coverage-changed.ts: if (missed.has(line)) uncovered → if (true) uncovered
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+KILLED 155-30 scripts/coverage-changed.ts: source && hintWithoutReason(text) → source && false
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-31 scripts/coverage-changed.ts: if (!rel.startsWith("..")) byFile.set(rel, fileCoverage); → byFile.set(rel, fileCoverage);
+    ✗ scripts/coverage-changed.test.ts > coverageByFile keys entries by path relative to the root and drops files outside it
+KILLED 155-32 scripts/coverage-changed.ts: byFile.set(rel, fileCoverage); → byFile.set(path, fileCoverage);
+    ✗ scripts/coverage-changed.test.ts > coverageByFile keys entries by path relative to the root and drops files outside it
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-33 scripts/coverage-changed.ts: deps.log ?? ((line: string) => console.log(line)) → deps.log ?? ((_line: string) => undefined)
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-34 scripts/coverage-changed.ts: deps.logError ?? ((line: string) => console.error(line)) → deps.logError ?? ((_line: string) => undefined)
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-35 scripts/coverage-changed.ts: { cwd: deps.cwd, encoding: "utf8" } → { cwd: undefined, encoding: "utf8" }
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-36 scripts/coverage-changed.ts: args.base ?? (vars.COVERAGE_BASE || DEFAULT_BASE) → (vars.COVERAGE_BASE || DEFAULT_BASE)
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-37 scripts/coverage-changed.ts: args.base ?? (vars.COVERAGE_BASE || DEFAULT_BASE) → args.base ?? DEFAULT_BASE
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+KILLED 155-38 scripts/coverage-changed.ts: vars.COVERAGE_BASE || DEFAULT_BASE → vars.COVERAGE_BASE ?? DEFAULT_BASE
+    ✗ scripts/coverage-changed.test.ts > main base ref treats an empty COVERAGE_BASE (a push run) as unset
+KILLED 155-39 scripts/coverage-changed.ts: export const DEFAULT_BASE = "origin/main"; → export const DEFAULT_BASE = "main";
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+    ✗ scripts/coverage-changed.test.ts > main base ref treats an empty COVERAGE_BASE (a push run) as unset
+KILLED 155-40 scripts/coverage-changed.ts: args.coverage ?? DEFAULT_COVERAGE_FILE → DEFAULT_COVERAGE_FILE
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+KILLED 155-41 scripts/coverage-changed.ts: join(root, args.coverage ?? DEFAULT_COVERAGE_FILE) → join(args.coverage ?? DEFAULT_COVERAGE_FILE)
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-42 scripts/coverage-changed.ts: export const DEFAULT_COVERAGE_FILE = "coverage/coverage-final.json"; → export const DEFAULT_COVERAGE_FILE = "coverage/coverage.json";
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main ignores removed and unchanged lines, even uncovered ones
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main checks committed changes only, not the working tree
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main base ref treats an empty COVERAGE_BASE (a push run) as unset
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-43 scripts/coverage-changed.ts:     logError((err as Error).message);⏎    return 2; →     return 2;
+    ✗ scripts/coverage-changed.test.ts > main exits 2 on bad arguments
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-44 scripts/coverage-changed.ts:     logError((err as Error).message);⏎    return 2; →     logError((err as Error).message);⏎    return 1;
+    ✗ scripts/coverage-changed.test.ts > main exits 2 on bad arguments
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-45 scripts/coverage-changed.ts: if (!existsSync(coverageFile)) { → if (false) {
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-46 scripts/coverage-changed.ts:     logError(`coverage-changed: no ${coverageFile}; run \`npm run test:coverage\` first.`);⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-47 scripts/coverage-changed.ts: run \`npm run test:coverage\` first.`);⏎    return 2; → run \`npm run test:coverage\` first.`);⏎    return 1;
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-48 scripts/coverage-changed.ts: git("merge-base", base, "HEAD"); → git("rev-parse", "HEAD");
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-49 scripts/coverage-changed.ts: if (vars.CI) { → if (true) {
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-50 scripts/coverage-changed.ts: if (vars.CI) { → if (false) {
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-51 scripts/coverage-changed.ts: (CI must fetch the full history).`);⏎      return 2; → (CI must fetch the full history).`);⏎      return 1;
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-52 scripts/coverage-changed.ts: or pass --base <ref>).`);⏎    return 0; → or pass --base <ref>).`);⏎    return 1;
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-53 scripts/coverage-changed.ts: logError(`coverage-changed: SKIPPING → log(`coverage-changed: SKIPPING
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+KILLED 155-54 scripts/coverage-changed.ts:     "-c",⏎    "core.quotePath=false",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+KILLED 155-55 scripts/coverage-changed.ts:     "-U0",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-56 scripts/coverage-changed.ts:     "-M",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+KILLED 155-57 scripts/coverage-changed.ts:     "--no-color",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-58 scripts/coverage-changed.ts:     "--no-ext-diff",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main ignores removed and unchanged lines, even uncovered ones
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-59 scripts/coverage-changed.ts: `${base}...HEAD` → `${base}..HEAD`
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+KILLED 155-60 scripts/coverage-changed.ts: if (uncovered.length > 0) { → if (uncovered.length >= 0) {
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+KILLED 155-61 scripts/coverage-changed.ts: if (unexplained.length > 0) { → if (unexplained.length >= 0) {
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+KILLED 155-62 scripts/coverage-changed.ts: for (const { file, line } of uncovered) log(`${file}:${line}`); → for (const { file } of uncovered) log(`${file}`);
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-63 scripts/coverage-changed.ts: for (const { file, line } of unexplained) log(`${file}:${line}`); → for (const { file } of unexplained) log(`${file}`);
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-64 scripts/coverage-changed.ts:     for (const { file, line } of unexplained) log(`${file}:${line}`);⏎ → 
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-65 scripts/coverage-changed.ts: if (uncovered.length + unexplained.length > 0) { → if (uncovered.length > 0) {
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-66 scripts/coverage-changed.ts: if (uncovered.length + unexplained.length > 0) { → if (unexplained.length > 0) {
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-67 scripts/coverage-changed.ts: Coverage shows a line ran, not that a test checks it.",⏎    );⏎    return 1; → Coverage shows a line ran, not that a test checks it.",⏎    );⏎    return 0;
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-68 scripts/coverage-changed.ts: "coverage-changed: give each line above a test, or an ignore hint with a reason " + → "coverage-changed: add tests " +
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+KILLED 155-69 scripts/coverage-changed.ts: every added source line since ${base} ran in a test. → every added source line since HEAD ran in a test.
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+    ✗ scripts/coverage-changed.test.ts > main base ref treats an empty COVERAGE_BASE (a push run) as unset
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-70 scripts/coverage-changed.ts: ran in a test.`);⏎  return 0; → ran in a test.`);⏎  return 1;
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main ignores removed and unchanged lines, even uncovered ones
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+    ✗ scripts/coverage-changed.test.ts > main checks committed changes only, not the working tree
+    ✗ scripts/coverage-changed.test.ts > main base ref defaults to origin/main
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main base ref treats an empty COVERAGE_BASE (a push run) as unset
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-71 scripts/coverage-changed.ts:     const fileCoverage = coverage.get(file);⏎ →     const fileCoverage = coverage.get(file);⏎    if (!fileCoverage) continue;⏎
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-72 scripts/coverage-changed.ts: const source = isSourceFile(file, globs); → const source = true;
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-73 scripts/coverage-changed.ts: const source = isSourceFile(file, globs); → const source = fileCoverage !== undefined;
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-74 scripts/coverage-changed.ts: (?:\/\/|\/\*\*?) → (?:\/\/|\/\*)
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore next */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /** v8 ignore if */ if (aws()) run(); → true
+KILLED 155-75 scripts/coverage-changed.ts:   /(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:start|stop)(?=\W|$)/,⏎ → 
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason   /* v8 ignore start */ code(); → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* v8 ignore stop */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* TODO v8 ignore start */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason code(); // later: v8 ignore stop → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const s = 'v8 ignore start'; // the provider reads start/stop anywhere on a line → true
+KILLED 155-76 scripts/coverage-changed.ts:   /(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:start|stop)(?=\W|$)/, →   /(?:\/\/|\/\*\*?)\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:start|stop)(?=\W|$)/,
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason /* TODO v8 ignore start */ → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason code(); // later: v8 ignore stop → true
+    ✗ scripts/coverage-changed.test.ts > hintWithoutReason const s = 'v8 ignore start'; // the provider reads start/stop anywhere on a line → true
+KILLED 155-77 scripts/coverage-changed.ts: globs.include.some((glob) => matchesGlob(file, glob)) && → globs.include.some((glob) => matchesGlob(file, glob)) ||
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/a.test.ts → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/types.d.ts → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile docs/note.md → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile lib/a.ts → false
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) leave out spikes
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-78 scripts/coverage-changed.ts:  &&⏎    !globs.exclude.some((glob) => matchesGlob(file, glob)) → 
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/a.test.ts → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/types.d.ts → false
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-79 scripts/coverage-changed.ts:     globs.include.some((glob) => matchesGlob(file, glob)) &&⏎ → 
+    ✗ scripts/coverage-changed.test.ts > isSourceFile docs/note.md → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile lib/a.ts → false
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) leave out spikes
+    ✗ scripts/coverage-changed.test.ts > checkChanged reports uncovered lines for files with coverage, and unexplained hints for source files
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-80 scripts/coverage-changed.ts: deps.sources ?? SOURCE_GLOBS → SOURCE_GLOBS
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+KILLED 155-81 scripts/coverage-changed.ts: { include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE } → { include: COVERAGE_INCLUDE, exclude: [] }
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/a.test.ts → false
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/types.d.ts → false
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) are the ones the coverage run uses
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-82 scripts/coverage-changed.ts: process.exitCode = main(process.argv.slice(2), process.env); → main(process.argv.slice(2), process.env);
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+KILLED 155-83 scripts/coverage-changed.ts: strict: true, → strict: false,
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs names the bad argument in the usage error
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--bse","x"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--base"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--coverage","--base"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["stray"]
+    ✗ scripts/coverage-changed.test.ts > main exits 2 on bad arguments
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-84 scripts/coverage-changed.ts: coverage: values.coverage } → coverage: values.base }
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs reads --base and --coverage
+    ✗ scripts/coverage-changed.test.ts > main fails an uncovered added line, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main passes a covered added line
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ?? right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose || right operand never did
+    ✗ scripts/coverage-changed.test.ts > main fails an added line whose statement ran but whose ternary arm never did
+    ✗ scripts/coverage-changed.test.ts > main passes an ignore hint with a reason (the hinted code is absent from the coverage JSON)
+    ✗ scripts/coverage-changed.test.ts > main fails an added ignore hint with no reason, printing it as file:line
+    ✗ scripts/coverage-changed.test.ts > main fails a hint with no reason in a source file the coverage JSON leaves out (`ignore file`)
+    ✗ scripts/coverage-changed.test.ts > main ignores removed and unchanged lines, even uncovered ones
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+    ✗ scripts/coverage-changed.test.ts > main counts only the edits in a renamed file
+    ✗ scripts/coverage-changed.test.ts > main diffs from the merge base, so what the base changed since the branch began doesn't count
+    ✗ scripts/coverage-changed.test.ts > main reads paths with non-ASCII characters as git wrote them
+    ✗ scripts/coverage-changed.test.ts > main checks committed changes only, not the working tree
+    ✗ scripts/coverage-changed.test.ts > main reads the coverage file given by --coverage
+    ✗ scripts/coverage-changed.test.ts > main exits 2 and says to run test:coverage when there is no coverage JSON
+    ✗ scripts/coverage-changed.test.ts > main base ref uses COVERAGE_BASE, and --base over it
+    ✗ scripts/coverage-changed.test.ts > main base ref without a merge base: exits 2 in CI, and warns and passes locally
+    ✗ scripts/coverage-changed.test.ts > main sets the process exit code from main when run as a script
+    ✗ scripts/coverage-changed.test.ts > main logs to the console by default
+KILLED 155-85 scripts/coverage-changed.ts:  (${(err as Error).message})` → `
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs names the bad argument in the usage error
+KILLED 155-86 scripts/coverage-changed.ts:       {⏎        cause: err,⏎      },⏎ →       {},⏎
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--bse","x"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--base"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["--coverage","--base"]
+    ✗ scripts/coverage-changed.test.ts > parseCliArgs rejects ["stray"]
+KILLED 155-87 vitest.config.ts:   "packages/*/src/**/*.{ts,tsx}",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+KILLED 155-88 vitest.config.ts:   "services/*/src/**/*.{ts,tsx}",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+KILLED 155-89 vitest.config.ts:   "apps/*/src/**/*.{ts,tsx}",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include the web app's .tsx components
+KILLED 155-90 vitest.config.ts:   "scripts/*.ts",⏎ → 
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+KILLED 155-91 vitest.config.ts: "apps/*/src/**/*.{ts,tsx}" → "apps/*/src/**/*.ts"
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include the web app's .tsx components
+KILLED 155-92 vitest.config.ts: ["**/*.test.*", "**/*.d.ts"] → ["**/*.d.ts"]
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/a.test.ts → false
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under packages, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under services, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under apps, and no test
+    ✗ scripts/coverage-changed.test.ts > the coverage globs in vitest.config.ts (AC 1) include every non-test source file under scripts, and no test
+    ✗ scripts/coverage-changed.test.ts > main ignores files outside the coverage include: shell, Markdown, CSS and tests
+KILLED 155-93 vitest.config.ts: ["**/*.test.*", "**/*.d.ts"] → ["**/*.test.*"]
+    ✗ scripts/coverage-changed.test.ts > isSourceFile src/types.d.ts → false
+SURVIVED 155-94 vitest.config.ts: include: COVERAGE_INCLUDE, → include: ["packages/*/src/**/*.{ts,tsx}", "services/*/src/**/*.{ts,tsx}", "apps/*/src/**/*.{ts,tsx}", "scripts/*.ts"],
+SURVIVED 155-95 vitest.config.ts: exclude: COVERAGE_EXCLUDE, → exclude: ["**/*.test.*", "**/*.d.ts"],
+
+95 edits: 93 killed, 2 survived, 0 timed out, 0 errors, 0 refused
+real 594.43
+user 302.86
+sys 240.04

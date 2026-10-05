@@ -1,0 +1,7 @@
+Added lines no test executes (4):
+packages/tools/src/repos/dynamo/items.ts:141
+packages/tools/src/repos/dynamo/items.ts:142
+services/api/src/lib/chat-turn.ts:333
+services/api/src/lib/history.ts:40
+coverage-changed: give each line above a test, or an ignore hint with a reason (`/* v8 ignore next -- <reason> */`). Coverage shows a line ran, not that a test checks it.
+gate exit 1 in 1 s (base 633a4ce, head cf1c90393c22c3429b3362bf1f0aa7dd6382846f)

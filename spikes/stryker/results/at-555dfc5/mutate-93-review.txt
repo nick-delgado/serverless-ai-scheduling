@@ -1,0 +1,8 @@
+SURVIVED TEST-1 packages/tools/src/tools/reschedule_appointment.ts:   if (current.status !== "BOOKED") return fail("APPOINTMENT_NOT_BOOKED");⏎  // A retry after a successful move: answer before the clock rules, which the new time may now break.⏎  if (current.slotId === input.new_slot_id) return alreadyThere(current);⏎ →   // A retry after a successful move: answer before the clock rules, which the new time may now break.⏎  if (current.slotId === input.new_slot_id) return alreadyThere(current);⏎  if (current.status !== "BOOKED") return fail("APPOINTMENT_NOT_BOOKED");⏎
+SURVIVED TEST-2a packages/tools/src/tools/reschedule_appointment.ts:     if (!provider) {⏎      throw new Error(⏎        `Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`,⏎      );⏎    }⏎ → 
+SURVIVED TEST-2b packages/tools/src/tools/reschedule_appointment.ts:     if (!moved) throw new Error(`Appointment ${input.appointment_id} vanished after SAME_SLOT`);⏎ → 
+
+3 edits: 0 killed, 3 survived, 0 timed out, 0 errors, 0 refused
+real 37.64
+user 127.17
+sys 5.33

@@ -1,0 +1,766 @@
+[
+  {
+    "id": "154-1",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": ".padStart(2, \"0\")",
+    "replace": ".padStart(1, \"0\")",
+    "claimed": "formatElapsed 0 ms → 0:00 (and others)"
+  },
+  {
+    "id": "154-2",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "String(Math.floor(seconds / 60))",
+    "replace": "String(Math.round(seconds / 60))",
+    "claimed": "formatElapsed 59999 ms → 0:59 (and others)"
+  },
+  {
+    "id": "154-3",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "Math.floor(ms / 1000)",
+    "replace": "Math.round(ms / 1000)",
+    "claimed": "formatElapsed 999 ms → 0:00 (and others)"
+  },
+  {
+    "id": "154-4",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "seconds % 60",
+    "replace": "seconds",
+    "claimed": "formatElapsed 60000 ms → 1:00 (and others)"
+  },
+  {
+    "id": "154-5",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (text.length === 0) {",
+    "replace": "if (text.length < 0) {",
+    "claimed": "the recording overlay (FR-021) starts the level at 0 again on Record again (and others)"
+  },
+  {
+    "id": "154-6",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "const text = raw.trim();",
+    "replace": "const text = raw;",
+    "claimed": "transcription (FR-022 to FR-024) Send shows Transcribing… with a spinner, then posts the trimmed transcript and closes (and others)"
+  },
+  {
+    "id": "154-7",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (latest.current(text)) setPhase(null);\n    else setPhase({ name: \"unsent\", text });",
+    "replace": "latest.current(text);\n    setPhase(null);",
+    "claimed": "transcription (FR-022 to FR-024) a transcript in time clears the 10 s timer (and others)"
+  },
+  {
+    "id": "154-8",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "discard();\n        deliver(transcript);",
+    "replace": "deliver(transcript);",
+    "claimed": "transcription (FR-022 to FR-024) a transcript in time clears the 10 s timer"
+  },
+  {
+    "id": "154-9",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "clearTimeout(finalTimer.current);",
+    "replace": "",
+    "claimed": "transcription (FR-022 to FR-024) a transcript in time clears the 10 s timer",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-10",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "attempt.current += 1;",
+    "replace": "",
+    "claimed": "the mic button (FR-020) a second tap before start() resolves cancels the first recording (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-11",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "session.current?.cancel();",
+    "replace": "",
+    "claimed": "the recording overlay (FR-021) Cancel discards the recording, closes, and puts focus back on the mic (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-12",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (ms >= RECORDING_CAP_MS) send();",
+    "replace": "if (ms > RECORDING_CAP_MS) send();",
+    "claimed": "the 60 s cap (FR-021) sends at 60 s as if Send were pressed, showing 1:00 (and others)"
+  },
+  {
+    "id": "154-13",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "const ms = Date.now() - startedAt.current;",
+    "replace": "const ms = (ticks += TICK_MS);",
+    "claimed": "the 60 s cap (FR-021) reads the clock, not the ticks, so a throttled tab still stops at 60 s"
+  },
+  {
+    "id": "154-14",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "session.current = started;\n          startedAt.current = Date.now();",
+    "replace": "session.current = started;",
+    "claimed": "the recording overlay (FR-021) starts the m:ss timer when recording begins, not on the tap (and others)"
+  },
+  {
+    "id": "154-15",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setElapsedMs(Math.min(Date.now() - startedAt.current, RECORDING_CAP_MS));",
+    "replace": "setElapsedMs(Date.now() - startedAt.current);",
+    "claimed": "the 60 s cap (FR-021) reads the clock, not the ticks, so a throttled tab still stops at 60 s"
+  },
+  {
+    "id": "154-16",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setElapsedMs(Math.min(Date.now() - startedAt.current, RECORDING_CAP_MS));",
+    "replace": "",
+    "claimed": "the 60 s cap (FR-021) sends at 60 s as if Send were pressed, showing 1:00 (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-17",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (!current) return;\n    clearInterval(ticker.current);",
+    "replace": "if (!current) return;",
+    "claimed": "the recording overlay (FR-021) stops the timer at Send"
+  },
+  {
+    "id": "154-18",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "finalTimer.current = setTimeout(fail, FINAL_TIMEOUT_MS);",
+    "replace": "finalTimer.current = setTimeout(fail, FINAL_TIMEOUT_MS + 1);",
+    "claimed": "the 60 s cap (FR-021) shows the FR-024 error 10 s after the auto-send if no final transcript arrives (and others)"
+  },
+  {
+    "id": "154-19",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "finalTimer.current = setTimeout(fail, FINAL_TIMEOUT_MS);",
+    "replace": "",
+    "claimed": "the 60 s cap (FR-021) shows the FR-024 error 10 s after the auto-send if no final transcript arrives (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-20",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current !== id) return;\n        discard();",
+    "replace": "discard();",
+    "claimed": "the recording overlay (FR-021) Esc cancels while transcribing, and the transcript that arrives later isn't sent (and others)"
+  },
+  {
+    "id": "154-21",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current === id) fail();\n      },\n    );\n  };",
+    "replace": "fail();\n      },\n    );\n  };",
+    "claimed": "transcription (FR-022 to FR-024) Cancel while a failing stop() is pending: the failure doesn't reopen the overlay"
+  },
+  {
+    "id": "154-22",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (!transcriber) return;\n    discard();",
+    "replace": "if (!transcriber) return;",
+    "claimed": "the mic button (FR-020) a second tap before start() resolves cancels the first recording"
+  },
+  {
+    "id": "154-23",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setNotice(null);",
+    "replace": "",
+    "claimed": "the mic button (FR-020) denied, then a later tap asks again and clears the notice",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-24",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setElapsedMs(0);",
+    "replace": "",
+    "claimed": "transcription (FR-022 to FR-024) Record again starts a new recording at once in the same overlay",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-25",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setLevel(0);",
+    "replace": "",
+    "claimed": "the recording overlay (FR-021) starts the level at 0 again on Record again",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-26",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setPhase({ name: \"starting\" });",
+    "replace": "",
+    "claimed": "the mic button (FR-020) opens the overlay, which asks the Transcriber for the mic, with focus inside (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-27",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current === id) setLevel(value);",
+    "replace": "setLevel(value);",
+    "claimed": "callbacks from an earlier recording a level reported by the previous recording is ignored"
+  },
+  {
+    "id": "154-28",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current === id) fail();\n        },\n      })",
+    "replace": "fail();\n        },\n      })",
+    "claimed": "callbacks from an earlier recording an error reported after Cancel doesn't reopen the overlay"
+  },
+  {
+    "id": "154-29",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "started.cancel();",
+    "replace": "",
+    "claimed": "the mic button (FR-020) a second tap before start() resolves cancels the first recording (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-30",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current !== id) {\n            started.cancel();\n            return;\n          }",
+    "replace": "",
+    "claimed": "the mic button (FR-020) a second tap before start() resolves cancels the first recording (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-31",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (attempt.current !== id) return;\n          const kind",
+    "replace": "const kind",
+    "claimed": "transcription (FR-022 to FR-024) Cancel while a denied start() is pending: no notice"
+  },
+  {
+    "id": "154-32",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (kind === \"failed\") {",
+    "replace": "if (kind !== \"failed\") {",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)"
+  },
+  {
+    "id": "154-33",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setPhase(null);\n          setNotice(kind);",
+    "replace": "setNotice(kind);",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)"
+  },
+  {
+    "id": "154-34",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "setNotice(kind);",
+    "replace": "",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-35",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "if (phase?.name === \"unsent\" && latest.current(phase.text)) setPhase(null);",
+    "replace": "if (phase?.name === \"unsent\") { latest.current(phase.text); setPhase(null); }",
+    "claimed": "transcription (FR-022 to FR-024) send() returning false again keeps the overlay open"
+  },
+  {
+    "id": "154-36",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "useEffect(() => {\n    latest.current = onTranscript;\n  });",
+    "replace": "",
+    "claimed": "transcription (FR-022 to FR-024) uses the latest onTranscript when the transcript arrives",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-37",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "useEffect(() => () => discardRef.current(), []);",
+    "replace": "",
+    "claimed": "the recording overlay (FR-021) unmounting cancels the recording",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-38",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "const close = () => {\n    discard();",
+    "replace": "const close = () => {",
+    "claimed": "the recording overlay (FR-021) Cancel discards the recording, closes, and puts focus back on the mic (and others)"
+  },
+  {
+    "id": "154-39",
+    "file": "apps/web/src/voice/useRecording.ts",
+    "find": "onLevel: (value) => {",
+    "replace": "onLevelX: (value: number) => {",
+    "claimed": "the recording overlay (FR-021) shows the Transcriber's input level (and others)"
+  },
+  {
+    "id": "154-40",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "}, [phase.name]);",
+    "replace": "}, []);",
+    "claimed": "the recording overlay (FR-021) traps focus: Tab from the last button wraps to the first, Shift+Tab from the first to the last (and others)"
+  },
+  {
+    "id": "154-41",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "if (event.key === \"Escape\") {",
+    "replace": "if (event.key === \"Esc\") {",
+    "claimed": "the recording overlay (FR-021) Esc cancels while recording (and others)"
+  },
+  {
+    "id": "154-42",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "if (event.key !== \"Tab\" || !dialogRef.current) return;",
+    "replace": "if (event.key !== \"Tabx\" || !dialogRef.current) return;",
+    "claimed": "the recording overlay (FR-021) traps focus: Tab from the last button wraps to the first, Shift+Tab from the first to the last (and others)"
+  },
+  {
+    "id": "154-43",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "(active === first || active === dialogRef.current)",
+    "replace": "(active === first)",
+    "claimed": "the recording overlay (FR-021) Shift+Tab from the dialog itself (after a click on its background) goes to the last button"
+  },
+  {
+    "id": "154-44",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "(active === first || active === dialogRef.current)",
+    "replace": "(active === dialogRef.current)",
+    "claimed": "the recording overlay (FR-021) traps focus: Tab from the last button wraps to the first, Shift+Tab from the first to the last"
+  },
+  {
+    "id": "154-45",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "} else if (!event.shiftKey && active === last) {",
+    "replace": "} else if (active === last) {",
+    "claimed": "the recording overlay (FR-021) leaves Tab alone between the first and last buttons"
+  },
+  {
+    "id": "154-46",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "} else if (!event.shiftKey && active === last) {",
+    "replace": "} else if (!event.shiftKey) {",
+    "claimed": "the recording overlay (FR-021) leaves Tab alone between the first and last buttons"
+  },
+  {
+    "id": "154-47",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "event.preventDefault();\n      last.focus();",
+    "replace": "last.focus();",
+    "claimed": "the recording overlay (FR-021) traps focus: Tab from the last button wraps to the first, Shift+Tab from the first to the last"
+  },
+  {
+    "id": "154-48",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "event.preventDefault();\n      first.focus();",
+    "replace": "first.focus();",
+    "claimed": "the recording overlay (FR-021) traps focus: Tab from the last button wraps to the first, Shift+Tab from the first to the last"
+  },
+  {
+    "id": "154-49",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "const showTimer = phase.name === \"recording\" || phase.name === \"transcribing\";",
+    "replace": "const showTimer = phase.name === \"recording\";",
+    "claimed": "the recording overlay (FR-021) stops the timer at Send (and others)"
+  },
+  {
+    "id": "154-50",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "const showTimer = phase.name === \"recording\" || phase.name === \"transcribing\";",
+    "replace": "const showTimer = phase.name === \"transcribing\";",
+    "claimed": "the recording overlay (FR-021) starts the m:ss timer when recording begins, not on the tap (and others)"
+  },
+  {
+    "id": "154-51",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "recording: \"Recording\",",
+    "replace": "recording: \"\",",
+    "claimed": "the mic button (FR-020) a second tap before start() resolves cancels the first recording (and others)"
+  },
+  {
+    "id": "154-52",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "transcribing: \"Transcribing…\",",
+    "replace": "transcribing: \"\",",
+    "claimed": "the 60 s cap (FR-021) sends at 60 s as if Send were pressed, showing 1:00 (and others)"
+  },
+  {
+    "id": "154-53",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "starting: \"Starting…\",",
+    "replace": "starting: \"\",",
+    "claimed": "the mic button (FR-020) opens the overlay, which asks the Transcriber for the mic, with focus inside"
+  },
+  {
+    "id": "154-54",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "onClick={phase.name === \"recording\" ? onSend : onResend}",
+    "replace": "onClick={phase.name === \"recording\" ? onResend : onSend}",
+    "claimed": "the recording overlay (FR-021) starts the level at 0 again on Record again (and others)"
+  },
+  {
+    "id": "154-55",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "style={{ \"--level\": String(level) } as CSSProperties}",
+    "replace": "style={{ \"--level\": \"0\" } as CSSProperties}",
+    "claimed": "the recording overlay (FR-021) shows the Transcriber's input level (and others)"
+  },
+  {
+    "id": "154-56",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "aria-modal=\"true\"",
+    "replace": "aria-modal=\"false\"",
+    "claimed": "the mic button (FR-020) opens the overlay, which asks the Transcriber for the mic, with focus inside"
+  },
+  {
+    "id": "154-57",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "{TRANSCRIBE_FAILED}",
+    "replace": "{NOT_CAUGHT}",
+    "claimed": "the mic button (FR-020) a start() rejection that isn't a TranscriberError counts as failed (and others)"
+  },
+  {
+    "id": "154-58",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "{phase.name === \"empty\" && (",
+    "replace": "{phase.name === \"failed\" && (",
+    "claimed": "the mic button (FR-020) a start() rejection that isn't a TranscriberError counts as failed (and others)"
+  },
+  {
+    "id": "154-59",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "aria-label=\"Send recording\"",
+    "replace": "",
+    "claimed": "the recording overlay (FR-021) starts the level at 0 again on Record again (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-60",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "onClick={onTypeInstead}",
+    "replace": "onClick={onCancel}",
+    "claimed": "the mic button (FR-020) a start() rejection that isn't a TranscriberError counts as failed (and others)"
+  },
+  {
+    "id": "154-61",
+    "file": "apps/web/src/voice/RecordingOverlay.tsx",
+    "find": "onClick={onRecordAgain}",
+    "replace": "onClick={onCancel}",
+    "claimed": "the mic button (FR-020) a start() rejection that isn't a TranscriberError counts as failed (and others)"
+  },
+  {
+    "id": "154-62",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "if (wasOpen.current && !open) {",
+    "replace": "if (!open) {",
+    "claimed": "the mic button (FR-020) is enabled otherwise, with no note, and doesn't take focus on render"
+  },
+  {
+    "id": "154-63",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "if (focusInputOnClose.current) inputRef.current?.focus();\n      else micRef.current?.focus();",
+    "replace": "micRef.current?.focus();",
+    "claimed": "transcription (FR-022 to FR-024) Type instead closes the overlay and focuses the message box (and others)"
+  },
+  {
+    "id": "154-64",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "focusInputOnClose.current = false;",
+    "replace": "",
+    "claimed": "transcription (FR-022 to FR-024) after Type instead, a later Cancel puts focus back on the mic, not the message box",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-65",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "wasOpen.current = open;",
+    "replace": "",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-66",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "disabled={responding || unavailable}",
+    "replace": "disabled={unavailable}",
+    "claimed": "the mic button (FR-020) is disabled while the agent responds, like Send (and others)"
+  },
+  {
+    "id": "154-67",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "disabled={responding || unavailable}",
+    "replace": "disabled={responding}",
+    "claimed": "the mic button (FR-020) is disabled with a one-line note when there's no Transcriber"
+  },
+  {
+    "id": "154-68",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "aria-describedby={unavailable ? noteId : undefined}",
+    "replace": "aria-describedby={noteId}",
+    "claimed": "the mic button (FR-020) is enabled otherwise, with no note, and doesn't take focus on render"
+  },
+  {
+    "id": "154-69",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "onClick={() => inputRef.current?.focus()}",
+    "replace": "onClick={() => undefined}",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)"
+  },
+  {
+    "id": "154-70",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "{NOTICES[recording.notice]}",
+    "replace": "{NOTICES.denied}",
+    "claimed": "the mic button (FR-020) unavailable: its own message, with Type instead"
+  },
+  {
+    "id": "154-71",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "onRecordAgain={recording.record}",
+    "replace": "onRecordAgain={recording.close}",
+    "claimed": "the recording overlay (FR-021) starts the level at 0 again on Record again (and others)"
+  },
+  {
+    "id": "154-72",
+    "file": "apps/web/src/voice/VoiceInput.tsx",
+    "find": "onCancel={recording.close}",
+    "replace": "onCancel={() => undefined}",
+    "claimed": "the recording overlay (FR-021) Cancel discards the recording, closes, and puts focus back on the mic (and others)"
+  },
+  {
+    "id": "154-73",
+    "file": "apps/web/src/voice/TranscriberContext.ts",
+    "find": "return import.meta.env.DEV ? new MockTranscriber({ ...DEV_MOCK_OPTIONS }) : null;",
+    "replace": "return import.meta.env.DEV ? new MockTranscriber() : null;",
+    "claimed": "defaultTranscriber is the MockTranscriber, with the dev delays, on the dev server"
+  },
+  {
+    "id": "154-74",
+    "file": "apps/web/src/voice/TranscriberContext.ts",
+    "find": "return import.meta.env.DEV ? new MockTranscriber({ ...DEV_MOCK_OPTIONS }) : null;",
+    "replace": "return new MockTranscriber({ ...DEV_MOCK_OPTIONS });",
+    "claimed": "defaultTranscriber is none in a production build, so the mic shows disabled"
+  },
+  {
+    "id": "154-75",
+    "file": "apps/web/src/voice/TranscriberContext.ts",
+    "find": "return import.meta.env.DEV ? new MockTranscriber({ ...DEV_MOCK_OPTIONS }) : null;",
+    "replace": "return null;",
+    "claimed": "defaultTranscriber is the MockTranscriber, with the dev delays, on the dev server"
+  },
+  {
+    "id": "154-76",
+    "file": "apps/web/src/chat/ChatPage.tsx",
+    "find": "<VoiceInput onTranscript={chat.send}",
+    "replace": "<VoiceInput onTranscript={() => true}",
+    "claimed": "ChatPage: voice posts the transcript as the patient's message and sends it like typed text, leaving a draft alone"
+  },
+  {
+    "id": "154-77",
+    "file": "apps/web/src/chat/ChatPage.tsx",
+    "find": "responding={chat.responding} inputRef={inputRef} />",
+    "replace": "responding={false} inputRef={inputRef} />",
+    "claimed": "ChatPage: voice disables the mic while the agent responds, and enables it again after the reply"
+  },
+  {
+    "id": "154-78",
+    "file": "apps/web/src/chat/ChatPage.tsx",
+    "find": "responding={chat.responding} inputRef={inputRef} />",
+    "replace": "responding={chat.responding} inputRef={{ current: null }} />",
+    "claimed": "ChatPage: voice denied: the guidance beside the composer, and Type instead focuses the message box"
+  },
+  {
+    "id": "154-79",
+    "file": "apps/web/src/voice/transcriber.ts",
+    "find": "return error instanceof TranscriberError ? error.kind : \"failed\";",
+    "replace": "return \"failed\";",
+    "claimed": "the mic button (FR-020) denied: closes the overlay and shows the guidance beside the composer, with Type instead (and others)"
+  },
+  {
+    "id": "154-80",
+    "file": "apps/web/src/voice/transcriber.ts",
+    "find": "return error instanceof TranscriberError ? error.kind : \"failed\";",
+    "replace": "return (error as TranscriberError).kind;",
+    "claimed": "the mic button (FR-020) a start() rejection that isn't a TranscriberError counts as failed"
+  },
+  {
+    "id": "154-81",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "this.starts += 1;",
+    "replace": "",
+    "claimed": "MockTranscriber resolves stop() with the sample transcript by default, and records the session (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-82",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "const options = { ...this.options };",
+    "replace": "const options = {} as MockTranscriberOptions;",
+    "claimed": "ChatPage: voice posts the transcript as the patient's message and sends it like typed text, leaving a draft alone (and others)"
+  },
+  {
+    "id": "154-83",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.startDelayMs) await wait(options.startDelayMs);",
+    "replace": "",
+    "claimed": "MockTranscriber waits startDelayMs before start() settles (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-84",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.denied) throw new TranscriberError(\"denied\");",
+    "replace": "",
+    "claimed": "ChatPage: voice denied: the guidance beside the composer, and Type instead focuses the message box (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-85",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.unavailable) throw new TranscriberError(\"unavailable\");",
+    "replace": "if (options.unavailable) throw new TranscriberError(\"denied\");",
+    "claimed": "MockTranscriber start() with { unavailable: true } rejects with a unavailable TranscriberError (and others)"
+  },
+  {
+    "id": "154-86",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.error === \"start\") throw new TranscriberError(\"failed\");",
+    "replace": "",
+    "claimed": "MockTranscriber start() with { error: 'start' } rejects with a failed TranscriberError (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-87",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "this.sessions.push(record);",
+    "replace": "",
+    "claimed": "MockTranscriber resolves stop() with the sample transcript by default, and records the session (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-88",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "MOCK_LEVELS[tick % MOCK_LEVELS.length]",
+    "replace": "MOCK_LEVELS[tick]",
+    "claimed": "MockTranscriber reports levels every levelIntervalMs, cycling MOCK_LEVELS, until stop"
+  },
+  {
+    "id": "154-89",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "tick += 1;",
+    "replace": "",
+    "claimed": "MockTranscriber reports levels every levelIntervalMs, cycling MOCK_LEVELS, until stop (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-90",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "options.levelIntervalMs ?? 100",
+    "replace": "options.levelIntervalMs ?? 50",
+    "claimed": "MockTranscriber reports levels every 100 ms by default, and cancel stops them"
+  },
+  {
+    "id": "154-91",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "options.error === \"recording\"",
+    "replace": "options.error === \"stop\"",
+    "claimed": "MockTranscriber error: recording calls onError after errorAfterMs and stops the levels (and others)"
+  },
+  {
+    "id": "154-92",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "clearInterval(levels);\n            callbacks",
+    "replace": "callbacks",
+    "claimed": "MockTranscriber error: recording calls onError after errorAfterMs and stops the levels"
+  },
+  {
+    "id": "154-93",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "options.errorAfterMs ?? 0",
+    "replace": "0",
+    "claimed": "MockTranscriber error: recording calls onError after errorAfterMs and stops the levels (and others)"
+  },
+  {
+    "id": "154-94",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "record.state = \"stopped\";",
+    "replace": "",
+    "claimed": "MockTranscriber resolves stop() with the sample transcript by default, and records the session (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-95",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "release();\n        if (options.neverFinal)",
+    "replace": "if (options.neverFinal)",
+    "claimed": "MockTranscriber reports levels every levelIntervalMs, cycling MOCK_LEVELS, until stop"
+  },
+  {
+    "id": "154-96",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.neverFinal) return new Promise<string>(() => undefined);",
+    "replace": "",
+    "claimed": "MockTranscriber neverFinal: stop() never settles (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-97",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.delayMs) await wait(options.delayMs);",
+    "replace": "",
+    "claimed": "MockTranscriber resolves stop() with the configured transcript after the delay (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-98",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "if (options.error === \"stop\") throw new TranscriberError(\"failed\");",
+    "replace": "",
+    "claimed": "MockTranscriber error: stop rejects stop() with failed (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-99",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "return options.transcript ?? SAMPLE_TRANSCRIPT;",
+    "replace": "return SAMPLE_TRANSCRIPT;",
+    "claimed": "ChatPage: voice posts the transcript as the patient's message and sends it like typed text, leaving a draft alone (and others)"
+  },
+  {
+    "id": "154-100",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "return options.transcript ?? SAMPLE_TRANSCRIPT;",
+    "replace": "return options.transcript ?? \"\";",
+    "claimed": "MockTranscriber resolves stop() with the sample transcript by default, and records the session (and others)"
+  },
+  {
+    "id": "154-101",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "record.state = \"cancelled\";",
+    "replace": "",
+    "claimed": "MockTranscriber reports levels every 100 ms by default, and cancel stops them (and others)",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-102",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "record.state = \"cancelled\";\n        release();",
+    "replace": "record.state = \"cancelled\";",
+    "claimed": "MockTranscriber error: recording doesn't fire after cancel (and others)"
+  },
+  {
+    "id": "154-103",
+    "file": "apps/web/src/voice/MockTranscriber.ts",
+    "find": "clearTimeout(failure);",
+    "replace": "",
+    "claimed": "MockTranscriber error: recording doesn't fire after cancel",
+    "translation": "the PR wrote (deleted) in backticks; the first run of this list took it literally and printed ERROR (a parse error, no failing test)"
+  },
+  {
+    "id": "154-104",
+    "file": "apps/web/src/styles/global.css",
+    "find": "clip-path: inset(50%);\n  white-space",
+    "replace": "white-space",
+    "claimed": ".visually-hidden is defined in global.css"
+  },
+  {
+    "id": "154-105",
+    "file": "apps/web/src/chat/chat.css",
+    "find": "/* Fills <main>",
+    "replace": ".visually-hidden { \nposition: absolute; \n} \n\n/* Fills <main>",
+    "claimed": ".visually-hidden is no longer defined in chat.css"
+  }
+]

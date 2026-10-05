@@ -1,0 +1,15 @@
+KILLED TEST-101a apps/web/src/voice/useRecording.ts: export const FINAL_TIMEOUT_MS = 10_000; → export const FINAL_TIMEOUT_MS = 5_000;
+    ✗ apps/web/src/voice/VoiceInput.test.tsx > the recording overlay (FR-021) stops the timer at Send
+SURVIVED TEST-101b apps/web/src/voice/useRecording.ts: export const FINAL_TIMEOUT_MS = 10_000; → export const FINAL_TIMEOUT_MS = 15_000;
+SURVIVED TEST-102 apps/web/src/voice/useRecording.ts:     attempt.current += 1;⏎    clearInterval(ticker.current);⏎ →     attempt.current += 1;⏎
+REFUSED TEST-102-bare apps/web/src/voice/useRecording.ts: clearInterval(ticker.current); → 
+    (find occurs 2 times)
+SURVIVED TEST-104a apps/web/src/voice/TranscriberContext.ts: { startDelayMs: 300, delayMs: 1000 } → { startDelayMs: 300, delayMs: 1500 }
+SURVIVED TEST-104b apps/web/src/voice/TranscriberContext.ts: { startDelayMs: 300, delayMs: 1000 } → { startDelayMs: 300, delayMs: 1000, neverFinal: true }
+SURVIVED TEST-105 apps/web/src/voice/useRecording.ts:     session.current = null;⏎ → 
+SURVIVED TEST-203 apps/web/src/voice/RecordingOverlay.tsx:         tabIndex={-1}⏎ → 
+
+8 edits: 1 killed, 6 survived, 0 timed out, 0 errors, 1 refused
+real 11.02
+user 33.41
+sys 5.72

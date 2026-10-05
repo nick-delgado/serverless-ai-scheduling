@@ -1,0 +1,10 @@
+KILLED TEST-2 packages/evals/src/simulator/guards.ts: key.includes("_") &&  → 
+    ✗ packages/evals/test/simulator.test.ts > guard: hidden facts and the goal never go out verbatim the window is 8 words: a 7-word overlap passes, 8 is a leak
+SURVIVED TEST-3a packages/evals/src/simulator/llm.ts: /^(["“])([\s\S]*)(["”])$/ → /^(["])([\s\S]*)(["”])$/
+SURVIVED TEST-3b packages/evals/src/simulator/llm.ts: /^(["“])([\s\S]*)(["”])$/ → /^(["“])([\s\S]*)(["])$/
+SURVIVED TEST-3c packages/evals/src/simulator/llm.ts: .replaceAll(/[\s-]+/g, "_") → .replaceAll(/[-]+/g, "_")
+SURVIVED TEST-3d packages/evals/src/simulator/llm.ts: .replaceAll(/[\s-]+/g, "_") → .replaceAll(/[\s]+/g, "_")
+SURVIVED TEST-1-kind packages/evals/src/simulator/replay.ts: t.kind === "scenario" &&  → 
+SURVIVED TEST-105 packages/evals/src/simulator/prompt.ts: ? "(none)" → ? ""
+
+7 edits: 1 killed, 6 survived, 0 timed out, 0 errors, 0 refused

@@ -1,0 +1,762 @@
+[
+  {
+    "id": "155-1",
+    "group": "parseAddedLines",
+    "note": "raw.startsWith(\"diff --git \") → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (raw.startsWith(\"diff --git \")) {",
+    "replace": "if (false) {"
+  },
+  {
+    "id": "155-2",
+    "group": "parseAddedLines",
+    "note": "inHeader = true → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "      inHeader = true;",
+    "replace": "      inHeader = false;"
+  },
+  {
+    "id": "155-3",
+    "group": "parseAddedLines",
+    "note": "lines = undefined; deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "      lines = undefined;\n",
+    "replace": ""
+  },
+  {
+    "id": "155-4",
+    "group": "parseAddedLines",
+    "note": "inHeader && raw.startsWith(\"+++ b/\") → raw.startsWith(\"+++ b/\")",
+    "file": "scripts/coverage-changed.ts",
+    "find": "inHeader && raw.startsWith(\"+++ b/\")",
+    "replace": "raw.startsWith(\"+++ b/\")"
+  },
+  {
+    "id": "155-5",
+    "group": "parseAddedLines",
+    "note": "… → inHeader",
+    "file": "scripts/coverage-changed.ts",
+    "find": "} else if (inHeader && raw.startsWith(\"+++ b/\")) {",
+    "replace": "} else if (inHeader) {"
+  },
+  {
+    "id": "155-6",
+    "group": "parseAddedLines",
+    "note": "raw.slice(\"+++ b/\".length) → raw.slice(4)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "raw.slice(\"+++ b/\".length)",
+    "replace": "raw.slice(4)"
+  },
+  {
+    "id": "155-7",
+    "group": "parseAddedLines",
+    "note": "inHeader = false; in the @@ branch deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "      inHeader = false;\n",
+    "replace": ""
+  },
+  {
+    "id": "155-8",
+    "group": "parseAddedLines",
+    "note": "raw.startsWith(\"@@ \") → \"@@@\"",
+    "file": "scripts/coverage-changed.ts",
+    "find": "raw.startsWith(\"@@ \")",
+    "replace": "raw.startsWith(\"@@@\")"
+  },
+  {
+    "id": "155-9",
+    "group": "parseAddedLines",
+    "note": "next = Number(…) → next = 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "next = Number(/^@@ -\\S+ \\+(\\d+)/.exec(raw)?.[1]);",
+    "replace": "next = 1;"
+  },
+  {
+    "id": "155-10",
+    "group": "parseAddedLines",
+    "note": "lines && raw.startsWith(\"+\") → lines && true",
+    "file": "scripts/coverage-changed.ts",
+    "find": "lines && raw.startsWith(\"+\")",
+    "replace": "lines && true"
+  },
+  {
+    "id": "155-11",
+    "group": "parseAddedLines",
+    "note": "next += 1 deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "      next += 1;\n",
+    "replace": ""
+  },
+  {
+    "id": "155-12",
+    "group": "parseAddedLines",
+    "note": "raw.slice(1) → raw",
+    "file": "scripts/coverage-changed.ts",
+    "find": "text: raw.slice(1) }",
+    "replace": "text: raw }"
+  },
+  {
+    "id": "155-13",
+    "group": "uncoveredLines",
+    "note": "coverage.s[id] !== 0 → === 0",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (coverage.s[id] !== 0) continue;",
+    "replace": "if (coverage.s[id] === 0) continue;"
+  },
+  {
+    "id": "155-14",
+    "group": "uncoveredLines",
+    "note": "… the continue deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    if (coverage.s[id] !== 0) continue;\n",
+    "replace": ""
+  },
+  {
+    "id": "155-15",
+    "group": "uncoveredLines",
+    "note": "line <= end.line → <",
+    "file": "scripts/coverage-changed.ts",
+    "find": "line <= end.line",
+    "replace": "line < end.line"
+  },
+  {
+    "id": "155-16",
+    "group": "uncoveredLines",
+    "note": "let line = start.line → end.line",
+    "file": "scripts/coverage-changed.ts",
+    "find": "let line = start.line;",
+    "replace": "let line = end.line;"
+  },
+  {
+    "id": "155-17",
+    "group": "uncoveredLines",
+    "note": "coverage.b[id]?.[i] === 0 && → true &&",
+    "file": "scripts/coverage-changed.ts",
+    "find": "coverage.b[id]?.[i] === 0 &&",
+    "replace": "true &&"
+  },
+  {
+    "id": "155-18",
+    "group": "uncoveredLines",
+    "note": "&& arm.start.line !== undefined deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": " && arm.start.line !== undefined",
+    "replace": ""
+  },
+  {
+    "id": "155-19",
+    "group": "uncoveredLines",
+    "note": "lines.add(arm.start.line) → + 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "lines.add(arm.start.line);",
+    "replace": "lines.add(arm.start.line + 1);"
+  },
+  {
+    "id": "155-20",
+    "group": "hintWithoutReason",
+    "note": "if (!hint) return false → true",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (!hint) return false;",
+    "replace": "if (!hint) return true;"
+  },
+  {
+    "id": "155-21",
+    "group": "hintWithoutReason",
+    "note": "hint.index + hint[0].length → hint[0].length",
+    "file": "scripts/coverage-changed.ts",
+    "find": "text.slice(hint.index + hint[0].length)",
+    "replace": "text.slice(hint[0].length)"
+  },
+  {
+    "id": "155-22",
+    "group": "hintWithoutReason",
+    "note": "close < 0 ? rest : rest.slice(0, close) → rest",
+    "file": "scripts/coverage-changed.ts",
+    "find": "close < 0 ? rest : rest.slice(0, close)",
+    "replace": "rest"
+  },
+  {
+    "id": "155-23",
+    "group": "hintWithoutReason",
+    "note": "… → rest.slice(0, close)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "close < 0 ? rest : rest.slice(0, close)",
+    "replace": "rest.slice(0, close)"
+  },
+  {
+    "id": "155-24",
+    "group": "hintWithoutReason",
+    "note": "dashes < 0 return true → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (dashes < 0) return true;",
+    "replace": "if (dashes < 0) return false;"
+  },
+  {
+    "id": "155-25",
+    "group": "hintWithoutReason",
+    "note": ".slice(dashes + 2) → .slice(dashes)",
+    "file": "scripts/coverage-changed.ts",
+    "find": ".slice(dashes + 2)",
+    "replace": ".slice(dashes)"
+  },
+  {
+    "id": "155-26",
+    "group": "hintWithoutReason",
+    "note": ".replace(\"@preserve\", \"\") deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "        .replace(\"@preserve\", \"\")\n",
+    "replace": ""
+  },
+  {
+    "id": "155-27",
+    "group": "hintWithoutReason",
+    "note": ".trim() === \"\" → !== \"\"",
+    "file": "scripts/coverage-changed.ts",
+    "find": ".trim() === \"\"",
+    "replace": ".trim() !== \"\""
+  },
+  {
+    "id": "155-28",
+    "group": "hintWithoutReason",
+    "note": ".trim() deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "        .trim() === \"\"",
+    "replace": "        === \"\""
+  },
+  {
+    "id": "155-29",
+    "group": "checkChanged",
+    "note": "missed.has(line) → true",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (missed.has(line)) uncovered",
+    "replace": "if (true) uncovered"
+  },
+  {
+    "id": "155-30",
+    "group": "checkChanged",
+    "note": "hintWithoutReason(text) → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "source && hintWithoutReason(text)",
+    "replace": "source && false"
+  },
+  {
+    "id": "155-31",
+    "group": "coverageByFile",
+    "note": "the !rel.startsWith(\"..\") guard deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (!rel.startsWith(\"..\")) byFile.set(rel, fileCoverage);",
+    "replace": "byFile.set(rel, fileCoverage);"
+  },
+  {
+    "id": "155-32",
+    "group": "coverageByFile",
+    "note": "key rel → path",
+    "file": "scripts/coverage-changed.ts",
+    "find": "byFile.set(rel, fileCoverage);",
+    "replace": "byFile.set(path, fileCoverage);"
+  },
+  {
+    "id": "155-33",
+    "group": "main, defaults and wiring",
+    "note": "the log default → no-op",
+    "file": "scripts/coverage-changed.ts",
+    "find": "deps.log ?? ((line: string) => console.log(line))",
+    "replace": "deps.log ?? ((_line: string) => undefined)"
+  },
+  {
+    "id": "155-34",
+    "group": "main, defaults and wiring",
+    "note": "the logError default → no-op",
+    "file": "scripts/coverage-changed.ts",
+    "find": "deps.logError ?? ((line: string) => console.error(line))",
+    "replace": "deps.logError ?? ((_line: string) => undefined)"
+  },
+  {
+    "id": "155-35",
+    "group": "main, defaults and wiring",
+    "note": "cwd: deps.cwd → undefined",
+    "file": "scripts/coverage-changed.ts",
+    "find": "{ cwd: deps.cwd, encoding: \"utf8\" }",
+    "replace": "{ cwd: undefined, encoding: \"utf8\" }"
+  },
+  {
+    "id": "155-36",
+    "group": "main, defaults and wiring",
+    "note": "args.base ?? (…) → env only",
+    "file": "scripts/coverage-changed.ts",
+    "find": "args.base ?? (vars.COVERAGE_BASE || DEFAULT_BASE)",
+    "replace": "(vars.COVERAGE_BASE || DEFAULT_BASE)"
+  },
+  {
+    "id": "155-37",
+    "group": "main, defaults and wiring",
+    "note": "… → args.base ?? DEFAULT_BASE",
+    "file": "scripts/coverage-changed.ts",
+    "find": "args.base ?? (vars.COVERAGE_BASE || DEFAULT_BASE)",
+    "replace": "args.base ?? DEFAULT_BASE"
+  },
+  {
+    "id": "155-38",
+    "group": "main, defaults and wiring",
+    "note": "vars.COVERAGE_BASE || DEFAULT_BASE → ??",
+    "file": "scripts/coverage-changed.ts",
+    "find": "vars.COVERAGE_BASE || DEFAULT_BASE",
+    "replace": "vars.COVERAGE_BASE ?? DEFAULT_BASE"
+  },
+  {
+    "id": "155-39",
+    "group": "main, defaults and wiring",
+    "note": "DEFAULT_BASE \"origin/main\" → \"main\"",
+    "file": "scripts/coverage-changed.ts",
+    "find": "export const DEFAULT_BASE = \"origin/main\";",
+    "replace": "export const DEFAULT_BASE = \"main\";"
+  },
+  {
+    "id": "155-40",
+    "group": "main, defaults and wiring",
+    "note": "args.coverage ?? DEFAULT_COVERAGE_FILE → the default only",
+    "file": "scripts/coverage-changed.ts",
+    "find": "args.coverage ?? DEFAULT_COVERAGE_FILE",
+    "replace": "DEFAULT_COVERAGE_FILE"
+  },
+  {
+    "id": "155-41",
+    "group": "main, defaults and wiring",
+    "note": "join(root, …) → join(…)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "join(root, args.coverage ?? DEFAULT_COVERAGE_FILE)",
+    "replace": "join(args.coverage ?? DEFAULT_COVERAGE_FILE)"
+  },
+  {
+    "id": "155-42",
+    "group": "main, defaults and wiring",
+    "note": "DEFAULT_COVERAGE_FILE renamed",
+    "file": "scripts/coverage-changed.ts",
+    "find": "export const DEFAULT_COVERAGE_FILE = \"coverage/coverage-final.json\";",
+    "replace": "export const DEFAULT_COVERAGE_FILE = \"coverage/coverage.json\";"
+  },
+  {
+    "id": "155-43",
+    "group": "main, guards and exit codes",
+    "note": "the argument-error message deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    logError((err as Error).message);\n    return 2;",
+    "replace": "    return 2;"
+  },
+  {
+    "id": "155-44",
+    "group": "main, guards and exit codes",
+    "note": "its return 2 → 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    logError((err as Error).message);\n    return 2;",
+    "replace": "    logError((err as Error).message);\n    return 1;"
+  },
+  {
+    "id": "155-45",
+    "group": "main, guards and exit codes",
+    "note": "!existsSync(coverageFile) → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (!existsSync(coverageFile)) {",
+    "replace": "if (false) {"
+  },
+  {
+    "id": "155-46",
+    "group": "main, guards and exit codes",
+    "note": "its message deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    logError(`coverage-changed: no ${coverageFile}; run \\`npm run test:coverage\\` first.`);\n",
+    "replace": ""
+  },
+  {
+    "id": "155-47",
+    "group": "main, guards and exit codes",
+    "note": "its return 2 → 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "run \\`npm run test:coverage\\` first.`);\n    return 2;",
+    "replace": "run \\`npm run test:coverage\\` first.`);\n    return 1;"
+  },
+  {
+    "id": "155-48",
+    "group": "main, guards and exit codes",
+    "note": "merge-base → rev-parse HEAD",
+    "file": "scripts/coverage-changed.ts",
+    "find": "git(\"merge-base\", base, \"HEAD\");",
+    "replace": "git(\"rev-parse\", \"HEAD\");"
+  },
+  {
+    "id": "155-49",
+    "group": "main, guards and exit codes",
+    "note": "if (vars.CI) → true",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (vars.CI) {",
+    "replace": "if (true) {"
+  },
+  {
+    "id": "155-50",
+    "group": "main, guards and exit codes",
+    "note": "… → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (vars.CI) {",
+    "replace": "if (false) {"
+  },
+  {
+    "id": "155-51",
+    "group": "main, guards and exit codes",
+    "note": "the CI return 2 → 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "(CI must fetch the full history).`);\n      return 2;",
+    "replace": "(CI must fetch the full history).`);\n      return 1;"
+  },
+  {
+    "id": "155-52",
+    "group": "main, guards and exit codes",
+    "note": "the local return 0 → 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "or pass --base <ref>).`);\n    return 0;",
+    "replace": "or pass --base <ref>).`);\n    return 1;"
+  },
+  {
+    "id": "155-53",
+    "group": "main, guards and exit codes",
+    "note": "the SKIPPING message sent to log instead of logError",
+    "file": "scripts/coverage-changed.ts",
+    "find": "logError(`coverage-changed: SKIPPING",
+    "replace": "log(`coverage-changed: SKIPPING"
+  },
+  {
+    "id": "155-54",
+    "group": "main, the diff command",
+    "note": "-c core.quotePath=false deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    \"-c\",\n    \"core.quotePath=false\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-55",
+    "group": "main, the diff command",
+    "note": "\"-U0\" deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    \"-U0\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-56",
+    "group": "main, the diff command",
+    "note": "\"-M\" deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    \"-M\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-57",
+    "group": "main, the diff command",
+    "note": "\"--no-color\" deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    \"--no-color\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-58",
+    "group": "main, the diff command",
+    "note": "\"--no-ext-diff\" deleted",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    \"--no-ext-diff\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-59",
+    "group": "main, the diff command",
+    "note": "...HEAD → ..HEAD",
+    "file": "scripts/coverage-changed.ts",
+    "find": "`${base}...HEAD`",
+    "replace": "`${base}..HEAD`"
+  },
+  {
+    "id": "155-60",
+    "group": "main, the report",
+    "note": "uncovered.length > 0 → >= 0",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (uncovered.length > 0) {",
+    "replace": "if (uncovered.length >= 0) {"
+  },
+  {
+    "id": "155-61",
+    "group": "main, the report",
+    "note": "unexplained.length > 0 → >= 0",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (unexplained.length > 0) {",
+    "replace": "if (unexplained.length >= 0) {"
+  },
+  {
+    "id": "155-62",
+    "group": "main, the report",
+    "note": "the file:line format → file (uncovered)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "for (const { file, line } of uncovered) log(`${file}:${line}`);",
+    "replace": "for (const { file } of uncovered) log(`${file}`);"
+  },
+  {
+    "id": "155-63",
+    "group": "main, the report",
+    "note": "the file:line format → file (unexplained)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "for (const { file, line } of unexplained) log(`${file}:${line}`);",
+    "replace": "for (const { file } of unexplained) log(`${file}`);"
+  },
+  {
+    "id": "155-64",
+    "group": "main, the report",
+    "note": "the unexplained lines not printed",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    for (const { file, line } of unexplained) log(`${file}:${line}`);\n",
+    "replace": ""
+  },
+  {
+    "id": "155-65",
+    "group": "main, the report",
+    "note": "the failure condition → only uncovered",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (uncovered.length + unexplained.length > 0) {",
+    "replace": "if (uncovered.length > 0) {"
+  },
+  {
+    "id": "155-66",
+    "group": "main, the report",
+    "note": "… → only unexplained",
+    "file": "scripts/coverage-changed.ts",
+    "find": "if (uncovered.length + unexplained.length > 0) {",
+    "replace": "if (unexplained.length > 0) {"
+  },
+  {
+    "id": "155-67",
+    "group": "main, the report",
+    "note": "the failure return 1 → 0",
+    "file": "scripts/coverage-changed.ts",
+    "find": "Coverage shows a line ran, not that a test checks it.\",\n    );\n    return 1;",
+    "replace": "Coverage shows a line ran, not that a test checks it.\",\n    );\n    return 0;"
+  },
+  {
+    "id": "155-68",
+    "group": "main, the report",
+    "note": "the hint advice message reworded",
+    "file": "scripts/coverage-changed.ts",
+    "find": "\"coverage-changed: give each line above a test, or an ignore hint with a reason \" +",
+    "replace": "\"coverage-changed: add tests \" +"
+  },
+  {
+    "id": "155-69",
+    "group": "main, the report",
+    "note": "the success message's base → HEAD",
+    "file": "scripts/coverage-changed.ts",
+    "find": "every added source line since ${base} ran in a test.",
+    "replace": "every added source line since HEAD ran in a test."
+  },
+  {
+    "id": "155-70",
+    "group": "main, the report",
+    "note": "the success return 0 → 1",
+    "file": "scripts/coverage-changed.ts",
+    "find": "ran in a test.`);\n  return 0;",
+    "replace": "ran in a test.`);\n  return 1;"
+  },
+  {
+    "id": "155-71",
+    "group": "after the review",
+    "note": "checkChanged: skipping files absent from the coverage JSON (as before)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    const fileCoverage = coverage.get(file);\n",
+    "replace": "    const fileCoverage = coverage.get(file);\n    if (!fileCoverage) continue;\n"
+  },
+  {
+    "id": "155-72",
+    "group": "after the review",
+    "note": "checkChanged: hint-checking every file",
+    "file": "scripts/coverage-changed.ts",
+    "find": "const source = isSourceFile(file, globs);",
+    "replace": "const source = true;"
+  },
+  {
+    "id": "155-73",
+    "group": "after the review",
+    "note": "checkChanged: hint-checking only files in the JSON",
+    "file": "scripts/coverage-changed.ts",
+    "find": "const source = isSourceFile(file, globs);",
+    "replace": "const source = fileCoverage !== undefined;"
+  },
+  {
+    "id": "155-74",
+    "group": "after the review",
+    "note": "hint patterns: /** dropped from the opener",
+    "file": "scripts/coverage-changed.ts",
+    "find": "(?:\\/\\/|\\/\\*\\*?)",
+    "replace": "(?:\\/\\/|\\/\\*)"
+  },
+  {
+    "id": "155-75",
+    "group": "after the review",
+    "note": "hint patterns: the anywhere-on-a-line start/stop pattern dropped",
+    "file": "scripts/coverage-changed.ts",
+    "find": "  /(?:istanbul|[cv]8|node:coverage)\\s+ignore\\s+(?:start|stop)(?=\\W|$)/,\n",
+    "replace": ""
+  },
+  {
+    "id": "155-76",
+    "group": "after the review",
+    "note": "hint patterns: start/stop allowed only after an opener",
+    "file": "scripts/coverage-changed.ts",
+    "find": "  /(?:istanbul|[cv]8|node:coverage)\\s+ignore\\s+(?:start|stop)(?=\\W|$)/,",
+    "replace": "  /(?:\\/\\/|\\/\\*\\*?)\\s*(?:istanbul|[cv]8|node:coverage)\\s+ignore\\s+(?:start|stop)(?=\\W|$)/,"
+  },
+  {
+    "id": "155-77",
+    "group": "after the review",
+    "note": "isSourceFile: && → ||",
+    "file": "scripts/coverage-changed.ts",
+    "find": "globs.include.some((glob) => matchesGlob(file, glob)) &&",
+    "replace": "globs.include.some((glob) => matchesGlob(file, glob)) ||"
+  },
+  {
+    "id": "155-78",
+    "group": "after the review",
+    "note": "isSourceFile: the exclude check dropped",
+    "file": "scripts/coverage-changed.ts",
+    "find": " &&\n    !globs.exclude.some((glob) => matchesGlob(file, glob))",
+    "replace": ""
+  },
+  {
+    "id": "155-79",
+    "group": "after the review",
+    "note": "isSourceFile: the include check dropped",
+    "file": "scripts/coverage-changed.ts",
+    "find": "    globs.include.some((glob) => matchesGlob(file, glob)) &&\n",
+    "replace": ""
+  },
+  {
+    "id": "155-80",
+    "group": "after the review",
+    "note": "main: deps.sources ?? SOURCE_GLOBS → SOURCE_GLOBS",
+    "file": "scripts/coverage-changed.ts",
+    "find": "deps.sources ?? SOURCE_GLOBS",
+    "replace": "SOURCE_GLOBS"
+  },
+  {
+    "id": "155-81",
+    "group": "after the review",
+    "note": "SOURCE_GLOBS's exclude emptied",
+    "file": "scripts/coverage-changed.ts",
+    "find": "{ include: COVERAGE_INCLUDE, exclude: COVERAGE_EXCLUDE }",
+    "replace": "{ include: COVERAGE_INCLUDE, exclude: [] }"
+  },
+  {
+    "id": "155-82",
+    "group": "after the review",
+    "note": "the entry block: process.exitCode = main(…) → main(…)",
+    "file": "scripts/coverage-changed.ts",
+    "find": "process.exitCode = main(process.argv.slice(2), process.env);",
+    "replace": "main(process.argv.slice(2), process.env);"
+  },
+  {
+    "id": "155-83",
+    "group": "after the review",
+    "note": "parseCliArgs: strict: true → false",
+    "file": "scripts/coverage-changed.ts",
+    "find": "strict: true,",
+    "replace": "strict: false,"
+  },
+  {
+    "id": "155-84",
+    "group": "after the review",
+    "note": "parseCliArgs: coverage taken from values.base",
+    "file": "scripts/coverage-changed.ts",
+    "find": "coverage: values.coverage }",
+    "replace": "coverage: values.base }"
+  },
+  {
+    "id": "155-85",
+    "group": "after the review",
+    "note": "parseCliArgs: the parser's message dropped from the usage error",
+    "file": "scripts/coverage-changed.ts",
+    "find": " (${(err as Error).message})`",
+    "replace": "`"
+  },
+  {
+    "id": "155-86",
+    "group": "after the review",
+    "note": "parseCliArgs: the cause dropped",
+    "file": "scripts/coverage-changed.ts",
+    "find": "      {\n        cause: err,\n      },\n",
+    "replace": "      {},\n"
+  },
+  {
+    "id": "155-87",
+    "group": "after the review",
+    "note": "vitest.config.ts: include \"packages/*/src/**/*.{ts,tsx}\" dropped",
+    "file": "vitest.config.ts",
+    "find": "  \"packages/*/src/**/*.{ts,tsx}\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-88",
+    "group": "after the review",
+    "note": "vitest.config.ts: include \"services/*/src/**/*.{ts,tsx}\" dropped",
+    "file": "vitest.config.ts",
+    "find": "  \"services/*/src/**/*.{ts,tsx}\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-89",
+    "group": "after the review",
+    "note": "vitest.config.ts: include \"apps/*/src/**/*.{ts,tsx}\" dropped",
+    "file": "vitest.config.ts",
+    "find": "  \"apps/*/src/**/*.{ts,tsx}\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-90",
+    "group": "after the review",
+    "note": "vitest.config.ts: include \"scripts/*.ts\" dropped",
+    "file": "vitest.config.ts",
+    "find": "  \"scripts/*.ts\",\n",
+    "replace": ""
+  },
+  {
+    "id": "155-91",
+    "group": "after the review",
+    "note": "vitest.config.ts: {ts,tsx} → ts in the apps glob alone",
+    "file": "vitest.config.ts",
+    "find": "\"apps/*/src/**/*.{ts,tsx}\"",
+    "replace": "\"apps/*/src/**/*.ts\""
+  },
+  {
+    "id": "155-92",
+    "group": "after the review",
+    "note": "vitest.config.ts: \"**/*.test.*\" dropped from exclude",
+    "file": "vitest.config.ts",
+    "find": "[\"**/*.test.*\", \"**/*.d.ts\"]",
+    "replace": "[\"**/*.d.ts\"]"
+  },
+  {
+    "id": "155-93",
+    "group": "after the review",
+    "note": "vitest.config.ts: \"**/*.d.ts\" dropped from exclude",
+    "file": "vitest.config.ts",
+    "find": "[\"**/*.test.*\", \"**/*.d.ts\"]",
+    "replace": "[\"**/*.test.*\"]"
+  },
+  {
+    "id": "155-94",
+    "group": "after the review",
+    "note": "vitest.config.ts: the coverage block's include no longer the constant",
+    "file": "vitest.config.ts",
+    "find": "include: COVERAGE_INCLUDE,",
+    "replace": "include: [\"packages/*/src/**/*.{ts,tsx}\", \"services/*/src/**/*.{ts,tsx}\", \"apps/*/src/**/*.{ts,tsx}\", \"scripts/*.ts\"],"
+  },
+  {
+    "id": "155-95",
+    "group": "after the review",
+    "note": "vitest.config.ts: the coverage block's exclude no longer the constant",
+    "file": "vitest.config.ts",
+    "find": "exclude: COVERAGE_EXCLUDE,",
+    "replace": "exclude: [\"**/*.test.*\", \"**/*.d.ts\"],"
+  }
+]

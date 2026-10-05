@@ -1,0 +1,22 @@
+[
+  {
+    "group": "HINT regex",
+    "note": "each alternative of the first version's single HINT regex (\\/\\/, \\/\\*, istanbul, c of [cv]8, node:coverage, if|else|next|file|start|stop, the trailing \\b): 14 breaks; at 5d54a70 HINTS is two patterns, so the after-review group's hint-pattern breaks stand in"
+  },
+  {
+    "group": "checkChanged",
+    "note": "the first version's three breaks (continue → break; missed.has(line) → true; hintWithoutReason(text) → false): continue is gone at 5d54a70; the other two are below in their new form"
+  },
+  {
+    "group": "parseCliArgs",
+    "note": "the first version's five breaks (either flag !== operand, value === undefined, value.startsWith(\"--\"), the base/coverage swap, i += 1): the hand-written parser was replaced by util.parseArgs; the after-review group's parseCliArgs breaks stand in"
+  },
+  {
+    "group": "survivors of the first sweep",
+    "note": "stop dropped; hint.index dropped (above); continue → break; value.startsWith('--') dropped; -M deleted (above): the first-version forms of these are covered by the entries above or no longer apply"
+  },
+  {
+    "group": "after the review",
+    "note": "vitest.config.ts: {ts,tsx} → ts in all four globs (one edit per glob is four edits; the apps one above stands in)"
+  }
+]

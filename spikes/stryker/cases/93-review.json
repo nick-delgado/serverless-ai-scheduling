@@ -1,0 +1,23 @@
+[
+  {
+    "id": "TEST-1",
+    "note": "#93 review 555dfc5/TEST-1: the same-slot answer moved above the status check",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "  if (current.status !== \"BOOKED\") return fail(\"APPOINTMENT_NOT_BOOKED\");\n  // A retry after a successful move: answer before the clock rules, which the new time may now break.\n  if (current.slotId === input.new_slot_id) return alreadyThere(current);\n",
+    "replace": "  // A retry after a successful move: answer before the clock rules, which the new time may now break.\n  if (current.slotId === input.new_slot_id) return alreadyThere(current);\n  if (current.status !== \"BOOKED\") return fail(\"APPOINTMENT_NOT_BOOKED\");\n"
+  },
+  {
+    "id": "TEST-2a",
+    "note": "#93 review 555dfc5/TEST-2: delete the missing-provider guard in alreadyThere",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "    if (!provider) {\n      throw new Error(\n        `Appointment ${appointment.appointmentId} references unknown provider ${appointment.providerId}`,\n      );\n    }\n",
+    "replace": ""
+  },
+  {
+    "id": "TEST-2b",
+    "note": "#93 review 555dfc5/TEST-2: delete the vanished-after-SAME_SLOT guard",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "    if (!moved) throw new Error(`Appointment ${input.appointment_id} vanished after SAME_SLOT`);\n",
+    "replace": ""
+  }
+]

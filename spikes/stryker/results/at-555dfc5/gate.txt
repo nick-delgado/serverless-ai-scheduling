@@ -1,0 +1,8 @@
+Added lines no test executes (5):
+packages/tools/src/tools/reschedule_appointment.ts:90
+packages/tools/src/tools/reschedule_appointment.ts:91
+packages/tools/src/tools/reschedule_appointment.ts:92
+packages/tools/src/tools/reschedule_appointment.ts:93
+packages/tools/src/tools/reschedule_appointment.ts:161
+coverage-changed: give each line above a test, or an ignore hint with a reason (`/* v8 ignore next -- <reason> */`). Coverage shows a line ran, not that a test checks it.
+gate exit 1 in 2 s (base 743c04b, head 555dfc5a0ce61beb1faef30daa88cdaa9539d8e3)
