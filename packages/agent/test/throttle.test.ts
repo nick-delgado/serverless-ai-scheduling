@@ -50,6 +50,9 @@ describe("httpStatusOf (#105)", () => {
     expect(httpStatusOf({ $metadata: { httpStatusCode: 429 }, statusCode: 500, status: 503 })).toBe(429);
     expect(httpStatusOf({ $metadata: {}, statusCode: 500, status: 503 })).toBe(500);
     expect(httpStatusOf({ status: 503 })).toBe(503);
+    // Defined, not truthy: a 0 still wins over a later field.
+    expect(httpStatusOf({ $metadata: { httpStatusCode: 0 }, statusCode: 429 })).toBe(0);
+    expect(httpStatusOf({ statusCode: 0, status: 429 })).toBe(0);
   });
 
   it("counts only a number", () => {
