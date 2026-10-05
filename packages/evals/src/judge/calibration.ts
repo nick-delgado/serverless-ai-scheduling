@@ -40,8 +40,9 @@ const Dimension = z.enum(RUBRIC_DIMENSIONS);
 /**
  * A transcript event as the calibration files hold it: every field of each `TranscriptEvent` kind, so a
  * malformed event is a usage error naming the field, not `Assistant: undefined` in the judge's prompt
- * (SMELL-205 decision, PR #165). `runCalibration` assigns these events to `TranscriptEvent[]`, which is
- * the compile-time check that the two shapes agree.
+ * (SMELL-205 decision, PR #165). `runCalibration` assigns these events to `TranscriptEvent[]`: a one-way
+ * compile-time check that a calibration event is assignable to a `TranscriptEvent`. It doesn't catch a
+ * field added to `TranscriptEvent` later; add that field here by hand.
  */
 const CalibrationEvent = z.discriminatedUnion("kind", [
   z.object({
