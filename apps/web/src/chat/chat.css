@@ -1,17 +1,5 @@
 /* Chat page (S5-02, #26). Colors and spacing come from src/styles/tokens.css. */
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* Fills <main>, which scrolls; the composer sticks to its bottom edge. */
 .chat {
   display: flex;

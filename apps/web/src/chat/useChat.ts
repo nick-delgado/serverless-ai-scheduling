@@ -9,7 +9,9 @@
  * - when the typewriter has revealed everything, the reply joins the messages and is announced once
  *   through the live region (not per character).
  *
- * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list.
+ * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list. An
+ *   `error` event that names a conversation (the server stored the message, #104) sets it as `done`
+ *   does, so Retry after a failed first turn continues that conversation, and so does a reload.
  * - Retry is offered only for a stream `error` event with `retryable: true`, or a network failure
  *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`). It
  *   resends the same text with the same `clientMessageId` and `conversationId`, without adding the
@@ -213,6 +215,13 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       });
       active.current = { controller, typewriter };
 
+      // The conversation this login session is using: sent with the next turn, restored on reload.
+      const rememberConversation = (id: string) => {
+        conversationId.current = id;
+        const { sub } = latest.current;
+        if (sub !== undefined) writeLoginSession({ sub, conversationId: id });
+      };
+
       const onEvent = (event: ChatStreamEvent) => {
         switch (event.type) {
           case "status":
@@ -232,15 +241,15 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
             if (typewriter.received.length === 0) setTurn((t) => (t ? { ...t, waiting: true } : t));
             break;
           case "done": {
-            conversationId.current = event.conversationId;
-            const { sub } = latest.current;
-            if (sub !== undefined) writeLoginSession({ sub, conversationId: event.conversationId });
+            rememberConversation(event.conversationId);
             messageId = event.messageId;
             doneReceived = true;
             typewriter.finish();
             break;
           }
           case "error":
+            // A failed turn's conversation, once stored (#104): Retry and a reload continue it (FR-014).
+            if (event.conversationId !== undefined) rememberConversation(event.conversationId);
             // The chat handler's own 401 is an `UNAUTHORIZED` error event (ADR-007), not a throw.
             if (event.code === "UNAUTHORIZED") signedOut();
             else failTurn(event.message, event.retryable);

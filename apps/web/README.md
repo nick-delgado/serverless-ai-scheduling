@@ -17,7 +17,7 @@ npm test -w apps/web             # Vitest + Testing Library (jsdom), MSW in Node
 | `src/mocks/` | MSW mock API: handlers, fixtures, options | S5-01 (#24) |
 | `src/pages/Login*`, `src/auth/` | Login, auth state, the `/chat` guard, sign-out | S1-02 (#25) |
 | `src/chat/` | Chat page, stream client, typewriter | S5-02 (#26), S5-03 (#27) |
-| `src/voice/` | Voice overlay and transcriber | S6-01 (#28) |
+| `src/voice/` | Mic button, recording overlay, the `Transcriber` interface and `MockTranscriber`; the real transcriber comes with S6-02 (#29) | S6-01 (#28) |
 
 ## Sign-in
 
@@ -42,8 +42,19 @@ The chat page restores a conversation only if this login session has been using 
 
 Production builds contain no mock code: the worker script is served by the dev server only, `main.tsx` loads the mock behind `import.meta.env.DEV`, and `src/auth/session.ts` names the Cognito mock's pool behind the same guard. `build.test.ts` runs the production build in `npm test` and checks `index.html` plus scripts under `assets/`, and that the output has no mock API code, no worker script, and none of the Cognito mock's pool ID, app client ID or password.
 
+## Voice input
+
+The mic sits in the composer (`ChatPage` passes `VoiceInput` as `Composer`'s `accessory`). It talks only to a `Transcriber` (`src/voice/transcriber.ts`), which owns the mic permission and the audio: `start()` asks for the mic and rejects with a `TranscriberError` (`denied`, `unavailable` or `failed`), and its session's `stop()` resolves with the final transcript. The overlay starts the m:ss timer when `start()` resolves, sends at 60 s, waits 10 s for the transcript, then shows the FR-024 error. The level dot follows `onLevel`; it pulses until the first level arrives, so a Transcriber that reports none still shows that it's recording. The transcript goes through `useChat().send` like typed text.
+
+`TranscriberContext` picks the Transcriber:
+
+- **Dev server:** a `MockTranscriber` with no audio. Tapping the mic shows "Starting…" for 0.3 s in place of the browser's prompt, the level dot moves, and about 1 s after Send it "hears" a fixed sample sentence (`SAMPLE_TRANSCRIPT`). There are no console controls; to try denial, a missing mic, a failure or a transcript that never comes, change `DEV_MOCK_OPTIONS` in `src/voice/TranscriberContext.ts` locally (`denied`, `unavailable`, `error`, `neverFinal`, `transcript`, `delayMs`).
+- **Production builds:** no Transcriber until #29, so the mic shows disabled with "Voice input isn't available yet." The mock isn't in the bundle.
+- **Tests:** wrap the page in `<TranscriberContext.Provider value={new MockTranscriber({ ... })}>`. The mock records `starts` and each session's `state` (`recording`, `stopped`, `cancelled`), and a test can change `options` between recordings.
+
 ## Conventions
 
 - Colors come from the tokens in `src/styles/tokens.css`; `tokens.test.ts` checks every text/background pair against WCAG AA in both themes. Add a pair there when you add a token.
 - Pages render their own `<title>` with `pageTitle()`.
+- `.visually-hidden` (text for screen readers only) is global, in `src/styles/global.css`.
 - `<main>` scrolls, not the document, so the header and disclaimer stay in view. A page that needs a pinned composer can fill `<main>` with a flex column.

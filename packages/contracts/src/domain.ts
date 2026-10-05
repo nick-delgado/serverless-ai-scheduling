@@ -84,6 +84,12 @@ export const ConversationMessage = z.strictObject({
   content: z.array(ContentBlock).min(1),
   turnId: TurnId,
   createdAt: IsoDateTimeUtc,
+  /**
+   * The `ChatRequest.clientMessageId` this patient message was sent with, so `POST /api/chat` can tell
+   * a retried send from a new one (FR-015, #104). Set on patient messages only; rows written before
+   * #104 have none and never match.
+   */
+  clientMessageId: z.uuid().optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessage>;
 
