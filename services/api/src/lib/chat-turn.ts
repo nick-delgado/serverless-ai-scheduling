@@ -365,8 +365,9 @@ class ChatTurn {
   }
 
   /**
-   * Stores messages before the agent runs. The rows written, or undefined when another turn of this
-   * conversation wrote first (the turn has then failed with a conflict).
+   * Stores messages the turn needs before it can answer: the patient's message before the agent runs,
+   * or a replay's closing reply. The rows written, or undefined when another turn of this conversation
+   * wrote first (the turn has then failed with a conflict).
    */
   async #append(
     turn: OpenTurn,

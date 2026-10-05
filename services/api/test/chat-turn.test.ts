@@ -41,6 +41,25 @@ const NOW = "2026-10-05T13:00:00Z"; // Monday 9:00 AM ET
 const CLIENT_MESSAGE_ID = "5b8e2c1a-7d6f-4e3b-9a1c-2d3e4f5a6b7c";
 /** A valid patient ID with no profile in the fixture. */
 const NO_PROFILE = "9d1e4b7a-2c3f-4a5b-8e6d-1f2a3b4c5d6e";
+const throttled = Object.assign(new Error("Too many requests"), {
+  name: "ThrottlingException",
+  $metadata: { httpStatusCode: 429 },
+});
+/** A hand-seeded conversation for retry cases this handler can't produce itself (#104). */
+const SEEDED_CONVERSATION = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+const SEEDED_CLIENT_MESSAGE_ID = "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47";
+const seededRow = (
+  seq: number,
+  role: "user" | "assistant",
+  content: ConversationMessage["content"],
+): ConversationMessage => ({
+  conversationId: SEEDED_CONVERSATION,
+  seq,
+  role,
+  content,
+  turnId: "00000000-0000-4000-8000-0000000000ff",
+  createdAt: NOW,
+});
 
 function uuidSequence(): () => string {
   let n = 0;
@@ -438,11 +457,6 @@ describe("handleChatTurn: rejections before the agent runs", () => {
 });
 
 describe("handleChatTurn: failures", () => {
-  const throttled = Object.assign(new Error("Too many requests"), {
-    name: "ThrottlingException",
-    $metadata: { httpStatusCode: 429 },
-  });
-
   it("answers 429 when Bedrock throttles before anything streamed, keeps the message, and leaves the turn open", async () => {
     const w = world({ steps: [{ error: throttled }, scriptedText("Back now.")] });
     const { response, summary } = await w.send("Hello");
@@ -714,10 +728,6 @@ describe("handleChatTurn: logging", () => {
 });
 
 describe("handleChatTurn: retries (#104, FR-015)", () => {
-  const throttled = Object.assign(new Error("Too many requests"), {
-    name: "ThrottlingException",
-    $metadata: { httpStatusCode: 429 },
-  });
   const NO_USAGE = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   const turnLog = (w: World, n: number) => w.logs.filter((l) => l.msg === "chat turn")[n];
 
@@ -749,6 +759,7 @@ describe("handleChatTurn: retries (#104, FR-015)", () => {
     expect(await messagesOf(w.repos, MARIA, conversationId)).toHaveLength(2);
     expect(turnLog(w, 1)).toMatchObject({ replayed: true, retry: "answered" });
     expect(turnLog(w, 0)).toMatchObject({ replayed: false });
+    expect(turnLog(w, 0)?.retry).toBeUndefined();
   });
 
   it("replays even for a patient at the daily cap, since it makes no model call", async () => {
@@ -783,23 +794,22 @@ describe("handleChatTurn: retries (#104, FR-015)", () => {
     expect(w.llm.requests).toHaveLength(2);
   });
 
+  /** A turn whose storing stopped after a tool result: patient message, tool_use, tool_result. */
+  const seedStoppedAfterToolResult = (w: World) =>
+    w.repos.conversations.append(MARIA, [
+      {
+        ...seededRow(0, "user", [{ type: "text", text: "Who works there?" }]),
+        clientMessageId: SEEDED_CLIENT_MESSAGE_ID,
+      },
+      seededRow(1, "assistant", [{ type: "tool_use", id: "tu_1", name: "find_providers", input: {} }]),
+      seededRow(2, "user", [{ type: "tool_result", toolUseId: "tu_1", content: "{}" }]),
+    ]);
+
   it("closes, then replays, a turn whose storing stopped after a tool result", async () => {
     const w = world();
-    const conversationId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
-    const clientMessageId = "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47";
-    const row = (seq: number, role: "user" | "assistant", content: ConversationMessage["content"]) => ({
-      conversationId,
-      seq,
-      role,
-      content,
-      turnId: "00000000-0000-4000-8000-0000000000ff",
-      createdAt: NOW,
-    });
-    await w.repos.conversations.append(MARIA, [
-      { ...row(0, "user", [{ type: "text", text: "Who works there?" }]), clientMessageId },
-      row(1, "assistant", [{ type: "tool_use", id: "tu_1", name: "find_providers", input: {} }]),
-      row(2, "user", [{ type: "tool_result", toolUseId: "tu_1", content: "{}" }]),
-    ]);
+    const conversationId = SEEDED_CONVERSATION;
+    const clientMessageId = SEEDED_CLIENT_MESSAGE_ID;
+    await seedStoppedAfterToolResult(w);
     const retry = await w.send("Who works there?", { conversationId, clientMessageId });
 
     expect(retry.response.events).toEqual([
@@ -812,21 +822,39 @@ describe("handleChatTurn: retries (#104, FR-015)", () => {
     expect(w.llm.requests).toHaveLength(0);
   });
 
+  it("answers the retryable conflict, and replays nothing, when another turn writes before the replay's closing reply", async () => {
+    const w = world();
+    await seedStoppedAfterToolResult(w);
+    w.deps.repos = {
+      ...w.repos,
+      conversations: {
+        ...w.repos.conversations,
+        append: () => Promise.reject(new ConversationAppendError("SEQ_CONFLICT", SEEDED_CONVERSATION, 3)),
+      },
+    };
+    const retry = await w.send("Who works there?", {
+      conversationId: SEEDED_CONVERSATION,
+      clientMessageId: SEEDED_CLIENT_MESSAGE_ID,
+    });
+
+    expect(retry.response.status).toBe(409);
+    expect(retry.response.events).toEqual([
+      expect.objectContaining({ type: "error", retryable: true, conversationId: SEEDED_CONVERSATION }),
+    ]);
+    expect(retry.summary).toMatchObject({ replayed: false, messagesAppended: 0 });
+    expect(await messagesOf(w.repos, MARIA, SEEDED_CONVERSATION)).toHaveLength(3);
+  });
+
   it("answers INTERNAL for a repeat whose stored turn has no reply text to replay", async () => {
     const w = world();
-    const conversationId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
-    const clientMessageId = "0b6f3f0e-8a51-4c3e-9d0a-2f6a3c1d9e47";
-    const at = { conversationId, turnId: "00000000-0000-4000-8000-0000000000ff", createdAt: NOW };
     await w.repos.conversations.append(MARIA, [
-      { ...at, seq: 0, role: "user", content: [{ type: "text", text: "Hi" }], clientMessageId },
-      {
-        ...at,
-        seq: 1,
-        role: "assistant",
-        content: [{ type: "tool_use", id: "t", name: "find_providers", input: {} }],
-      },
+      { ...seededRow(0, "user", [{ type: "text", text: "Hi" }]), clientMessageId: SEEDED_CLIENT_MESSAGE_ID },
+      seededRow(1, "assistant", [{ type: "tool_use", id: "t", name: "find_providers", input: {} }]),
     ]);
-    const retry = await w.send("Hi", { conversationId, clientMessageId });
+    const retry = await w.send("Hi", {
+      conversationId: SEEDED_CONVERSATION,
+      clientMessageId: SEEDED_CLIENT_MESSAGE_ID,
+    });
     expectWellFormed(retry.response);
     expect(retry.response.events).toEqual([expect.objectContaining({ type: "error", code: "INTERNAL" })]);
     expect(w.llm.requests).toHaveLength(0);
