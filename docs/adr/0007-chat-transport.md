@@ -100,10 +100,10 @@ p95 is nearest-rank, so with N=10 it is the maximum. 20/20 runs ended with `done
 
 ### Learned during the spike (consequences for later work)
 
-- **Headers arrive with the first event.** The Node.js runtime writes the HTTP status/header prelude on the first `write()`, so a client sees nothing until the model's first token. That makes TTFB equal to time-to-first-token. It also lets the handler choose the status late:
+- **Headers arrive with the first event.** The Node.js runtime writes the HTTP status/header prelude on the first `write()`, so a client sees nothing until the model's first token. That makes TTFB equal to time-to-first-token. It also lets the handler choose the status late: *(Refined by the [#160 amendment](#amendment-2026-10-05-name-a-new-conversation-before-the-agent-runs-160): a turn that starts a conversation writes its `conversation` event before the model runs, so its first byte comes before the first token.)*
   - 400 for bad input;
   - 429/503 when Bedrock rejects the call up front; *(Refined by the [#160 amendment](#amendment-2026-10-05-name-a-new-conversation-before-the-agent-runs-160): only in a continued conversation.)*
-  - 200 once text flows, with a mid-stream failure becoming an `error` event under 200.
+  - 200 once text flows, with a mid-stream failure becoming an `error` event under 200. *(Refined by the [#160 amendment](#amendment-2026-10-05-name-a-new-conversation-before-the-agent-runs-160): a turn that starts a conversation is 200 from its `conversation` event on.)*
 
   The UI must start its "processing" animation on send, not on response headers.
 - **CloudFront drops `Authorization` on GET and HEAD.** It forwards the header only for POST/PUT/PATCH/DELETE (and uncached OPTIONS). The `/api/*` behavior uses `CachingDisabled`, so it can't put the header in a cache key. Our `POST /api/chat` is unaffected, but a `GET /api/session` (#18) would reach the authorizer without its token and get 401. #18 must pick one of these:
