@@ -3,7 +3,7 @@
  * deciding it; its own cost; errored trials not judged), the suite (the budget guard sees judge spend;
  * the judge summary and markdown), and the CLI's judge setup, estimate, run options and usage errors.
  */
-import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
+import { MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,7 +12,6 @@ import {
   estimateRunCost,
   judgeCallEstimateUsd,
   failedChecks,
-  JUDGE_ESTIMATE_TOKENS,
   JUDGE_RUBRIC_VERSION,
   JudgeError,
   judgeFails,
@@ -292,13 +291,9 @@ describe("CLI judge setup", () => {
 
   it("the estimate adds one judge call per trial of a scenario with a rubric dimension", () => {
     const judge = judgeSetup(parse(["--mode=scenario"]), { llm });
-    const one = estimateCostUsd(MODEL_PROFILES["haiku-4.5"], {
-      inputTokens: JUDGE_ESTIMATE_TOKENS.input,
-      outputTokens: JUDGE_ESTIMATE_TOKENS.output,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-    expect(judgeCallEstimateUsd(MODEL_PROFILES["haiku-4.5"])).toBe(one);
+    // haiku-4.5 at $1 / $5 per million tokens: 6000 input and 600 output (de04bd8/SMELL-206).
+    const one = 0.009;
+    expect(judgeCallEstimateUsd(MODEL_PROFILES["haiku-4.5"])).toBeCloseTo(one, 12);
     const cases = [scenario(EMERGENCY)];
     const without = estimateRunCost(cases, SCRIPTED_PROFILE, 3);
     expect(estimateRunCost(cases, SCRIPTED_PROFILE, 3, { kind: "script-only" }, judge)).toBeCloseTo(

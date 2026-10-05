@@ -249,14 +249,13 @@ export function judgeSetup(
 /** Judge calls a trial is expected to take: one, at ~6k input / 600 output tokens (r1/A-11). */
 export const JUDGE_ESTIMATE_TOKENS = { input: 6000, output: 600 };
 
+/** One call's estimated cost on `profile`, without prompt caching. */
+const callCostUsd = (profile: ModelProfile, inputTokens: number, outputTokens: number): number =>
+  estimateCostUsd(profile, { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
+
 /** One judge call's estimated cost on `profile`, at `JUDGE_ESTIMATE_TOKENS`. */
 export const judgeCallEstimateUsd = (profile: ModelProfile): number =>
-  estimateCostUsd(profile, {
-    inputTokens: JUDGE_ESTIMATE_TOKENS.input,
-    outputTokens: JUDGE_ESTIMATE_TOKENS.output,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-  });
+  callCostUsd(profile, JUDGE_ESTIMATE_TOKENS.input, JUDGE_ESTIMATE_TOKENS.output);
 
 /**
  * Pre-run estimate (USD). L1: one call per trial, input ≈ request bytes / 4, output ≈ 300 tokens.
@@ -273,13 +272,11 @@ export function estimateRunCost(
   setup: SimulatorSetup = { kind: "script-only" },
   judge: JudgeSetup = { kind: "off" },
 ): number {
-  const cost = (p: ModelProfile, inputTokens: number, outputTokens: number) =>
-    estimateCostUsd(p, { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
   let estimate = 0;
   for (const c of cases) {
     if (isL1Case(c)) {
       const req = l1Request(c, profile, promptFor(undefined, new Date(c.clock), undefined));
-      estimate += cost(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
+      estimate += callCostUsd(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
       continue;
     }
     // The same check as the CLI's printed skip list.
@@ -287,8 +284,8 @@ export function estimateRunCost(
     const scripted = c.script?.length ?? 0;
     const turns =
       setup.kind === "script-only" ? scripted : Math.min(c.max_turns, scripted + EXPECTED_SIMULATED_TURNS);
-    estimate += cost(profile, 4000, 400) * 3 * turns * trials;
-    if (setup.kind === "llm") estimate += cost(setup.profile, 1500, 150) * (turns - scripted) * trials;
+    estimate += callCostUsd(profile, 4000, 400) * 3 * turns * trials;
+    if (setup.kind === "llm") estimate += callCostUsd(setup.profile, 1500, 150) * (turns - scripted) * trials;
     if (judge.kind === "llm" && judgedDimensions(c).length > 0)
       estimate += judgeCallEstimateUsd(judge.profile) * trials;
   }
