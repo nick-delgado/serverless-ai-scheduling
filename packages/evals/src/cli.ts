@@ -64,6 +64,7 @@ function orUsageError<T>(step: () => T): T {
   }
 }
 
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests; the logic it wires lives in cli-args.ts and the modules it calls, which are tested */
 async function main(): Promise<void> {
   const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR));
   const { mode, suite, trials, maxCostUsd, profile } = args;
@@ -145,3 +146,4 @@ main().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });
+/* v8 ignore stop */

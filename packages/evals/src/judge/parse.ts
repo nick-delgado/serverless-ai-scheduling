@@ -18,6 +18,10 @@ export type DimensionScore = z.infer<typeof DimensionScore> & { dimension: Rubri
 
 export const JudgeReply = z.object({ scores: z.array(DimensionScore) });
 
+/** One Zod issue as `path: message`, with `(root)` for the value itself. */
+export const issueText = (issue: { path: readonly PropertyKey[]; message: string }): string =>
+  `${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`;
+
 export type ParsedJudgeReply = { ok: true; scores: DimensionScore[] } | { ok: false; problems: string[] };
 
 /** Collapse runs of whitespace, so a quote that re-wraps a line still matches. */
@@ -47,7 +51,7 @@ export function parseJudgeReply(
   if (!parsed.success)
     return {
       ok: false,
-      problems: parsed.error.issues.map((i) => `${i.path.map(String).join(".") || "(root)"}: ${i.message}`),
+      problems: parsed.error.issues.map(issueText),
     };
 
   const haystack = normalizeWhitespace(transcript);

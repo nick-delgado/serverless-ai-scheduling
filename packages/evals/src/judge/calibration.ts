@@ -18,6 +18,7 @@ import { firstNameOf, promptFor } from "../system-prompt";
 import type { TranscriptEvent } from "../transcript";
 import type { JudgeCost, TrialJudge } from "./judge";
 import { zeroJudgeCost, JudgeError } from "./judge";
+import { issueText } from "./parse";
 import { agentPromptText } from "./prompt";
 import { addUsage } from "../simulator/types";
 import { errorReason } from "../util";
@@ -135,10 +136,7 @@ export async function exportCalibration(
 ): Promise<{ set: CalibrationSet; labels: LabelsFile }> {
   const parsed = ExportSource.safeParse(report);
   if (!parsed.success) {
-    const [issue] = parsed.error.issues;
-    throw new Error(
-      `not a scenario results file: ${issue?.path.map(String).join(".") || "(root)"}: ${issue?.message ?? "invalid"}`,
-    );
+    throw new Error(`not a scenario results file: ${parsed.error.issues.map(issueText).join("; ")}`);
   }
   const byId = new Map(scenarios.map((s) => [s.id, s]));
   const candidates: Candidate[] = parsed.data.cases.flatMap((c) => {

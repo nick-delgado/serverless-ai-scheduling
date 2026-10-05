@@ -16,6 +16,7 @@ import {
   DEFAULT_JUDGE_PROFILE,
   exportCalibration,
   hasLabels,
+  issueText,
   labelledDimensions,
   JUDGE_PROFILE_ENV,
   judgedDimensions,
@@ -313,10 +314,7 @@ function parseFile<T>(schema: z.ZodType<T>, value: unknown, path: string): T {
   if (value === undefined) throw new CliArgError(`${path} doesn't exist`);
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
-  const [issue] = parsed.error.issues;
-  throw new CliArgError(
-    `${path}: ${issue?.path.map(String).join(".") || "(root)"}: ${issue?.message ?? "invalid"}`,
-  );
+  throw new CliArgError(`${path}: ${parsed.error.issues.map(issueText).join("; ")}`);
 }
 
 /**

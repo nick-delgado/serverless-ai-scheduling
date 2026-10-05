@@ -388,6 +388,12 @@ describe("calibrationStep", () => {
     ],
     ["no labels file", { "/cal/transcripts.json": SET }, undefined, "/cal/labels.json doesn't exist"],
     [
+      "a labels file that isn't an object",
+      { "/cal/transcripts.json": SET, "/cal/labels.json": "x" },
+      undefined,
+      /^\/cal\/labels\.json: \(root\): /,
+    ],
+    [
       "an unlabelled labels file",
       { "/cal/transcripts.json": SET, "/cal/labels.json": emptyLabels(SET.transcripts) },
       undefined,

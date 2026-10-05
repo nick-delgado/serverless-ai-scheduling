@@ -196,6 +196,7 @@ describe("suite + judge", () => {
       ],
     } as unknown as TrialResult;
     expect(judgeFails(t)).toEqual(["judge.tone 3/5"]);
+    expect(failedChecks(t)).toEqual(["invariant.x: "]);
     expect(summarizeJudge([], [])).toEqual({
       costUsd: 0,
       judgedTrials: 0,

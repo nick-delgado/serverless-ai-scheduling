@@ -103,6 +103,9 @@ describe("prompt", () => {
     );
     expect(renderJudgeTranscript([call("x", {}, { ok: false })])).toContain("-> error null");
     expect(renderJudgeTranscript([])).toBe("(empty conversation)");
+    expect(renderJudgeTranscript([call("x", undefined)])).toBe(
+      "[turn 1] Tool call x undefined -> ok undefined",
+    );
   });
 
   it("cuts a long tool result, and only a long one", () => {
