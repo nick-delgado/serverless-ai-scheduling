@@ -106,12 +106,13 @@ export function uncoveredLines(coverage: FileCoverage): Set<number> {
 
 /**
  * The hints Vitest's v8 provider honours, mirroring `ast-v8-to-istanbul` 1.0.7 (`src/ignore-hints.ts`):
- * `if`/`else`/`next`/`file` at the start of a `//`, `/*` or `/**` comment, and `start`/`stop` anywhere on a
- * source line, with no comment opener needed. The provider reads comments with a tokenizer; this reads one
- * line at a time.
+ * `if`/`else`/`next`/`file` at the start of a `//`, `/*` or `/**` comment (or at the start of a line, as on the
+ * line after a `/*` opener: the provider's `p`), and `start`/`stop` anywhere on a source line, with no comment
+ * opener needed. The provider reads comments with a tokenizer; this reads one line at a time.
  */
 const HINTS = [
   /(?:\/\/|\/\*\*?)\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:if|else|next|file)(?=\W|$)/,
+  /^\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:if|else|next|file)(?=\W|$)/,
   /(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(?:start|stop)(?=\W|$)/,
 ];
 

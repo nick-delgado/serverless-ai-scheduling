@@ -1,7 +1,9 @@
 /**
  * scripts/coverage-changed.ts against throwaway git repositories and hand-built coverage JSON in the shape
- * `npm run test:coverage` writes (istanbul entries from Vitest's v8 provider). The tests call `main`
- * in-process, because a child process records no coverage (#140).
+ * `npm run test:coverage` writes (istanbul entries from Vitest's v8 provider). Most tests call the script's
+ * functions in-process, because a child process records no coverage (#140): the `main` tests drive the whole
+ * check against a throwaway repository. One test spawns the script to check its exit code, and the
+ * tests of the coverage globs check the exported globs against the repository's own `src` trees.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { globSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -138,6 +140,7 @@ describe("hintWithoutReason", () => {
     ["/* TODO v8 ignore start */", true],
     ["code(); // later: v8 ignore stop", true],
     ["const s = 'v8 ignore start'; // the provider reads start/stop anywhere on a line", true],
+    ["  v8 ignore next", true],
     ["/** v8 ignore next -- only on AWS */", false],
     ["/* TODO v8 ignore start -- the AWS-only path */", false],
     ["// v8 ignore next -- x", false],
@@ -145,6 +148,7 @@ describe("hintWithoutReason", () => {
     ["/* v8 ignore next -- CLI entry */", false],
     ["/* v8 ignore stop -- end of the AWS-only path */", false],
     ["// c8 ignore next -- @preserve only reached in the browser", false],
+    ["  v8 ignore next -- the line after a /* opener", false],
     ["const s = 'v8 ignore next'; // a string, not a hint", false],
     ["call(); // no hint here", false],
   ])("%s → %s", (line, expected) => {
@@ -402,6 +406,19 @@ describe("main", () => {
     writeCoverage({ "src/a.ts": fileCoverage([[1, 3, 1]]) });
     expect(run()).toBe(1);
     expect(out).toEqual(['Coverage ignore hints without a reason after "--" (1):', "src/b.ts:1"]);
+  });
+
+  it("without `sources`, takes source files from the coverage globs (scripts/*.ts is one)", () => {
+    write("scripts/b.ts", "/* v8 ignore next */\nexport const b = never();\n");
+    commit("add b");
+    writeCoverage({ "src/a.ts": fileCoverage([[1, 3, 1]]) });
+    const code = main(
+      ["--base", "main"],
+      {},
+      { cwd: repo, log: (l) => out.push(l), logError: (l) => errors.push(l) },
+    );
+    expect(code).toBe(1);
+    expect(out).toEqual(['Coverage ignore hints without a reason after "--" (1):', "scripts/b.ts:1"]);
   });
 
   it("ignores removed and unchanged lines, even uncovered ones", () => {
