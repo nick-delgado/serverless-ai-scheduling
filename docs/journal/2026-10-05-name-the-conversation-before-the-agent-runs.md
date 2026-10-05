@@ -42,10 +42,19 @@ Nick's answers settled the transport and the scope. These are the decisions the 
 - Client: the hook tests and the page tests resend with the named ID after a cut stream and after a mid-read network error, through the real `fetch` and `readChatStream`. A bare 502 or a network failure before any byte still resends without one.
 - We broke the code it guards with `npm run mutate`, 30 exact edits, and every one turned a test red: 9 in the chat handler, 5 in the contract, 1 in the hook and 15 in the mock. The PR lists each edit and the tests it turned red.
 - `npm run test:coverage` (DynamoDB Local running): 2351 passed in 100 files. `npm run coverage:changed`: every added source line ran.
-- `dev` check (an early first line, then a resend after a disconnect): pending, by the orchestrator. Results go here.
+- `dev` check, 2026-10-05, run by the orchestrating session. Nick ran its script locally, because it signs in a demo user.
+  - **Deploy:** `scripts/deploy.sh api dev` from this branch at `a307a80` updated `sched-dev-api`, which had been at `bd775d6`. Only the api stack was deployed. The SPA wasn't, because it sends no token until #36.
+  - **Method:** the script signed in the demo patient `maria.santos` and sent `POST /api/chat` through CloudFront with no `conversationId`. It disconnected at the first `text_delta` and waited for the turn's `chat turn` log line. Then it resent the same body with the named `conversationId` and called `POST /api/session`.
+  - **Run 2, complete.** Headers arrived at 386 ms, and the first line was the `conversation` event at 387 ms. The first `text_delta` came at 1480 ms, 1093 ms later. So API Gateway and CloudFront did not buffer the small first line. The server log for the turn shows `completed`, 200, `done`, `messagesAppended` 4, `firstEventMs` 62, `firstTextMs` 1157 and `totalMs` 3451.
+  - **The resend:** 200, `text_delta` then `done`, for the same conversation. Its log shows `retry: "answered"`, `replayed: true`, `messagesAppended` 0, no turn counted and `totalMs` 7. `POST /api/session` then showed the patient's message once, in 2 bubbles.
+  - **Run 1:** the `conversation` line came at 1179 ms and the first `text_delta` at 2305 ms, a gap of 1126 ms. The script misread Lambda's JSON log format on this run and stopped before the resend.
+  - **The disconnect:** in both runs the turn still finished as `completed` on the server after the client had gone. So on `dev` the resend took #104's replay path. The in-memory test, whose sink throws, takes the re-run path.
+  - **Cost:** two Sonnet 4.6 first turns, a few cents. The resend made no model call.
+  - **Not checked:** a resend while the original turn is still running, and the SPA in a browser, which needs #36.
 
 ## What's next
 
 - Deploy `web` before `api`. A bundle built before v1.2 rejects the new line as unreadable.
 - #38 measures time to first token with `firstTextMs`. `firstEventMs` now times the `conversation` event on new conversations.
-- The `dev` check also answers ADR-007's open question: whether API Gateway and CloudFront deliver a small first line before the model's first token.
+- The `dev` check settled ADR-007's open question. API Gateway and CloudFront pass the small first line straight through: it arrived about 1.1 s before the first `text_delta` in both runs.
+- Still to check: the page in a browser once #36 sends a token, and a resend while the original turn is still running (a non-goal here).
