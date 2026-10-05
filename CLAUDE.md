@@ -113,11 +113,13 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Reviewing agent PRs: run **`review-agent-pr`** from any session's main conversation, including the one that wrote or orchestrated the PR, but never inside a subagent or forked context. All judgement comes from the fresh subagents it spawns; pass them nothing from the session's own context. Fix its "Fix now" findings with `address-pr-review` from the PR's worktree, and batch recurring causes into process changes with `improve-agent-process`.
 - Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR. A line your change makes false, in `CLAUDE.md` or any other doc, skill or keep-in-sync comment (a command, a status, a list of copies), is fixed in the same PR, called out the same way; an Accepted ADR changes by amendment. The journal entry the definition of done asks for, and its row in `docs/journal/README.md`, are in scope for every issue.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
+<!-- sync-start:ci-checks (restated in the header of .github/workflows/ci.yml) -->
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
   - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
 
   A PR isn't done until both are green.
+<!-- sync-end:ci-checks -->
 - **Recommended branch protection for `main`** (Nick enables it in Settings → Branches):
   - require a pull request before merging;
   - require status checks `Lint, typecheck, test` and `cfn-lint` to pass;

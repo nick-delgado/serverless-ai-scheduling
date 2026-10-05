@@ -4,6 +4,7 @@
  * (`handlers/chat.ts`), the integration tests and the eval harness (in-process, #30) run the same code.
  *
  * Order of work, and why:
+ * sync-start:chat-turn-order (restated in docs/architecture.md, "A chat turn, end to end")
  * 1. Identity comes from the verified JWT `sub` only (`patientId` here). Bad body → 400. Nothing is
  *    counted or stored for a request that never reaches the agent.
  * 2. History is loaded ONLY through the owned read `listMessages(patientId, conversationId)`. A body
@@ -24,6 +25,7 @@
  * 8. This module owns the terminal event: `done` (with the stored reply's message ID) or `error`. An
  *    `error` names the conversation whenever it exists in storage, so a Retry after a failed first turn
  *    continues it (FR-014). The stream always ends, whatever throws.
+ * sync-end:chat-turn-order
  */
 import { randomUUID } from "node:crypto";
 

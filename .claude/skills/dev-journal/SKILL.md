@@ -39,7 +39,7 @@ A reversed decision gets a **new** ADR that supersedes the old one; a refined on
 Two to five short paragraphs: the situation and what we did.
 
 ## Why we chose what we chose
-The reasoning, including options we rejected and why. Name each item of the PR's "Decisions the spec left open" with the alternative it beat; the PR body isn't kept in the repo.
+The reasoning, including options we rejected and why. This is the one list of the decisions the spec left open, each with the alternative it beat: the PR's "Decisions the spec left open" links here instead of repeating it, and the PR body isn't kept in the repo. Update it whenever a decision is added or settled.
 
 ## What surprised us
 The part a reader will remember. Wrong assumptions, unexpected numbers, dead ends.
