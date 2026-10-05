@@ -17,7 +17,8 @@
  *   A `stop()` still pending when `cancel()` is called may settle or not; the overlay ignores it.
  * - `onError` reports failures while recording (the mic track ends, the stream drops). After it fires
  *   the overlay shows the FR-024 error and calls `cancel()`.
- * - `onLevel` reports the input level, 0 to 1, while recording (optional for an implementation).
+ * - `onLevel` reports the input level, 0 to 1, while recording (optional for an implementation). Until
+ *   the first report, the overlay's level dot pulses.
  */
 
 export type TranscriberErrorKind = "denied" | "unavailable" | "failed";

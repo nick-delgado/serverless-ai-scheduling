@@ -22,7 +22,7 @@
   cursor: not-allowed;
 }
 
-/* The notice and the note sit at the start of the composer's action row, which wraps for them. */
+/* The composer's action row wraps while it holds the denied / unavailable notice. */
 .composer__actions:has(> .voice-notice) {
   flex-wrap: wrap;
 }
@@ -136,7 +136,8 @@
   background: var(--color-accent-hover);
 }
 
-/* The level, 0 to 1, scales a dot; it changes in steps, so reduced motion only loses the easing. */
+/* The level, 0 to 1, scales a dot; it changes in steps, so reduced motion only loses the easing.
+   Until the first level arrives the dot pulses instead; the global reduced-motion rule stops it. */
 .voice-level {
   width: 2.5rem;
   height: 2.5rem;
@@ -153,6 +154,19 @@
   border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: voice-spin 0.9s linear infinite;
+}
+
+.voice-level--pulse {
+  animation: voice-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes voice-pulse {
+  from {
+    transform: scale(0.5);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 @keyframes voice-spin {

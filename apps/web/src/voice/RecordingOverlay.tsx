@@ -6,24 +6,34 @@
  *   button goes away), and Tab / Shift+Tab wrap inside the dialog. The trap is hand-written because
  *   jsdom's `HTMLDialogElement` has no `showModal()`.
  * - A click on the dialog's background focuses the dialog itself (`tabIndex={-1}`), not the page
- *   behind it, and Shift+Tab from there goes to the last button.
+ *   behind it, and Shift+Tab from there goes to the last button. A press on the backdrop around the
+ *   dialog is prevented, so focus stays where it was and Esc and the trap keep working.
+ * - The level dot pulses until the Transcriber reports its first level (`onLevel` is optional), so
+ *   something moves while recording; the global reduced-motion rule stops the pulse.
  * - Esc cancels, in every phase.
  * - The ticking timer is not a live region. The phase line ("Recording", "Transcribing…") is a status
  *   and the errors are alerts, so each is announced once.
  */
-import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef } from "react";
+import { type CSSProperties, type KeyboardEvent, type MouseEvent, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
-import { formatElapsed, type RecordingPhase } from "./useRecording";
+import type { RecordingPhase } from "./useRecording";
 
 export const NOT_CAUGHT = "I didn't catch that.";
 export const TRANSCRIBE_FAILED = "Sorry, we couldn't turn that into text.";
 export const NOT_SENT = "Your message wasn't sent. Try Send again in a moment.";
 
+/** m:ss, from whole seconds. */
+export function formatElapsed(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export interface RecordingOverlayProps {
   phase: RecordingPhase;
   elapsedMs: number;
-  level: number;
+  /** 0 to 1, or null before the first report (the dot pulses). */
+  level: number | null;
   onSend: () => void;
   onResend: () => void;
   onRecordAgain: () => void;
@@ -38,6 +48,12 @@ const STATUS: Record<RecordingPhase["name"], string> = {
   empty: "",
   failed: "",
   unsent: "",
+};
+
+const ERROR: Partial<Record<RecordingPhase["name"], string>> = {
+  empty: NOT_CAUGHT,
+  failed: TRANSCRIBE_FAILED,
+  unsent: NOT_SENT,
 };
 
 const FOCUSABLE = "button:not(:disabled), [href], textarea, input, select, [tabindex]:not([tabindex='-1'])";
@@ -72,10 +88,16 @@ export function RecordingOverlay(props: RecordingOverlayProps) {
     }
   };
 
+  // Only a press on the backdrop itself; presses inside the dialog still focus their target.
+  const onBackdropMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) event.preventDefault();
+  };
+
   const showTimer = phase.name === "recording" || phase.name === "transcribing";
+  const error = ERROR[phase.name];
 
   return createPortal(
-    <div className="voice-backdrop">
+    <div className="voice-backdrop" onMouseDown={onBackdropMouseDown}>
       <div
         ref={dialogRef}
         className="voice-dialog"
@@ -92,13 +114,15 @@ export function RecordingOverlay(props: RecordingOverlayProps) {
         <div className="voice-dialog__meter">
           {phase.name === "recording" && (
             <span
-              className="voice-level"
+              className={level === null ? "voice-level voice-level--pulse" : "voice-level"}
               data-testid="voice-level"
               aria-hidden="true"
-              style={{ "--level": String(level) } as CSSProperties}
+              style={level === null ? undefined : ({ "--level": String(level) } as CSSProperties)}
             />
           )}
-          {phase.name === "transcribing" && <span className="voice-spinner" aria-hidden="true" />}
+          {phase.name === "transcribing" && (
+            <span className="voice-spinner" data-testid="voice-spinner" aria-hidden="true" />
+          )}
           {showTimer && (
             <span className="voice-dialog__timer" role="timer" aria-label="Recording time">
               {formatElapsed(elapsedMs)}
@@ -109,25 +133,15 @@ export function RecordingOverlay(props: RecordingOverlayProps) {
         <p className="voice-dialog__status" role="status">
           {STATUS[phase.name]}
         </p>
-        {phase.name === "empty" && (
-          <p className="voice-dialog__error" role="alert">
-            {NOT_CAUGHT}
-          </p>
-        )}
-        {phase.name === "failed" && (
-          <p className="voice-dialog__error" role="alert">
-            {TRANSCRIBE_FAILED}
-          </p>
-        )}
         {phase.name === "unsent" && (
-          <>
-            <p className="voice-dialog__transcript" data-testid="voice-transcript">
-              {phase.text}
-            </p>
-            <p className="voice-dialog__error" role="alert">
-              {NOT_SENT}
-            </p>
-          </>
+          <p className="voice-dialog__transcript" data-testid="voice-transcript">
+            {phase.text}
+          </p>
+        )}
+        {error && (
+          <p className="voice-dialog__error" role="alert">
+            {error}
+          </p>
         )}
 
         <div className="voice-dialog__actions">

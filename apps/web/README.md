@@ -44,7 +44,7 @@ Production builds contain no mock code: the worker script is served by the dev s
 
 ## Voice input
 
-The mic sits in the composer (`ChatPage` passes `VoiceInput` as `Composer`'s `accessory`). It talks only to a `Transcriber` (`src/voice/transcriber.ts`), which owns the mic permission and the audio: `start()` asks for the mic and rejects with a `TranscriberError` (`denied`, `unavailable` or `failed`), and its session's `stop()` resolves with the final transcript. The overlay starts the m:ss timer when `start()` resolves, sends at 60 s, waits 10 s for the transcript, then shows the FR-024 error. The transcript goes through `useChat().send` like typed text.
+The mic sits in the composer (`ChatPage` passes `VoiceInput` as `Composer`'s `accessory`). It talks only to a `Transcriber` (`src/voice/transcriber.ts`), which owns the mic permission and the audio: `start()` asks for the mic and rejects with a `TranscriberError` (`denied`, `unavailable` or `failed`), and its session's `stop()` resolves with the final transcript. The overlay starts the m:ss timer when `start()` resolves, sends at 60 s, waits 10 s for the transcript, then shows the FR-024 error. The level dot follows `onLevel`; it pulses until the first level arrives, so a Transcriber that reports none still shows that it's recording. The transcript goes through `useChat().send` like typed text.
 
 `TranscriberContext` picks the Transcriber:
 

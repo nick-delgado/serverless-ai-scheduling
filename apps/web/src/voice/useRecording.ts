@@ -51,8 +51,8 @@ export interface Recording {
   notice: MicNotice | null;
   /** Milliseconds recorded, at most `RECORDING_CAP_MS`. */
   elapsedMs: number;
-  /** The latest input level, 0 to 1. */
-  level: number;
+  /** The latest input level, 0 to 1, or null until the Transcriber reports one (the overlay pulses). */
+  level: number | null;
   /** Open the overlay and start recording (also "Record again"). */
   record: () => void;
   /** Send: stop recording and wait for the final transcript. */
@@ -63,23 +63,19 @@ export interface Recording {
   close: () => void;
 }
 
-/** m:ss, from whole seconds. */
-export function formatElapsed(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
 export function useRecording({ transcriber, onTranscript }: UseRecordingOptions): Recording {
   const [phase, setPhase] = useState<RecordingPhase | null>(null);
   const [notice, setNotice] = useState<MicNotice | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [level, setLevel] = useState(0);
+  const [level, setLevel] = useState<number | null>(null);
 
   const attempt = useRef(0);
   const session = useRef<TranscriberSession | null>(null);
   const startedAt = useRef(0);
   const ticker = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const finalTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The attempt `send()` already ran for, so a second call (the cap tick and a click) does nothing. */
+  const sentAttempt = useRef(-1);
 
   // Read when a transcript arrives, not when the recording started.
   const latest = useRef(onTranscript);
@@ -115,12 +111,13 @@ export function useRecording({ transcriber, onTranscript }: UseRecordingOptions)
 
   const send = () => {
     const current = session.current;
-    if (!current) return;
+    const id = attempt.current;
+    if (!current || sentAttempt.current === id) return;
+    sentAttempt.current = id;
     clearInterval(ticker.current);
     setElapsedMs(Math.min(Date.now() - startedAt.current, RECORDING_CAP_MS));
-    const id = attempt.current;
     setPhase({ name: "transcribing" });
-    // `discard` clears this timer, so it only fires for the current attempt.
+    // The only 10 s timer of this attempt (`send` runs once per attempt), and `discard` clears it.
     finalTimer.current = setTimeout(fail, FINAL_TIMEOUT_MS);
     current.stop().then(
       (transcript) => {
@@ -140,7 +137,7 @@ export function useRecording({ transcriber, onTranscript }: UseRecordingOptions)
     const id = attempt.current;
     setNotice(null);
     setElapsedMs(0);
-    setLevel(0);
+    setLevel(null);
     setPhase({ name: "starting" });
     transcriber
       .start({
