@@ -3,6 +3,10 @@
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** One Zod issue as `path: message`, with `(root)` for the value itself. */
+export const issueText = (issue: { path: readonly PropertyKey[]; message: string }): string =>
+  `${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`;
+
 /** How a model, transport or usage error is recorded: `Name: message`. */
 export const errorReason = (error: unknown): string =>
   error instanceof Error ? `${error.name}: ${error.message}` : String(error);

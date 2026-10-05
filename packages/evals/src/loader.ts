@@ -10,6 +10,7 @@ import { parse } from "yaml";
 import type { z } from "zod";
 
 import { isL1Case, L1Case, Scenario } from "./schema";
+import { issueText } from "./util";
 
 export const SCENARIOS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "scenarios");
 
@@ -31,9 +32,7 @@ export class ScenarioLoadError extends Error {
 }
 
 function formatIssues(file: string, error: z.ZodError): string[] {
-  return error.issues.map(
-    (issue) => `${file}: ${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`,
-  );
+  return error.issues.map((issue) => `${file}: ${issueText(issue)}`);
 }
 
 export function loadScenarios(dir: string = SCENARIOS_DIR): LoadedScenarios {

@@ -6,14 +6,16 @@
  * - `graders`: deterministic end-state, trajectory, and invariant graders;
  * - `l1`: single-turn next-action cases;
  * - `suite` / `cli`: suites, metrics, JSON + markdown results (`npm run evals`);
- * - `rate-limit`: the shared per-model token bucket with 429 backoff every live call goes through.
- * The LLM judge (#32) and reports/baselines (#34) plug in on top.
+ * - `rate-limit`: the shared per-model token bucket with 429 backoff every live call goes through;
+ * - `judge`: the LLM judge's rubrics, grader results and calibration (#32).
+ * Reports and baselines (#34) plug in on top.
  */
 export const PACKAGE_NAME = "@sched/evals";
 
 export * from "./cli-args";
 export * from "./environment";
 export * from "./graders";
+export * from "./judge";
 export * from "./l1";
 export * from "./loader";
 export * from "./rate-limit";

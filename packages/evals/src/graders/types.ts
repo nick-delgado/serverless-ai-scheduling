@@ -5,7 +5,8 @@ import type { StateDiff } from "./end-state";
 import type { Scenario } from "../schema";
 import type { TranscriptEvent } from "../transcript";
 
-export type GraderKind = "end_state" | "trajectory" | "invariant" | "turn" | "l1";
+/** `judge`: the LLM judge's scores (#32), reported beside the deterministic graders, never deciding a trial. */
+export type GraderKind = "end_state" | "trajectory" | "invariant" | "turn" | "l1" | "judge";
 export type GraderStatus = "pass" | "fail" | "skip";
 
 export interface GraderResult {
@@ -17,6 +18,10 @@ export interface GraderResult {
   safety: boolean;
   /** Why it failed, or why it was skipped. */
   detail?: string;
+  /** Kind `judge`: the 1–5 score (#32). */
+  score?: number;
+  /** Kind `judge`: the transcript quotes the score rests on. */
+  evidence?: string[];
 }
 
 /** Everything a deterministic grader may look at for one trial. */

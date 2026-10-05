@@ -65,10 +65,12 @@ Evals (ADR-008; live runs call Bedrock and cost money, so try `--dry-run` first 
 
 ```bash
 npm run evals -- --suite smoke --mode l1 --profile sonnet-4.6 --trials 1          # single-turn L1 cases (the default mode)
-npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; an LLM plays the patient (--simulator-profile or SIMULATOR_MODEL_PROFILE, default sonnet-4.6), so it costs more than L1
+npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; an LLM plays the patient (--simulator-profile or SIMULATOR_MODEL_PROFILE, default sonnet-4.6) and an LLM judge scores them (--judge-profile or JUDGE_MODEL_PROFILE, default haiku-4.5; --no-judge), so it costs more than L1
+npm run evals -- --export-calibration <results.json>                               # judge calibration: write ~20 transcripts and an empty labels file to packages/evals/calibration/ (no model calls)
+npm run evals -- --calibrate                                                       # judge the labelled transcripts and report judge–human agreement
 ```
 
-Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls), `--out <dir>`. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
+Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls; the judge still runs), `--calibration-dir <dir>`, `--out <dir>`. The judge's scores are reported beside each trial and never change its status; its cost is reported apart from `costUsd` and counts toward `--max-cost`. The calibration steps ignore the run flags (`--mode`, `--suite`, `--filter`, `--trials`, `--replay`, `--max-cost`); `--calibrate` honours `--dry-run` (estimate only), writes its report to `--out`, and prints its estimate before calling the judge. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored).
 
 Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.

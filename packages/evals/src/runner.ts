@@ -2,7 +2,8 @@
  * Multi-turn scenario runner (L2/L3, ADR-008). Each trial gets a fresh `TrialEnvironment` and drives the
  * real `runAgentTurn` turn by turn: scripted patient messages first, then the `PatientSimulator` (#31),
  * until the simulator stops or `max_turns` is reached. The transcript and the before/after repository
- * snapshots then go to the deterministic graders.
+ * snapshots then go to the deterministic graders, and the transcript to the LLM judge (#32), whose
+ * results are reported beside the trial's status and never change it.
  */
 import {
   estimateCostUsd,
@@ -15,12 +16,16 @@ import type { TokenUsage, TurnOutcome } from "@sched/contracts";
 import type { ToolRegistry } from "@sched/tools";
 
 import { errorReason } from "./util";
-import { createTrialEnvironment } from "./environment";
+import { createTrialEnvironment, type TrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
+import { gradeWithJudge } from "./judge/grade";
+import { addCost, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge/judge";
+import { agentPromptText } from "./judge/prompt";
 import type { Scenario } from "./schema";
 import {
   addUsage,
   scriptOnlySimulator,
+  type RejectedReply,
   SimulatorError,
   zeroSimulatorCost,
   zeroUsage,
@@ -70,6 +75,15 @@ export interface TrialResult {
   costUsd: number;
   /** The simulator's share of the conversation: tokens, model calls and cost (#31). */
   simulatorCost: SimulatorCost;
+  /** The judge's calls (#32): not part of `costUsd` (r1/Q-2 (a)); the budget guard adds it. */
+  judgeCost: JudgeCost;
+  /** Why the judge gave no verdict for this trial (its results are then `skip`, r1/A-9). */
+  judgeError?: string;
+  /**
+   * The judge's replies it rejected and retried (bad JSON, a quote not in the transcript), when there were
+   * any, like the simulator's `rejected` (SMELL-107 decision, PR #165).
+   */
+  judgeRejected?: RejectedReply[];
   durationMs: number;
   /** Per-turn wall-clock durations, ms. */
   turnDurationsMs: number[];
@@ -78,6 +92,8 @@ export interface TrialResult {
 export interface RunScenarioOptions {
   agent: AgentUnderTest;
   simulator?: PatientSimulator;
+  /** The LLM judge (#32). Undefined: the judge is off, and its dimensions report `skip`. */
+  judge?: TrialJudge;
   trial?: number;
 }
 
@@ -101,10 +117,20 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
     llmRetries: 0,
     costUsd: 0,
     simulatorCost: zeroSimulatorCost(),
+    judgeCost: zeroJudgeCost(),
     durationMs: 0,
     turnDurationsMs: [],
   };
 }
+
+/**
+ * The agent's system prompt for a trial: the factory's (default: the production prompt) at the trial's
+ * frozen clock, greeting the trial's patient by first name. The calibration export rebuilds it the same way.
+ */
+export const trialSystemPrompt = (
+  env: Pick<TrialEnvironment, "clock" | "before" | "patientId">,
+  factory?: SystemPromptFactory,
+) => promptFor(factory, env.clock.now(), firstNameOf(env.before.patients, env.patientId));
 
 /** Why this scenario can't run in this harness configuration, if it can't. */
 export function skipReason(scenario: Scenario, simulator: PatientSimulator): string | undefined {
@@ -128,8 +154,7 @@ export async function runScenarioTrial(
     trial,
     ...(agent.registry === undefined ? {} : { registry: agent.registry }),
   });
-  const firstName = firstNameOf(env.before.patients, env.patientId);
-  const system = promptFor(agent.systemPrompt, env.clock.now(), firstName);
+  const system = trialSystemPrompt(env, agent.systemPrompt);
 
   const history: LlmMessage[] = [];
   const events: TranscriptEvent[] = [];
@@ -142,10 +167,7 @@ export async function runScenarioTrial(
   const simulatorCost: SimulatorCost = zeroSimulatorCost();
   const simulatorTurns: RecordedSimulatorTurn[] = [];
   const addSimulatorCost = (cost: SimulatorCost | undefined) => {
-    if (cost === undefined) return;
-    simulatorCost.usage = addUsage(simulatorCost.usage, cost.usage);
-    simulatorCost.costUsd += cost.costUsd;
-    simulatorCost.llmCalls += cost.llmCalls;
+    if (cost !== undefined) addCost(simulatorCost, cost);
   };
   let stoppedBecause = "max_turns";
   let error: string | undefined;
@@ -225,6 +247,16 @@ export async function runScenarioTrial(
       slotIds: env.faultsFired.flatMap((f) => (f.takenSlotId ? [f.takenSlotId] : [])),
     },
   });
+  // The trial's duration is the conversation's; judging comes after.
+  const durationMs = Math.round(performance.now() - started);
+  const judged = await gradeWithJudge({
+    scenario,
+    events,
+    agentSystemPrompt: agentPromptText(system),
+    judge: options.judge,
+    trialErrored: error !== undefined,
+  });
+  graders.push(...judged.graders);
   const passed = trialPassed(graders);
   return {
     kind: "scenario",
@@ -244,7 +276,10 @@ export async function runScenarioTrial(
     llmRetries,
     costUsd: costUsd + simulatorCost.costUsd,
     simulatorCost,
-    durationMs: Math.round(performance.now() - started),
+    judgeCost: judged.cost,
+    ...(judged.error === undefined ? {} : { judgeError: judged.error }),
+    ...(judged.rejected === undefined ? {} : { judgeRejected: judged.rejected }),
+    durationMs,
     turnDurationsMs,
   };
 }

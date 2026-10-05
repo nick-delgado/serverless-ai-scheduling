@@ -38,6 +38,8 @@ describe("parseCliArgs", () => {
       mode: "l1",
       profile: MODEL_PROFILES["sonnet-4.6"],
       simulatorProfile: MODEL_PROFILES["sonnet-4.6"],
+      judge: true,
+      calibrationDir: "/tmp/calibration",
       trials: 1,
       filters: [],
       maxCostUsd: 1,
@@ -46,7 +48,8 @@ describe("parseCliArgs", () => {
     });
   });
 
-  it("reads every flag", () => {
+  // --export-calibration and --calibrate exclude each other, so the next test reads those two.
+  it("reads every flag but the two calibration steps", () => {
     const args = parseCliArgs(
       [
         "--suite=full",
@@ -59,6 +62,9 @@ describe("parseCliArgs", () => {
         "--max-cost=0.5",
         "--dry-run",
         "--out=/x",
+        "--judge-profile=nova-pro",
+        "--no-judge",
+        "--calibration-dir=/c",
       ],
       OUT,
     );
@@ -68,12 +74,23 @@ describe("parseCliArgs", () => {
       profile: MODEL_PROFILES["nova-pro"],
       simulatorProfile: MODEL_PROFILES["haiku-4.5"],
       replay: "/r.json",
+      judge: false,
+      judgeProfile: "nova-pro",
+      calibrationDir: "/c",
       trials: 3,
       filters: ["book", "safety"],
       maxCostUsd: 0.5,
       dryRun: true,
       out: "/x",
     });
+  });
+
+  it("reads the calibration steps: the export with its results file, and the agreement (f6d8ff8/TEST-204)", () => {
+    expect(parseCliArgs(["--export-calibration=/r.json"], OUT, {}).calibration).toEqual({
+      action: "export",
+      from: "/r.json",
+    });
+    expect(parseCliArgs(["--calibrate"], OUT, {}).calibration).toEqual({ action: "agreement" });
   });
 
   it.each([

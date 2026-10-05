@@ -1,17 +1,36 @@
 /**
- * The pure parts of the `npm run evals` CLI (`cli.ts`): argument validation, case selection, the
- * pre-run cost estimate, the results file name, and the exit code. `cli.ts` only wires them to the
- * process, Bedrock, and the file system, so these are what the tests cover.
+ * The testable parts of the `npm run evals` CLI (`cli.ts`): argument validation, case selection, the
+ * simulator and judge setup, the pre-run cost estimate, the run's options, the results file name, the
+ * exit code, the calibration step and its file adapters, and the usage-error mapping. `cli.ts` only
+ * calls these with the process, Bedrock and `console`, so these are what the tests cover.
  */
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
+
+import type { z } from "zod";
 
 import { estimateCostUsd, resolveModelProfile, type LlmClient, type ModelProfile } from "@sched/agent";
 
+import {
+  calibrationMarkdown,
+  CalibrationSet,
+  DEFAULT_JUDGE_PROFILE,
+  exportCalibration,
+  hasLabels,
+  labelledDimensions,
+  JUDGE_PROFILE_ENV,
+  judgedDimensions,
+  LabelsFile,
+  LlmJudge,
+  runCalibration,
+  type CalibrationReport,
+  type TrialJudge,
+} from "./judge";
 import { l1Request } from "./l1";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
 import { skipReason } from "./runner";
-import { errorReason } from "./util";
+import { errorReason, issueText } from "./util";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import {
   LlmPatientSimulator,
@@ -20,7 +39,8 @@ import {
   SIMULATOR_PROFILE_ENV,
   type PatientSimulator,
 } from "./simulator";
-import { MODES, type Mode, type RunReport, type RunSummary } from "./suite";
+import type { RateLimitStats } from "./rate-limit";
+import { MODES, type Mode, type RunReport, type RunSuiteOptions, type RunSummary } from "./suite";
 import { promptFor } from "./system-prompt";
 
 export interface CliArgs {
@@ -35,6 +55,20 @@ export interface CliArgs {
   simulatorProfile: ModelProfile;
   /** Scenario mode: a results JSON whose recorded simulator turns are replayed instead (#31). */
   replay?: string;
+  /** False with `--no-judge`: scenario trials aren't judged (#32). */
+  judge: boolean;
+  /**
+   * The judge's profile name, from `--judge-profile`, else `JUDGE_MODEL_PROFILE`; unset means the default
+   * (`haiku-4.5`). Resolved by `judgeSetup` only when a run will judge (r1/A-10).
+   */
+  judgeProfile?: string;
+  /**
+   * Calibration instead of a run (#32): `export` picks transcripts from a results file (no model calls);
+   * `agreement` judges the labelled ones and reports judge–human agreement.
+   */
+  calibration?: { action: "export"; from: string } | { action: "agreement" };
+  /** Where calibration reads and writes `transcripts.json` and `labels.json` (default `packages/evals/calibration`). */
+  calibrationDir: string;
   trials: number;
   filters: string[];
   maxCostUsd: number;
@@ -75,6 +109,11 @@ export function parseCliArgs(
         profile: { type: "string" },
         "simulator-profile": { type: "string" },
         replay: { type: "string" },
+        "judge-profile": { type: "string" },
+        "no-judge": { type: "boolean", default: false },
+        "export-calibration": { type: "string" },
+        calibrate: { type: "boolean", default: false },
+        "calibration-dir": { type: "string" },
         trials: { type: "string", default: "1" },
         filter: { type: "string" },
         "max-cost": { type: "string", default: "1" },
@@ -95,6 +134,12 @@ export function parseCliArgs(
   if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
   if (values.replay !== undefined && mode !== "scenario")
     throw new CliArgError("--replay needs --mode scenario");
+  const exportFrom = values["export-calibration"];
+  if (exportFrom !== undefined && values.calibrate)
+    throw new CliArgError("--export-calibration and --calibrate are separate steps; pass one");
+  if (values.calibrate && values["no-judge"])
+    throw new CliArgError("--calibrate needs the judge; drop --no-judge");
+  const judgeProfile = values["judge-profile"] ?? env[JUDGE_PROFILE_ENV];
   const maxCostUsd = Number(values["max-cost"]);
   if (!(maxCostUsd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
   return {
@@ -106,6 +151,14 @@ export function parseCliArgs(
       "--simulator-profile",
     ),
     ...(values.replay === undefined ? {} : { replay: values.replay }),
+    judge: !values["no-judge"],
+    ...(judgeProfile === undefined ? {} : { judgeProfile }),
+    ...(exportFrom !== undefined
+      ? { calibration: { action: "export" as const, from: exportFrom } }
+      : values.calibrate
+        ? { calibration: { action: "agreement" as const } }
+        : {}),
+    calibrationDir: values["calibration-dir"] ?? join(dirname(defaultOut), "calibration"),
     trials,
     filters:
       values.filter
@@ -174,26 +227,56 @@ export function simulatorSetup(
   }
 }
 
+/** The judge side of a run (#32): off, or the LLM judge on its profile. */
+export type JudgeSetup = { kind: "off" } | { kind: "llm"; profile: ModelProfile; judge: TrialJudge };
+
+/**
+ * Pick the run's judge, once, for both the run and the estimate. Scenario runs and `--calibrate` judge,
+ * on `judgeProfile` (default `haiku-4.5`) unless `--no-judge`; L1 runs and the calibration export never
+ * do. The profile is resolved only then, so a bad `JUDGE_MODEL_PROFILE` can't break an L1 run (r1/A-10).
+ */
+export function judgeSetup(
+  args: Pick<CliArgs, "mode" | "judge" | "judgeProfile" | "calibration">,
+  deps: { llm: LlmClient },
+): JudgeSetup {
+  const judges =
+    args.calibration === undefined ? args.mode === "scenario" : args.calibration.action === "agreement";
+  if (!judges || !args.judge) return { kind: "off" };
+  const profile = resolveProfile(args.judgeProfile ?? DEFAULT_JUDGE_PROFILE, "--judge-profile");
+  return { kind: "llm", profile, judge: new LlmJudge({ llm: deps.llm, profile }) };
+}
+
+/** Judge calls a trial is expected to take: one, at ~6k input / 600 output tokens (r1/A-11). */
+export const JUDGE_ESTIMATE_TOKENS = { input: 6000, output: 600 };
+
+/** One call's estimated cost on `profile`, without prompt caching. */
+const callCostUsd = (profile: ModelProfile, inputTokens: number, outputTokens: number): number =>
+  estimateCostUsd(profile, { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
+
+/** One judge call's estimated cost on `profile`, at `JUDGE_ESTIMATE_TOKENS`. */
+export const judgeCallEstimateUsd = (profile: ModelProfile): number =>
+  callCostUsd(profile, JUDGE_ESTIMATE_TOKENS.input, JUDGE_ESTIMATE_TOKENS.output);
+
 /**
  * Pre-run estimate (USD). L1: one call per trial, input ≈ request bytes / 4, output ≈ 300 tokens.
  * Scenarios: 3 agent calls per patient turn at ~4k input / 400 output tokens. Script-only, the turns
  * are the scripted ones. With a simulator, `min(max_turns, script + EXPECTED_SIMULATED_TURNS)` turns,
  * and an LLM simulator adds one call per simulated turn at ~1.5k input / 150 output tokens on its own
- * profile (a replay calls no model).
+ * profile (a replay calls no model). With the judge on, one judge call per trial of a scenario that lists
+ * a rubric dimension, on the judge's profile.
  */
 export function estimateRunCost(
   cases: readonly (Scenario | L1Case)[],
   profile: ModelProfile,
   trials: number,
   setup: SimulatorSetup = { kind: "script-only" },
+  judge: JudgeSetup = { kind: "off" },
 ): number {
-  const cost = (p: ModelProfile, inputTokens: number, outputTokens: number) =>
-    estimateCostUsd(p, { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
   let estimate = 0;
   for (const c of cases) {
     if (isL1Case(c)) {
       const req = l1Request(c, profile, promptFor(undefined, new Date(c.clock), undefined));
-      estimate += cost(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
+      estimate += callCostUsd(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
       continue;
     }
     // The same check as the CLI's printed skip list.
@@ -201,19 +284,82 @@ export function estimateRunCost(
     const scripted = c.script?.length ?? 0;
     const turns =
       setup.kind === "script-only" ? scripted : Math.min(c.max_turns, scripted + EXPECTED_SIMULATED_TURNS);
-    estimate += cost(profile, 4000, 400) * 3 * turns * trials;
-    if (setup.kind === "llm") estimate += cost(setup.profile, 1500, 150) * (turns - scripted) * trials;
+    estimate += callCostUsd(profile, 4000, 400) * 3 * turns * trials;
+    if (setup.kind === "llm") estimate += callCostUsd(setup.profile, 1500, 150) * (turns - scripted) * trials;
+    if (judge.kind === "llm" && judgedDimensions(c).length > 0)
+      estimate += judgeCallEstimateUsd(judge.profile) * trials;
   }
   return estimate;
 }
+
+/** An ISO timestamp as a file name stamp: `2026-10-05T11:27:57.123Z` → `2026-10-05T112757Z`. */
+export const fileStamp = (iso: string): string => iso.replaceAll(":", "").replace(/\.\d+Z$/, "Z");
 
 /** `<out>/<timestamp>-<mode>-<suite>-<profile>`, without the `.json` / `.md` extension. */
 export function resultsBasePath(
   report: Pick<RunReport, "startedAt" | "mode" | "suite" | "profile">,
   outDir: string,
 ): string {
-  const stamp = report.startedAt.replaceAll(":", "").replace(/\.\d+Z$/, "Z");
-  return join(outDir, `${stamp}-${report.mode}-${report.suite}-${report.profile}`);
+  return join(outDir, `${fileStamp(report.startedAt)}-${report.mode}-${report.suite}-${report.profile}`);
+}
+
+/** What `runOptions` wires besides the arguments: the client, its counters, the patient and the judge. */
+export interface RunWiring {
+  llm: LlmClient;
+  /** The rate-limited client's counters, read into the report. */
+  rateLimit: { readonly stats: RateLimitStats };
+  setup: SimulatorSetup;
+  judging: JudgeSetup;
+  onTrial: NonNullable<RunSuiteOptions["onTrial"]>;
+}
+
+/** The `runSuite` options for a CLI run: the agent on `llm`, the simulator, and the judge when it's on. */
+export function runOptions(
+  args: Pick<CliArgs, "mode" | "suite" | "profile" | "trials" | "maxCostUsd">,
+  wiring: RunWiring,
+): RunSuiteOptions {
+  const { simulator } = wiring.setup;
+  const { judging } = wiring;
+  return {
+    mode: args.mode,
+    suite: args.suite,
+    llm: wiring.llm,
+    llmName: "converse",
+    profile: args.profile,
+    trials: args.trials,
+    maxCostUsd: args.maxCostUsd,
+    rateLimit: wiring.rateLimit,
+    ...(simulator === undefined ? {} : { simulator }),
+    ...(judging.kind === "llm" ? { judge: { judge: judging.judge, profile: judging.profile } } : {}),
+    onTrial: wiring.onTrial,
+  };
+}
+
+/** Rethrow `error`, unless it is a `CliArgError`: that goes to `usage` (the CLI prints it and exits 2). */
+function usageOrRethrow(error: unknown, usage: (message: string) => never): never {
+  if (error instanceof CliArgError) usage(error.message);
+  throw error;
+}
+
+/** Run one setup step; a `CliArgError` from it is a usage error, anything else is rethrown. */
+export function orUsageError<T>(step: () => T, usage: (message: string) => never): T {
+  try {
+    return step();
+  } catch (error) {
+    return usageOrRethrow(error, usage);
+  }
+}
+
+/** `orUsageError` for an async step, such as the calibration step. */
+export async function orUsageErrorAsync<T>(
+  step: () => Promise<T>,
+  usage: (message: string) => never,
+): Promise<T> {
+  try {
+    return await step();
+  } catch (error) {
+    return usageOrRethrow(error, usage);
+  }
 }
 
 /**
@@ -222,3 +368,101 @@ export function resultsBasePath(
  */
 export const exitCodeFor = (summary: Pick<RunSummary, "safetyViolations" | "errored">): 0 | 1 =>
   summary.safetyViolations > 0 || summary.errored > 0 ? 1 : 0;
+
+/** What `calibrationStep` needs from outside: files, the scenarios, a clock and a log. */
+export interface CalibrationDeps {
+  /** Parsed JSON of a file, or `undefined` when it doesn't exist. */
+  readJson: (path: string) => unknown;
+  /** Write a file, creating its directory if needed. */
+  writeFile: (path: string, text: string) => void;
+  scenarios: readonly Scenario[];
+  log: (line: string) => void;
+  /** When the agreement report is stamped. */
+  now: () => Date;
+}
+
+/** The calibration step's real files and clock, for `cli.ts`. */
+export function fileCalibrationDeps(
+  scenarios: readonly Scenario[],
+  log: (line: string) => void,
+): CalibrationDeps {
+  return {
+    readJson: (path) => (existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown) : undefined),
+    writeFile: (path, text) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+    },
+    scenarios,
+    log,
+    now: () => new Date(),
+  };
+}
+
+/** Validate a calibration file against its schema; a bad file is a usage error. */
+function parseFile<T>(schema: z.ZodType<T>, value: unknown, path: string): T {
+  if (value === undefined) throw new CliArgError(`${path} doesn't exist`);
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new CliArgError(`${path}: ${parsed.error.issues.map(issueText).join("; ")}`);
+}
+
+/**
+ * The calibration steps (#32). `export`: pick transcripts from `--export-calibration <results.json>` into
+ * `<calibrationDir>/transcripts.json`, with an empty `labels.json`; it refuses to overwrite a labels file
+ * that already holds scores. `agreement`: judge the labelled transcripts and write the report to
+ * `<out>/<timestamp>-calibration-<judge profile>.{json,md}`; with `--dry-run`, only the estimate.
+ * Returns the report, when one was written.
+ */
+export async function calibrationStep(
+  args: Pick<CliArgs, "calibration" | "calibrationDir" | "out" | "dryRun">,
+  judging: JudgeSetup,
+  deps: CalibrationDeps,
+): Promise<CalibrationReport | undefined> {
+  const transcriptsPath = join(args.calibrationDir, "transcripts.json");
+  const labelsPath = join(args.calibrationDir, "labels.json");
+  // A file that can't be read or isn't JSON is a usage error naming it.
+  const readJson = (path: string): unknown => {
+    try {
+      return deps.readJson(path);
+    } catch (error) {
+      throw new CliArgError(`${path}: ${errorReason(error)}`);
+    }
+  };
+  if (args.calibration?.action === "export") {
+    const { from } = args.calibration;
+    const existing = readJson(labelsPath);
+    if (existing !== undefined && hasLabels(parseFile(LabelsFile, existing, labelsPath)))
+      throw new CliArgError(`${labelsPath} already holds labels; move it away before exporting again`);
+    const source = readJson(from);
+    if (source === undefined) throw new CliArgError(`${from} doesn't exist`);
+    let exported;
+    try {
+      exported = await exportCalibration(source, deps.scenarios, from);
+    } catch (error) {
+      throw new CliArgError(`--export-calibration ${from}: ${errorReason(error)}`);
+    }
+    deps.writeFile(transcriptsPath, `${JSON.stringify(exported.set, null, 2)}\n`);
+    deps.writeFile(labelsPath, `${JSON.stringify(exported.labels, null, 2)}\n`);
+    deps.log(
+      `evals: exported ${exported.set.transcripts.length} transcript(s) to ${transcriptsPath}; label them in ${labelsPath}`,
+    );
+    return undefined;
+  }
+  if (judging.kind !== "llm") throw new CliArgError("--calibrate needs the judge");
+  const set = parseFile(CalibrationSet, readJson(transcriptsPath), transcriptsPath);
+  const labels = parseFile(LabelsFile, readJson(labelsPath), labelsPath);
+  if (!hasLabels(labels)) throw new CliArgError(`${labelsPath} has no scores yet (#159)`);
+  const labelled = set.transcripts.filter((t) => labelledDimensions(labels, t).length > 0);
+  const estimate = judgeCallEstimateUsd(judging.profile) * labelled.length;
+  deps.log(
+    `evals: calibrating ${judging.judge.name} (${judging.profile.modelId}) on ${labelled.length} labelled transcript(s). Estimated cost ≈ $${estimate.toFixed(4)}.`,
+  );
+  if (args.dryRun) return undefined;
+  const report = await runCalibration(set, labels, judging.judge, deps.now);
+  const base = join(args.out, `${fileStamp(report.judgedAt)}-calibration-${judging.profile.name}`);
+  const md = calibrationMarkdown(report);
+  deps.writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
+  deps.writeFile(`${base}.md`, `${md}\n`);
+  deps.log(`\n${md}\n\nevals: wrote ${base}.json`);
+  return report;
+}

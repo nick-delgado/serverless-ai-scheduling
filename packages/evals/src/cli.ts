@@ -14,6 +14,16 @@
  * agent, so both share one per-model quota. `--replay <results.json>` replays a run's recorded
  * simulator turns instead (no simulator calls).
  *
+ * Scenario runs are judged by the LLM judge (#32) on `--judge-profile` (default `JUDGE_MODEL_PROFILE`,
+ * else `haiku-4.5`), through the same client; `--no-judge` turns it off. Its scores are reported beside
+ * each trial's status and never change it; its cost is reported apart and counts toward `--max-cost`.
+ * Calibration: `--export-calibration <results.json>` writes transcripts and an empty labels file to
+ * `--calibration-dir` (default `packages/evals/calibration`); `--calibrate` judges the labelled ones and
+ * reports judge–human agreement. The calibration steps ignore the run flags (`--mode`, `--suite`,
+ * `--filter`, `--trials`, `--replay`, and `--max-cost`: no budget stop). `--calibrate` honours `--dry-run`
+ * (it prints only its estimate) and writes its report to `--out`; it prints its estimate before calling
+ * the judge. The export ignores `--dry-run`.
+ *
  * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
  * (list cases and the estimate, no calls), `--out <dir>`.
  */
@@ -24,12 +34,17 @@ import { fileURLToPath } from "node:url";
 import { ConverseLlmClient } from "@sched/agent";
 
 import {
+  calibrationStep,
   caseSkipReason,
-  CliArgError,
   estimateRunCost,
   exitCodeFor,
+  fileCalibrationDeps,
+  judgeSetup,
+  orUsageError,
+  orUsageErrorAsync,
   parseCliArgs,
   resultsBasePath,
+  runOptions,
   selectCases,
   simulatorSetup,
 } from "./cli-args";
@@ -40,37 +55,34 @@ import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's tested functions (setup, options, the calibration step and files, usage errors); what stays here is untested wiring: the client, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and the results writes. */
 function fail(message: string): never {
   console.error(`evals: ${message}`);
   process.exit(2);
 }
 
-/** Runs one setup step; a `CliArgError` from it is a usage error (exit 2), anything else is rethrown. */
-function orUsageError<T>(step: () => T): T {
-  try {
-    return step();
-  } catch (error) {
-    if (error instanceof CliArgError) fail(error.message);
-    throw error;
-  }
-}
-
 async function main(): Promise<void> {
-  const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR));
+  const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR), fail);
   const { mode, suite, trials, maxCostUsd, profile } = args;
-  const cases = selectCases(loadScenarios(), args);
-  if (cases.length === 0) fail("no cases match");
+  const loaded = loadScenarios();
 
-  // One rate-limited client for the agent and the simulator: one quota per model ID (#31).
+  // One rate-limited client for the agent, the simulator and the judge: one quota per model ID (#31, #32).
   const llm = rateLimited(new ConverseLlmClient({ maxAttempts: 1 }), {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
-  const setup = orUsageError(() =>
-    simulatorSetup(args, {
-      llm,
-      readReplay: (path) => JSON.parse(readFileSync(path, "utf8")),
-    }),
+  const judging = orUsageError(() => judgeSetup(args, { llm }), fail);
+  if (args.calibration !== undefined) {
+    const deps = fileCalibrationDeps(loaded.scenarios, console.log);
+    await orUsageErrorAsync(() => calibrationStep(args, judging, deps), fail);
+    return;
+  }
+
+  const cases = selectCases(loaded, args);
+  if (cases.length === 0) fail("no cases match");
+  const setup = orUsageError(
+    () => simulatorSetup(args, { llm, readReplay: (path) => JSON.parse(readFileSync(path, "utf8")) }),
+    fail,
   );
   const { simulator } = setup;
 
@@ -78,28 +90,26 @@ async function main(): Promise<void> {
     const why = caseSkipReason(c, simulator);
     return why === undefined ? [] : [`  skip ${c.id}: ${why}`];
   });
-  const estimate = estimateRunCost(cases, profile, trials, setup);
+  const estimate = estimateRunCost(cases, profile, trials, setup, judging);
   console.log(
-    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}. Estimated cost ≈ $${estimate.toFixed(4)} (budget guard $${maxCostUsd}).`,
+    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}${judging.kind === "llm" ? `, judge ${judging.judge.name}` : ""}. Estimated cost ≈ $${estimate.toFixed(4)}${judging.kind === "llm" ? ", judge included" : ""} (budget guard $${maxCostUsd}).`,
   );
   for (const line of skips) console.log(line);
   if (args.dryRun) return;
 
-  const report = await runSuite(cases, {
-    mode,
-    suite,
-    llm,
-    llmName: "converse",
-    profile,
-    trials,
-    maxCostUsd,
-    rateLimit: llm,
-    ...(simulator === undefined ? {} : { simulator }),
-    onTrial: (id, t) =>
-      console.log(
-        `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,
-      ),
-  });
+  const report = await runSuite(
+    cases,
+    runOptions(args, {
+      llm,
+      rateLimit: llm,
+      setup,
+      judging,
+      onTrial: (id, t) =>
+        console.log(
+          `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,
+        ),
+    }),
+  );
 
   mkdirSync(args.out, { recursive: true });
   const base = resultsBasePath(report, args.out);
@@ -114,3 +124,4 @@ main().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });
+/* v8 ignore stop -- end of the entry point */
