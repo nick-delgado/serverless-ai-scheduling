@@ -35,16 +35,24 @@ Then ask for the apply step, which writes your answers into the issue's descript
 - **Options:**
   - (a) <option>: <what it means for the code and for users>. Scope: within the issue | adds <...>
   - (b) <option>: <...>. Scope: <...>
-- **Recommendation:** (<letter>), because <reason, citing a source the owner can check>
+- **Recommendation:** (<letter>), because <reason, citing a source the owner can check>.
+  No conditions here: if the recommended choice holds only under a condition, write the
+  condition into that option's own text. The apply step records the chosen option's text,
+  not the recommendation.
 - **Reply:** `Decision r<k>/Q-1: (<letter>)`
 
 ### Assumptions
 
 The coding agent will follow these unless you correct them.
 
-| ID | Assumption | Basis | To correct |
-|---|---|---|---|
-| A-1 | <what the agent will do> | <the source or convention it follows> | `Decision r<k>/A-1: <your correction>` |
+| ID | Assumption | Basis | Makes stale | To correct |
+|---|---|---|---|---|
+| A-1 | <what the agent will do> | <the source or convention it follows> | <doc lines this assumption contradicts and the agent must update, as `path:line`; or "nothing"> | `Decision r<k>/A-1: <your correction>` |
+
+An assumption the review could not check, such as how an external library, service or
+platform behaves, is marked **(verify first)**: the agent establishes the behaviour before
+building on it and pins it with a test, so a wrong assumption fails loudly instead of
+silently.
 
 ### Suggested edits to the issue
 
@@ -107,6 +115,12 @@ The review is advisory: the owner decides whether work starts.
 - **Never re-ask** what an earlier round, an applied decision on this issue, or a decision
   recorded elsewhere in the project (an ADR, the PRD, an owner decision on another PR)
   already settled; cite it as the basis of an assumption instead.
+- **Edits to acceptance criteria state the observable first:** what a user or a test sees
+  ("When <condition>, <observable result>"), then any detail. An edit that prescribes
+  following a precedent ("test it as #142 does") is suggested only after checking that the
+  precedent's preconditions hold for this issue (same kind of input, same infrastructure).
+  A criterion that only a browser or a person can check gets an edit to the issue's
+  Verification section saying how it will be checked.
 - **Suggested edits are exact:** the "Before" text exists verbatim in the current
   description, so the apply step can make the change mechanically.
 - **Line numbers** are lines of files at the default branch's commit named in the header.
