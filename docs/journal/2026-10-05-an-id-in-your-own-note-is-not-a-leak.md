@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #166, PR #165 (the run), #167 (the other three violations), #98, CLAUDE.md rule 1
+**Related:** #166, PR #173, PR #165 (the run), #167 (the other three violations), #98, CLAUDE.md rule 1
 
 ## What happened
 
@@ -42,4 +42,4 @@ These are the decisions the spec left open, each with the alternative it beat:
   - a verbatim read-back fails;
   - another patient's escalation ID fails.
 - Breaks, via `npm run mutate`: 16 edits to the new code, 14 killed, and 2 survived as equivalent mutants. One is the `typeof appointment_id` guard, which decision 4 then removed. The other widens `isRecord(this)` to arrays, where the key is an index and never `reason`. Turning off the scan entirely turns the pre-existing "tool returns another patient's appointment" test red.
-- Live re-run of the one scenario: pending, see PR.
+- Live re-run of the one scenario: pending, see PR #173.
