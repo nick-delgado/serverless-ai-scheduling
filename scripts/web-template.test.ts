@@ -22,22 +22,23 @@ const lines = template.split("\n");
 const indentOf = (line: string): number => line.length - line.trimStart().length;
 
 /**
- * The lines of the block that starts at the line matching `header`: that line and every following
- * line that is blank or indented deeper than it.
+ * The lines of the block that starts at the first line of `within` matching `header`: that line and
+ * every following line that is blank or indented deeper than it.
  */
-function block(header: RegExp): string[] {
-  const start = lines.findIndex((line) => header.test(line));
+function block(header: RegExp, within: string[] = lines): string[] {
+  const start = within.findIndex((line) => header.test(line));
   if (start === -1) throw new Error(`web.yaml: no line matches ${String(header)}`);
-  const indent = indentOf(lines[start] ?? "");
-  const end = lines.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
-  return lines.slice(start, end === -1 ? undefined : end);
+  const indent = indentOf(within[start] ?? "");
+  const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
+  return within.slice(start, end === -1 ? undefined : end);
 }
 
-/** The literal block scalar under `FunctionCode: |`, dedented the way YAML reads it. */
+/**
+ * The literal block scalar under SpaDeepLinkFunction's `FunctionCode: |`, dedented the way YAML reads
+ * it. The search runs inside that resource's block, so another resource's `FunctionCode` can't be taken.
+ */
 function functionCode(): string {
-  const [header, ...body] = block(/^\s+FunctionCode: \|\s*$/);
-  if (header === undefined || !block(/^ {2}SpaDeepLinkFunction:$/).includes(header))
-    throw new Error("web.yaml: FunctionCode is not under SpaDeepLinkFunction");
+  const [, ...body] = block(/^\s+FunctionCode: \|\s*$/, block(/^ {2}SpaDeepLinkFunction:$/));
   const indent = Math.min(...body.filter((l) => l.trim() !== "").map(indentOf));
   return body.map((l) => l.slice(indent)).join("\n") + "\n";
 }
@@ -93,7 +94,9 @@ describe("SpaDeepLinkFunction (web.yaml)", () => {
     "/api/chat",
     "/api/session",
   ])("passes %s through unchanged", (uri) => {
-    expect(forwarded(uri)).toBe(uri);
+    const request = viewerRequest(uri);
+    const before = structuredClone(request);
+    expect(handler({ request })).toEqual(before);
   });
 
   it("changes only the URI: the query string, headers and method pass through as they are", () => {
