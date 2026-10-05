@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #113, process log #72 (PR #132 review P1; batches 1, 2, 3 and 5), #140 (the coverage gate), PR #93, PR #97, PR #132, PR #153, PR #154, PR #155
+**Related:** issue #113, PR #168, process log #72 (PR #132 review P1; batches 1, 2, 3 and 5), #140 (the coverage gate), PR #93, PR #97, PR #132, PR #153, PR #154, PR #155
 
 ## What happened
 
