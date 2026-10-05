@@ -20,8 +20,9 @@
  * Calibration: `--export-calibration <results.json>` writes transcripts and an empty labels file to
  * `--calibration-dir` (default `packages/evals/calibration`); `--calibrate` judges the labelled ones and
  * reports judge–human agreement. The calibration steps ignore the run flags (`--mode`, `--suite`,
- * `--filter`, `--trials`, `--replay`, and `--max-cost`: no budget stop); `--calibrate` prints its
- * estimate before calling the judge.
+ * `--filter`, `--trials`, `--replay`, and `--max-cost`: no budget stop). `--calibrate` honours `--dry-run`
+ * (it prints only its estimate) and writes its report to `--out`; it prints its estimate before calling
+ * the judge. The export ignores `--dry-run`.
  *
  * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
  * (list cases and the estimate, no calls), `--out <dir>`.
@@ -54,7 +55,7 @@ import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. It only calls cli-args.ts's tested functions (setup, options, calibration files, usage errors) with the process, Bedrock and the console. */
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's tested functions (setup, options, the calibration step and files, usage errors); what stays here is untested wiring: the client, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and the results writes. */
 function fail(message: string): never {
   console.error(`evals: ${message}`);
   process.exit(2);
