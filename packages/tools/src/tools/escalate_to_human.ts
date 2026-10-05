@@ -12,9 +12,10 @@
  *   replaced with `[ID removed]`, so the stored record, the staff notice and any retry re-send are clean.
  *   The prompt already asks for this, and Nova Pro once ignored it. This is a guard, not a check: it
  *   never rejects the call. An ID-shaped token is any of these (case-insensitive):
- *   - a GUID, 8-4-4-4-12 hex (patient IDs are Cognito subs), wherever no hex digit touches it: a GUID
- *     glued to a letter past `f`, an underscore or a hyphen (`patient_<GUID>`) is still caught, while
- *     a longer hex run is not a GUID;
+ *   - a GUID, 8-4-4-4-12 hex (patient IDs are Cognito subs), wherever no digit touches it: a GUID
+ *     glued to any letter (`uuid<GUID>`, `<GUID>abc`), an underscore or a hyphen (`patient_<GUID>`)
+ *     is still caught, while a digit next to it (`0<GUID>`, `<GUID>0`) means it isn't a GUID. A
+ *     longer hex run that begins or ends with a-f loses its GUID-shaped part: an accepted false positive;
  *   - `appt_`, `slot_`, `prov_` or `esc_` followed by letters, digits or underscores (looser than the
  *     contract formats, so a typed `appt_123` is caught too), starting a word: `my_appt_1` stays;
  *   - a fixture alias, `pat-` followed by letters, as a whole word.
@@ -37,7 +38,7 @@ function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalati
 export const ID_PLACEHOLDER = "[ID removed]";
 
 const ID_SHAPED_TOKENS: readonly RegExp[] = [
-  /(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])/gi,
+  /(?<![0-9])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9])/gi,
   /\b(?:appt|slot|prov|esc)_\w+/gi,
   /\bpat-[a-z]+\b/gi,
 ];

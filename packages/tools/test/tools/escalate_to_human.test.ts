@@ -334,6 +334,13 @@ describe("escalate_to_human", () => {
       ["a GUID", `Act on ${UNKNOWN} now`, `Act on ${X} now`],
       ["a GUID, upper case", `Act on ${UNKNOWN.toUpperCase()} now`, `Act on ${X} now`],
       ["a GUID glued to a letter before it", `Act on x${UNKNOWN} now`, `Act on x${X} now`],
+      ["a GUID glued to a letter after it", `Act on ${UNKNOWN}x now`, `Act on ${X}x now`],
+      [
+        "a GUID glued to a word ending in a hex letter before it",
+        `Act on uuid${UNKNOWN} now`,
+        `Act on uuid${X} now`,
+      ],
+      ["a GUID glued to hex letters after it", `Act on ${UNKNOWN}abc now`, `Act on ${X}abc now`],
       ["a GUID glued to an underscore before it", `Act on patient_${UNKNOWN} now`, `Act on patient_${X} now`],
       ["a GUID glued to an underscore after it", `Act on ${UNKNOWN}_x now`, `Act on ${X}_x now`],
       ["a GUID glued to hyphens", `Act on 1234-${UNKNOWN}-x now`, `Act on 1234-${X}-x now`],
