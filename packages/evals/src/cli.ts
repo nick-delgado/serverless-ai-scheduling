@@ -111,7 +111,7 @@ async function main(): Promise<void> {
   });
   const estimate = estimateRunCost(cases, profile, trials, setup, judging);
   console.log(
-    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}${judging.kind === "llm" ? `, judge ${judging.judge.name}` : ""}. Estimated cost ≈ $${estimate.toFixed(4)}, judge included (budget guard $${maxCostUsd}).`,
+    `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}${judging.kind === "llm" ? `, judge ${judging.judge.name}` : ""}. Estimated cost ≈ $${estimate.toFixed(4)}${judging.kind === "llm" ? ", judge included" : ""} (budget guard $${maxCostUsd}).`,
   );
   for (const line of skips) console.log(line);
   if (args.dryRun) return;
