@@ -12,11 +12,21 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const globalCss = read("./global.css");
 const chatCss = read("../chat/chat.css");
 
-const RULE = /(^|\n)\.visually-hidden\s*\{[^}]*clip-path:\s*inset\(50%\)[^}]*\}/;
+const RULE = /(^|\n)\.visually-hidden\s*\{([^}]*)\}/;
 
 describe(".visually-hidden", () => {
-  it("is defined in global.css", () => {
-    expect(globalCss).toMatch(RULE);
+  it("is defined in global.css, with the declarations that hide it visually", () => {
+    const body = RULE.exec(globalCss)?.[2] ?? "";
+    for (const declaration of [
+      /position:\s*absolute;/,
+      /width:\s*1px;/,
+      /height:\s*1px;/,
+      /overflow:\s*hidden;/,
+      /clip-path:\s*inset\(50%\);/,
+      /white-space:\s*nowrap;/,
+    ]) {
+      expect(body).toMatch(declaration);
+    }
   });
 
   it("is no longer defined in chat.css", () => {

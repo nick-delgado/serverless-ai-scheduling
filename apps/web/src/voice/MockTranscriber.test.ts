@@ -57,6 +57,7 @@ describe("MockTranscriber", () => {
     const error: unknown = await mock.start().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TranscriberError);
     expect((error as TranscriberError).kind).toBe(kind);
+    expect((error as TranscriberError).name).toBe("TranscriberError");
     expect(mock.sessions).toEqual([]);
   });
 
@@ -83,6 +84,13 @@ describe("MockTranscriber", () => {
     const levels = onLevel.mock.calls.length;
     await vi.advanceTimersByTimeAsync(1_000);
     expect(onLevel).toHaveBeenCalledTimes(levels);
+  });
+
+  it("error: recording fires at once when errorAfterMs isn't given", async () => {
+    const onError = vi.fn();
+    await new MockTranscriber({ error: "recording" }).start({ onError });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onError).toHaveBeenCalledOnce();
   });
 
   it("error: recording doesn't fire after cancel", async () => {
@@ -120,5 +128,12 @@ describe("MockTranscriber", () => {
     await expect(mock.start()).rejects.toBeInstanceOf(TranscriberError);
     mock.options = {};
     await expect(mock.start()).resolves.toBeDefined();
+  });
+
+  it("a session keeps a copy of the options it started with, even if they're edited before stop()", async () => {
+    const mock = new MockTranscriber({ transcript: "First" });
+    const session = await mock.start();
+    mock.options.transcript = "Second";
+    await expect(session.stop()).resolves.toBe("First");
   });
 });

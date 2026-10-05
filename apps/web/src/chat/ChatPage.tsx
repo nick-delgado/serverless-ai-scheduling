@@ -22,8 +22,8 @@ export interface ChatPageProps extends UseChatOptions {
 
 /**
  * The chat page (S5-02, #26): greeting, messages, the streaming reply, the error bubble with Retry,
- * and the composer, with the mic as its accessory (#28). The patient's `sub` and the 401 handling (sign out, which routes to sign-in) come
- * from the auth context unless the props give them (#27).
+ * and the composer, with the mic as its accessory (#28). The patient's `sub` and the 401 handling
+ * (sign out, which routes to sign-in) come from the auth context unless the props give them (#27).
  */
 export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
   const contextApi = useContext(ChatApiContext);

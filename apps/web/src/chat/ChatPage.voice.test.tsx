@@ -12,7 +12,7 @@ import { MockTranscriber } from "../voice/MockTranscriber";
 import { TranscriberContext } from "../voice/TranscriberContext";
 import { MIC_LABEL, NOTICES } from "../voice/VoiceInput";
 import { ChatPage } from "./ChatPage";
-import { captureChatBodies, doneEvent, gate, instant, log, serveEvents, until } from "./testUtils";
+import { captureChatBodies, doneEvent, gate, instant, log, sendNow, serveEvents, until } from "./testUtils";
 
 afterEach(() => {
   server.events.removeAllListeners();
@@ -64,8 +64,7 @@ describe("ChatPage: voice", () => {
     await renderPage(new MockTranscriber());
     expect(mic()).toBeEnabled();
 
-    fireEvent.change(messageBox(), { target: { value: "Hi" } });
-    fireEvent.keyDown(messageBox(), { key: "Enter" });
+    sendNow("Hi");
     expect(mic()).toBeDisabled();
 
     held.open();
