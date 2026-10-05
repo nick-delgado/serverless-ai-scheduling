@@ -538,5 +538,11 @@
     "file": "scripts/mutate.ts",
     "find": "  rmSync(running.reportDir, { recursive: true, force: true });\n",
     "replace": ""
+  },
+  {
+    "id": "fmt-detail-default",
+    "file": "scripts/mutate.ts",
+    "find": "(${result.detail ?? \"\"})",
+    "replace": "(${result.detail})"
   }
 ]

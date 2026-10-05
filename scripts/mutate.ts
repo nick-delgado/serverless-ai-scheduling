@@ -224,7 +224,7 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
     logError(`\nmutate: ${signal}: the edited file is restored.`);
     process.exit(130);
   };
-  /* v8 ignore stop */
+  /* v8 ignore stop -- end of the signal handler */
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
 

@@ -14,6 +14,9 @@ KILLED occ-minus scripts/mutate.ts: return text.split(find).length - 1; → retu
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
@@ -54,6 +57,7 @@ KILLED cls-nonvitest scripts/mutate.ts: if (outcome.failedTests === undefined) r
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
 KILLED cls-gt0 scripts/mutate.ts: outcome.failedTests.length > 0 ? "KILLED" → outcome.failedTests.length >= 0 ? "KILLED"
     ✗ scripts/mutate.test.ts > classify {"code":1,"timedOut":false,"failedTests":[]} → ERROR
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
@@ -78,6 +82,7 @@ KILLED arg-cmd-slice scripts/mutate.ts: cmd: argv.slice(dash + 1) }; → cmd: ar
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main reports wrong arguments with the usage and exits 2
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
@@ -102,6 +107,9 @@ KILLED arg-own-slice scripts/mutate.ts: const own = argv.slice(0, dash); → con
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
@@ -177,6 +185,9 @@ KILLED run-slice1 scripts/mutate.ts:     : cmd.slice(1); →     : cmd;
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
     ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
@@ -191,10 +202,17 @@ KILLED run-cwd scripts/mutate.ts: { cwd, stdio: ["ignore", "pipe", "pipe"], deta
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main mutates nothing when the unedited run fails
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
+    ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-detached scripts/mutate.ts: stdio: ["ignore", "pipe", "pipe"], detached: true } → stdio: ["ignore", "pipe", "pipe"], detached: false }
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main kills a timed-out command's whole process group, not only the process it started
     ✗ scripts/mutate.test.ts > main records how long each run took, and 0 s for a refused edit
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-stdout scripts/mutate.ts:     child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));⏎ →     child.stdout.resume();⏎
@@ -215,10 +233,12 @@ KILLED run-nonvitest scripts/mutate.ts: const failedTests = !vitest⏎        ? 
     ✗ scripts/mutate.test.ts > main writes replace as it stands, $ patterns included
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
 KILLED run-noreport scripts/mutate.ts:           : [];⏎      rmSync →           : undefined;⏎      rmSync
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
 KILLED run-rm scripts/mutate.ts:       rmSync(scratch, { recursive: true, force: true });⏎ → 
     ✗ scripts/mutate.test.ts > main removes its report directory after each run
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-cwd-names scripts/mutate.ts: failedTestNames(JSON.parse(readFileSync(reportFile, "utf8")), cwd) → failedTestNames(JSON.parse(readFileSync(reportFile, "utf8")), "/")
@@ -226,12 +246,14 @@ KILLED run-cwd-names scripts/mutate.ts: failedTestNames(JSON.parse(readFileSync(
 KILLED fmt-nl scripts/mutate.ts: text.replaceAll("\n", "⏎") → text
     ✗ scripts/mutate.test.ts > formatResult prints the status, id, file and both sides of the edit, newlines as ⏎, then each failed test
     ✗ scripts/mutate.test.ts > formatResult prints no detail line for an error, whose detail is the command's output
+    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
     ✗ scripts/mutate.test.ts > formatResult says why an edit was refused
 KILLED fmt-names scripts/mutate.ts:   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);⏎ → 
     ✗ scripts/mutate.test.ts > formatResult prints the status, id, file and both sides of the edit, newlines as ⏎, then each failed test
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
 KILLED fmt-refused scripts/mutate.ts: if (result.status === "REFUSED") lines.push → if (result.detail !== undefined) lines.push
     ✗ scripts/mutate.test.ts > formatResult prints no detail line for an error, whose detail is the command's output
+    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
 KILLED main-cwd scripts/mutate.ts: const cwd = deps.cwd ?? process.cwd(); → const cwd = deps.cwd ?? ".";
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
 KILLED main-log scripts/mutate.ts: deps.log ?? ((line: string) => console.log(line)) → deps.log ?? ((_line: string) => undefined)
@@ -279,6 +301,10 @@ KILLED main-write-edit scripts/mutate.ts:           writeFileSync(⏎           
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
     ✗ scripts/mutate.test.ts > main runs only the edits --only names
     ✗ scripts/mutate.test.ts > main logs to the console by default, relative to the process's directory
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED main-names scripts/mutate.ts: failedTests: outcome.failedTests ?? [], → failedTests: [],
@@ -291,6 +317,7 @@ KILLED main-restore scripts/mutate.ts:           restore();⏎          restore 
     ✗ scripts/mutate.test.ts > main applies each edit alone, restores the file after each, and reports KILLED and SURVIVED
     ✗ scripts/mutate.test.ts > main exits 0 when every edit was killed or timed out
     ✗ scripts/mutate.test.ts > main names the failed tests of a Vitest run, and calls a failing Vitest run with no failed test an ERROR
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
 KILLED main-off-int scripts/mutate.ts:     process.off("SIGINT", onSignal);⏎ → 
     ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
 KILLED main-off-term scripts/mutate.ts:     process.off("SIGTERM", onSignal);⏎ → 
@@ -329,6 +356,7 @@ KILLED sig-exit scripts/mutate.ts:     process.exit(130); →     process.exit(1
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-running scripts/mutate.ts:     running = { pid: child.pid as number, reportDir: scratch };⏎ → 
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED run-running-reset scripts/mutate.ts:       running = undefined;⏎ → 
@@ -336,10 +364,17 @@ KILLED run-running-reset scripts/mutate.ts:       running = undefined;⏎ →
 KILLED stop-guard scripts/mutate.ts:   if (running === undefined) return;⏎ → 
     ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
 KILLED stop-kill scripts/mutate.ts:   process.kill(-running.pid, "SIGKILL");⏎ → 
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
+    ✗ scripts/mutate.test.ts > main forgets the command once it ends, so a later signal kills no process group and removes nothing
+    ✗ scripts/mutate.test.ts > main removes its signal handlers when it returns
+    ✗ scripts/mutate.test.ts > the script sets the process exit code from main
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
 KILLED stop-rm scripts/mutate.ts:   rmSync(running.reportDir, { recursive: true, force: true });⏎ → 
+    ✗ scripts/mutate.test.ts > main stops a running command's process group and removes its report directory when asked
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGINT
     ✗ scripts/mutate.test.ts > the script restores the edited file, stops the command and exits 130 on SIGTERM
+KILLED fmt-detail-default scripts/mutate.ts: (${result.detail ?? ""}) → (${result.detail})
+    ✗ scripts/mutate.test.ts > formatResult prints an empty reason for a refused edit with no detail
 
-90 edits: 89 killed, 0 survived, 1 timed out, 0 errors, 0 refused
+91 edits: 90 killed, 0 survived, 1 timed out, 0 errors, 0 refused

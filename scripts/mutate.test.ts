@@ -259,6 +259,13 @@ describe("formatResult", () => {
     ]);
   });
 
+  it("prints an empty reason for a refused edit with no detail", () => {
+    expect(formatResult({ ...result, status: "REFUSED", failedTests: [] })).toEqual([
+      "REFUSED 7 a.ts: x⏎y → z",
+      "    ()",
+    ]);
+  });
+
   it("says why an edit was refused", () => {
     expect(
       formatResult({ ...result, status: "REFUSED", failedTests: [], detail: "find occurs 2 times" }),
@@ -425,6 +432,30 @@ describe("main", () => {
       log.mockRestore();
       error.mockRestore();
       cwd.mockRestore();
+    }
+  });
+
+  it("stops a running command's process group and removes its report directory when asked", async () => {
+    const tmp = join(dir, "tmp");
+    mkdirSync(tmp);
+    vi.stubEnv("TMPDIR", tmp);
+    try {
+      const edits = editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
+      const done = main([edits, "--", ...checker()], deps());
+      await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
+        timeout: 5_000,
+        interval: 20,
+      });
+      expect(readdirSync(tmp)).toHaveLength(1);
+      stopRunning();
+      expect(readdirSync(tmp)).toEqual([]);
+      await done;
+      // Killed by a signal, the command exits non-zero, so the edit reads as KILLED; the file is restored.
+      expect(out[0]).toBe("KILLED t target.txt: ok ? 1 → slow ? 1");
+      expect(alive(checkerPid())).toBe(false);
+      expect(target()).toBe(TARGET);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 
