@@ -10,8 +10,9 @@
  * until it is added to that list by hand. Each entry must produce a `fail` under its name. Judged graders
  * fail through a scripted judge client, not a live call.
  *
- * `invariant.conversation_owned_by_caller` is the one name left out: it is only ever reported as `skip`
- * (the chat handler's tests cover it at L0, #80).
+ * Names that are only ever reported as `skip` are left out: `invariant.conversation_owned_by_caller` (the
+ * chat handler's tests cover it at L0, #80), `judge.no_hallucinated_slots` (graded deterministically as
+ * `invariant.no_hallucinated_slots`), and `judge.<dimension>` for a `judge:` entry with no rubric.
  */
 import { MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
