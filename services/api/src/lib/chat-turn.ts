@@ -317,9 +317,10 @@ class ChatTurn {
   ): OpenTurn {
     const newId = this.#deps.newId ?? randomUUID;
     let conversationId: ConversationId;
-    const opensConversation = requested === undefined || stored.length === 0;
-    if (!opensConversation) {
+    let opensConversation = true;
+    if (requested !== undefined && stored.length > 0) {
       conversationId = requested;
+      opensConversation = false;
       this.#storedConversationId = conversationId;
     } else {
       conversationId = newId();

@@ -297,6 +297,28 @@ describe("POST /api/chat", () => {
     expect(events[0]).toHaveProperty("message", DAILY_CAP_MESSAGE);
   });
 
+  it("remembers a conversation whose first turn failed after naming it, so a Retry with its ID continues it", async () => {
+    configureMockApi({ chatFault: "unavailable" });
+    const named = parseChatResponseBody(await (await postChat()).text())[0];
+    if (named?.type !== "conversation") throw new Error("expected the conversation event first");
+
+    configureMockApi({ chatFault: "none" });
+    const { events } = await readEvents(
+      await postChat({
+        conversationId: named.conversationId,
+        clientMessageId: CLIENT_MESSAGE_ID,
+        text: "Any openings with Dr. Lee?",
+      }),
+    );
+    expect(events.map((e) => e.type)).not.toContain("conversation");
+    // The mock ignores clientMessageId, so the resend counts as a new message after the stored one.
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      conversationId: named.conversationId,
+      messageId: "msg_000003",
+    });
+  });
+
   it("injects a failure mid-stream: 200, part of the reply, then a retryable error", async () => {
     configureMockApi({ chatFault: "mid_stream" });
     const res = await postChat();
