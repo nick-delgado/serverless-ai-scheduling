@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #138, #104, #160, PR #133 (decision `cd600b3/SPEC-4`), ADR-007 (2026-10-05 amendment), PRD FR-015
+**Related:** #138, [PR #161](https://github.com/nick-delgado/serverless-ai-scheduling/pull/161), #104, #160, PR #133 (decision `cd600b3/SPEC-4`), ADR-007 (2026-10-05 amendment), PRD FR-015
 
 ## What happened
 
