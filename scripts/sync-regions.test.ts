@@ -20,20 +20,21 @@ export function regionsOf(text: string, path: string): Map<string, string> {
   const regions = new Map<string, string>();
   let open: { name: string; from: number } | undefined;
   const lines = text.split("\n");
-  lines.forEach((line, i) => {
+  for (const [i, line] of lines.entries()) {
     const m = MARKER.exec(line);
-    if (!m) return;
-    const [, kind, name] = m;
+    if (!m) continue;
+    const [, kind = "", name = ""] = m;
     if (kind === "start") {
       if (open) throw new Error(`${path}:${i + 1}: sync-start:${name} inside sync-start:${open.name}`);
       if (regions.has(name)) throw new Error(`${path}:${i + 1}: sync region ${name} marked twice`);
       open = { name, from: i + 1 };
     } else {
-      if (open?.name !== name) throw new Error(`${path}:${i + 1}: sync-end:${name} without its sync-start`);
+      if (!open || open.name !== name)
+        throw new Error(`${path}:${i + 1}: sync-end:${name} without its sync-start`);
       regions.set(name, lines.slice(open.from, i).join("\n"));
       open = undefined;
     }
-  });
+  }
   if (open) throw new Error(`${path}: sync-start:${open.name} has no sync-end`);
   return regions;
 }
@@ -80,7 +81,8 @@ export function unsynced(base: Snapshot, head: Snapshot, checked: ReadonlySet<st
 
 describe("regionsOf", () => {
   it("returns each region's lines between its markers, in any comment style", () => {
-    const text = "a\n// sync-start:x\none\ntwo\n// sync-end:x\n<!-- sync-start:y -->\nthree\n<!-- sync-end:y -->";
+    const text =
+      "a\n// sync-start:x\none\ntwo\n// sync-end:x\n<!-- sync-start:y -->\nthree\n<!-- sync-end:y -->";
     expect(regionsOf(text, "f")).toEqual(
       new Map([
         ["x", "one\ntwo"],
@@ -106,7 +108,10 @@ describe("regionsOf", () => {
 
 describe("unsynced", () => {
   const pair = (a: string, b: string) =>
-    snapshot({ "a.ts": `// sync-start:x\n${a}\n// sync-end:x`, "b.md": `<!-- sync-start:x -->\n${b}\n<!-- sync-end:x -->` });
+    snapshot({
+      "a.ts": `// sync-start:x\n${a}\n// sync-end:x`,
+      "b.md": `<!-- sync-start:x -->\n${b}\n<!-- sync-end:x -->`,
+    });
   const base = pair("one", "one");
   const none = new Set<string>();
 
@@ -159,7 +164,9 @@ function mergeBase(): string | undefined {
   } catch (err) {
     if (process.env.CI)
       throw new Error(`sync-regions: no merge base with ${ref} (CI must fetch full history)`, { cause: err });
-    process.stderr.write(`\n[sync-regions] SKIPPING: no merge base with ${ref} (set SYNC_BASE or fetch origin).\n`);
+    process.stderr.write(
+      `\n[sync-regions] SKIPPING: no merge base with ${ref} (set SYNC_BASE or fetch origin).\n`,
+    );
     return undefined;
   }
 }
@@ -188,7 +195,9 @@ describe.runIf(base !== undefined)("sync regions on this branch", () => {
     const head = snapshot(
       Object.fromEntries(markedFiles().map((p) => [p, readFileSync(join(root, p), "utf8")] as const)),
     );
-    const before = snapshot(Object.fromEntries(markedFiles(rev).map((p) => [p, git("show", `${rev}:${p}`)] as const)));
+    const before = snapshot(
+      Object.fromEntries(markedFiles(rev).map((p) => [p, git("show", `${rev}:${p}`)] as const)),
+    );
     const checked = new Set(
       git("log", "--format=%(trailers:key=Sync-checked,valueonly)", `${rev}..HEAD`)
         .split("\n")
