@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #160, #138 (PR #161), #104 (PR #153), ADR-007 (2026-10-05 amendment, #160), PRD FR-015, contracts v1.2
+**Related:** #160, [PR #174](https://github.com/nick-delgado/serverless-ai-scheduling/pull/174), #138 (PR #161), #104 (PR #153), ADR-007 (2026-10-05 amendment, #160), PRD FR-015, contracts v1.2
 
 ## What happened
 
