@@ -1,0 +1,37 @@
+[
+  {
+    "id": "93-1",
+    "note": "restoring the error in the pre-check",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "if (current.slotId === input.new_slot_id) return alreadyThere(current);",
+    "replace": "if (current.slotId === input.new_slot_id) return toolFail(\"INVALID_INPUT\", \"The appointment is already at that time.\", \"The move already succeeded.\");"
+  },
+  {
+    "id": "93-2",
+    "note": "removing the pre-check",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "  if (current.slotId === input.new_slot_id) return alreadyThere(current);\n",
+    "replace": ""
+  },
+  {
+    "id": "93-3",
+    "note": "answering the repository's SAME_SLOT as an error",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "if (result.reason !== \"SAME_SLOT\") return fail(result.reason);",
+    "replace": "return toolFail(\"INVALID_INPUT\", \"The appointment is already at that time.\", \"The move already succeeded.\");"
+  },
+  {
+    "id": "93-4",
+    "note": "marking a real move already_rescheduled",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "already_rescheduled: false,",
+    "replace": "already_rescheduled: true,"
+  },
+  {
+    "id": "93-5",
+    "note": "keeping a previous time on a retry",
+    "file": "packages/tools/src/tools/reschedule_appointment.ts",
+    "find": "previous_start_local: null,",
+    "replace": "previous_start_local: formatClinicDateTime(appointment.startUtc),"
+  }
+]
