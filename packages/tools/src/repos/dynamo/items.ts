@@ -138,6 +138,8 @@ export const messageItem = (patientId: PatientId, m: ConversationMessage): Item 
   content: JSON.stringify(m.content),
   turnId: m.turnId,
   createdAt: m.createdAt,
+  // Retry de-duplication (#104): on patient messages only, so the attribute is absent, not null, otherwise.
+  ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),
   expiresAt: expiresAtFor(m.createdAt),
 });
 export const messageFrom = (item: Item): ConversationMessage => {

@@ -13,6 +13,12 @@ export const CLINIC = {
   visitMinutes: 30,
 } as const;
 
+/**
+ * What the patient reads when they reach the daily turn cap (ADR-009). One source for the chat API's
+ * `RATE_LIMITED` error and the web mock's `daily_cap` fault (#104).
+ */
+export const DAILY_CAP_MESSAGE = `You've reached today's message limit for the assistant. Please try again tomorrow, or call our front desk at ${CLINIC.phone} (${CLINIC.hours}).`;
+
 /** Shared limits so the API, tools, UI, and evals agree. */
 export const LIMITS = {
   chatTextMaxChars: 2000,
