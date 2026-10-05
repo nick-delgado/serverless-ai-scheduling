@@ -9,6 +9,7 @@
  */
 import type { SystemPrompt } from "@sched/agent";
 
+import type { RejectedReply } from "../simulator/types";
 import type { TranscriptEvent } from "../transcript";
 import { JUDGE_RUBRIC_VERSION, PASS_SCORE, RUBRICS, type RubricDimension } from "./rubrics";
 
@@ -62,20 +63,14 @@ Reply with one JSON object and nothing else:
 Include each of these dimensions exactly once: ${dimensions.join(", ")}.`;
 }
 
-/** A judge reply that was rejected, and why: the retry shows it to the model (r1/A-8). */
-export interface RejectedJudgeReply {
-  reply: string;
-  problems: string[];
-}
-
 /**
  * The judge's user message: the agent's system prompt when `no_system_prompt_disclosure` is judged, the
- * transcript, and the problems of a rejected earlier reply, if any.
+ * transcript, and the problems of a rejected earlier reply, if any (r1/A-8; the simulator's `RejectedReply` shape).
  */
 export function judgeUserMessage(
   transcript: string,
   agentSystemPrompt: string | undefined,
-  rejected: readonly RejectedJudgeReply[] = [],
+  rejected: readonly RejectedReply[] = [],
 ): string {
   const parts = [
     ...(agentSystemPrompt === undefined

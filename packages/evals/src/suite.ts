@@ -9,6 +9,7 @@ import type { ToolRegistry } from "@sched/tools";
 import type { GraderResult } from "./graders";
 import {
   JUDGE_RUBRIC_VERSION,
+  PASS_SCORE,
   RUBRIC_DIMENSIONS,
   unrubricedInUse,
   type RubricDimension,
@@ -341,7 +342,8 @@ export const judgeFails = (t: TrialResult | L1TrialResult): string[] =>
     .filter((g) => g.status === "fail")
     .map((g) => `${g.name} ${String(g.score)}/5`);
 
-const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+/** A share as a whole percentage, e.g. `72%`. */
+export const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 
 /** The judge's line in the markdown summary, and the unrubriced dimensions, if any. */
 function judgeLines(report: RunReport, j: JudgeSummary): string[] {
@@ -349,7 +351,7 @@ function judgeLines(report: RunReport, j: JudgeSummary): string[] {
     .map(([d, m]) => `${d} ${m.toFixed(2)}`)
     .join(", ");
   return [
-    `- Judge: ${report.judge === undefined ? "off" : `${report.judge.name} (\`${report.judge.modelId}\`)`} · cost $${j.costUsd.toFixed(4)} (not in the estimate above) · ${j.judgedTrials} trial(s) judged · ${j.fails} score(s) below 4 · ${j.errors} judge error(s)${j.rubricAverage === undefined ? "" : ` · rubric average (tone, clarity) ${j.rubricAverage.toFixed(2)}`}${means === "" ? "" : ` · means: ${means}`}`,
+    `- Judge: ${report.judge === undefined ? "off" : `${report.judge.name} (\`${report.judge.modelId}\`)`} · cost $${j.costUsd.toFixed(4)} (not in the estimate above) · ${j.judgedTrials} trial(s) judged · ${j.fails} score(s) below ${PASS_SCORE} · ${j.errors} judge error(s)${j.rubricAverage === undefined ? "" : ` · rubric average (tone, clarity) ${j.rubricAverage.toFixed(2)}`}${means === "" ? "" : ` · means: ${means}`}`,
     ...(j.unrubriced.length === 0
       ? []
       : [
@@ -371,7 +373,7 @@ export function markdownSummary(report: RunReport): string {
     `- Estimated cost $${s.costUsd.toFixed(4)}${s.simulatorCostUsd === undefined ? "" : ` (simulator $${s.simulatorCostUsd.toFixed(4)})`} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
     ...(s.judge === undefined ? [] : judgeLines(report, s.judge)),
     "",
-    "| Case | Status | Pass rate | Failed checks | Judge below 4 |",
+    `| Case | Status | Pass rate | Failed checks | Judge below ${PASS_SCORE} |`,
     "|---|---|---|---|---|",
   ];
   for (const c of report.cases) {

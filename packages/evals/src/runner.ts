@@ -16,13 +16,21 @@ import type { TokenUsage, TurnOutcome } from "@sched/contracts";
 import type { ToolRegistry } from "@sched/tools";
 
 import { errorReason } from "./util";
-import { createTrialEnvironment } from "./environment";
+import { createTrialEnvironment, type TrialEnvironment } from "./environment";
 import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from "./graders";
-import { agentPromptText, gradeWithJudge, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge";
+import {
+  addCost,
+  agentPromptText,
+  gradeWithJudge,
+  zeroJudgeCost,
+  type JudgeCost,
+  type TrialJudge,
+} from "./judge";
 import type { Scenario } from "./schema";
 import {
   addUsage,
   scriptOnlySimulator,
+  type RejectedReply,
   SimulatorError,
   zeroSimulatorCost,
   zeroUsage,
@@ -76,6 +84,11 @@ export interface TrialResult {
   judgeCost: JudgeCost;
   /** Why the judge gave no verdict for this trial (its results are then `skip`, r1/A-9). */
   judgeError?: string;
+  /**
+   * The judge's replies it rejected and retried (bad JSON, a quote not in the transcript), when there were
+   * any, like the simulator's `rejected` (SMELL-107 decision, PR #165).
+   */
+  judgeRejected?: RejectedReply[];
   durationMs: number;
   /** Per-turn wall-clock durations, ms. */
   turnDurationsMs: number[];
@@ -115,6 +128,15 @@ function skipped(trial: number, reason: string, simulator: string): TrialResult 
   };
 }
 
+/**
+ * The agent's system prompt for a trial: the factory's (default: the production prompt) at the trial's
+ * frozen clock, greeting the trial's patient by first name. The calibration export rebuilds it the same way.
+ */
+export const trialSystemPrompt = (
+  env: Pick<TrialEnvironment, "clock" | "before" | "patientId">,
+  factory?: SystemPromptFactory,
+) => promptFor(factory, env.clock.now(), firstNameOf(env.before.patients, env.patientId));
+
 /** Why this scenario can't run in this harness configuration, if it can't. */
 export function skipReason(scenario: Scenario, simulator: PatientSimulator): string | undefined {
   if (scenario.surface === "api") return "needs the chat handler (surface: api, #17)";
@@ -137,8 +159,7 @@ export async function runScenarioTrial(
     trial,
     ...(agent.registry === undefined ? {} : { registry: agent.registry }),
   });
-  const firstName = firstNameOf(env.before.patients, env.patientId);
-  const system = promptFor(agent.systemPrompt, env.clock.now(), firstName);
+  const system = trialSystemPrompt(env, agent.systemPrompt);
 
   const history: LlmMessage[] = [];
   const events: TranscriptEvent[] = [];
@@ -151,10 +172,7 @@ export async function runScenarioTrial(
   const simulatorCost: SimulatorCost = zeroSimulatorCost();
   const simulatorTurns: RecordedSimulatorTurn[] = [];
   const addSimulatorCost = (cost: SimulatorCost | undefined) => {
-    if (cost === undefined) return;
-    simulatorCost.usage = addUsage(simulatorCost.usage, cost.usage);
-    simulatorCost.costUsd += cost.costUsd;
-    simulatorCost.llmCalls += cost.llmCalls;
+    if (cost !== undefined) addCost(simulatorCost, cost);
   };
   let stoppedBecause = "max_turns";
   let error: string | undefined;
@@ -265,6 +283,7 @@ export async function runScenarioTrial(
     simulatorCost,
     judgeCost: judged.cost,
     ...(judged.error === undefined ? {} : { judgeError: judged.error }),
+    ...(judged.rejected === undefined ? {} : { judgeRejected: judged.rejected }),
     durationMs,
     turnDurationsMs,
   };

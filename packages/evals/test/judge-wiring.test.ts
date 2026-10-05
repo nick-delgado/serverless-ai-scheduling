@@ -1,7 +1,7 @@
 /**
  * The judge wired into the harness (#32): the runner (judge results beside the trial's status, never
  * deciding it; its own cost; errored trials not judged), the suite (the budget guard sees judge spend;
- * the judge summary and markdown), and the CLI's judge setup and estimate.
+ * the judge summary and markdown), and the CLI's judge setup, estimate, run options and usage errors.
  */
 import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import {
   agentPromptText,
   CliArgError,
   estimateRunCost,
+  judgeCallEstimateUsd,
   failedChecks,
   JUDGE_ESTIMATE_TOKENS,
   JUDGE_RUBRIC_VERSION,
@@ -17,18 +18,24 @@ import {
   judgeFails,
   judgeSetup,
   LlmJudge,
+  loadScenarios,
   markdownSummary,
   NOT_JUDGED_ERRORED,
+  orUsageError,
+  orUsageErrorAsync,
   parseCliArgs,
   promptFor,
+  runOptions,
   runScenarioTrial,
   runSuite,
+  scriptOnlySimulator,
   summarizeJudge,
+  type RunWiring,
   type TrialJudge,
   type TrialResult,
 } from "../src";
 import { byName, scenario, SCRIPTED_PROFILE } from "./helpers";
-import { cost, FixedJudge, scored } from "./judge-helpers";
+import { cost, EVENTS, FixedJudge, reply, scored } from "./judge-helpers";
 
 const EMERGENCY = "safety-emergency-chest-pain-911";
 const GOOD = "That could be an emergency. Please call 911 right now.";
@@ -86,6 +93,20 @@ describe("runner + judge", () => {
     expect(judge.inputs).toEqual([]);
   });
 
+  it("records the judge's rejected replies on the trial, after a verdict or an error (f6d8ff8/SMELL-107 decision)", async () => {
+    const rejected = [{ reply: "not json", problems: ["it is not one JSON object"] }];
+    const verdict = { ...scored({ clarity: 5, no_medical_advice: 5 }), rejected };
+    const retried = await trial(GOOD, new FixedJudge(() => verdict));
+    expect(retried.judgeRejected).toEqual(rejected);
+    const gaveUp = await trial(
+      GOOD,
+      new FixedJudge(() => Promise.reject(new JudgeError("no valid verdict", cost(0.02), rejected))),
+    );
+    expect(gaveUp.judgeRejected).toEqual(rejected);
+    const clean = await trial(GOOD, new FixedJudge(() => scored({ clarity: 5, no_medical_advice: 5 })));
+    expect(clean).not.toHaveProperty("judgeRejected");
+  });
+
   it("the trial's duration is the conversation's, without the judge's call", async () => {
     const slow = new FixedJudge(
       () =>
@@ -119,13 +140,21 @@ describe("suite + judge", () => {
     expect(unjudged.cases[0]?.trials).toHaveLength(3);
   });
 
+  it("the budget guard counts the conversation's own cost in scenario mode (f6d8ff8/TEST-205)", async () => {
+    const report = await runSuite([scenario(EMERGENCY)], opts(undefined, { maxCostUsd: 1e-9 }));
+    expect(report.cases[0]?.trials[0]?.costUsd).toBeGreaterThan(1e-9);
+    expect(report.cases[0]?.trials).toHaveLength(1);
+    expect(report.cases[0]?.budgetStopped).toBe(true);
+  });
+
   it("passes the judge to every trial and summarises it beside the run, outside costUsd", async () => {
     let n = 0;
     const judge = new FixedJudge(() => {
       n += 1;
       if (n === 2) return Promise.reject(new JudgeError("bad", cost(0.01)));
       return scored(
-        n === 1 ? { clarity: 5, no_medical_advice: 4 } : { clarity: 2, no_medical_advice: 5 },
+        // Trial 3 has two scores below the pass mark: `fails` counts scores, not trials (f6d8ff8/TEST-206).
+        n === 1 ? { clarity: 5, no_medical_advice: 4 } : { clarity: 2, no_medical_advice: 3 },
         0.01,
       );
     });
@@ -141,9 +170,9 @@ describe("suite + judge", () => {
     expect(j).toEqual({
       costUsd: 0.03,
       judgedTrials: 2,
-      fails: 1,
+      fails: 2,
       errors: 1,
-      meanScores: { clarity: 3.5, no_medical_advice: 4.5 },
+      meanScores: { clarity: 3.5, no_medical_advice: 3.5 },
       rubricAverage: 3.5,
       unrubriced: [{ dimension: "urgency", scenarioIds: [EMERGENCY] }],
     });
@@ -152,11 +181,11 @@ describe("suite + judge", () => {
 
     const md = markdownSummary(report);
     expect(md).toContain(
-      "- Judge: fixed (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) · cost $0.0300 (not in the estimate above) · 2 trial(s) judged · 1 score(s) below 4 · 1 judge error(s) · rubric average (tone, clarity) 3.50 · means: clarity 3.50, no_medical_advice 4.50",
+      "- Judge: fixed (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) · cost $0.0300 (not in the estimate above) · 2 trial(s) judged · 2 score(s) below 4 · 1 judge error(s) · rubric average (tone, clarity) 3.50 · means: clarity 3.50, no_medical_advice 3.50",
     );
     expect(md).toContain(`- Judge dimensions without a rubric (skipped): urgency (${EMERGENCY})`);
     expect(md).toContain("| Failed checks | Judge below 4 |");
-    expect(md).toMatch(/\| judge\.clarity 2\/5 \|$/m);
+    expect(md).toMatch(/\| judge\.clarity 2\/5<br>judge\.no_medical_advice 3\/5 \|$/m);
     const [t3] = report.cases[0]?.trials.slice(2) ?? [];
     expect(t3 === undefined ? [] : failedChecks(t3).every((c) => !c.startsWith("judge."))).toBe(true);
   });
@@ -170,7 +199,7 @@ describe("suite + judge", () => {
   });
 
   it("an L1 run has no judge summary", async () => {
-    const { l1 } = await import("../src").then((m) => m.loadScenarios());
+    const { l1 } = loadScenarios();
     const [c] = l1;
     if (c === undefined) throw new Error("no L1 case");
     const report = await runSuite([c], {
@@ -212,10 +241,14 @@ describe("CLI judge setup", () => {
   const llm = new ScriptedLlmClient();
   const parse = (argv: string[], env: Record<string, string> = {}) => parseCliArgs(argv, "/r/results", env);
 
-  it("judges scenario runs on haiku-4.5 by default, through the given client", () => {
-    const setup = judgeSetup(parse(["--mode=scenario"]), { llm });
+  it("judges scenario runs on haiku-4.5 by default, through the given client (f6d8ff8/TEST-201)", async () => {
+    const given = new ScriptedLlmClient([scriptedText(reply({ tone: 5 }))]);
+    const setup = judgeSetup(parse(["--mode=scenario"]), { llm: given });
     expect(setup).toMatchObject({ kind: "llm", profile: MODEL_PROFILES["haiku-4.5"] });
-    expect(setup.kind === "llm" && setup.judge).toBeInstanceOf(LlmJudge);
+    if (setup.kind !== "llm") throw new Error("the judge is off");
+    expect(setup.judge).toBeInstanceOf(LlmJudge);
+    await setup.judge.judge({ dimensions: ["tone"], events: EVENTS, agentSystemPrompt: "" });
+    expect(given.requests.map((r) => r.modelId)).toEqual([MODEL_PROFILES["haiku-4.5"].modelId]);
   });
 
   it("takes --judge-profile over JUDGE_MODEL_PROFILE", () => {
@@ -265,6 +298,7 @@ describe("CLI judge setup", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
+    expect(judgeCallEstimateUsd(MODEL_PROFILES["haiku-4.5"])).toBe(one);
     const cases = [scenario(EMERGENCY)];
     const without = estimateRunCost(cases, SCRIPTED_PROFILE, 3);
     expect(estimateRunCost(cases, SCRIPTED_PROFILE, 3, { kind: "script-only" }, judge)).toBeCloseTo(
@@ -279,5 +313,78 @@ describe("CLI judge setup", () => {
       estimateRunCost([noDims], SCRIPTED_PROFILE, 3),
       10,
     );
+  });
+});
+
+describe("CLI run options (f6d8ff8/TEST-202)", () => {
+  const llm = new ScriptedLlmClient();
+  const args = parseCliArgs(["--mode=scenario", "--suite=full", "--trials=2", "--max-cost=3"], "/r", {});
+  const onTrial = () => undefined;
+  const rateLimit: RunWiring["rateLimit"] = { stats: { calls: 0, retries: 0, throttles: 0 } };
+  const wiring = (extra: Partial<RunWiring> = {}): RunWiring => ({
+    llm,
+    rateLimit,
+    setup: { kind: "script-only" },
+    judging: { kind: "off" },
+    onTrial,
+    ...extra,
+  });
+
+  it("runs the agent on the given client with the arguments, the counters and the progress callback", () => {
+    expect(runOptions(args, wiring())).toEqual({
+      mode: "scenario",
+      suite: "full",
+      llm,
+      llmName: "converse",
+      profile: MODEL_PROFILES["sonnet-4.6"],
+      trials: 2,
+      maxCostUsd: 3,
+      rateLimit,
+      onTrial,
+    });
+  });
+
+  it("passes the simulator and the judge with its profile on when they're set", () => {
+    const judge = new FixedJudge(() => scored({}));
+    const options = runOptions(
+      args,
+      wiring({
+        setup: { kind: "replay", simulator: scriptOnlySimulator },
+        judging: { kind: "llm", profile: MODEL_PROFILES["nova-pro"], judge },
+      }),
+    );
+    expect(options.simulator).toBe(scriptOnlySimulator);
+    expect(options.judge).toEqual({ judge, profile: MODEL_PROFILES["nova-pro"] });
+  });
+});
+
+describe("CLI usage errors (f6d8ff8/TEST-202)", () => {
+  class Exit extends Error {}
+  const usage = (message: string): never => {
+    throw new Exit(message);
+  };
+
+  it("sends a CliArgError's message to usage, returns a value, and rethrows anything else", () => {
+    expect(() =>
+      orUsageError(() => {
+        throw new CliArgError("--trials must be a positive integer");
+      }, usage),
+    ).toThrow(new Exit("--trials must be a positive integer"));
+    expect(orUsageError(() => 7, usage)).toBe(7);
+    const other = new Error("disk full");
+    expect(() =>
+      orUsageError(() => {
+        throw other;
+      }, usage),
+    ).toThrow(other);
+  });
+
+  it("does the same for an async step, such as the calibration step", async () => {
+    await expect(
+      orUsageErrorAsync(() => Promise.reject(new CliArgError("/cal/labels.json doesn't exist")), usage),
+    ).rejects.toEqual(new Exit("/cal/labels.json doesn't exist"));
+    await expect(orUsageErrorAsync(() => Promise.resolve(7), usage)).resolves.toBe(7);
+    const other = new Error("disk full");
+    await expect(orUsageErrorAsync(() => Promise.reject(other), usage)).rejects.toBe(other);
   });
 });

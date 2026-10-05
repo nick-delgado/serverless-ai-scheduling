@@ -48,7 +48,8 @@ describe("parseCliArgs", () => {
     });
   });
 
-  it("reads every flag", () => {
+  // --export-calibration and --calibrate exclude each other, so the next test reads those two.
+  it("reads every flag but the two calibration steps", () => {
     const args = parseCliArgs(
       [
         "--suite=full",
@@ -82,6 +83,14 @@ describe("parseCliArgs", () => {
       dryRun: true,
       out: "/x",
     });
+  });
+
+  it("reads the calibration steps: the export with its results file, and the agreement (f6d8ff8/TEST-204)", () => {
+    expect(parseCliArgs(["--export-calibration=/r.json"], OUT, {}).calibration).toEqual({
+      action: "export",
+      from: "/r.json",
+    });
+    expect(parseCliArgs(["--calibrate"], OUT, {}).calibration).toEqual({ action: "agreement" });
   });
 
   it.each([

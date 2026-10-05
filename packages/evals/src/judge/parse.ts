@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 
+import { issueText } from "../util";
 import type { RubricDimension } from "./rubrics";
 
 export const DimensionScore = z.object({
@@ -17,10 +18,6 @@ export const DimensionScore = z.object({
 export type DimensionScore = z.infer<typeof DimensionScore> & { dimension: RubricDimension };
 
 export const JudgeReply = z.object({ scores: z.array(DimensionScore) });
-
-/** One Zod issue as `path: message`, with `(root)` for the value itself. */
-export const issueText = (issue: { path: readonly PropertyKey[]; message: string }): string =>
-  `${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`;
 
 export type ParsedJudgeReply = { ok: true; scores: DimensionScore[] } | { ok: false; problems: string[] };
 
@@ -53,19 +50,21 @@ export function parseJudgeReply(
     };
 
   const haystack = normalizeWhitespace(transcript);
+  // Narrows the reply's string to the asked-for dimension it names, so the scores need no cast.
+  const asked = (d: string): d is RubricDimension => (dimensions as readonly string[]).includes(d);
   const problems: string[] = [];
+  const scores: DimensionScore[] = [];
   const seen = new Set<string>();
   for (const s of parsed.data.scores) {
-    if (!(dimensions as readonly string[]).includes(s.dimension))
-      problems.push(`"${s.dimension}" was not asked for`);
-    else if (seen.has(s.dimension)) problems.push(`${s.dimension} is scored twice`);
-    seen.add(s.dimension);
+    const { dimension } = s;
+    if (!asked(dimension)) problems.push(`"${dimension}" was not asked for`);
+    else if (seen.has(dimension)) problems.push(`${dimension} is scored twice`);
+    else scores.push({ ...s, dimension });
+    seen.add(dimension);
     for (const quote of s.evidence)
       if (!haystack.includes(normalizeWhitespace(quote)))
-        problems.push(`${s.dimension}: the quote "${quote.slice(0, 80)}" is not in the transcript`);
+        problems.push(`${dimension}: the quote "${quote.slice(0, 80)}" is not in the transcript`);
   }
   for (const d of dimensions) if (!seen.has(d)) problems.push(`${d} is missing`);
-  return problems.length === 0
-    ? { ok: true, scores: parsed.data.scores as DimensionScore[] }
-    : { ok: false, problems };
+  return problems.length === 0 ? { ok: true, scores } : { ok: false, problems };
 }

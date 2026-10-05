@@ -17,17 +17,6 @@ export const EVENTS = [
 ];
 export const QUOTE = "Shall I book it?";
 
-/** A judge reply scoring each dimension, quoting `quote`. */
-export const reply = (scores: Partial<Record<RubricDimension, number>>, quote = QUOTE) =>
-  JSON.stringify({
-    scores: Object.entries(scores).map(([dimension, score]) => ({
-      dimension,
-      score,
-      evidence: [quote],
-      reason: `because ${dimension}`,
-    })),
-  });
-
 /** A stand-in judge returning fixed scores, recording what it was asked. */
 export class FixedJudge implements TrialJudge {
   readonly name = "fixed";
@@ -38,6 +27,10 @@ export class FixedJudge implements TrialJudge {
     return Promise.resolve(this.verdict(input));
   }
 }
+
+/** A judge reply scoring each dimension, quoting `quote`: the JSON of `scored`'s scores. */
+export const reply = (scores: Partial<Record<RubricDimension, number>>, quote = QUOTE) =>
+  JSON.stringify({ scores: scored(scores).scores.map((s) => ({ ...s, evidence: [quote] })) });
 
 export const cost = (costUsd: number) => ({ ...zeroJudgeCost(), costUsd, llmCalls: 1 });
 export const scored = (scores: Partial<Record<RubricDimension, number>>, usd = 0.01): JudgeVerdict => ({

@@ -1,11 +1,14 @@
 /**
- * Every grader has a case that fails (#32 AC 7; improve-agent-process batch 1, #72 proposal P2). The
- * grader names the harness can emit are enumerated from the schema and the graders' own constants: end
- * state (`EndState`'s keys), trajectory (`TrajectoryRule`'s keys, plus `no_unknown_tools`), turn health,
- * invariants (`INVARIANTS` less the judged ones), L1 (its fixed names and `L1ResponseChecks`' keys, and
- * the two invariants L1 grades itself), and the judge (`RUBRIC_DIMENSIONS`). A new key or name with no
- * entry in `FAIL_CASES` fails the first test; each entry must produce a `fail` under that name. Judged
- * graders fail through a scripted judge client, not a live call.
+ * Every grader has a case that fails (#32 AC 7; improve-agent-process batch 1, #72 proposal P2). Most
+ * grader names the harness can emit are derived from the schema and the graders' constants: end state
+ * (`EndState`'s keys), trajectory (`TrajectoryRule`'s keys), invariants (`INVARIANTS` less the judged
+ * ones), `L1_ACTION`, L1 response checks (`L1ResponseChecks`' keys), and the judge (`RUBRIC_DIMENSIONS`).
+ * Nine names the graders spell as literals are listed by hand in `emittable()`: `end_state.appointment.not_slot`,
+ * `end_state.fabricated_ids_never_booked`, `trajectory.no_unknown_tools`, `turn.outcome`,
+ * `l1.stop_reason`, `l1.forbid_tools`, `l1.forbid_arg_values`, and the two invariants L1 grades itself. A
+ * new derived key with no entry in `FAIL_CASES` fails the first test; a new literal-named grader does not
+ * until it is added to that list by hand. Each entry must produce a `fail` under its name. Judged graders
+ * fail through a scripted judge client, not a live call.
  *
  * `invariant.conversation_owned_by_caller` is the one name left out: it is only ever reported as `skip`
  * (the chat handler's tests cover it at L0, #80).
@@ -266,7 +269,7 @@ const graderName = (key: string): string =>
 /** A result's name without the `(label)` a trajectory rule adds. */
 const baseName = (name: string): string => name.replace(/\(.*\)$/, "");
 
-/** Every grader name the harness can emit, from the schema and the graders' constants. */
+/** The grader names the harness can emit: derived from the schema and constants, plus nine literals by hand. */
 function emittable(): string[] {
   const judged: readonly string[] = JUDGED_INVARIANTS;
   const endState = Object.keys(EndState.shape).map((k) => (k === "escalation" ? "escalation.reason_in" : k));

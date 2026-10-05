@@ -11,14 +11,15 @@
  * These results never change a trial's status (r1/Q-1 (c)): `trialPassed` ignores kind `judge`.
  */
 import { errorReason } from "../util";
-import type { GraderResult } from "../graders/types";
-import type { Scenario } from "../schema";
+import { skip, type GraderResult } from "../graders/types";
+import type { RejectedReply } from "../simulator/types";
 import type { TranscriptEvent } from "../transcript";
 import { JudgeError, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge";
 import {
   DETERMINISTIC_JUDGE_DIMENSIONS,
   judgedDimensions,
   PASS_SCORE,
+  type JudgedExpect,
   unrubricedDimensions,
 } from "./rubrics";
 
@@ -31,10 +32,12 @@ export interface JudgeGrading {
   cost: JudgeCost;
   /** Why the judge produced no verdict, when it was asked for one. */
   error?: string;
+  /** The judge's replies rejected on the way to its verdict or its error (SMELL-107 decision, PR #165). */
+  rejected?: RejectedReply[];
 }
 
 export interface JudgeGradingInput {
-  scenario: Pick<Scenario, "expect">;
+  scenario: JudgedExpect;
   events: readonly TranscriptEvent[];
   agentSystemPrompt: string;
   /** Undefined: the judge is off. */
@@ -43,24 +46,19 @@ export interface JudgeGradingInput {
   trialErrored: boolean;
 }
 
-const skipped = (name: string, detail: string): GraderResult => ({
-  kind: "judge",
-  name,
-  status: "skip",
-  safety: false,
-  detail,
-});
+const rejectedOf = (rejected: readonly RejectedReply[] | undefined) =>
+  rejected === undefined || rejected.length === 0 ? {} : { rejected: [...rejected] };
 
 export async function gradeWithJudge(input: JudgeGradingInput): Promise<JudgeGrading> {
   const dimensions = judgedDimensions(input.scenario);
   const others: GraderResult[] = [
     ...DETERMINISTIC_JUDGE_DIMENSIONS.filter((d) => input.scenario.expect.judge.includes(d)).map((d) =>
-      skipped(`judge.${d}`, `graded deterministically: invariant.${d}`),
+      skip("judge", `judge.${d}`, `graded deterministically: invariant.${d}`),
     ),
-    ...unrubricedDimensions(input.scenario).map((d) => skipped(`judge.${d}`, NO_RUBRIC)),
+    ...unrubricedDimensions(input.scenario).map((d) => skip("judge", `judge.${d}`, NO_RUBRIC)),
   ];
   const cost = zeroJudgeCost();
-  const allSkipped = (why: string) => [...dimensions.map((d) => skipped(`judge.${d}`, why)), ...others];
+  const allSkipped = (why: string) => [...dimensions.map((d) => skip("judge", `judge.${d}`, why)), ...others];
   if (dimensions.length === 0) return { graders: others, cost };
   if (input.judge === undefined) return { graders: allSkipped(JUDGE_OFF), cost };
   if (input.trialErrored) return { graders: allSkipped(NOT_JUDGED_ERRORED), cost };
@@ -74,7 +72,7 @@ export async function gradeWithJudge(input: JudgeGradingInput): Promise<JudgeGra
     const byDimension = new Map(verdict.scores.map((s) => [s.dimension, s]));
     const graders = dimensions.map((d): GraderResult => {
       const s = byDimension.get(d);
-      if (s === undefined) return skipped(`judge.${d}`, "the judge returned no score");
+      if (s === undefined) return skip("judge", `judge.${d}`, "the judge returned no score");
       return {
         kind: "judge",
         name: `judge.${d}`,
@@ -85,13 +83,14 @@ export async function gradeWithJudge(input: JudgeGradingInput): Promise<JudgeGra
         detail: `${s.score}/5: ${s.reason}`,
       };
     });
-    return { graders: [...graders, ...others], cost: verdict.cost };
+    return { graders: [...graders, ...others], cost: verdict.cost, ...rejectedOf(verdict.rejected) };
   } catch (error) {
     const reason = `judge error: ${errorReason(error)}`;
     return {
       graders: allSkipped(reason),
       cost: error instanceof JudgeError ? error.cost : cost,
       error: reason,
+      ...rejectedOf(error instanceof JudgeError ? error.rejected : undefined),
     };
   }
 }

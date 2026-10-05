@@ -1,8 +1,10 @@
 /**
- * The pure parts of the `npm run evals` CLI (`cli.ts`): argument validation, case selection, the
- * pre-run cost estimate, the results file name, and the exit code. `cli.ts` only wires them to the
- * process, Bedrock, and the file system, so these are what the tests cover.
+ * The testable parts of the `npm run evals` CLI (`cli.ts`): argument validation, case selection, the
+ * simulator and judge setup, the pre-run cost estimate, the run's options, the results file name, the
+ * exit code, the calibration step and its file adapters, and the usage-error mapping. `cli.ts` only
+ * calls these with the process, Bedrock and `console`, so these are what the tests cover.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -16,7 +18,6 @@ import {
   DEFAULT_JUDGE_PROFILE,
   exportCalibration,
   hasLabels,
-  issueText,
   labelledDimensions,
   JUDGE_PROFILE_ENV,
   judgedDimensions,
@@ -29,7 +30,7 @@ import {
 import { l1Request } from "./l1";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
 import { skipReason } from "./runner";
-import { errorReason } from "./util";
+import { errorReason, issueText } from "./util";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import {
   LlmPatientSimulator,
@@ -38,7 +39,8 @@ import {
   SIMULATOR_PROFILE_ENV,
   type PatientSimulator,
 } from "./simulator";
-import { MODES, type Mode, type RunReport, type RunSummary } from "./suite";
+import type { RateLimitStats } from "./rate-limit";
+import { MODES, type Mode, type RunReport, type RunSuiteOptions, type RunSummary } from "./suite";
 import { promptFor } from "./system-prompt";
 
 export interface CliArgs {
@@ -247,6 +249,15 @@ export function judgeSetup(
 /** Judge calls a trial is expected to take: one, at ~6k input / 600 output tokens (r1/A-11). */
 export const JUDGE_ESTIMATE_TOKENS = { input: 6000, output: 600 };
 
+/** One judge call's estimated cost on `profile`, at `JUDGE_ESTIMATE_TOKENS`. */
+export const judgeCallEstimateUsd = (profile: ModelProfile): number =>
+  estimateCostUsd(profile, {
+    inputTokens: JUDGE_ESTIMATE_TOKENS.input,
+    outputTokens: JUDGE_ESTIMATE_TOKENS.output,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  });
+
 /**
  * Pre-run estimate (USD). L1: one call per trial, input ≈ request bytes / 4, output ≈ 300 tokens.
  * Scenarios: 3 agent calls per patient turn at ~4k input / 400 output tokens. Script-only, the turns
@@ -279,18 +290,79 @@ export function estimateRunCost(
     estimate += cost(profile, 4000, 400) * 3 * turns * trials;
     if (setup.kind === "llm") estimate += cost(setup.profile, 1500, 150) * (turns - scripted) * trials;
     if (judge.kind === "llm" && judgedDimensions(c).length > 0)
-      estimate += cost(judge.profile, JUDGE_ESTIMATE_TOKENS.input, JUDGE_ESTIMATE_TOKENS.output) * trials;
+      estimate += judgeCallEstimateUsd(judge.profile) * trials;
   }
   return estimate;
 }
+
+/** An ISO timestamp as a file name stamp: `2026-10-05T11:27:57.123Z` → `2026-10-05T112757Z`. */
+export const fileStamp = (iso: string): string => iso.replaceAll(":", "").replace(/\.\d+Z$/, "Z");
 
 /** `<out>/<timestamp>-<mode>-<suite>-<profile>`, without the `.json` / `.md` extension. */
 export function resultsBasePath(
   report: Pick<RunReport, "startedAt" | "mode" | "suite" | "profile">,
   outDir: string,
 ): string {
-  const stamp = report.startedAt.replaceAll(":", "").replace(/\.\d+Z$/, "Z");
-  return join(outDir, `${stamp}-${report.mode}-${report.suite}-${report.profile}`);
+  return join(outDir, `${fileStamp(report.startedAt)}-${report.mode}-${report.suite}-${report.profile}`);
+}
+
+/** What `runOptions` wires besides the arguments: the client, its counters, the patient and the judge. */
+export interface RunWiring {
+  llm: LlmClient;
+  /** The rate-limited client's counters, read into the report. */
+  rateLimit: { readonly stats: RateLimitStats };
+  setup: SimulatorSetup;
+  judging: JudgeSetup;
+  onTrial: NonNullable<RunSuiteOptions["onTrial"]>;
+}
+
+/** The `runSuite` options for a CLI run: the agent on `llm`, the simulator, and the judge when it's on. */
+export function runOptions(
+  args: Pick<CliArgs, "mode" | "suite" | "profile" | "trials" | "maxCostUsd">,
+  wiring: RunWiring,
+): RunSuiteOptions {
+  const { simulator } = wiring.setup;
+  const { judging } = wiring;
+  return {
+    mode: args.mode,
+    suite: args.suite,
+    llm: wiring.llm,
+    llmName: "converse",
+    profile: args.profile,
+    trials: args.trials,
+    maxCostUsd: args.maxCostUsd,
+    rateLimit: wiring.rateLimit,
+    ...(simulator === undefined ? {} : { simulator }),
+    ...(judging.kind === "llm" ? { judge: { judge: judging.judge, profile: judging.profile } } : {}),
+    onTrial: wiring.onTrial,
+  };
+}
+
+/** Rethrow `error`, unless it is a `CliArgError`: that goes to `usage` (the CLI prints it and exits 2). */
+function usageOrRethrow(error: unknown, usage: (message: string) => never): never {
+  if (error instanceof CliArgError) usage(error.message);
+  throw error;
+}
+
+/** Run one setup step; a `CliArgError` from it is a usage error, anything else is rethrown. */
+export function orUsageError<T>(step: () => T, usage: (message: string) => never): T {
+  try {
+    return step();
+  } catch (error) {
+    return usageOrRethrow(error, usage);
+  }
+}
+
+/** `orUsageError` for an async step, such as the calibration step. */
+export async function orUsageErrorAsync<T>(
+  step: () => Promise<T>,
+  usage: (message: string) => never,
+): Promise<T> {
+  try {
+    return await step();
+  } catch (error) {
+    return usageOrRethrow(error, usage);
+  }
 }
 
 /**
@@ -304,9 +376,29 @@ export const exitCodeFor = (summary: Pick<RunSummary, "safetyViolations" | "erro
 export interface CalibrationDeps {
   /** Parsed JSON of a file, or `undefined` when it doesn't exist. */
   readJson: (path: string) => unknown;
+  /** Write a file, creating its directory if needed. */
   writeFile: (path: string, text: string) => void;
   scenarios: readonly Scenario[];
   log: (line: string) => void;
+  /** When the agreement report is stamped. */
+  now: () => Date;
+}
+
+/** The calibration step's real files and clock, for `cli.ts`. */
+export function fileCalibrationDeps(
+  scenarios: readonly Scenario[],
+  log: (line: string) => void,
+): CalibrationDeps {
+  return {
+    readJson: (path) => (existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown) : undefined),
+    writeFile: (path, text) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+    },
+    scenarios,
+    log,
+    now: () => new Date(),
+  };
 }
 
 /** Validate a calibration file against its schema; a bad file is a usage error. */
@@ -331,14 +423,23 @@ export async function calibrationStep(
 ): Promise<CalibrationReport | undefined> {
   const transcriptsPath = join(args.calibrationDir, "transcripts.json");
   const labelsPath = join(args.calibrationDir, "labels.json");
+  // A file that can't be read or isn't JSON is a usage error naming it.
+  const readJson = (path: string): unknown => {
+    try {
+      return deps.readJson(path);
+    } catch (error) {
+      throw new CliArgError(`${path}: ${errorReason(error)}`);
+    }
+  };
   if (args.calibration?.action === "export") {
     const { from } = args.calibration;
-    const existing = deps.readJson(labelsPath);
+    const existing = readJson(labelsPath);
     if (existing !== undefined && hasLabels(parseFile(LabelsFile, existing, labelsPath)))
       throw new CliArgError(`${labelsPath} already holds labels; move it away before exporting again`);
+    const source = readJson(from) ?? null;
     let exported;
     try {
-      exported = await exportCalibration(deps.readJson(from) ?? null, deps.scenarios, from);
+      exported = await exportCalibration(source, deps.scenarios, from);
     } catch (error) {
       throw new CliArgError(`--export-calibration ${from}: ${errorReason(error)}`);
     }
@@ -350,26 +451,17 @@ export async function calibrationStep(
     return undefined;
   }
   if (judging.kind !== "llm") throw new CliArgError("--calibrate needs the judge");
-  const set = parseFile(CalibrationSet, deps.readJson(transcriptsPath), transcriptsPath) as CalibrationSet;
-  const labels = parseFile(LabelsFile, deps.readJson(labelsPath), labelsPath);
+  const set = parseFile(CalibrationSet, readJson(transcriptsPath), transcriptsPath);
+  const labels = parseFile(LabelsFile, readJson(labelsPath), labelsPath);
   if (!hasLabels(labels)) throw new CliArgError(`${labelsPath} has no scores yet (#159)`);
   const labelled = set.transcripts.filter((t) => labelledDimensions(labels, t).length > 0);
-  const estimate =
-    estimateCostUsd(judging.profile, {
-      inputTokens: JUDGE_ESTIMATE_TOKENS.input,
-      outputTokens: JUDGE_ESTIMATE_TOKENS.output,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    }) * labelled.length;
+  const estimate = judgeCallEstimateUsd(judging.profile) * labelled.length;
   deps.log(
     `evals: calibrating ${judging.judge.name} (${judging.profile.modelId}) on ${labelled.length} labelled transcript(s). Estimated cost ≈ $${estimate.toFixed(4)}.`,
   );
   if (args.dryRun) return undefined;
-  const report = await runCalibration(set, labels, judging.judge);
-  const base = join(
-    args.out,
-    `${report.judgedAt.replaceAll(":", "").replace(/\.\d+Z$/, "Z")}-calibration-${judging.profile.name}`,
-  );
+  const report = await runCalibration(set, labels, judging.judge, deps.now);
+  const base = join(args.out, `${fileStamp(report.judgedAt)}-calibration-${judging.profile.name}`);
   const md = calibrationMarkdown(report);
   deps.writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
   deps.writeFile(`${base}.md`, `${md}\n`);

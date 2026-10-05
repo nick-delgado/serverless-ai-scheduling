@@ -28,6 +28,8 @@ import {
   unrubricedDimensions,
   unrubricedInUse,
   zeroJudgeCost,
+  type Invariant,
+  type JudgedExpect,
   type JudgeInput,
   type RubricDimension,
 } from "../src";
@@ -35,8 +37,9 @@ import { assistant, call, systemText, userText } from "./helpers";
 import { cost, EVENTS, FixedJudge, QUOTE, reply, scored } from "./judge-helpers";
 
 /** A scenario's `expect`, with only what dimension selection reads. */
-const expects = (invariants: string[], judge: string[]) =>
-  ({ expect: { invariants, judge } }) as unknown as Parameters<typeof judgedDimensions>[0];
+const expects = (invariants: Invariant[], judge: JudgedExpect["expect"]["judge"]): JudgedExpect => ({
+  expect: { invariants, judge },
+});
 
 const profile = MODEL_PROFILES["haiku-4.5"];
 const input = (dimensions: RubricDimension[]): JudgeInput => ({
@@ -88,11 +91,15 @@ describe("dimensions", () => {
 
 describe("prompt", () => {
   it("renders patient and assistant text, and tool calls with their results or errors", () => {
-    const failed = call("book_appointment", { slot_id: "x" }, {
-      ok: false,
-      error: { code: "SLOT_UNAVAILABLE", message: "taken" },
-      turn: 2,
-    } as never);
+    const failed = call(
+      "book_appointment",
+      { slot_id: "x" },
+      {
+        ok: false,
+        error: { code: "SLOT_UNAVAILABLE", message: "taken" },
+        turn: 2,
+      },
+    );
     expect(renderJudgeTranscript([...EVENTS, failed])).toBe(
       [
         "[turn 1] Patient: I need a dermatology appointment next week.",
@@ -256,12 +263,17 @@ describe("LlmJudge", () => {
   });
 
   it("retries a bad reply once, telling the model what was wrong, and adds up both calls", async () => {
-    const llm = new ScriptedLlmClient([scriptedText("not json"), scriptedText(reply({ tone: 4 }))]);
+    const llm = new ScriptedLlmClient([
+      scriptedText("not json", { usage: { inputTokens: 1000, outputTokens: 100 } }),
+      scriptedText(reply({ tone: 4 }), { usage: { inputTokens: 2000, outputTokens: 200 } }),
+    ]);
     const verdict = await new LlmJudge({ llm, profile }).judge(input(["tone"]));
     expect(verdict.scores[0]?.score).toBe(4);
     expect(verdict.rejected).toEqual([{ reply: "not json", problems: ["it is not one JSON object"] }]);
     expect(verdict.cost.llmCalls).toBe(2);
-    expect(verdict.cost.usage.inputTokens).toBe(200);
+    expect(verdict.cost.usage.inputTokens).toBe(3000);
+    // Both calls priced, not just the last (f6d8ff8/TEST-102): haiku-4.5 at $1 / $5 per million tokens.
+    expect(verdict.cost.costUsd).toBeCloseTo((3000 * 1 + 300 * 5) / 1e6, 12);
     expect(userText(llm.requests[1])).toContain(
       "<rejected>\nnot json\n</rejected>\nProblems: it is not one JSON object.",
     );
@@ -275,16 +287,21 @@ describe("LlmJudge", () => {
 
   it(`gives up after ${JUDGE_MAX_ATTEMPTS} bad replies with a JudgeError carrying their cost`, async () => {
     const llm = new ScriptedLlmClient([
-      scriptedText("no"),
-      scriptedText(reply({ tone: 9 })),
+      scriptedText("no", { usage: { inputTokens: 1000, outputTokens: 100 } }),
+      scriptedText(reply({ tone: 9 }), { usage: { inputTokens: 2000, outputTokens: 200 } }),
       scriptedText(reply({ tone: 4 })),
     ]);
-    const error = await new LlmJudge({ llm, profile }).judge(input(["tone"])).catch((e: unknown) => e);
+    const error = (await new LlmJudge({ llm, profile })
+      .judge(input(["tone"]))
+      .catch((e: unknown) => e)) as JudgeError;
     expect(error).toBeInstanceOf(JudgeError);
-    expect((error as JudgeError).message).toMatch(
+    expect(error.message).toMatch(
       /^no valid verdict in 2 attempts: it is not one JSON object \| scores\.0\.score/,
     );
-    expect((error as JudgeError).cost.llmCalls).toBe(2);
+    expect(error.cost.llmCalls).toBe(2);
+    expect(error.cost.costUsd).toBeCloseTo((3000 * 1 + 300 * 5) / 1e6, 12); // f6d8ff8/TEST-102
+    // Both rejected replies travel with the error (f6d8ff8/SMELL-107 decision).
+    expect(error.rejected.map((r) => r.reply)).toEqual(["no", reply({ tone: 9 })]);
     expect(llm.remaining).toBe(1);
   });
 
@@ -296,6 +313,7 @@ describe("LlmJudge", () => {
     expect(error).toBeInstanceOf(JudgeError);
     expect(error.message).toBe("model call failed: Error: throttled");
     expect(error.cost.llmCalls).toBe(1);
+    expect(error.rejected).toEqual([{ reply: "no", problems: ["it is not one JSON object"] }]);
   });
 });
 
@@ -339,6 +357,7 @@ describe("gradeWithJudge", () => {
     ]);
     expect(graded.cost.costUsd).toBe(0.01);
     expect(graded.error).toBeUndefined();
+    expect(graded).not.toHaveProperty("rejected");
     expect(judge.inputs).toEqual([
       { dimensions: ["tone", "no_medical_advice"], events: EVENTS, agentSystemPrompt: "P" },
     ]);
@@ -367,6 +386,14 @@ describe("gradeWithJudge", () => {
     expect(judge.inputs).toEqual([]);
   });
 
+  it("returns the replies the judge rejected on the way to its verdict (f6d8ff8/SMELL-107 decision)", async () => {
+    const rejected = [{ reply: "not json", problems: ["it is not one JSON object"] }];
+    const judge = new FixedJudge(() => ({ ...scored({ tone: 5, no_medical_advice: 5 }), rejected }));
+    expect((await gradeWithJudge({ ...base, judge })).rejected).toEqual(rejected);
+    const none = new FixedJudge(() => ({ ...scored({ tone: 5, no_medical_advice: 5 }), rejected: [] }));
+    expect(await gradeWithJudge({ ...base, judge: none })).not.toHaveProperty("rejected");
+  });
+
   it("skips a dimension a stand-in judge left unscored", async () => {
     const graded = await gradeWithJudge({ ...base, judge: new FixedJudge(() => scored({ tone: 5 })) });
     expect(graded.graders[1]).toMatchObject({
@@ -376,19 +403,27 @@ describe("gradeWithJudge", () => {
     });
   });
 
-  it("turns a judge error into skips with the reason, keeping the JudgeError's cost", async () => {
-    const failing = new FixedJudge(() => Promise.reject(new JudgeError("no valid verdict", cost(0.02))));
+  it("turns a judge error into skips with the reason, keeping the JudgeError's cost and rejected replies", async () => {
+    const rejected = [{ reply: "no", problems: ["it is not one JSON object"] }];
+    const failing = new FixedJudge(() =>
+      Promise.reject(new JudgeError("no valid verdict", cost(0.02), rejected)),
+    );
     const graded = await gradeWithJudge({ ...base, judge: failing });
-    expect(graded.error).toBe("judge error: JudgeError: no valid verdict");
-    expect(graded.graders[0]).toMatchObject({
-      status: "skip",
-      detail: "judge error: JudgeError: no valid verdict",
-    });
+    const why = "judge error: JudgeError: no valid verdict";
+    expect(graded.error).toBe(why);
+    // The whole list: the scored dimensions skip with the reason, the others keep theirs (f6d8ff8/TEST-103).
+    expect(graded.graders).toEqual([
+      { kind: "judge", name: "judge.tone", status: "skip", safety: false, detail: why },
+      { kind: "judge", name: "judge.no_medical_advice", status: "skip", safety: false, detail: why },
+      ...OTHERS,
+    ]);
     expect(graded.cost.costUsd).toBe(0.02);
+    expect(graded.rejected).toEqual(rejected); // f6d8ff8/SMELL-107 decision
 
     const crashing = new FixedJudge(() => Promise.reject(new Error("boom")));
     const crashed = await gradeWithJudge({ ...base, judge: crashing });
     expect(crashed.error).toBe("judge error: Error: boom");
     expect(crashed.cost).toEqual(zeroJudgeCost());
+    expect(crashed).not.toHaveProperty("rejected");
   });
 });

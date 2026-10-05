@@ -19,12 +19,14 @@
  * each trial's status and never change it; its cost is reported apart and counts toward `--max-cost`.
  * Calibration: `--export-calibration <results.json>` writes transcripts and an empty labels file to
  * `--calibration-dir` (default `packages/evals/calibration`); `--calibrate` judges the labelled ones and
- * reports judge–human agreement.
+ * reports judge–human agreement. The calibration steps ignore the run flags (`--mode`, `--suite`,
+ * `--filter`, `--trials`, `--replay`, and `--max-cost`: no budget stop); `--calibrate` prints its
+ * estimate before calling the judge.
  *
  * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
  * (list cases and the estimate, no calls), `--out <dir>`.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,12 +35,15 @@ import { ConverseLlmClient } from "@sched/agent";
 import {
   calibrationStep,
   caseSkipReason,
-  CliArgError,
   estimateRunCost,
   exitCodeFor,
+  fileCalibrationDeps,
   judgeSetup,
+  orUsageError,
+  orUsageErrorAsync,
   parseCliArgs,
   resultsBasePath,
+  runOptions,
   selectCases,
   simulatorSetup,
 } from "./cli-args";
@@ -49,24 +54,14 @@ import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. It only calls cli-args.ts's tested functions (setup, options, calibration files, usage errors) with the process, Bedrock and the console. */
 function fail(message: string): never {
   console.error(`evals: ${message}`);
   process.exit(2);
 }
 
-/** Runs one setup step; a `CliArgError` from it is a usage error (exit 2), anything else is rethrown. */
-function orUsageError<T>(step: () => T): T {
-  try {
-    return step();
-  } catch (error) {
-    if (error instanceof CliArgError) fail(error.message);
-    throw error;
-  }
-}
-
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests; the logic it wires lives in cli-args.ts and the modules it calls, which are tested */
 async function main(): Promise<void> {
-  const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR));
+  const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR), fail);
   const { mode, suite, trials, maxCostUsd, profile } = args;
   const loaded = loadScenarios();
 
@@ -75,33 +70,18 @@ async function main(): Promise<void> {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
-  const judging = orUsageError(() => judgeSetup(args, { llm }));
+  const judging = orUsageError(() => judgeSetup(args, { llm }), fail);
   if (args.calibration !== undefined) {
-    const readJson = (path: string): unknown =>
-      existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
-    const writeFile = (path: string, text: string) => {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, text);
-    };
-    const step = calibrationStep(args, judging, {
-      readJson,
-      writeFile,
-      scenarios: loaded.scenarios,
-      log: console.log,
-    });
-    await step.catch((error: unknown) =>
-      error instanceof CliArgError ? fail(error.message) : Promise.reject(error),
-    );
+    const deps = fileCalibrationDeps(loaded.scenarios, console.log);
+    await orUsageErrorAsync(() => calibrationStep(args, judging, deps), fail);
     return;
   }
 
   const cases = selectCases(loaded, args);
   if (cases.length === 0) fail("no cases match");
-  const setup = orUsageError(() =>
-    simulatorSetup(args, {
-      llm,
-      readReplay: (path) => JSON.parse(readFileSync(path, "utf8")),
-    }),
+  const setup = orUsageError(
+    () => simulatorSetup(args, { llm, readReplay: (path) => JSON.parse(readFileSync(path, "utf8")) }),
+    fail,
   );
   const { simulator } = setup;
 
@@ -116,22 +96,19 @@ async function main(): Promise<void> {
   for (const line of skips) console.log(line);
   if (args.dryRun) return;
 
-  const report = await runSuite(cases, {
-    mode,
-    suite,
-    llm,
-    llmName: "converse",
-    profile,
-    trials,
-    maxCostUsd,
-    rateLimit: llm,
-    ...(simulator === undefined ? {} : { simulator }),
-    ...(judging.kind === "llm" ? { judge: { judge: judging.judge, profile: judging.profile } } : {}),
-    onTrial: (id, t) =>
-      console.log(
-        `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,
-      ),
-  });
+  const report = await runSuite(
+    cases,
+    runOptions(args, {
+      llm,
+      rateLimit: llm,
+      setup,
+      judging,
+      onTrial: (id, t) =>
+        console.log(
+          `  ${t.status.padEnd(5)} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}  ${t.durationMs} ms  ${failedChecks(t).join("; ")}`,
+        ),
+    }),
+  );
 
   mkdirSync(args.out, { recursive: true });
   const base = resultsBasePath(report, args.out);

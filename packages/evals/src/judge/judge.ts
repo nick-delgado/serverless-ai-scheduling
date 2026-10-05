@@ -11,28 +11,30 @@
  *
  * The request is built here, like the simulator's (`simulator/llm.ts`); #105 plans one shared builder.
  */
-import { estimateCostUsd, type LlmClient, type ModelProfile } from "@sched/agent";
+import { estimateCostUsd, type LlmClient, type ModelProfile, type ModelProfileName } from "@sched/agent";
 
-import { addUsage, zeroSimulatorCost, type SimulatorCost } from "../simulator/types";
+import { addUsage, zeroSimulatorCost, type RejectedReply, type SimulatorCost } from "../simulator/types";
 import { textOf, type TranscriptEvent } from "../transcript";
 import { errorReason } from "../util";
 import { parseJudgeReply, type DimensionScore } from "./parse";
-import {
-  judgeSystemPrompt,
-  judgeUserMessage,
-  renderJudgeTranscript,
-  type RejectedJudgeReply,
-} from "./prompt";
+import { judgeSystemPrompt, judgeUserMessage, renderJudgeTranscript } from "./prompt";
 import { JUDGE_RUBRIC_VERSION, type RubricDimension } from "./rubrics";
 
 /** The environment variable that selects the judge's model profile. */
 export const JUDGE_PROFILE_ENV = "JUDGE_MODEL_PROFILE";
 /** The judge's default profile (r1/Q-4). */
-export const DEFAULT_JUDGE_PROFILE = "haiku-4.5";
+export const DEFAULT_JUDGE_PROFILE: ModelProfileName = "haiku-4.5";
 
 /** What the judge's calls cost: the same shape as the simulator's. */
 export type JudgeCost = SimulatorCost;
 export const zeroJudgeCost = zeroSimulatorCost;
+
+/** Add `more`'s tokens, cost and model calls into `total` (the runner's simulator cost, a calibration run). */
+export function addCost(total: JudgeCost, more: JudgeCost): void {
+  total.usage = addUsage(total.usage, more.usage);
+  total.costUsd += more.costUsd;
+  total.llmCalls += more.llmCalls;
+}
 
 export interface JudgeInput {
   dimensions: readonly RubricDimension[];
@@ -44,8 +46,8 @@ export interface JudgeInput {
 export interface JudgeVerdict {
   scores: DimensionScore[];
   cost: JudgeCost;
-  /** Replies rejected on the way to this one. */
-  rejected?: RejectedJudgeReply[];
+  /** Replies rejected on the way to this one; the runner records them as `TrialResult.judgeRejected`. */
+  rejected?: RejectedReply[];
 }
 
 /** Anything that scores a trial: the LLM judge, or a stand-in in tests. */
@@ -55,14 +57,19 @@ export interface TrialJudge {
   judge(input: JudgeInput): Promise<JudgeVerdict>;
 }
 
-/** The judge couldn't produce a valid verdict. `cost` is what its calls cost anyway. */
+/**
+ * The judge couldn't produce a valid verdict. `cost` is what its calls cost anyway, and `rejected` the
+ * replies it turned down on the way.
+ */
 export class JudgeError extends Error {
   override readonly name = "JudgeError";
   readonly cost: JudgeCost;
+  readonly rejected: readonly RejectedReply[];
 
-  constructor(message: string, cost: JudgeCost) {
+  constructor(message: string, cost: JudgeCost, rejected: readonly RejectedReply[] = []) {
     super(message);
     this.cost = cost;
+    this.rejected = rejected;
   }
 }
 
@@ -91,7 +98,7 @@ export class LlmJudge implements TrialJudge {
     const showPrompt = input.dimensions.includes("no_system_prompt_disclosure");
     const system = judgeSystemPrompt(input.dimensions);
     const cost = zeroJudgeCost();
-    const rejected: RejectedJudgeReply[] = [];
+    const rejected: RejectedReply[] = [];
     const profile = this.profile;
 
     for (let attempt = 1; attempt <= JUDGE_MAX_ATTEMPTS; attempt++) {
@@ -124,7 +131,7 @@ export class LlmJudge implements TrialJudge {
             : { inlineReasoningTag: profile.inlineReasoningTag }),
         });
       } catch (callError) {
-        throw new JudgeError(`model call failed: ${errorReason(callError)}`, cost);
+        throw new JudgeError(`model call failed: ${errorReason(callError)}`, cost, rejected);
       }
       cost.llmCalls += 1;
       cost.usage = addUsage(cost.usage, response.usage);
@@ -141,6 +148,7 @@ export class LlmJudge implements TrialJudge {
     throw new JudgeError(
       `no valid verdict in ${JUDGE_MAX_ATTEMPTS} attempts: ${rejected.map((r) => r.problems.join(", ")).join(" | ")}`,
       cost,
+      rejected,
     );
   }
 }

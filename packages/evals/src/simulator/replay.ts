@@ -18,6 +18,7 @@ import {
   type SimulatorContext,
   type SimulatorTurn,
 } from "./types";
+import { issueText } from "../util";
 
 /**
  * The part of a results file (`RunReport`) a replay reads. Trials without `simulatorTurns` (L1 trials)
@@ -61,9 +62,7 @@ export class ReplayPatientSimulator implements PatientSimulator {
     const parsed = ReplaySource.safeParse(json);
     if (!parsed.success) {
       const [issue] = parsed.error.issues;
-      throw new Error(
-        `not a results file: ${issue?.path.map(String).join(".") || "(root)"}: ${issue?.message ?? "invalid"}`,
-      );
+      throw new Error(`not a results file: ${issue === undefined ? "(root): invalid" : issueText(issue)}`);
     }
     const report = parsed.data;
     const recordings: Record<string, readonly RecordedSimulatorTurn[]> = {};
