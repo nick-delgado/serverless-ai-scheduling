@@ -146,4 +146,4 @@ main().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });
-/* v8 ignore stop */
+/* v8 ignore stop -- end of the entry point */
