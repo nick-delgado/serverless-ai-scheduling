@@ -400,11 +400,30 @@ describe("calibrationStep", () => {
     expect(labelled.store.has("/cal/transcripts.json")).toBe(false);
   });
 
-  it("export of a missing or wrong results file is a usage error", async () => {
-    await expect(calibrationStep(exportArgs, off, files().deps)).rejects.toThrow(
+  it("export of a missing results file is a usage error saying it doesn't exist (de04bd8/SMELL-205)", async () => {
+    const { store, deps } = files();
+    await expect(calibrationStep(exportArgs, off, deps)).rejects.toThrow(
+      new CliArgError("/r.json doesn't exist"),
+    );
+    expect(store.size).toBe(0);
+  });
+
+  it("export of a file that isn't scenario results is a usage error naming the field", async () => {
+    const { deps } = files({ "/r.json": null });
+    await expect(calibrationStep(exportArgs, off, deps)).rejects.toThrow(
       /^--export-calibration \/r\.json: Error: not a scenario results file: \(root\)/,
     );
-    await expect(calibrationStep(exportArgs, off, files().deps)).rejects.toBeInstanceOf(CliArgError);
+    await expect(calibrationStep(exportArgs, off, deps)).rejects.toBeInstanceOf(CliArgError);
+  });
+
+  it("export refuses an existing labels file that isn't valid, naming it, and writes nothing (de04bd8/TEST-203)", async () => {
+    const bad = { ...FIXTURE_LABELS, labels: [{ id: "a#1", scores: { tone: 7 } }] };
+    const { store, deps } = files({ "/r.json": resultsFile(), "/cal/labels.json": bad });
+    const step = calibrationStep(exportArgs, off, deps);
+    await expect(step).rejects.toBeInstanceOf(CliArgError);
+    await expect(step).rejects.toThrow(/^\/cal\/labels\.json: labels\.0\.scores\.tone: /);
+    expect(store.has("/cal/transcripts.json")).toBe(false);
+    expect(store.get("/cal/labels.json")).toBe(bad);
   });
 
   it("agreement judges the labelled transcripts and writes the report", async () => {

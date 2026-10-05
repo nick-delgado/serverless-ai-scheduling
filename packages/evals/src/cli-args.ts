@@ -436,7 +436,8 @@ export async function calibrationStep(
     const existing = readJson(labelsPath);
     if (existing !== undefined && hasLabels(parseFile(LabelsFile, existing, labelsPath)))
       throw new CliArgError(`${labelsPath} already holds labels; move it away before exporting again`);
-    const source = readJson(from) ?? null;
+    const source = readJson(from);
+    if (source === undefined) throw new CliArgError(`${from} doesn't exist`);
     let exported;
     try {
       exported = await exportCalibration(source, deps.scenarios, from);
