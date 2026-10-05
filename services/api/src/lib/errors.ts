@@ -2,7 +2,7 @@
  * Patient-safe terminal `error` events for the chat stream (ADR-007), with the HTTP status to use if
  * nothing has been streamed yet. Details go to the log, never to the client.
  */
-import { CLINIC, type ChatErrorCode, type ChatStreamEvent } from "@sched/contracts";
+import { DAILY_CAP_MESSAGE, type ChatErrorCode, type ChatStreamEvent } from "@sched/contracts";
 
 export type ChatErrorEvent = Extract<ChatStreamEvent, { type: "error" }>;
 
@@ -18,13 +18,7 @@ function failure(httpStatus: number, code: ChatErrorCode, message: string, retry
 export const FAILURES = {
   unauthorized: () => failure(401, "UNAUTHORIZED", "Please sign in again.", false),
   badRequest: () => failure(400, "BAD_REQUEST", "The message couldn't be read. Please try again.", false),
-  dailyCap: () =>
-    failure(
-      429,
-      "RATE_LIMITED",
-      `You've reached today's message limit for the assistant. Please try again tomorrow, or call our front desk at ${CLINIC.phone} (${CLINIC.hours}).`,
-      false,
-    ),
+  dailyCap: () => failure(429, "RATE_LIMITED", DAILY_CAP_MESSAGE, false),
   throttled: () =>
     failure(429, "RATE_LIMITED", "The assistant is busy right now. Please try again in a moment.", true),
   unavailable: () =>

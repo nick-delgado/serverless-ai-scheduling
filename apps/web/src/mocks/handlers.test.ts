@@ -2,6 +2,7 @@ import {
   ApiError,
   type ChatStreamEvent,
   CLINIC,
+  DAILY_CAP_MESSAGE,
   isTerminalEvent,
   parseChatResponseBody,
   parseStreamEventLine,
@@ -219,6 +220,8 @@ describe("POST /api/chat", () => {
       expect.objectContaining({ type: "error", code: "RATE_LIMITED", retryable: false }),
     ]);
     expect(events[0]).toHaveProperty("message", expect.stringContaining(CLINIC.phone));
+    // One source for the text, shared with the chat handler's FAILURES.dailyCap (#104).
+    expect(events[0]).toHaveProperty("message", DAILY_CAP_MESSAGE);
   });
 
   it("injects a failure mid-stream: 200, part of the reply, then a retryable error", async () => {

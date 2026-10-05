@@ -53,6 +53,12 @@ export const ChatErrorEvent = z.strictObject({
   code: ChatErrorCode,
   message: z.string().min(1).max(500),
   retryable: z.boolean(),
+  /**
+   * The conversation this turn belongs to, whenever it exists in storage when the error is sent (the
+   * patient's message was stored, or the request continued a stored conversation), so a Retry after a
+   * failed first turn continues it (FR-014, FR-015, #104). Omitted otherwise.
+   */
+  conversationId: ConversationId.optional(),
 });
 
 export const ChatStreamEvent = z.discriminatedUnion("type", [

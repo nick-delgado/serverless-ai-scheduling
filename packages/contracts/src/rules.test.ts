@@ -4,7 +4,7 @@ import * as C from "./index";
 
 import { ChatRequest } from "./api";
 import { IsoDate, IsoDateTimeUtc } from "./primitives";
-import { Slot } from "./domain";
+import { ConversationMessage, Slot } from "./domain";
 import { RescheduleAppointmentOutput } from "./tools";
 import { PatientId, makeSlotId, messageIdForSeq, parseSlotId, toCanonicalUtc } from "./ids";
 import {
@@ -155,6 +155,24 @@ describe("contracts v1.1 (#60)", () => {
       { type: "text_delta", text: "\n\nDr. Lee is free." },
     ];
     expect(C.visibleText(events)).toBe("Let me check.\n\nDr. Lee is free.");
+  });
+});
+
+describe("chat retries (#104)", () => {
+  const uuid = "5b8e2c1a-7d6f-4e3b-9a1c-2d3e4f5a6b7c";
+
+  it("a stored message may carry the clientMessageId it was sent with, which must be a UUID", () => {
+    const message = { ...EXAMPLES.ConversationMessage, role: "user", content: [EXAMPLES.ContentBlock] };
+    expect(ConversationMessage.parse({ ...message, clientMessageId: uuid }).clientMessageId).toBe(uuid);
+    expect(ConversationMessage.safeParse(message).success).toBe(true);
+    expect(ConversationMessage.safeParse({ ...message, clientMessageId: "retry-1" }).success).toBe(false);
+  });
+
+  it("an error event may name its conversation, which must be a conversation ID", () => {
+    const error = { ...EXAMPLES.ChatErrorEvent, conversationId: uuid };
+    expect(ChatStreamEvent.parse(error)).toEqual(error);
+    expect(ChatStreamEvent.safeParse(EXAMPLES.ChatErrorEvent).success).toBe(true);
+    expect(ChatStreamEvent.safeParse({ ...error, conversationId: "conv-1" }).success).toBe(false);
   });
 });
 

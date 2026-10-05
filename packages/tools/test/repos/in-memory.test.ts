@@ -16,6 +16,13 @@ describe("in-memory repositories: implementation specifics", () => {
   const clock = new FrozenClock("2026-10-05T13:00:00Z");
   const maria = FIXTURE_PATIENT_IDS["pat-maria"];
 
+  it("keeps a patient message's clientMessageId (#104)", async () => {
+    const repos = createInMemoryRepositories({ seed: buildClinicFixture(), clock });
+    const clientMessageId = "5b8e2c1a-7d6f-4e3b-9a1c-2d3e4f5a6b7c";
+    await repos.conversations.append(maria, [{ ...message(CONV_A, 0), clientMessageId }]);
+    expect((await repos.conversations.listMessages(maria, CONV_A))[0]?.clientMessageId).toBe(clientMessageId);
+  });
+
   it("loads the full clinic-default fixture", async () => {
     const fixture = buildClinicFixture();
     const repos = createInMemoryRepositories({ seed: fixture, clock });
