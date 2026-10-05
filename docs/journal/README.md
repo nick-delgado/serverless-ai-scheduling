@@ -44,3 +44,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-04 | [The voice overlay never touches the mic, and a `?raw` CSS import read nothing](2026-10-04-the-overlay-never-touches-the-mic.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [CI now fails a line no test ran, including the right operand of `??`](2026-10-04-ci-now-fails-a-line-no-test-ran.md) | 4. Teaching the agent to schedule |
 | 2026-10-05 | [Readiness reviews halved the open questions, and wrote some of the next mistakes](2026-10-05-readiness-reviews-halved-the-open-questions.md) | 4. Teaching the agent to schedule |
+| 2026-10-05 | [What the prompt couldn't stop, code now removes: `<thinking>` anywhere, and IDs in escalation summaries](2026-10-05-guards-outside-the-prompt.md) | 4. Teaching the agent to schedule |
