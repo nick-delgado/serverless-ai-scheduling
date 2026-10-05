@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M3
-**Related:** #107, #16 (PR #102), #37, ADR-008, ADR-009, ADR-010, PRD FR-034
+**Related:** #107, PR #162, #16 (PR #102), #37, ADR-008, ADR-009, ADR-010, PRD FR-034
 
 ## What happened
 
