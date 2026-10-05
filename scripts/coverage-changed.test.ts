@@ -261,8 +261,18 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["--base=abc"])).toEqual({ base: "abc" });
   });
 
+  it("names the bad argument in the usage error", () => {
+    expect(() => parseCliArgs(["--bse", "x"])).toThrow(/usage: coverage-changed .*'--bse'/);
+  });
+
   it.each([[["--bse", "x"]], [["--base"]], [["--coverage", "--base"]], [["stray"]]])("rejects %j", (argv) => {
     expect(() => parseCliArgs(argv)).toThrow(/usage: coverage-changed/);
+    // The parser's own error stays attached as the cause.
+    expect(() => parseCliArgs(argv)).toThrow(
+      expect.objectContaining({
+        cause: expect.objectContaining({ code: expect.stringMatching(/^ERR_PARSE_ARGS_/) }),
+      }),
+    );
   });
 });
 

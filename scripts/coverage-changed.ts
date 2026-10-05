@@ -196,7 +196,12 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     });
     return { base: values.base, coverage: values.coverage };
   } catch (err) {
-    throw new Error(`usage: coverage-changed [--base <ref>] [--coverage <path>] (${(err as Error).message})`);
+    throw new Error(
+      `usage: coverage-changed [--base <ref>] [--coverage <path>] (${(err as Error).message})`,
+      {
+        cause: err,
+      },
+    );
   }
 }
 
