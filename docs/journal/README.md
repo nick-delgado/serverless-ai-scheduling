@@ -42,3 +42,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-04 | [Deep links: the edge rewrites only what has no file extension, and never `/api`](2026-10-04-deep-links-rewrite-only-what-has-no-extension.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [A Retry re-runs a turn no tool touched, and replays one that a tool did](2026-10-04-a-retry-reruns-a-turn-no-tool-touched.md) | 4. Teaching the agent to schedule |
 | 2026-10-04 | [The voice overlay never touches the mic, and a `?raw` CSS import read nothing](2026-10-04-the-overlay-never-touches-the-mic.md) | 4. Teaching the agent to schedule |
+| 2026-10-04 | [CI now fails a line no test ran, including the right operand of `??`](2026-10-04-ci-now-fails-a-line-no-test-ran.md) | 4. Teaching the agent to schedule |

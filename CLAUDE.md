@@ -54,7 +54,11 @@ npm run format                           # auto-fix formatting and lint
 npm run typecheck                        # tsc --noEmit for the root configs and every workspace
 npm test                                 # all Vitest projects
 npm test -w packages/contracts           # one workspace
+npm run test:coverage                    # all Vitest projects with v8 coverage (coverage/coverage-final.json)
+npm run coverage:changed                 # fail on any line this branch adds that no test ran (vs origin/main; -- --base <ref>)
 ```
+
+The coverage gate checks committed changes only. A deliberate exception is a `/* v8 ignore next -- <reason> */` hint (or `start`/`stop`) in the diff; a hint without a reason fails. Lines only DynamoDB Local reaches show as uncovered locally unless it is running (`npm run dynamodb:local -w packages/tools`).
 
 Evals (ADR-008; live runs call Bedrock and cost money, so try `--dry-run` first for the case list and estimate):
 
@@ -110,7 +114,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Parallel agents: each issue lists its **owned paths**. Stay inside them. If you must touch a shared file (root configs, `packages/contracts`), keep the change minimal and say so in the PR. A line your change makes false, in `CLAUDE.md` or any other doc, skill or keep-in-sync comment (a command, a status, a list of copies), is fixed in the same PR, called out the same way; an Accepted ADR changes by amendment. The journal entry the definition of done asks for, and its row in `docs/journal/README.md`, are in scope for every issue.
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
-  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, and test on Node from `.nvmrc`.
+  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
 
   A PR isn't done until both are green.
