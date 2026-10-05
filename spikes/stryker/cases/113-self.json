@@ -1,0 +1,542 @@
+[
+  {
+    "id": "occ-empty",
+    "file": "scripts/mutate.ts",
+    "find": "  if (find === \"\") return 0;\n",
+    "replace": ""
+  },
+  {
+    "id": "occ-minus",
+    "file": "scripts/mutate.ts",
+    "find": "return text.split(find).length - 1;",
+    "replace": "return text.split(find).length;"
+  },
+  {
+    "id": "vit-prefix",
+    "file": "scripts/mutate.ts",
+    "find": "/(^|\\/)vitest(\\.mjs)?$/",
+    "replace": "/vitest(\\.mjs)?$/"
+  },
+  {
+    "id": "vit-mjs",
+    "file": "scripts/mutate.ts",
+    "find": "/(^|\\/)vitest(\\.mjs)?$/",
+    "replace": "/(^|\\/)vitest$/"
+  },
+  {
+    "id": "vit-anchor",
+    "file": "scripts/mutate.ts",
+    "find": "/(^|\\/)vitest(\\.mjs)?$/",
+    "replace": "/(^|\\/)vitest(\\.mjs)?/"
+  },
+  {
+    "id": "ftn-array",
+    "file": "scripts/mutate.ts",
+    "find": "  if (!Array.isArray(files)) return [];\n",
+    "replace": ""
+  },
+  {
+    "id": "ftn-assert-default",
+    "file": "scripts/mutate.ts",
+    "find": "(file.assertionResults ?? [])",
+    "replace": "(file.assertionResults as { status: string; fullName: string }[])"
+  },
+  {
+    "id": "ftn-failed",
+    "file": "scripts/mutate.ts",
+    "find": "test.status === \"failed\"",
+    "replace": "test.status !== \"passed\""
+  },
+  {
+    "id": "ftn-prefix-slash",
+    "file": "scripts/mutate.ts",
+    "find": "const prefix = `${cwd}/`;",
+    "replace": "const prefix = cwd;"
+  },
+  {
+    "id": "ftn-strip",
+    "file": "scripts/mutate.ts",
+    "find": "${file.name.startsWith(prefix) ? file.name.slice(prefix.length) : file.name}",
+    "replace": "${file.name.slice(prefix.length)}"
+  },
+  {
+    "id": "ftn-sep",
+    "file": "scripts/mutate.ts",
+    "find": "} > ${test.fullName}`",
+    "replace": "} ${test.fullName}`"
+  },
+  {
+    "id": "cls-timeout",
+    "file": "scripts/mutate.ts",
+    "find": "  if (outcome.timedOut) return \"TIMEOUT\";\n",
+    "replace": ""
+  },
+  {
+    "id": "cls-zero",
+    "file": "scripts/mutate.ts",
+    "find": "if (outcome.code === 0) return \"SURVIVED\";",
+    "replace": "if (outcome.code === 0 && outcome.failedTests === undefined) return \"SURVIVED\";"
+  },
+  {
+    "id": "cls-nonvitest",
+    "file": "scripts/mutate.ts",
+    "find": "if (outcome.failedTests === undefined) return \"KILLED\";",
+    "replace": "if (outcome.failedTests === undefined) return \"ERROR\";"
+  },
+  {
+    "id": "cls-gt0",
+    "file": "scripts/mutate.ts",
+    "find": "outcome.failedTests.length > 0 ? \"KILLED\"",
+    "replace": "outcome.failedTests.length >= 0 ? \"KILLED\""
+  },
+  {
+    "id": "arg-nodash",
+    "file": "scripts/mutate.ts",
+    "find": "if (dash < 0 || dash === argv.length - 1)",
+    "replace": "if (dash === argv.length - 1)"
+  },
+  {
+    "id": "arg-empty-cmd",
+    "file": "scripts/mutate.ts",
+    "find": "if (dash < 0 || dash === argv.length - 1)",
+    "replace": "if (dash < 0)"
+  },
+  {
+    "id": "arg-default-timeout",
+    "file": "scripts/mutate.ts",
+    "find": "export const DEFAULT_TIMEOUT_SECONDS = 300;",
+    "replace": "export const DEFAULT_TIMEOUT_SECONDS = 30;"
+  },
+  {
+    "id": "arg-cmd-slice",
+    "file": "scripts/mutate.ts",
+    "find": "cmd: argv.slice(dash + 1) };",
+    "replace": "cmd: argv.slice(dash) };"
+  },
+  {
+    "id": "arg-own-slice",
+    "file": "scripts/mutate.ts",
+    "find": "const own = argv.slice(0, dash);",
+    "replace": "const own = argv.slice(0, dash + 1);"
+  },
+  {
+    "id": "arg-value-index",
+    "file": "scripts/mutate.ts",
+    "find": "const value = own[i + 1];",
+    "replace": "const value = own[i];"
+  },
+  {
+    "id": "arg-or-timeout",
+    "file": "scripts/mutate.ts",
+    "find": "if (arg === \"--timeout\" || arg === \"--json\" || arg === \"--only\") {",
+    "replace": "if (arg === \"--json\" || arg === \"--only\") {"
+  },
+  {
+    "id": "arg-or-json",
+    "file": "scripts/mutate.ts",
+    "find": "if (arg === \"--timeout\" || arg === \"--json\" || arg === \"--only\") {",
+    "replace": "if (arg === \"--timeout\" || arg === \"--only\") {"
+  },
+  {
+    "id": "arg-or-only",
+    "file": "scripts/mutate.ts",
+    "find": "if (arg === \"--timeout\" || arg === \"--json\" || arg === \"--only\") {",
+    "replace": "if (arg === \"--timeout\" || arg === \"--json\") {"
+  },
+  {
+    "id": "arg-needs-value",
+    "file": "scripts/mutate.ts",
+    "find": "      if (value === undefined) throw new Error(`${arg} needs a value. ${USAGE}`);\n",
+    "replace": ""
+  },
+  {
+    "id": "arg-skip",
+    "file": "scripts/mutate.ts",
+    "find": "      i++;\n",
+    "replace": ""
+  },
+  {
+    "id": "arg-number",
+    "file": "scripts/mutate.ts",
+    "find": "args.timeout = Number(value);",
+    "replace": "args.timeout = Number(value) || DEFAULT_TIMEOUT_SECONDS;"
+  },
+  {
+    "id": "arg-json",
+    "file": "scripts/mutate.ts",
+    "find": "else if (arg === \"--json\") args.json = value;",
+    "replace": "else if (arg === \"--json\") args.json = undefined;"
+  },
+  {
+    "id": "arg-only-split",
+    "file": "scripts/mutate.ts",
+    "find": "else args.only = value.split(\",\");",
+    "replace": "else args.only = [value];"
+  },
+  {
+    "id": "arg-first-file",
+    "file": "scripts/mutate.ts",
+    "find": "} else if (args.editsFile === \"\") args.editsFile = arg;",
+    "replace": "} else if (true) args.editsFile = arg;"
+  },
+  {
+    "id": "arg-no-file",
+    "file": "scripts/mutate.ts",
+    "find": "  if (args.editsFile === \"\") throw new Error(`no edits file. ${USAGE}`);\n",
+    "replace": ""
+  },
+  {
+    "id": "arg-timeout-guard",
+    "file": "scripts/mutate.ts",
+    "find": "  if (!(args.timeout > 0)) throw new Error(`--timeout must be a positive number of seconds. ${USAGE}`);\n",
+    "replace": ""
+  },
+  {
+    "id": "arg-timeout-gt",
+    "file": "scripts/mutate.ts",
+    "find": "if (!(args.timeout > 0))",
+    "replace": "if (!(args.timeout >= 0))"
+  },
+  {
+    "id": "run-json-reporter",
+    "file": "scripts/mutate.ts",
+    "find": "\"--reporter=dot\", \"--reporter=json\", ",
+    "replace": "\"--reporter=dot\", "
+  },
+  {
+    "id": "run-output-file",
+    "file": "scripts/mutate.ts",
+    "find": "`--outputFile.json=${reportFile}`",
+    "replace": "`--outputFile=${reportFile}`"
+  },
+  {
+    "id": "run-slice1",
+    "file": "scripts/mutate.ts",
+    "find": "    : cmd.slice(1);",
+    "replace": "    : cmd;"
+  },
+  {
+    "id": "run-cwd",
+    "file": "scripts/mutate.ts",
+    "find": "{ cwd, stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: true }",
+    "replace": "{ stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: true }"
+  },
+  {
+    "id": "run-detached",
+    "file": "scripts/mutate.ts",
+    "find": "stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: true }",
+    "replace": "stdio: [\"ignore\", \"pipe\", \"pipe\"], detached: false }"
+  },
+  {
+    "id": "run-stdout",
+    "file": "scripts/mutate.ts",
+    "find": "    child.stdout.on(\"data\", (chunk: Buffer) => (output += chunk.toString()));\n",
+    "replace": "    child.stdout.resume();\n"
+  },
+  {
+    "id": "run-stderr",
+    "file": "scripts/mutate.ts",
+    "find": "    child.stderr.on(\"data\", (chunk: Buffer) => (output += chunk.toString()));\n",
+    "replace": "    child.stderr.resume();\n"
+  },
+  {
+    "id": "run-timedout",
+    "file": "scripts/mutate.ts",
+    "find": "      timedOut = true;\n",
+    "replace": ""
+  },
+  {
+    "id": "run-kill-group",
+    "file": "scripts/mutate.ts",
+    "find": "process.kill(-(child.pid as number), \"SIGKILL\");",
+    "replace": "child.kill(\"SIGKILL\");"
+  },
+  {
+    "id": "run-ms",
+    "file": "scripts/mutate.ts",
+    "find": "}, timeoutSeconds * 1000);",
+    "replace": "}, timeoutSeconds * 100);"
+  },
+  {
+    "id": "run-clear",
+    "file": "scripts/mutate.ts",
+    "find": "      clearTimeout(timer);\n",
+    "replace": ""
+  },
+  {
+    "id": "run-nonvitest",
+    "file": "scripts/mutate.ts",
+    "find": "const failedTests = !vitest\n        ? undefined",
+    "replace": "const failedTests = !vitest\n        ? []"
+  },
+  {
+    "id": "run-noreport",
+    "file": "scripts/mutate.ts",
+    "find": "          : [];\n      rmSync",
+    "replace": "          : undefined;\n      rmSync"
+  },
+  {
+    "id": "run-rm",
+    "file": "scripts/mutate.ts",
+    "find": "      rmSync(scratch, { recursive: true, force: true });\n",
+    "replace": ""
+  },
+  {
+    "id": "run-cwd-names",
+    "file": "scripts/mutate.ts",
+    "find": "failedTestNames(JSON.parse(readFileSync(reportFile, \"utf8\")), cwd)",
+    "replace": "failedTestNames(JSON.parse(readFileSync(reportFile, \"utf8\")), \"/\")"
+  },
+  {
+    "id": "fmt-nl",
+    "file": "scripts/mutate.ts",
+    "find": "text.replaceAll(\"\\n\", \"⏎\")",
+    "replace": "text"
+  },
+  {
+    "id": "fmt-names",
+    "file": "scripts/mutate.ts",
+    "find": "  for (const name of result.failedTests) lines.push(`    ✗ ${name}`);\n",
+    "replace": ""
+  },
+  {
+    "id": "fmt-refused",
+    "file": "scripts/mutate.ts",
+    "find": "if (result.status === \"REFUSED\") lines.push",
+    "replace": "if (result.detail !== undefined) lines.push"
+  },
+  {
+    "id": "main-cwd",
+    "file": "scripts/mutate.ts",
+    "find": "const cwd = deps.cwd ?? process.cwd();",
+    "replace": "const cwd = deps.cwd ?? \".\";"
+  },
+  {
+    "id": "main-log",
+    "file": "scripts/mutate.ts",
+    "find": "deps.log ?? ((line: string) => console.log(line))",
+    "replace": "deps.log ?? ((_line: string) => undefined)"
+  },
+  {
+    "id": "main-logerror",
+    "file": "scripts/mutate.ts",
+    "find": "deps.logError ?? ((line: string) => console.error(line))",
+    "replace": "deps.logError ?? ((_line: string) => undefined)"
+  },
+  {
+    "id": "main-usage-msg",
+    "file": "scripts/mutate.ts",
+    "find": "    logError((err as Error).message);\n    return 2;",
+    "replace": "    return 2;"
+  },
+  {
+    "id": "main-usage-code",
+    "file": "scripts/mutate.ts",
+    "find": "    logError((err as Error).message);\n    return 2;",
+    "replace": "    logError((err as Error).message);\n    return 1;"
+  },
+  {
+    "id": "main-id",
+    "file": "scripts/mutate.ts",
+    "find": "id: edit.id ?? String(i + 1),",
+    "replace": "id: edit.id ?? String(i),"
+  },
+  {
+    "id": "main-only",
+    "file": "scripts/mutate.ts",
+    "find": "const edits = args.only ? all.filter((edit) => args.only?.includes(edit.id)) : all;",
+    "replace": "const edits = all;"
+  },
+  {
+    "id": "main-baseline",
+    "file": "scripts/mutate.ts",
+    "find": "if (baseline.code !== 0) {",
+    "replace": "if (false) {"
+  },
+  {
+    "id": "main-baseline-code",
+    "file": "scripts/mutate.ts",
+    "find": "nothing was mutated.\\n${baseline.output}`,\n    );\n    return 2;",
+    "replace": "nothing was mutated.\\n${baseline.output}`,\n    );\n    return 1;"
+  },
+  {
+    "id": "main-sigint",
+    "file": "scripts/mutate.ts",
+    "find": "  process.on(\"SIGINT\", onSignal);\n",
+    "replace": ""
+  },
+  {
+    "id": "main-sigterm",
+    "file": "scripts/mutate.ts",
+    "find": "  process.on(\"SIGTERM\", onSignal);\n",
+    "replace": ""
+  },
+  {
+    "id": "main-count-lt",
+    "file": "scripts/mutate.ts",
+    "find": "if (count !== 1) {",
+    "replace": "if (count < 1) {"
+  },
+  {
+    "id": "main-count-gt",
+    "file": "scripts/mutate.ts",
+    "find": "if (count !== 1) {",
+    "replace": "if (count > 1) {"
+  },
+  {
+    "id": "main-refused-detail",
+    "file": "scripts/mutate.ts",
+    "find": "detail: `find occurs ${count} times`,",
+    "replace": "detail: \"\","
+  },
+  {
+    "id": "main-refused-seconds",
+    "file": "scripts/mutate.ts",
+    "find": "          seconds: 0,\n        };",
+    "replace": "          seconds: 1,\n        };"
+  },
+  {
+    "id": "main-replacer",
+    "file": "scripts/mutate.ts",
+    "find": "original.replace(edit.find, () => edit.replace)",
+    "replace": "original.replace(edit.find, edit.replace)"
+  },
+  {
+    "id": "main-write-edit",
+    "file": "scripts/mutate.ts",
+    "find": "          writeFileSync(\n            path,\n            original.replace(edit.find, () => edit.replace),\n          );\n",
+    "replace": ""
+  },
+  {
+    "id": "main-names",
+    "file": "scripts/mutate.ts",
+    "find": "failedTests: outcome.failedTests ?? [],",
+    "replace": "failedTests: [],"
+  },
+  {
+    "id": "main-error-detail",
+    "file": "scripts/mutate.ts",
+    "find": "...(status === \"ERROR\" ? { detail: outcome.output.slice(-2000) } : {}),",
+    "replace": "detail: outcome.output.slice(-2000),"
+  },
+  {
+    "id": "main-seconds",
+    "file": "scripts/mutate.ts",
+    "find": "seconds: (Date.now() - started) / 1000,",
+    "replace": "seconds: 0,"
+  },
+  {
+    "id": "main-restore",
+    "file": "scripts/mutate.ts",
+    "find": "          restore();\n          restore = undefined;\n",
+    "replace": "          restore = undefined;\n"
+  },
+  {
+    "id": "main-off-int",
+    "file": "scripts/mutate.ts",
+    "find": "    process.off(\"SIGINT\", onSignal);\n",
+    "replace": ""
+  },
+  {
+    "id": "main-off-term",
+    "file": "scripts/mutate.ts",
+    "find": "    process.off(\"SIGTERM\", onSignal);\n",
+    "replace": ""
+  },
+  {
+    "id": "main-json",
+    "file": "scripts/mutate.ts",
+    "find": "  if (args.json)\n",
+    "replace": "  if (false)\n"
+  },
+  {
+    "id": "main-json-cmd",
+    "file": "scripts/mutate.ts",
+    "find": "JSON.stringify({ cmd: args.cmd, results }, null, 2)",
+    "replace": "JSON.stringify({ results }, null, 2)"
+  },
+  {
+    "id": "main-summary",
+    "file": "scripts/mutate.ts",
+    "find": "${count(\"KILLED\")} killed, ${count(\"SURVIVED\")} survived",
+    "replace": "${count(\"KILLED\")} killed, ${count(\"KILLED\")} survived"
+  },
+  {
+    "id": "main-exit-survived",
+    "file": "scripts/mutate.ts",
+    "find": "if (count(\"SURVIVED\") > 0) return 1;",
+    "replace": "if (count(\"SURVIVED\") > 0) return 2;"
+  },
+  {
+    "id": "main-exit-gt",
+    "file": "scripts/mutate.ts",
+    "find": "if (count(\"SURVIVED\") > 0) return 1;",
+    "replace": "if (count(\"SURVIVED\") >= 0) return 1;"
+  },
+  {
+    "id": "main-exit-error",
+    "file": "scripts/mutate.ts",
+    "find": "return count(\"ERROR\") + count(\"REFUSED\") > 0 ? 2 : 0;",
+    "replace": "return count(\"REFUSED\") > 0 ? 2 : 0;"
+  },
+  {
+    "id": "main-exit-refused",
+    "file": "scripts/mutate.ts",
+    "find": "return count(\"ERROR\") + count(\"REFUSED\") > 0 ? 2 : 0;",
+    "replace": "return count(\"ERROR\") > 0 ? 2 : 0;"
+  },
+  {
+    "id": "entry-exitcode",
+    "file": "scripts/mutate.ts",
+    "find": ".then((code) => (process.exitCode = code));",
+    "replace": ";"
+  },
+  {
+    "id": "sig-kill",
+    "file": "scripts/mutate.ts",
+    "find": "    stopRunning();\n    restore?.();",
+    "replace": "    restore?.();"
+  },
+  {
+    "id": "sig-restore",
+    "file": "scripts/mutate.ts",
+    "find": "    restore?.();\n",
+    "replace": ""
+  },
+  {
+    "id": "sig-exit",
+    "file": "scripts/mutate.ts",
+    "find": "    process.exit(130);",
+    "replace": "    process.exit(1);"
+  },
+  {
+    "id": "run-running",
+    "file": "scripts/mutate.ts",
+    "find": "    running = { pid: child.pid as number, reportDir: scratch };\n",
+    "replace": ""
+  },
+  {
+    "id": "run-running-reset",
+    "file": "scripts/mutate.ts",
+    "find": "      running = undefined;\n",
+    "replace": ""
+  },
+  {
+    "id": "stop-guard",
+    "file": "scripts/mutate.ts",
+    "find": "  if (running === undefined) return;\n",
+    "replace": ""
+  },
+  {
+    "id": "stop-kill",
+    "file": "scripts/mutate.ts",
+    "find": "  process.kill(-running.pid, \"SIGKILL\");\n",
+    "replace": ""
+  },
+  {
+    "id": "stop-rm",
+    "file": "scripts/mutate.ts",
+    "find": "  rmSync(running.reportDir, { recursive: true, force: true });\n",
+    "replace": ""
+  }
+]

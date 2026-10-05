@@ -34,6 +34,7 @@ The findings and the recommendation are in [the journal entry](../../docs/journa
 | `cases/<pr>.json` | Each PR's own recorded break list as exact edits (readiness review Q-3 (a)) |
 | `cases/<pr>-review.json` | The breaks the PR's review found, as exact edits |
 | `cases/155-not-applicable.json` | #155 list items that no longer name code at the reviewed commit |
+| `cases/113-self.json` | This PR's own seen-failing list for `scripts/mutate.ts` (output: `results/113-self.txt`) |
 | `results/` | Outputs (Prettier-ignored). `main-*` on `dd754fa`; `at-<sha>/` at a reviewed commit |
 
 ## Stryker needs a patch under Vitest 5
