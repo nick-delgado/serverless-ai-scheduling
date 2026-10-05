@@ -17,7 +17,7 @@ When it isn't clear which one a change is, ask the owner.
 | [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03) |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted (amended 2026-10-03) |
 | [006](0006-voice-transcription.md) | Voice transcription: browser → Transcribe Streaming | Proposed (spike S-3) |
-| [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7; amended 2026-10-03, twice; 2026-10-04) |
+| [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7; amended 2026-10-03, twice; 2026-10-04; 2026-10-05) |
 | [008](0008-evaluation-strategy.md) | Evaluation strategy | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03) |
 | [009](0009-safety-and-privacy.md) | Safety, privacy, and abuse controls | Accepted (amended 2026-10-03, 2026-10-04) |
 | [010](0010-provider-neutral-llm-layer.md) | Provider-neutral LLM layer via Bedrock Converse | Accepted (spike S-1c, #60) |
