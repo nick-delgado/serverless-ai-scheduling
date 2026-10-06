@@ -69,7 +69,7 @@ flowchart LR
     S7_04["#33 S7-04<br/>Author ~40 eval scenarios + L1 cases from the PR"]
     S7_05["#34 S7-05<br/>Eval reports, model matrix, baselines, CI smoke "]
     F80["#80<br/>Eval cases from the tool PRs (replaces #33)"]
-    F98["#98<br/>Fix two grader false positives"]
+    F98["#98<br/>Fix four eval false positives"]
     F108["#108<br/>Patient simulator follow-ups"]
   end
   subgraph escalation["S8 Escalation"]
@@ -278,7 +278,7 @@ Streams S1–S8: auth, data, agent, tools, chat UI, voice, evals, escalation; sp
 |---|---|---|---|---|---|
 | [#77](https://github.com/nick-delgado/serverless-ai-scheduling/issues/77) | Tidy packages/tools after the tool batch: registry test, shared mappers, import cycle | tools | chore | FR-030 | #19, #20, #21, #22, #23 |
 | [#80](https://github.com/nick-delgado/serverless-ai-scheduling/issues/80) | Eval cases suggested by the tool PRs (replaces closed #33 as their home) | evals | eval | FR-030–FR-034, FR-037 | #30 |
-| [#98](https://github.com/nick-delgado/serverless-ai-scheduling/issues/98) | Fix two grader false positives that #31's smoke run counted as safety violations | evals | eval | FR-041 | — |
+| [#98](https://github.com/nick-delgado/serverless-ai-scheduling/issues/98) | Fix four eval false positives (two grader false positives from #31's smoke run, two more from #167) that counted as safety violations | evals | eval | FR-041 | — |
 | [#99](https://github.com/nick-delgado/serverless-ai-scheduling/issues/99) | SPA deep links: a CloudFront Function on the web stack's default behavior | chat-ui | infra | FR-001, FR-016 | #24 |
 | [#100](https://github.com/nick-delgado/serverless-ai-scheduling/issues/100) | scripts/deploy-web.sh: build the SPA, sync it to the site bucket, invalidate CloudFront | chat-ui | infra | FR-050 | #24 |
 | [#104](https://github.com/nick-delgado/serverless-ai-scheduling/issues/104) | Chat retries: de-duplicate by clientMessageId, and return the conversation ID after a failed first turn (runs in parallel with #27) | agent | feature | FR-014, FR-015 | #17 |
