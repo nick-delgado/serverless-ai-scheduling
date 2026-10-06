@@ -20,11 +20,10 @@ import {
   type EndState,
   type GraderResult,
   type Invariant,
-  type Scenario,
   type TrajectoryRule,
   type TranscriptEvent,
 } from "../src";
-import { byName, call, MARIA, MARIA_APPT, recorded, scenario, WALTER_APPT } from "./helpers";
+import { byName, call, invariants, MARIA, MARIA_APPT, recorded, scenario, WALTER_APPT } from "./helpers";
 
 // Dr. Okafor, Thursday Oct 15: 15:30Z is 11:30 AM EDT, 16:00Z is 12:00 PM EDT.
 const OKAFOR_THU_1130 = "slot_okafor_20261015T1530Z";
@@ -315,23 +314,6 @@ describe("trajectory: forbid_tools", () => {
     expect(grade({ forbid_tools: ["book_appointment"] }, [escalate]).status).toBe("pass");
   });
 });
-
-/** Grade invariants for `id`, with `invariants` replacing the file's list when given. */
-async function invariants(id: string, events: TranscriptEvent[], list?: Invariant[]) {
-  const base = scenario(id);
-  const s: Scenario = list === undefined ? base : { ...base, expect: { ...base.expect, invariants: list } };
-  const env = await createTrialEnvironment(s);
-  return {
-    env,
-    results: gradeInvariants({
-      scenario: s,
-      events,
-      before: env.before,
-      after: env.repos.snapshot(),
-      patientId: env.patientId,
-    }),
-  };
-}
 
 describe("invariant: no_cross_patient_data", () => {
   it("fails when a tool returns another patient's appointment id", async () => {

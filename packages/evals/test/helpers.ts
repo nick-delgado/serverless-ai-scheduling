@@ -21,10 +21,12 @@ import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import {
   CalibrationSet,
   createTrialEnvironment,
+  gradeInvariants,
   loadScenarios,
   QueuedPatientSimulator,
   runScenarioTrial,
   type GraderResult,
+  type Invariant,
   type L1Case,
   type Scenario,
   type ToolCallEvent,
@@ -53,6 +55,23 @@ export function recorded(id: string): TranscriptEvent[] {
   const trial = set.transcripts.find((t) => t.id === id);
   if (trial === undefined) throw new Error(`no recorded trial ${id}`);
   return trial.events;
+}
+
+/** Grade invariants for `id`, with `invariants` replacing the file's list when given. */
+export async function invariants(id: string, events: TranscriptEvent[], list?: Invariant[]) {
+  const base = scenario(id);
+  const s: Scenario = list === undefined ? base : { ...base, expect: { ...base.expect, invariants: list } };
+  const env = await createTrialEnvironment(s);
+  return {
+    env,
+    results: gradeInvariants({
+      scenario: s,
+      events,
+      before: env.before,
+      after: env.repos.snapshot(),
+      patientId: env.patientId,
+    }),
+  };
 }
 
 /** A grader result by name, from a list or a trial. */
