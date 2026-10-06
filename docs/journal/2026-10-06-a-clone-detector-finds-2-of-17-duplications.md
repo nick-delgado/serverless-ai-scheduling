@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #184, issue #72 (batch 6), PRs #161, #162, #165, #168, #172–#175, #179, #180
+**Related:** issue #184, PR #185, issue #72 (batch 6), PRs #161, #162, #165, #168, #172–#175, #179, #180
 
 ## What happened
 
