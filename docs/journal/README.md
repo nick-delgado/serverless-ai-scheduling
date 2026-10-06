@@ -57,4 +57,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-06 | [A clone detector finds 2 of 17 reviewed duplications, so it reports and doesn't block](2026-10-06-a-clone-detector-finds-2-of-17-duplications.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [One HH:MM schema, and an acceptance grep that would have passed with nothing moved](2026-10-06-one-hhmm-and-a-grep-that-found-nothing.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [An echoed floor is not a sixth option: max_five_options counts list lines](2026-10-06-an-echoed-floor-is-not-a-sixth-option.md) | 5. What the evals showed |
+| 2026-10-06 | [No dated time before a tool returns it, and five options after several searches](2026-10-06-no-time-before-the-tool-returns-it.md) | 5. What the evals showed |
 | 2026-10-06 | [Six "noticed" minors from the judge's PR, tidied, and a hash that pins the judge's prompt to its version](2026-10-06-six-noticed-minors-tidied.md) | 5. What the evals showed |

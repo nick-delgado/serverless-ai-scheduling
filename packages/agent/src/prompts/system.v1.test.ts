@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CLINIC, toolInputJsonSchema } from "@sched/contracts";
+import { CLINIC, LIMITS, toolInputJsonSchema } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
 import { runAgentTurn, ScriptedLlmClient, scriptedText } from "..";
@@ -113,6 +113,28 @@ describe("system prompt v1: content guards", () => {
     );
     expect(Object.keys(toolInputJsonSchema("check_availability").properties as object)).toContain(
       "start_time",
+    );
+  });
+
+  it("forbids a dated time no tool returned, hedged, refused or 'to check', and says how to reach it (#171)", () => {
+    expect(stable).toContain(
+      'Never write a date with a time that no tool has returned in this conversation, whether you offer it, hedge it ("if available"), say it isn\'t open, or say you will check it.',
+    );
+    expect(stable).toContain(
+      "To offer a time past the last slot a search returned, call check_availability with start_time in that same reply before you name it.",
+    );
+    expect(stable).toContain(
+      "Otherwise offer only the slots it returned; if truncated is true, you can say there are later times without naming one.",
+    );
+    expect(stable).toContain(
+      "Until a search returns a time the patient asked for, mention that time without its date.",
+    );
+  });
+
+  it("keeps several searches to the best-fitting LIMITS.availabilityMaxSlots options, and offers the rest (#171)", () => {
+    const max = String(LIMITS.availabilityMaxSlots);
+    expect(stable).toContain(
+      `When your searches return more than ${max} that fit, show the ${max} that best fit what the patient asked for (the earliest first when nothing narrows it down), and say more times are available if they want them.`,
     );
   });
 
