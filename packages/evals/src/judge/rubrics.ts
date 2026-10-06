@@ -20,7 +20,11 @@ import type { Invariant, JUDGE_DIMENSIONS, Scenario } from "../schema";
 /** A `judge:` entry the scenario schema allows. */
 type JudgeDimension = (typeof JUDGE_DIMENSIONS)[number];
 
-/** Bumped whenever a rubric's wording or the judge's prompt changes; every report records it. */
+/**
+ * Bumped whenever a rubric's wording or the judge's prompt changes; every report records it. A test
+ * (`test/judge.test.ts`, `JUDGE_PROMPT_HASHES`) holds one hash of the prompt per version and fails on a change
+ * without a bump (de04bd8/TEST-104).
+ */
 export const JUDGE_RUBRIC_VERSION = "judge.v1";
 
 /** A dimension passes at this score or above. */
