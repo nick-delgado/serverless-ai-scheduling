@@ -21,11 +21,17 @@
  * day in the range, so a slot past the first `LIMITS.availabilityMaxSlots` of a day can be reached.
  * - It filters in `offerable`, like `time_of_day`, and combines with it as a strict AND. The repositories
  *   still read whole days, and the specialty walk counts only slots that pass, so it reads on to later days.
+ * - Omitted → no floor; the search is exactly what it was before #170.
+ * - Empty (`""`) or not `HH:MM` 24-hour → INVALID_INPUT from the contract's schema, before this handler runs.
  * - Any minute is accepted: "11:15" returns slots from 11:30. A time before opening is no floor in effect.
  * - At or after closing (`CLINIC.closeHour`) → INVALID_INPUT with the clinic hours, since no slot can match.
- * - 12:00 or later with `time_of_day: morning` → INVALID_INPUT with a hint, since no slot can match.
+ * - Conflicting: 12:00 or later with `time_of_day: morning` → INVALID_INPUT with a hint, since no slot can
+ *   match. A morning floor with `afternoon` is not a conflict: it returns afternoon slots.
  *   Both are errors rather than an empty success the model could misreport as "fully booked".
- * - On today, a floor that has already passed changes nothing: the past-date rules below still apply.
+ * - Checks, in order: those two `start_time` errors come first, before the past-date check, the missing
+ *   provider_id/specialty check, the unknown-provider check and the provider/specialty mismatch, so a
+ *   request that can match on no day gets that error even when its other inputs are also wrong.
+ * - Past: on today, a floor that has already passed changes nothing; the past-date rules below still apply.
  *
  * Past dates (decision): only slots that start strictly after `ctx.clock.now()` are ever offered.
  * - A range that is partly in the past is clamped to "from now"; the model isn't told, it just gets future slots.
