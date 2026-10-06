@@ -1,4 +1,4 @@
-# 2026-10-05 — One copy of the model-call plumbing: the throttle rule, the request builder, the usage sums and the retry loop
+# 2026-10-05 — The copies had already drifted: one Bedrock error meant "busy" to a patient and a hard failure to the evals
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
@@ -35,13 +35,13 @@ The two questions Nick answered are in the issue's "Decisions and clarifications
 - **The retry helper builds both failure messages itself.** The caller passes only the start of the exhaustion message (`no usable patient reply in 3 attempt(s)`, `no valid verdict in 2 attempts`), and the helper appends the problems, joined with ", " within a reply and " | " between replies. That keeps one copy of the joining format, which Stryker had found unpinned in the simulator's copy (#108's list). The `model call failed: <Name>: <message>` text is built there too. Both messages are verbatim what each caller produced before.
 - **The simulator's error factory drops `rejected`.** `SimulatorError` never carried the rejected replies, and still doesn't; the judge's `JudgeError` still does, on both kinds of failure.
 - **The retry helper's cost type is the existing `SimulatorCost`** (the judge's `JudgeCost` is an alias of it), so no new type crossed into `packages/evals`' public shapes; the helper isn't exported from `@sched/evals`.
-- **`rate-limit.ts` reads the error name inline** for its transient-name check, and lost its private `field` and `statusOf`; it re-exports `isThrottle`, so `@sched/evals`' surface and its tests are unchanged (r1/A-4).
-- **ADR-008's note on the L1 parity test** got a one-sentence status update saying #105 did the work, rather than an amendment section, because no decision changed.
+- **`rate-limit.ts` reads the error with `@sched/agent`'s readers**: `errorNameOf` for its transient-name check and `httpStatusOf` for its 5xx check, so it lost its private `field` and `statusOf`. The first version read the name with a hand-written copy of `field`; the review of `32474a5` (STD-2) caught it, and `isThrottle` and `isRetryable` now share the export. It re-exports `isThrottle`, so `@sched/evals`' surface and its tests are unchanged (r1/A-4).
+- **ADR-008 got an amendment** ([L1 builds its request with the shared builder](../adr/0008-evaluation-strategy.md#amendment-2026-10-05-l1-builds-its-request-with-the-shared-builder-105)), and its "until `@sched/agent` exports its builder" line a pointer to it. The first version edited that line in place, which `docs/adr/README.md` doesn't allow even when no decision changes; the review of `32474a5` (STD-1) caught it.
 
 ## What surprised us
 
 - **A syntax error counted as a kill.** The agent's first mutation pass (`npm run mutate`, #113) broke `httpStatusOf`'s `??` chain by turning one `??` into `||`. JavaScript forbids mixing the two without parentheses, so the edit didn't compile. Vitest couldn't load `throttle.test.ts`, and the runner rightly doesn't count a file that fails to load. But `session-bundle.test.ts` bundles the chat handler with esbuild, and esbuild failed on the same syntax error, so the run had one failing test, and the edit printed `KILLED`. The failing test named was the bundle test, not a throttle test, and that mismatch was the clue. Rewritten with parentheses (`(httpStatusCode || statusCode) ?? status`), both breaks went red in the test meant for them. A `KILLED` line is evidence only when the failing test is one that checks the line.
-- **The loop and L1 tests needed no change at all**, and the L1 parity test lost most of its checks. Once both build the profile-derived part with the same function, comparing those fields compares a function with itself; what can still drift is each caller's own part (L1's tools and messages), so that is what the parity test keeps.
+- **The loop and L1 tests needed no change at all**, and the L1 parity test lost its field-by-field comparisons with the loop, as the issue's AC 8 asked: the shared builder's own tests now cover the profile-derived fields. Those comparisons had also checked what L1 passed to the builder, though, and with them gone no test caught a `maxTokens` override or a dropped system cache point in `l1Request` (review of `32474a5`, TEST-1). Nick chose option (a): the parity test now also checks, for each of its three profiles, that L1's request without tools and messages equals `profileRequest(profile, system)`. That compares L1 with the builder, not with the loop.
 
 ## Evidence
 
