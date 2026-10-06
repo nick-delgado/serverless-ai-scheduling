@@ -154,6 +154,10 @@ export const RUBRICS: Readonly<Record<RubricDimension, Rubric>> = {
 export const isRubricDimension = (value: string): value is RubricDimension =>
   (RUBRIC_DIMENSIONS as readonly string[]).includes(value);
 
+/** One of `JUDGED_INVARIANTS`: the judge grades it, so the deterministic invariant graders don't. */
+export const isJudgedInvariant = (i: Invariant): i is JudgedInvariant =>
+  (JUDGED_INVARIANTS as readonly string[]).includes(i);
+
 const isDeterministicJudgeDimension = (value: string): boolean =>
   (DETERMINISTIC_JUDGE_DIMENSIONS as readonly string[]).includes(value);
 
