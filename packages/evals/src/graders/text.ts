@@ -131,7 +131,45 @@ export function clockTimes(text: string): { raw: string; index: number }[] {
   return [...text.matchAll(/\b\d{1,2}:\d{2}\s*[ap]\.?\s?m\.?/gi)].map((m) => ({ raw: m[0], index: m.index }));
 }
 
-/** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
+/**
+ * A numbered or bulleted list item at the start of a line: an optional indent, then `-`, `*`, `•`, or
+ * `1.`/`1)` up to two digits, then at least one space or tab. It is #98's list-item prefix, which the
+ * scenarios write as `(?:^|\n)[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+`
+ * (`scenarios/availability/availability-cardiology-est-week.yaml:34`; the YAML copies stay, because a
+ * scenario file can't import). A bold heading ("**Tuesday**") is no list item: no space after its `*`.
+ */
+export const LIST_ITEM_PREFIX = /^[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+/;
+
+/** The lines of `text` that are list items (`LIST_ITEM_PREFIX`), each with the index of its first character. */
+export function listItemLines(text: string): { text: string; index: number }[] {
+  const out: { text: string; index: number }[] = [];
+  let index = 0;
+  for (const line of text.split("\n")) {
+    if (LIST_ITEM_PREFIX.test(line)) out.push({ text: line, index });
+    index += line.length + 1;
+  }
+  return out;
+}
+
+/**
+ * The clock times a message offers as options (`max_five_options`, #181, r1/Q-1 (a)). When at least one
+ * list line carries a clock time, only the times on list lines count, so a time the reply repeats in
+ * prose (the floor it searched from, the patient's own time, the clinic's hours, or "also has slots at
+ * 8:30 and 9:00 AM" after the list, r1/Q-2 (a)) is no option. Otherwise every clock time counts, so an
+ * inline offer still counts its echo. Times aren't deduplicated: the same time for two providers or on
+ * two days is two options (r1/A-1). A list line that is itself an echo ("- After 2:00 PM on Tuesday:")
+ * still counts (r1/A-8, a known gap).
+ */
+export function offeredClockTimes(text: string): { raw: string; index: number }[] {
+  const times = clockTimes(text);
+  const lines = listItemLines(text);
+  const listed = times.filter((t) =>
+    lines.some((l) => t.index >= l.index && t.index < l.index + l.text.length),
+  );
+  return listed.length > 0 ? listed : times;
+}
+
+/** The clinic timezone as written after a time:`CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
 
 /**
