@@ -27,4 +27,5 @@ decisions with other agents working in parallel.
 - End with a concise report: PR URL, what was built, verification results, deviations, and anything that
   affects other issues. A step you couldn't run yourself (a write to `dev`, a live measurement, a browser
   check, or a definition-of-done item a rule you were given blocks, such as no Bedrock calls) goes first,
-  so the orchestrator runs it before merge or asks Nick to waive it (`task-workflow` step 7).
+  so the orchestrator runs it before merge or asks Nick to waive it, or to accept a regression, recorded as a
+  decision line in the issue's "Decisions and clarifications" (`task-workflow` step 7).
