@@ -20,12 +20,13 @@ The prompt keeps its name, `system.v1` (A-4), so results from before and after t
 
 The readiness review and its assumptions settled the route, the reach and the measurement. These are the choices the agent made where the spec was still silent:
 
-- **A new bullet, not a longer later-times bullet.** A-2 allowed editing either line. Leaving the later-times bullet as it was keeps #170's prompt test, which quotes it, unchanged. It also keeps the "how to search again" text apart from the "what you may not write" text. The alternative, one long bullet, would have changed the sentence #170's test checks.
-- **"Write a date with a time", not "mention a time".** Rule 2 already forbids mentioning any date or time no tool returned. The defect was a time attached to a date, which is what the grader pairs and what a patient reads as an offer. A-1 asks the model to repeat the patient's own time without its date ("I'll look for 2:30 PM"), so a ban on every bare time would contradict it.
+- **"Write a date with a time", not "mention a time".** Rule 2 says: "Never mention a date, time, or provider for an appointment that a tool didn't return in this conversation." We read "for an appointment" as covering an appointment the agent offers or quotes, not the patient's own requested time, and Nick confirmed that reading on the PR review (6a09806/SPEC-2 (a)), so Rule 2 stays as it is. The defect was a time attached to a date, which is what the grader pairs and what a patient reads as an offer. A-1 asks the model to repeat the patient's own time without its date ("I'll look for 2:30 PM"), so a ban on every bare time would contradict it.
 - **"Say it isn't open" is in the list.** A-1 names refusals. #98 stopped the grader counting some refusals as offers, but a refusal still quotes a dated time no tool returned, and the patient can't tell that from a guess. The alternative, leaving refusals out, would have matched the grader more closely and covered less of what A-1 asks.
 - **"If truncated is true, you can say there are later times."** A-2 allows saying later times exist. We tied it to `truncated`, the only signal the tool gives. Without the condition, the model could claim later times after a search that returned everything.
 - **The five that "best fit", with the earliest first as the fallback.** Q-2 (a) gives the rule. The wording interpolates `LIMITS.availabilityMaxSlots` three times, as the review asked, instead of the literal 5.
-- **Exact-sentence tests, one per bullet.** Each new sentence is quoted whole, so removing any clause fails a test. The mutation run below drops each clause, sentence and bullet, and swaps each limit for 6.
+- **Exact-sentence tests, one per bullet.** Each new sentence is quoted whole in a test. The mutation run below makes 14 edits: it drops the new bullet, two sentences and eight clauses, sets the two new limit interpolations to 6, and turns "without its date" into "with its date". A test failed for each one.
+
+One choice departs from the spec rather than filling a gap. A-2 named the bullets at `system.v1.ts:116` and `:118` as the place for the new text. The agent added a new bullet after `:118` instead, so the sentence #170's prompt test quotes stays as it is. The cost is that the section now describes the `start_time` search twice, in `:118` and in the new bullet's second sentence, each pinned by its own test, so the next change to how later times are reached has to reword both. Nick kept the new bullet on the PR review (6a09806/SPEC-1 (a)), with no prompt change and no eval re-run.
 
 ## What surprised us
 
@@ -37,7 +38,7 @@ Every `max_five_options` failure on the branch was the #181 false positive. The 
 
 ## Evidence
 
-- Mutation edits (`npm run mutate`): 14 edits to the two bullets, each a dropped clause, sentence or bullet, or a limit set to 6. All 14 were killed by the test that quotes the edited sentence. The PR lists each edit.
+- Mutation edits (`npm run mutate`): 14 edits to the two bullets: the new bullet, two sentences and eight clauses dropped, two limit interpolations set to 6, and "without its date" turned into "with its date". All 14 were killed by the test that quotes the edited sentence. The PR lists each edit.
 - `npm run lint`, `typecheck` and `npm test` pass. So do `npm run test:coverage` and `coverage:changed`.
 - Live evals (2026-10-06; `sonnet-4.6`; the `main` side ran from a detached worktree at `aa2f712`; costs at list prices, judge included; option counts read from the transcripts, because `max_five_options` also counts echoed times until #181 lands):
   - `reschedule-single-appointment`, 3 trials. `main`: 3 / 3 passed, 0 `no_hallucinated_slots` violations, the most options in one message 5, 10 and 5 ($0.26). Branch: 3 / 3 passed, 0 violations, at most 5 options in every message ($0.22). We read each branch transcript for a dated time under a date heading that no tool returned (A-6) and found none.
