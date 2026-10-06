@@ -23,7 +23,7 @@ Closes #
 
 ## Decisions the spec left open
 
-<!-- Behaviour you chose where the issue, PRD, ADRs and contracts are silent, and any acceptance criterion you couldn't meet as written. List them once, each with the alternative it beat, in the journal entry's "Why we chose" section, and link that entry here; a second list drifts. "None" is a fine answer. -->
+<!-- Behaviour you chose where the issue, PRD, ADRs and contracts are silent, and any acceptance criterion you couldn't meet as written. List them once, each with the alternative it beat, in the journal entry's "Why we chose" section (a rule for one tool's behaviour stays in its handler header, which the list links), and link that entry here; a second list drifts. "None" is a fine answer. -->
 
 ## Docs
 
