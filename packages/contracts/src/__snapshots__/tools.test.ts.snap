@@ -71,6 +71,11 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
           ],
           "type": "string",
         },
+        "start_time": {
+          "description": "Only slots starting at or after this time on each day, HH:MM 24-hour ET (e.g. 11:30). Use it for a specific time, or for times later than a previous search returned.",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "type": "string",
+        },
         "time_of_day": {
           "default": "any",
           "description": "morning = before 12:00 PM ET, afternoon = 12:00 PM ET or later.",

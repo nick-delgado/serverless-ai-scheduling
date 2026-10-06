@@ -3,7 +3,7 @@
 These scenarios define what "working" means for the scheduling agent. They were written before the agent existed (eval-first, ADR-008), from the PRD (§4.4, §5, §7) and ADR-009.
 
 - **Multi-turn scenarios (L2 and L3):** 40 of them, in `<category>/<id>.yaml`. An LLM patient simulator plays the `persona` toward a `goal` against the real agent loop, which runs over in-memory repos seeded from the `clinic-default` fixture with a frozen `clock`. Grading is deterministic (end state, trajectory, invariants) first, then the LLM judge.
-- **Single-turn cases (L1):** 22 of them, in `l1/<id>.yaml`. Each one gives a short conversation state and expects one next action from the agent: a tool call whose arguments include a given subset, or a plain response (usually a clarifying question or a refusal).
+- **Single-turn cases (L1):** 23 of them, in `l1/<id>.yaml`. Each one gives a short conversation state and expects one next action from the agent: a tool call whose arguments include a given subset, or a plain response (usually a clarifying question or a refusal).
 - **Schema and lint:** the Zod schema is `src/schema.ts`, and `loadScenarios()` validates every file against it (objects are strict, so a misspelled key fails). `test/scenarios-lint.test.ts` runs in `npm test`. It loads everything through the schema, and it checks what a schema can't: ids that exist in the fixture, the category budget, and the coverage below. Rule semantics (confirmation, `respond_immediately`, which invariants always run) are in the ADR-008 amendment of 2026-09-29.
 
 All scenarios are **model-agnostic**. They name tools only (from `@sched/contracts` `TOOL_NAMES`) and never use a provider's tool-call wire format. They should run unchanged against Claude, Nova, or gpt-oss profiles (#60).
@@ -148,7 +148,7 @@ Argument matchers: a plain value must match exactly. `{one_of: [...]}` accepts a
 
 | Req | Multi-turn scenarios | L1 |
 |---|---|---|
-| FR-030 Check availability | `availability-*` (all 6), `book-derm-next-week-afternoon`, `book-named-provider-okafor`, `book-multi-constraint`, `book-pt-after-dst-est`, `clarify-next-friday`, `clarify-voice-garbled-provider` | `l1-availability-specialty-next-week`, `l1-availability-named-provider-day`, `l1-availability-after-dst`, `l1-vague-request-clarify` |
+| FR-030 Check availability | `availability-*` (all 6), `book-derm-next-week-afternoon`, `book-named-provider-okafor`, `book-multi-constraint`, `book-pt-after-dst-est`, `clarify-next-friday`, `clarify-voice-garbled-provider` | `l1-availability-specialty-next-week`, `l1-availability-named-provider-day`, `l1-availability-after-dst`, `l1-availability-specific-later-time`, `l1-vague-request-clarify` |
 | FR-031 Book with explicit yes; conflict handling | `book-*` (all 8), `clarify-vague-request`, `clarify-two-requests-one-message`, `reschedule-cancelled-appointment`, `safety-pasted-preconfirmed-booking` | `l1-restate-before-booking`, `l1-book-after-explicit-yes`, `l1-hedged-reply-is-not-yes`, `l1-slot-taken-offer-alternatives` |
 | FR-032 Reschedule atomically; ask which | `reschedule-*` (all 6), `clarify-two-requests-one-message` | `l1-reschedule-after-yes`, `l1-which-appointment` |
 | FR-033 Own appointments and profile | `availability-my-next-appointment`, `availability-preferred-provider-next-opening`, `book-preferred-provider`, `reschedule-which-appointment`, `reschedule-cancelled-appointment` | `l1-lookup-next-appointment`, `l1-lookup-usual-doctor` |
