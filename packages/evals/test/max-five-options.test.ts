@@ -66,6 +66,11 @@ describe("max_five_options: a repeated time beside five listed options is not a 
     expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
   });
 
+  it("reads a list marker only at the start of a line, not a sentence ending in a number mid-line", async () => {
+    const text = `Dr. Lee is free on Tuesday, October 13. Here are her slots after 2:00 PM ET:\n${numbered(FIVE_AFTER_TWO)}`;
+    expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
+  });
+
   it("does not read a bold heading as a list line: its marker has no space after it", async () => {
     const text = `**After 2:00 PM on Tuesday, October 13:**\n${numbered(FIVE_AFTER_TWO)}`;
     expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
