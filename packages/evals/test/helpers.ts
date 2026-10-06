@@ -1,8 +1,11 @@
 /**
- * Shared test fixtures: case lookups, grader-result lookup, transcript event builders, fixture ids, the
+ * Shared test fixtures: case lookups, recorded trials, grader-result lookup, transcript event builders, fixture ids, the
  * production INTERNAL tool error (so fault-injection tests compare against it, not a copy), and the
  * scripted good booking flow the runner and self-tests drive.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import {
   MODEL_PROFILES,
   ScriptedLlmClient,
@@ -16,6 +19,7 @@ import { createToolExecutor } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 
 import {
+  CalibrationSet,
   createTrialEnvironment,
   loadScenarios,
   QueuedPatientSimulator,
@@ -40,6 +44,15 @@ export function l1Case(id: string): L1Case {
   const c = loaded.l1.find((x) => x.id === id);
   if (c === undefined) throw new Error(`no L1 case ${id}`);
   return c;
+}
+
+/** A committed trial's events, by id (`<scenario>#<trial>`), from the 2026-10-05 full run (PR #165). */
+export function recorded(id: string): TranscriptEvent[] {
+  const path = join(import.meta.dirname, "..", "calibration", "transcripts.json");
+  const set = CalibrationSet.parse(JSON.parse(readFileSync(path, "utf8")));
+  const trial = set.transcripts.find((t) => t.id === id);
+  if (trial === undefined) throw new Error(`no recorded trial ${id}`);
+  return trial.events;
 }
 
 /** A grader result by name, from a list or a trial. */
