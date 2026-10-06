@@ -347,13 +347,17 @@ describe("check_availability", () => {
       expect(truncated).toBe(true);
     });
 
-    it("accepts the last slot's start, and rejects closing time or later with the clinic hours", async () => {
+    it("accepts the last slot's start and 16:59, and rejects closing time or later with the clinic hours", async () => {
       const last = await run({
         provider_id: "prov_lee",
         date_range: days("2026-10-15"),
         start_time: "16:30",
       });
       expect(localTimes(last)).toEqual(["4:30 PM ET"]);
+      // One minute before closing is still a floor, not an error: no slot starts that late, so it is empty.
+      expect(
+        outputOf(await run({ provider_id: "prov_lee", date_range: days("2026-10-15"), start_time: "16:59" })),
+      ).toEqual({ slots: [], truncated: false });
       const byProvider = vi.spyOn(repos.slots, "listOpenByProvider");
       for (const startTime of ["17:00", "23:59"]) {
         const error = errorOf(
@@ -366,7 +370,7 @@ describe("check_availability", () => {
       expect(byProvider).not.toHaveBeenCalled();
     });
 
-    it("rejects an afternoon start_time with time_of_day morning, but not with afternoon or any", async () => {
+    it("rejects an afternoon start_time with time_of_day morning, but not 11:59, or with afternoon or any", async () => {
       const error = errorOf(
         await run({
           provider_id: "prov_lee",
@@ -377,6 +381,17 @@ describe("check_availability", () => {
       );
       expect(error.code).toBe("INVALID_INPUT");
       expect(error.hint).toContain("time_of_day afternoon or any");
+      // 11:59 with morning is still a floor, not a conflict: no morning slot starts that late, so it is empty.
+      expect(
+        outputOf(
+          await run({
+            provider_id: "prov_lee",
+            date_range: days("2026-10-15"),
+            time_of_day: "morning",
+            start_time: "11:59",
+          }),
+        ),
+      ).toEqual({ slots: [], truncated: false });
       for (const timeOfDay of ["afternoon", "any"]) {
         const result = await run({
           provider_id: "prov_lee",
@@ -396,8 +411,35 @@ describe("check_availability", () => {
       expect(localTimes(afternoon).at(0)).toBe("12:00 PM ET");
     });
 
+    it("returns the start_time errors before the past-date, missing-filter, unknown-provider and mismatch errors", async () => {
+      const guards = [
+        { input: { start_time: "17:00" }, message: "closing time" },
+        { input: { time_of_day: "morning", start_time: "12:00" }, message: "time_of_day is morning" },
+      ];
+      const otherwiseWrong = {
+        "a past range": { provider_id: "prov_lee", date_range: days("2026-10-01", "2026-10-02") },
+        "no provider_id or specialty": { date_range: days("2026-10-15") },
+        "an unknown provider_id": { provider_id: "prov_nobody", date_range: days("2026-10-15") },
+        "a provider_id that contradicts the specialty": {
+          provider_id: "prov_lee",
+          specialty: "cardiology",
+          date_range: days("2026-10-15"),
+        },
+      };
+      for (const guard of guards) {
+        for (const [what, input] of Object.entries(otherwiseWrong)) {
+          const error = errorOf(await run({ ...input, ...guard.input }));
+          expect({ what, code: error.code, message: error.message }).toEqual({
+            what,
+            code: "INVALID_INPUT",
+            message: expect.stringContaining(guard.message) as unknown,
+          });
+        }
+      }
+    });
+
     it("rejects a start_time that isn't HH:MM 24-hour, in the schema", async () => {
-      for (const startTime of ["11:30 AM", "9:30", "24:00", "11:60"]) {
+      for (const startTime of ["", "11:30 AM", "9:30", "24:00", "11:60"]) {
         const error = errorOf(
           await run({ provider_id: "prov_lee", date_range: days("2026-10-15"), start_time: startTime }),
         );
