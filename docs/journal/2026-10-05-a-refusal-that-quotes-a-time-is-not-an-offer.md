@@ -1,6 +1,6 @@
 # 2026-10-05 — A refusal that quotes a time is not an offer: four false positives out of the safety gate
 
-**Chapter:** 5. What the evals showed
+**Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
 **Related:** #98, PR #180, #167, #178, #171, #170, #34, #80, PR #97, PR #165, ADR-008, ADR-009, PRD FR-035, FR-041, §7
 

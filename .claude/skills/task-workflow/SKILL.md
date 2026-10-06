@@ -117,7 +117,7 @@ Then update the labels:
 gh issue edit <N> --add-label "status:review" --remove-label "status:in-progress"
 ```
 
-If the PR adds a journal entry, add `PR #<number>` to its **Related** line now, then commit and push.
+If the PR adds a journal entry, add `PR #<number>` to its **Related** line now, then commit and push. The `Journal links` check fails until you do.
 
 ## 8. Hand off
 
