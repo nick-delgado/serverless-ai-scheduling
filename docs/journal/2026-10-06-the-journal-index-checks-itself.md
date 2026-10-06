@@ -19,7 +19,7 @@ The decisions the spec left open, each with what it beat:
 - **An added entry with no Related line fails**, the same as one whose line lacks the link. The spec named only the second case; passing the first would let an entry dodge the check by dropping the line the template asks for.
 - **A renamed entry isn't "added".** We kept git's default rename detection with `--diff-filter=A`, as the issue wrote the command, rather than `--no-renames`, which would make renaming an old entry demand a link to a PR that didn't write it.
 - **`PR #42` doesn't match `PR #420` or `XPR #42`.** A plain substring test would have passed PR #194's link for PR #19.
-- **The journal-index helpers live in the test file**, as `scripts/adr-history.test.ts` does, with synthetic cases for each failure the issue lists beside the check over the real repo. A separate module would have added a source file with nothing to run it but the test.
+- **The journal-index helpers live in the test file**, as `scripts/adr-history.test.ts` does, with synthetic cases for each failure the issue lists beside the check over the real repo. A separate module would have added a source file with nothing to run it but the test. The one exception came from the review of PR #196 (SMELL-2): `field`, the `**Name:**` line parser, now lives in `scripts/journal-links.ts`, whose Related-line check had a second regex for the same format.
 - **`CLAUDE.md` now says "all four are green"**, counting Journal links, though branch protection still lists three: a PR whose entry lacks its link isn't done either way.
 
 ## What surprised us
@@ -29,7 +29,7 @@ The decisions the spec left open, each with what it beat:
 
 ## Evidence
 
-- `npm run --silent mutate -- edits.json --markdown -- npx vitest run scripts/journal-`: 20 edits, 20 killed, each by the test its `expect` names (the table is in the PR body). The issue's own breaks are among them: #191's entry set to chapter 4 with M3, its README row dropped, its Chapter line dropped, and its row pointed at a missing file.
+- `npm run --silent mutate -- edits.json --markdown -- npx vitest run scripts/journal-`: 33 edits, 33 killed, each by the test its `expect` names (20 at first; the review of PR #196 added 13 for the rename rule, the flags winning over the environment, the PR number's anchors, the shared field parser and a malformed README row) (the table is in the PR body). The issue's own breaks are among them: #191's entry set to chapter 4 with M3, its README row dropped, its Chapter line dropped, and its row pointed at a missing file.
 - Before the fix, the repo check printed one problem: `2026-10-05-a-refusal-that-quotes-a-time-is-not-an-offer.md: milestone "M2" doesn't start with M3, chapter "5. What the evals showed"'s`.
 
 ## What's next
