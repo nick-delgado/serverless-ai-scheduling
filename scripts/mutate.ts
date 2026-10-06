@@ -258,6 +258,9 @@ export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: 
 
 const shown = (text: string) => text.replaceAll("\n", "⏎");
 
+/** What a KILLED-OTHER edit expected to turn red (a result read back from JSON may lack its list). */
+const expected = (result: EditResult) => `expected: ${(result.expect ?? []).join(", ")}`;
+
 /** The printed lines for one result. */
 export function formatResult(result: EditResult): string[] {
   const lines = [
@@ -265,7 +268,7 @@ export function formatResult(result: EditResult): string[] {
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
   if (result.status === "REFUSED") lines.push(`    (${result.detail})`);
-  if (result.status === "KILLED-OTHER") lines.push(`    (expected: ${(result.expect ?? []).join(", ")})`);
+  if (result.status === "KILLED-OTHER") lines.push(`    (${expected(result)})`);
   return lines;
 }
 
@@ -299,7 +302,7 @@ export function markdownTable(results: readonly EditResult[]): string[] {
       r.status === "REFUSED"
         ? `REFUSED (${r.detail})`
         : r.status === "KILLED-OTHER"
-          ? `KILLED-OTHER (expected: ${(r.expect ?? []).join(", ")})`
+          ? `KILLED-OTHER (${expected(r)})`
           : r.status;
     const failed = r.failedTests.length > 0 ? r.failedTests.map(codeSpan).join("<br>") : "—";
     return `| ${cell(r.id)} | ${codeSpan(r.file)} | ${codeSpan(r.find)} → ${codeSpan(r.replace)} | ${cell(status)} | ${failed} |`;

@@ -304,6 +304,15 @@ describe("formatResult", () => {
     ]);
   });
 
+  it("names what a KILLED-OTHER edit expected, and an empty list when it has none", () => {
+    const other = { ...result, status: "KILLED-OTHER" as const, failedTests: [] };
+    expect(formatResult({ ...other, expect: ["one", "two"] })).toEqual([
+      "KILLED-OTHER 7 a.ts: x⏎y → z",
+      "    (expected: one, two)",
+    ]);
+    expect(formatResult(other)).toEqual(["KILLED-OTHER 7 a.ts: x⏎y → z", "    (expected: )"]);
+  });
+
   it("says why an edit was refused", () => {
     expect(
       formatResult({ ...result, status: "REFUSED", failedTests: [], detail: "find occurs 2 times" }),
