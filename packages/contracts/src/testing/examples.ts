@@ -281,6 +281,10 @@ export const EXAMPLES = {
   ChatStatusEvent: statusEvent,
   ChatTextDeltaEvent: deltaEvent,
   ChatTextResetEvent: { type: "text_reset", keepChars: 0 } satisfies In<"ChatTextResetEvent">,
+  ChatConversationEvent: {
+    type: "conversation",
+    conversationId: CONVERSATION_ID,
+  } satisfies In<"ChatConversationEvent">,
   ChatDoneEvent: doneEvent,
   ChatErrorCode: "RATE_LIMITED",
   ChatErrorEvent: errorEvent,

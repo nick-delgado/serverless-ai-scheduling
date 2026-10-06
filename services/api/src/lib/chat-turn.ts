@@ -18,13 +18,16 @@
  * 4. The daily turn cap (ADR-009) is consumed atomically before any model call, for a new message only.
  * 5. The patient's message is stored, with its `clientMessageId`, BEFORE the agent loop runs, so an
  *    escalation's staff transcript (read from storage, #23) includes it, and a failed turn never loses
- *    it (FR-015).
+ *    it (FR-015). A turn that opened a new conversation then names it in a `conversation` event, the
+ *    first thing written (so under 200), before the model is called: a Retry after a cut stream
+ *    continues it (#160).
  * 6. `runAgentTurn` streams `status`, `text_delta` and `text_reset` straight through. The tool executor
  *    is bound to this patient and to the conversation whose history was just loaded.
  * 7. The turn's messages are appended verbatim (reasoning blocks included), then the trace.
  * 8. This module owns the terminal event: `done` (with the stored reply's message ID) or `error`. An
- *    `error` names the conversation whenever it exists in storage, so a Retry after a failed first turn
- *    continues it (FR-014). The stream always ends, whatever throws.
+ *    `error` names the conversation whenever it exists in storage, so a Retry after a failed turn
+ *    continues it (FR-014). On a turn that opened a conversation the response is already 200 by then,
+ *    so the `error` event carries the failure. The stream always ends, whatever throws.
  * sync-end:chat-turn-order
  */
 import { randomUUID } from "node:crypto";
@@ -152,6 +155,8 @@ interface OpenTurn {
   readonly patientId: PatientId;
   readonly conversationId: ConversationId;
   readonly turnId: TurnId;
+  /** True when this turn starts the conversation (none requested, or the requested one read as empty). */
+  readonly opensConversation: boolean;
   nextSeq: number;
 }
 
@@ -248,6 +253,10 @@ class ChatTurn {
       };
       if (!(await this.#append(turn, [...before, patientMessage]))) return;
       history = [...earlier, ...before];
+      // The conversation now exists in storage: name it before the agent runs (#160).
+      if (turn.opensConversation) {
+        this.#send(200, { type: "conversation", conversationId: turn.conversationId });
+      }
     }
 
     const result = await this.#runAgent(turn, request.text, history);
@@ -309,8 +318,10 @@ class ChatTurn {
   ): OpenTurn {
     const newId = this.#deps.newId ?? randomUUID;
     let conversationId: ConversationId;
+    let opensConversation = true;
     if (requested !== undefined && stored.length > 0) {
       conversationId = requested;
+      opensConversation = false;
       this.#storedConversationId = conversationId;
     } else {
       conversationId = newId();
@@ -321,7 +332,7 @@ class ChatTurn {
     this.#summary.turnId = turnId;
     this.#facts.historyMessages = stored.length;
     const nextSeq = (stored.at(-1)?.seq ?? -1) + 1;
-    return { patientId, conversationId, turnId, nextSeq };
+    return { patientId, conversationId, turnId, opensConversation, nextSeq };
   }
 
   /**

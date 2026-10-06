@@ -20,11 +20,16 @@ export const SessionFault = z.enum(["none", "network", "unauthorized", "internal
 const ms = (fallback: number) => z.int().min(0).max(60_000).catch(fallback);
 
 export const MockApiOptions = z.object({
-  /** Round trip for responses that don't wait on the model: the session call, 401s, 400s, 429/503s. */
+  /**
+   * Round trip for responses that don't wait on the model: the session call, 401s, 400s, 429/503s, and
+   * the `conversation` event that opens a turn starting a conversation (#160).
+   */
   latencyMs: ms(150),
   /**
-   * From the chat request to its first event. The response headers arrive with that first event (the
-   * Lambda writes its HTTP prelude on the first write), so `fetch()` doesn't resolve before then.
+   * The model's time to its first event. The response headers arrive with the response's first event
+   * (the Lambda writes its HTTP prelude on the first write), so `fetch()` doesn't resolve before then:
+   * after `firstEventMs` on a turn that continues a conversation, or after `latencyMs` with the
+   * `conversation` event on one that starts a conversation, whose next event follows `firstEventMs` later.
    */
   firstEventMs: ms(1000),
   /** Gap between later chat events. */
@@ -40,9 +45,11 @@ export const MockApiOptions = z.object({
    * Error injection for `POST /api/chat`:
    * - `network`: the request fails (fetch rejects);
    * - `unauthorized`: API Gateway's own 401 `{"message":"Unauthorized"}`;
-   * - `rate_limited` / `unavailable`: 429 / 503 with one retryable NDJSON `error` event;
+   * - `rate_limited` / `unavailable`: 429 / 503 with one retryable NDJSON `error` event, or, on a
+   *   turn that starts a conversation, 200 with the `conversation` event, then that `error` (#160);
    * - `daily_cap`: 429 with the daily turn cap's `error` event (not retryable, ADR-009);
-   * - `mid_stream`: 200, part of the reply, then a retryable `error` event.
+   * - `mid_stream`: 200, part of the reply, then a retryable `error` event (after the `conversation`
+   *   event on a turn that starts a conversation).
    */
   chatFault: ChatFault.catch("none"),
   /** Which session `POST /api/session` returns: with an upcoming appointment, without, or a conversation to restore. */
