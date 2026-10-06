@@ -36,13 +36,14 @@ describe("killedFiles", () => {
     ]).toEqual(["scripts/a.ts"]);
   });
 
-  it("reads a file in a longer fence, or with escaped pipes in the cells before it", () => {
+  it("reads a file in a longer fence, or with escaped pipes before it, and skips a row with no file or no status", () => {
     const body = [
       MARKDOWN_HEADER,
       "|---|---|---|---|---|",
       "| a\\|b | `` scripts/`x`.ts `` | c | KILLED | e |",
       "| a row with no file |",
       "| 2 | | c | KILLED | e |",
+      "| 3 | `scripts/no-status.ts` |",
     ].join("\n");
     expect([...killedFiles(body)]).toEqual(["scripts/`x`.ts"]);
   });
