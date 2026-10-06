@@ -10,7 +10,8 @@ All files live in `RUN_DIR` (outside any checkout).
 
 | File | Writer | Readers | Contents |
 |---|---|---|---|
-| `spec/issue-<n>.md` | `get-issue.sh` | analysts, verifier | An issue with all its comments |
+| `spec/issue-<n>.md` | `get-issue.sh` | analysts, verifier | The issue with all its comments; read to its end |
+| `spec/background/issue-<n>.md` | `get-issue.sh --background` | analysts, verifier | A linked issue or PR, trimmed; searched, not read whole |
 | `issue-body.md`, `previous/round-<k>.md`, `previous/applied-<k>.md` | `get-readiness.sh` | verifier, refresh analyst, `apply-readiness.sh`, `update-issue-body.sh` | The description as it is now; earlier rounds and apply records |
 | `spec-changes.patch` | the orchestrator (`git diff`, refresh mode) | refresh analyst | The direction documents' changes since the last round's spec commit |
 | `issue-body.new.md`, `applied.md` | `apply-readiness.sh` | `update-issue-body.sh`, `post-readiness.sh` | The new description; the record of what was applied, ending in what is still open |

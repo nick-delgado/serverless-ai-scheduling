@@ -54,7 +54,14 @@ resource: a review that asks twenty questions is not read.
    the format's rules for edits to acceptance criteria.
 9. **Check that it tells one story.** Read your draft against itself and the issue: each
    assumption against the questions' options and the other assumptions; each against the
-   issue's goal and its lines. Where they disagree, fix the draft or turn the disagreement
+   issue's goal and its lines; each assumption and edit against the rules in the
+   instruction files and templates the manifest lists (what counts as done, what needs a
+   recorded decision). A conflict with a rule becomes a question quoting both. Run every
+   read-only command an edit or criterion prescribes (a search, a listing, a git query)
+   against `<RUN_DIR>/worktree`, check the output is what it expects, and quote both under
+   "What was checked"; mark one that builds, tests or writes "(verify first)". Check that
+   each option's text claims no more than it covers, and that each assumption naming a
+   place says whether it is required or a suggestion. Where they disagree, fix the draft or turn the disagreement
    into a question. Where an assumption's basis shows an issue line is wrong, add an edit
    for that line. Cite a stale line the same way everywhere it appears.
 10. **Choose the verdict** by the table in the format reference. "Not ready" says what to do

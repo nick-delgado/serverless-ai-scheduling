@@ -43,9 +43,16 @@ gh api --paginate "repos/{owner}/{repo}/pulls/${pr}/commits" \
 
 gh api "repos/{owner}/{repo}/pulls/${pr}" -H "Accept: application/vnd.github.diff" > "$run/diff.patch"
 
+# A check can run more than once on the same commit: a cancelled run replaced by a newer one,
+# a manual re-run, or the same workflow for two events. Drop a cancelled or skipped run when
+# a later run of the same check exists; keep every other run, so a real failure in one of
+# two parallel runs is never hidden. Commit statuses are already the latest per context.
 {
   gh api --paginate "repos/{owner}/{repo}/commits/${head_sha}/check-runs" \
-    --jq '.check_runs[] | "check\t\(.name)\t\(.status)\t\(.conclusion // "-")\t\(.html_url)"'
+    --jq '.check_runs[] | "\(.name)\t\(.started_at // "")\t\(.id)\tcheck\t\(.name)\t\(.status)\t\(.conclusion // "-")\t\(.html_url)"' |
+    sort -t "$(printf '\t')" -k1,1 -k2,2 -k3,3n |
+    awk -F'\t' '{ row[NR] = $4 "\t" $5 "\t" $6 "\t" $7 "\t" $8; name[NR] = $1; concl[NR] = $7; lastrow[$1] = NR }
+      END { for (i = 1; i <= NR; i++) if (!(concl[i] ~ /^(cancelled|skipped)$/ && lastrow[name[i]] > i)) print row[i] }'
   gh api "repos/{owner}/{repo}/commits/${head_sha}/status" \
     --jq '.statuses[] | "status\t\(.context)\t\(.state)\t-\t\(.target_url // "")"'
 } > "$run/ci.txt"
@@ -70,11 +77,11 @@ ci_state() {
     return
   fi
   if awk -F'\t' '($1 == "check" && $4 ~ /^(failure|timed_out|cancelled|action_required|startup_failure)$/) || ($1 == "status" && $3 ~ /^(failure|error)$/) { found = 1 } END { exit !found }' "$run/ci.txt"; then
-    echo "failing: $(awk -F'\t' '($1 == "check" && $4 ~ /^(failure|timed_out|cancelled|action_required|startup_failure)$/) || ($1 == "status" && $3 ~ /^(failure|error)$/) { printf "%s%s", sep, $2; sep = ", " }' "$run/ci.txt")"
+    echo "failing: $(awk -F'\t' '($1 == "check" && $4 ~ /^(failure|timed_out|cancelled|action_required|startup_failure)$/) || ($1 == "status" && $3 ~ /^(failure|error)$/) { if (!seen[$2]++) { printf "%s%s", sep, $2; sep = ", " } }' "$run/ci.txt")"
   elif awk -F'\t' '($1 == "check" && $3 != "completed") || ($1 == "status" && $3 == "pending") { found = 1 } END { exit !found }' "$run/ci.txt"; then
     echo "pending"
   else
-    echo "passing ($(awk -F'\t' '{ printf "%s%s", sep, $2; sep = ", " }' "$run/ci.txt"))"
+    echo "passing ($(awk -F'\t' '!seen[$2]++ { printf "%s%s", sep, $2; sep = ", " }' "$run/ci.txt"))"
   fi
 }
 

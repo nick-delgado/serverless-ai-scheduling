@@ -15,7 +15,10 @@ no task spec was found, skip steps 1 and 2, say so under "Not reviewed", and do 
 ### 1. Extract the requirements
 
 Read every task-level spec source completely, including issue comments: requirements are
-often refined there, and later comments override earlier text.
+often refined there, and later comments override earlier text. The files under
+`<RUN_DIR>/spec/` are the task's own issues: read each to its last line. The files under
+`<RUN_DIR>/spec/background/` are the issues and PRs they link to: search them and read the
+parts the spec points to, not the whole files.
 
 Write an atomic, numbered list:
 
