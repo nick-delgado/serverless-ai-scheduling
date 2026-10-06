@@ -146,6 +146,16 @@ describe("main", () => {
     }
   });
 
+  it("with .jscpd.json, skips a copy under fixtures/ and finds copies in .tsx files", () => {
+    // jscpd compares files of one format with each other, so the .tsx copy needs a .tsx original.
+    r.write("fixtures/f.ts", COPIED);
+    r.write("x.tsx", COPIED);
+    r.write("y.tsx", COPIED);
+    expect(runJscpd(config, repo).map((c) => [c.firstFile.name, c.secondFile.name].sort())).toEqual([
+      ["x.tsx", "y.tsx"],
+    ]);
+  });
+
   it("logs to the console, in the process's directory, by default", async () => {
     const cwd = vi.spyOn(process, "cwd").mockReturnValue(repo);
     try {

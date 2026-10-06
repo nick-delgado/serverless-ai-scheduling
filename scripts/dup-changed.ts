@@ -30,7 +30,6 @@ import {
   type AddedLine,
   addedSince,
   DEFAULT_BASE,
-  GIT_MAX_BUFFER,
   noMergeBase,
   type ScriptDeps,
   scriptIo,
@@ -76,6 +75,9 @@ export function formatClone(clone: Clone, added: ReadonlyMap<string, readonly Ad
   return `${at(ours)} copies ${at(theirs)} (${clone.lines} lines, ${clone.tokens} tokens)`;
 }
 
+/** jscpd's output limit: its JSON report goes to a file, but a failing run's output can be long. */
+export const JSCPD_MAX_BUFFER = 64 * 1024 * 1024;
+
 /** The jscpd launcher, resolved from this script's own dependencies so the check can scan another checkout. */
 const JSCPD = createRequire(import.meta.url).resolve("jscpd/run-jscpd.js");
 
@@ -86,7 +88,7 @@ export function runJscpd(config: string, cwd: string): Clone[] {
     const run = spawnSync(
       process.execPath,
       [JSCPD, "--config", config, "--reporters", "json", "--output", out, "."],
-      { cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER },
+      { cwd, encoding: "utf8", maxBuffer: JSCPD_MAX_BUFFER },
     );
     if (run.status !== 0) throw new Error(`jscpd exited ${String(run.status)}: ${run.stderr}${run.stdout}`);
     return (JSON.parse(readFileSync(join(out, "jscpd-report.json"), "utf8")) as { duplicates: Clone[] })
