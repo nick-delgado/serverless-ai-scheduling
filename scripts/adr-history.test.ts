@@ -107,6 +107,13 @@ describe("normalise / lostLines", () => {
     expect(lostLines(pointed, pointed.replace("We use X.", "We use X. *(Superseded: b.)*"))).toEqual([]);
   });
 
+  it("flags one of two identical pointers dropped", () => {
+    const twice = base.replace("We use X.", "We use X. *(Refined: a.)* *(Refined: a.)*");
+    expect(lostLines(twice, twice.replace(" *(Refined: a.)*", ""))).toEqual([
+      "We use X. *(Refined: a.)* *(Refined: a.)*",
+    ]);
+  });
+
   it("flags a pointer rewritten in place, removed, or reordered (PR #175's ADR-008 edit)", () => {
     const pointed = base.replace("We use X.", "We use X. *(Refined: a.)* *(Superseded: b.)*");
     const line = "We use X. *(Refined: a.)* *(Superseded: b.)*";

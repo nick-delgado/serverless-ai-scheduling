@@ -39,6 +39,7 @@ describe("namedFiles", () => {
       MARKDOWN_HEADER,
       "|---|---|---|---|---|",
       "| a\\|b | `` scripts/`x`.ts `` | c | d | e |",
+      "| a row with no file |",
     ].join("\n");
     expect([...namedFiles(body)]).toEqual(["scripts/`x`.ts"]);
   });
@@ -104,7 +105,10 @@ describe("main", () => {
   });
 
   it("passes when every changed source file is named, taking the base from PR_BASE", () => {
-    const body = table("scripts/kept.ts", "scripts/new.ts");
+    // A non-ASCII name too, which git would quote unless told not to.
+    repo.write("scripts/café.ts", "export const x = 1;\n");
+    repo.commit("non-ASCII");
+    const body = table("scripts/kept.ts", "scripts/new.ts", "scripts/café.ts");
     expect(main([], { PR_BODY: body, PR_BASE: "main" }, deps())).toBe(0);
     expect(out).toEqual(["pr-evidence: every changed source file since main is in a mutate table."]);
   });

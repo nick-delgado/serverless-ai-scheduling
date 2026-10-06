@@ -71,15 +71,7 @@ export function main(
   }
   let changed: string[];
   try {
-    changed = git(
-      "-c",
-      "core.quotePath=false",
-      "diff",
-      "--name-only",
-      "-M",
-      "--diff-filter=d",
-      `${base}...HEAD`,
-    )
+    changed = git("-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=d", `${base}...HEAD`)
       .split("\n")
       .filter((file) => file !== "");
   } catch (err) {

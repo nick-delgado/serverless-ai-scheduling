@@ -2,6 +2,7 @@
  * scripts/dup-changed.ts: the clone filter on hand-built reports, and `main` with the real jscpd against a throwaway
  * git repository whose feature branch copies a function.
  */
+import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -130,11 +131,19 @@ describe("main", () => {
     expect(errors[1]).toContain("usage: dup-changed");
   });
 
-  it("runs jscpd in the given directory and returns its clones", () => {
+  it("runs jscpd in the given directory and returns its clones, removing its report directory", () => {
     r.write("b.ts", COPIED);
-    expect(runJscpd(config, repo).map((c) => [c.firstFile.name, c.secondFile.name].sort())).toEqual([
-      ["a.ts", "b.ts"],
-    ]);
+    const tmp = join(repo, "tmp");
+    mkdirSync(tmp);
+    vi.stubEnv("TMPDIR", tmp);
+    try {
+      expect(runJscpd(config, repo).map((c) => [c.firstFile.name, c.secondFile.name].sort())).toEqual([
+        ["a.ts", "b.ts"],
+      ]);
+      expect(readdirSync(tmp)).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("logs to the console, in the process's directory, by default", async () => {

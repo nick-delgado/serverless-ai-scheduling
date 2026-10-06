@@ -85,7 +85,7 @@ export function runJscpd(config: string, cwd: string): Clone[] {
   try {
     const run = spawnSync(
       process.execPath,
-      [JSCPD, "--config", config, "--reporters", "json", "--output", out, "--silent", "."],
+      [JSCPD, "--config", config, "--reporters", "json", "--output", out, "."],
       { cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER },
     );
     if (run.status !== 0) throw new Error(`jscpd exited ${String(run.status)}: ${run.stderr}${run.stdout}`);

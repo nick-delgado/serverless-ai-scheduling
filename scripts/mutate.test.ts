@@ -327,6 +327,8 @@ describe("codeSpan", () => {
     ["a || b", "`a \\|\\| b`"],
     ["x `y` z", "``x `y` z``"],
     ["`y``", "``` `y`` ```"],
+    ["`y", "`` `y ``"],
+    ["y`", "`` y` ``"],
     ["", "``"],
   ])("%j → %s", (text, span) => {
     expect(codeSpan(text)).toBe(span);
