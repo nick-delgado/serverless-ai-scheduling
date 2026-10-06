@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as C from "./index";
 
 import { ChatRequest } from "./api";
-import { IsoDate, IsoDateTimeUtc } from "./primitives";
+import { HhMm, IsoDate, IsoDateTimeUtc } from "./primitives";
 import { ConversationMessage, Slot } from "./domain";
 import { RescheduleAppointmentOutput } from "./tools";
 import { PatientId, makeSlotId, messageIdForSeq, parseSlotId, toCanonicalUtc } from "./ids";
@@ -49,6 +49,16 @@ describe("primitives", () => {
     expect(IsoDate.safeParse("2026-02-29").success).toBe(false); // 2026 is not a leap year
     expect(IsoDate.safeParse("2028-02-29").success).toBe(true);
     expect(IsoDate.safeParse("10/13/2026").success).toBe(false);
+  });
+
+  it("HhMm takes zero-padded 24-hour HH:MM only, with one message for every other shape (#182)", () => {
+    for (const ok of ["00:00", "08:00", "11:30", "19:59", "23:59"])
+      expect(HhMm.safeParse(ok).success).toBe(true);
+    for (const bad of ["24:00", "11:60", "9:30", "11:30 AM", "11:30:00", "1130", ""])
+      expect(HhMm.safeParse(bad).success).toBe(false);
+    expect(HhMm.safeParse("9:30").error?.issues).toEqual([
+      expect.objectContaining({ path: [], message: "Expected a time as HH:MM (24-hour)" }),
+    ]);
   });
 
   it("IsoDateTimeUtc requires UTC (no offsets)", () => {
