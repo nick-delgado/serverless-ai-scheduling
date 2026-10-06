@@ -56,10 +56,10 @@ export function checkoutRoots(checkout: string): string[] {
   return basename(parent) === ".worktrees" ? [root, dirname(parent)] : [root];
 }
 
-/** True when `dir` is `root` or anywhere below it (by path, after resolving `.` and `..`). */
+/** True when `dir` is `root` or anywhere below it (by path: `relative` resolves `.` and `..`). */
 export function isInsideDir(dir: string, root: string): boolean {
-  const rel = relative(resolve(root), resolve(dir));
-  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+  const rel = relative(root, dir);
+  return rel !== ".." && !rel.startsWith(`..${sep}`);
 }
 
 /**
@@ -77,7 +77,7 @@ export function resultsCopyDir(deps: {
     throw new CliArgError(
       `the results copy directory ${base} is inside the repository checkout ${inside}; set ${RESULTS_COPY_DIR_ENV} to a directory outside it`,
     );
-  return join(base, basename(resolve(deps.checkout)));
+  return join(base, basename(deps.checkout));
 }
 
 /** The file system calls the results writes need. */

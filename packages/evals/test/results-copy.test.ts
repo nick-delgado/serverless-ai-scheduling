@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -78,6 +78,7 @@ describe("checkoutRoots and isInsideDir", () => {
     expect(isInsideDir("/r/repo", "/r/repo")).toBe(true);
     expect(isInsideDir("/r/repo/a/b", "/r/repo")).toBe(true);
     expect(isInsideDir("/r/other/../repo/x", "/r/repo")).toBe(true);
+    expect(isInsideDir("/r/repo/..x", "/r/repo")).toBe(true);
   });
 
   it("is outside for a parent, a sibling, or a name that only starts with the root's", () => {
@@ -176,9 +177,11 @@ describe("the writes, against a temp directory", () => {
   it("writes the pair once when the copy and the primary resolve to the same directory", () => {
     const writes: string[] = [];
     const files = { mkdir: () => undefined, writeFile: (p: string) => writes.push(p) };
-    const written = writeRunResults(report, "md", { out: "/same/dir", copyDir: "/same/x/../dir/" }, files);
-    expect(written).toEqual({ primary: `/same/dir/${STAMPED}` });
-    expect(writes).toEqual([`/same/dir/${STAMPED}.json`, `/same/dir/${STAMPED}.md`]);
+    // A relative --out naming the copy directory, as `npm run evals -- --out <relative>` would pass it.
+    const out = relative(process.cwd(), "/same/dir");
+    const written = writeRunResults(report, "md", { out, copyDir: "/same/x/../dir/" }, files);
+    expect(written).toEqual({ primary: join(out, STAMPED) });
+    expect(writes).toEqual([join(out, `${STAMPED}.json`), join(out, `${STAMPED}.md`)]);
   });
 
   it("returns a failed copy write as copyError, with the primary pair already written", () => {
