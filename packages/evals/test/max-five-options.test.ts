@@ -30,8 +30,12 @@ const FIVE_AFTER_TWO = [
   "3:00 PM ET — Dr. Priya Lee",
 ];
 
-const numbered = (lines: readonly string[], marker = (i: number) => `${String(i + 1)}.`, indent = "") =>
-  lines.map((l, i) => `${indent}${marker(i)} ${l}`).join("\n");
+const numbered = (
+  lines: readonly string[],
+  marker = (i: number) => `${String(i + 1)}.`,
+  indent = "",
+  gap = " ",
+) => lines.map((l, i) => `${indent}${marker(i)}${gap}${l}`).join("\n");
 
 /** PR #179's rerun trial 2, hand-built: the header echoes the `start_time` floor. */
 const TRIAL_2 = `Here are the open afternoon slots after 2:00 PM ET on Tuesday, October 13:\n\n${numbered(FIVE_AFTER_TWO)}\n\nWhich one works for you?`;
@@ -61,13 +65,20 @@ describe("max_five_options: a repeated time beside five listed options is not a 
     ["•", () => "•", ""],
     ["1)", (i: number) => `${String(i + 1)})`, ""],
     ["an indented 1.", (i: number) => `${String(i + 1)}.`, "  "],
-  ])("reads %s list lines", async (_what, marker, indent) => {
-    const text = `Here are the slots after 2:00 PM ET on Tuesday, October 13:\n${numbered(FIVE_AFTER_TWO, marker, indent)}`;
+    ["a tab-indented 1.", (i: number) => `${String(i + 1)}.`, "\t"],
+    ["- and a tab", () => "-", "", "\t"],
+  ])("reads %s list lines", async (_what, marker, indent, gap = " ") => {
+    const text = `Here are the slots after 2:00 PM ET on Tuesday, October 13:\n${numbered(FIVE_AFTER_TWO, marker, indent, gap)}`;
     expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
   });
 
   it("reads a list marker only at the start of a line, not a sentence ending in a number mid-line", async () => {
     const text = `Dr. Lee is free on Tuesday, October 13. Here are her slots after 2:00 PM ET:\n${numbered(FIVE_AFTER_TWO)}`;
+    expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
+  });
+
+  it("does not read a line that starts with a three-digit number as a list line", async () => {
+    const text = `${numbered(FIVE_AFTER_TWO)}\n\n100. That's the most I can list; Dr. Okafor also starts at 4:00 PM ET.`;
     expect(await maxFive([assistant(text)])).toMatchObject({ status: "pass" });
   });
 
@@ -85,6 +96,15 @@ describe("max_five_options: six or more counted times still fail (#181)", () => 
     expect(await maxFive([assistant(text)])).toMatchObject({
       status: "fail",
       detail: "10 times in one message",
+    });
+  });
+
+  it("counts each time on a list line, not one per line", async () => {
+    const text =
+      "Dr. Lee has these openings:\n- Tuesday, October 13: 2:00 PM, 2:30 PM and 3:00 PM ET\n- Thursday, October 15: 2:00 PM, 2:30 PM and 3:00 PM ET";
+    expect(await maxFive([assistant(text)])).toMatchObject({
+      status: "fail",
+      detail: "6 times in one message",
     });
   });
 
