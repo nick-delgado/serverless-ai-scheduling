@@ -63,10 +63,11 @@ import {
 import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
+
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's and results-copy.ts's tested functions (setup, options, the calibration step and files, usage errors, the results copy and its writes); what stays here is untested wiring: the client, the checkout path, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results lines. */
 /** The checkout running the CLI: `packages/evals/src/../../..`. */
 const CHECKOUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's tested functions (setup, options, the calibration step and files, usage errors); what stays here is untested wiring: the client, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results lines. */
 function fail(message: string): never {
   console.error(`evals: ${message}`);
   process.exit(2);
