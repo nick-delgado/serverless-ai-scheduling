@@ -77,6 +77,7 @@ const errorEvent = {
 export const EXAMPLES = {
   // primitives + ids + clinic
   IsoDate: "2026-10-13",
+  HhMm: "11:30",
   IsoDateTimeUtc: START,
   TokenUsage: USAGE,
   PatientId: PATIENT_ID,

@@ -130,6 +130,13 @@ describe("input validation rules", () => {
       expect(CheckAvailabilityInput.safeParse({ ...base, start_time: bad }).success).toBe(false);
   });
 
+  it('rejects a bad start_time with the message "Expected a time as HH:MM (24-hour)" (#182)', () => {
+    const input = { date_range: { start_date: "2026-11-02", end_date: "2026-11-06" }, start_time: "9:30" };
+    expect(CheckAvailabilityInput.safeParse(input).error?.issues).toEqual([
+      expect.objectContaining({ path: ["start_time"], message: "Expected a time as HH:MM (24-hour)" }),
+    ]);
+  });
+
   it("rejects a date range that ends before it starts", () => {
     expect(DateRange.safeParse({ start_date: "2026-10-14", end_date: "2026-10-13" }).success).toBe(false);
   });

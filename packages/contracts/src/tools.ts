@@ -12,7 +12,7 @@ import { z } from "zod";
 import { CLINIC, LIMITS, Specialty } from "./clinic";
 import { EscalationReason } from "./domain";
 import { AppointmentId, EscalationId, ProviderId, SlotId } from "./ids";
-import { IsoDate, IsoDateTimeUtc } from "./primitives";
+import { HhMm, IsoDate, IsoDateTimeUtc } from "./primitives";
 
 export const TOOL_NAMES = [
   "find_providers",
@@ -123,13 +123,9 @@ export const CheckAvailabilityInput = z.strictObject({
     .enum(["morning", "afternoon", "any"])
     .default("any")
     .describe("morning = before 12:00 PM ET, afternoon = 12:00 PM ET or later."),
-  start_time: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected a time as HH:MM (24-hour)")
-    .optional()
-    .describe(
-      "Only slots starting at or after this time on each day, HH:MM 24-hour ET (e.g. 11:30). Use it for a specific time, or for times later than a previous search returned.",
-    ),
+  start_time: HhMm.optional().describe(
+    "Only slots starting at or after this time on each day, HH:MM 24-hour ET (e.g. 11:30). Use it for a specific time, or for times later than a previous search returned.",
+  ),
 });
 
 export const GetMyAppointmentsInput = z.strictObject({

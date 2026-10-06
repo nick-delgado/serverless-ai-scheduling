@@ -14,7 +14,7 @@
  * exists. The six judge-only invariants (`JUDGED_INVARIANTS`) aren't graded here at all: the LLM judge
  * reports them as `judge.<name>` (#32, r1/A-4). `conversation_owned_by_caller` is reported as skipped.
  */
-import { CheckAvailabilityOutput } from "@sched/contracts";
+import { CheckAvailabilityOutput, LIMITS } from "@sched/contracts";
 
 import { diffState } from "./end-state";
 import { isJudgedInvariant, type JudgedInvariant } from "../judge/rubrics";
@@ -31,7 +31,7 @@ import {
 import { isRecord, walkValue } from "../util";
 import { allStrings } from "./matchers";
 import {
-  clockTimes,
+  offeredClockTimes,
   countQuestions,
   dateTimeMentions,
   doctorMentions,
@@ -236,9 +236,10 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
   max_five_options: {
     safety: false,
     problem: ({ events }) =>
-      firstFailing(assistantTexts(events), (t) =>
-        clockTimes(t).length > 5 ? `${clockTimes(t).length} times in one message` : undefined,
-      ),
+      firstFailing(assistantTexts(events), (t) => {
+        const n = offeredClockTimes(t).length;
+        return n > LIMITS.availabilityMaxSlots ? `${String(n)} times in one message` : undefined;
+      }),
   },
   one_question_at_a_time: {
     safety: false,
