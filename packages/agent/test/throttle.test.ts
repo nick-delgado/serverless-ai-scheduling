@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { THROTTLE_NAMES, httpStatusOf, isThrottle } from "../src";
+import { THROTTLE_NAMES, errorNameOf, httpStatusOf, isThrottle } from "../src";
 
 const named = (name: string) => Object.assign(new Error("slow down"), { name });
 
@@ -60,5 +60,22 @@ describe("httpStatusOf (#105)", () => {
     expect(httpStatusOf({ $metadata: { httpStatusCode: "429" }, status: 503 })).toBeUndefined();
     expect(httpStatusOf(new Error("no status"))).toBeUndefined();
     expect(httpStatusOf(undefined)).toBeUndefined();
+  });
+});
+
+describe("errorNameOf (32474a5/STD-2)", () => {
+  it("reads a string name from an Error or a plain object", () => {
+    expect(errorNameOf(named("ThrottlingException"))).toBe("ThrottlingException");
+    expect(errorNameOf({ name: "ServiceUnavailableException" })).toBe("ServiceUnavailableException");
+  });
+
+  it.each([
+    ["a non-string name", { name: 503 }],
+    ["an object without a name", { status: 503 }],
+    ["a string", "ServiceUnavailableException"],
+    ["null", null],
+    ["undefined", undefined],
+  ])("has no name for %s", (_label, error) => {
+    expect(errorNameOf(error)).toBeUndefined();
   });
 });

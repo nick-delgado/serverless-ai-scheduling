@@ -2,7 +2,8 @@
  * Pacing for live model calls (#34 note, ADR-002/ADR-010): one token bucket per model ID, shared by every
  * live call in the process (agent, patient simulator #31, judge #32), plus retry with exponential
  * backoff on throttling and transient 5xx errors. Which errors are throttling is `@sched/agent`'s
- * `isThrottle` (names and HTTP status, #105); the 5xx check reads the status with its `httpStatusOf`.
+ * `isThrottle` (names and HTTP status, #105); the transient-name and 5xx checks read the error with its
+ * `errorNameOf` and `httpStatusOf`.
  *
  * Wrap every live `LlmClient` with `rateLimited(client)`; they all draw from `SHARED_RATE_LIMITER` unless
  * given another limiter. The SDK's own retries should be off (`maxAttempts: 1`) so a retry also waits for
@@ -10,6 +11,7 @@
  */
 import {
   MODEL_PROFILES,
+  errorNameOf,
   httpStatusOf,
   isThrottle,
   type LlmCallOptions,
@@ -151,11 +153,11 @@ export { isThrottle };
 
 /** Worth retrying: throttling, or a transient 5xx from the service. */
 export function isRetryable(error: unknown): boolean {
-  const name = error !== null && typeof error === "object" && "name" in error ? error.name : undefined;
+  const name = errorNameOf(error);
   const status = httpStatusOf(error);
   return (
     isThrottle(error) ||
-    (typeof name === "string" && TRANSIENT_NAMES.has(name)) ||
+    (name !== undefined && TRANSIENT_NAMES.has(name)) ||
     (status !== undefined && status >= 500 && status < 600)
   );
 }

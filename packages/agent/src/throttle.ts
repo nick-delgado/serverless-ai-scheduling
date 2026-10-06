@@ -4,15 +4,16 @@
  * their own copy until #105.
  *
  * Throttling, by either of two signals:
- * - **The error's `name`** is one of `THROTTLE_NAMES`, read from any object, not only an `Error`
- *   (r1/A-3). The set is the union of the two old copies (r1/Q-2): `ThrottlingException` and
+ * - **The error's `name`** is one of `THROTTLE_NAMES`, read by `errorNameOf` from any object, not only
+ *   an `Error` (r1/A-3). The set is the union of the two old copies (r1/Q-2): `ThrottlingException` and
  *   `TooManyRequestsException` (both), `ServiceQuotaExceededException` (the API's: an account quota is
  *   a busy model, FR-015) and `Throttling` (the evals': the bare name some AWS clients use).
  * - **Its HTTP status** is 429, from `httpStatusOf`.
  *
  * `httpStatusOf` reads `$metadata.httpStatusCode` (the AWS SDK v3's field), then `statusCode`, then
  * `status` (other clients' and hand-built errors'); the first one defined wins, and it counts only if it
- * is a number (r1/A-2). The evals' 5xx check uses it too.
+ * is a number (r1/A-2). The evals' `isRetryable` uses both readers, `errorNameOf` for its transient
+ * names and `httpStatusOf` for its 5xx check, so the two packages read an error the same way.
  *
  * A pure leaf module (no SDK import), so any caller can use it without pulling in a model client.
  */
@@ -31,6 +32,12 @@ const field = (value: unknown, key: string): unknown =>
     ? (value as Record<string, unknown>)[key]
     : undefined;
 
+/** The `name` an error carries, if it is an object with a string `name` (an `Error` or a plain object). */
+export function errorNameOf(error: unknown): string | undefined {
+  const name = field(error, "name");
+  return typeof name === "string" ? name : undefined;
+}
+
 /** The HTTP status an error carries: `$metadata.httpStatusCode ?? statusCode ?? status`, if a number. */
 export function httpStatusOf(error: unknown): number | undefined {
   const status =
@@ -42,6 +49,6 @@ export function httpStatusOf(error: unknown): number | undefined {
 
 /** A throttling error: a name in `THROTTLE_NAMES`, or HTTP status 429. */
 export function isThrottle(error: unknown): boolean {
-  const name = field(error, "name");
-  return (typeof name === "string" && THROTTLE_NAMES.has(name)) || httpStatusOf(error) === 429;
+  const name = errorNameOf(error);
+  return (name !== undefined && THROTTLE_NAMES.has(name)) || httpStatusOf(error) === 429;
 }
