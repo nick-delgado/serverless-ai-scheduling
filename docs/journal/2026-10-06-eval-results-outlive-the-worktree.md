@@ -29,11 +29,13 @@ These are the decisions the spec left open. The agent made each one; the PR is w
 
 The first version of the "copy write fails" test made the copy's parent directory read-only with `chmod`. That fails to fail when the tests run as root, which some CI containers do, so the test now puts a plain file where the copy's parent directory should be. `mkdir` returns `ENOTDIR` then whoever runs it.
 
+The first mutation pass found two survivors. `rel === ""` in the containment check was redundant: the rest of the expression already returns true for the root itself, so the agent removed it. And no test told `resolve(copyBase) === resolve(primary)` from a plain string comparison, because `path.join` already normalises `..` and trailing slashes; only a relative `--out` needs the `resolve`, so the "written once" test now passes one.
+
 ## Evidence
 
 - A-10 probe, run from the task-worker agent's shell before building on it: `mkdir -p ~/.local/state/serverless-ai-scheduling/eval-results`, writing and reading back one file there, then removing it, all succeeded (`XDG_STATE_HOME` unset).
 - `npm run evals -- --dry-run`: prints the estimate, exits 0, and creates neither `packages/evals/results/` nor a checkout subdirectory under the copy directory. With `EVAL_RESULTS_COPY_DIR=<worktree>/x` it exits 2 naming the checkout; with `EVAL_RESULTS_COPY_DIR=rel` it exits 2 asking for an absolute path.
-- The mutation table in the PR (`npm run mutate -- … --markdown`) breaks each behaviour of `results-copy.ts` and drops the new calls in `cli.ts`.
+- The PR's mutation tables (`npm run mutate -- … --markdown`): 34 edits to `results-copy.ts`, all KILLED by `packages/evals/test/results-copy.test.ts`, and 4 to `cli.ts` and `index.ts` (dropping the new calls and the export), all KILLED by `typecheck -w packages/evals` plus ESLint on `cli.ts`.
 - No live eval ran: the tests cover the writes against a temp directory, as the issue's Verification says.
 
 ## What's next
