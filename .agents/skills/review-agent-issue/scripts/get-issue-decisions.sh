@@ -105,7 +105,7 @@ done <<< "$lines"
 if [ -n "$(printf '%s' "$accepted" | tr -d '[:space:]')" ]; then
   echo "| Item | Answer | By | Posted | Comment |"
   echo "|---|---|---|---|---|"
-  printf '%s\n' "$accepted" | awk -F'\t' -v r="$round" 'NF { printf "| r%s/%s | %s | %s | %s | %s |\n", r, $1, $2, $3, $4, $5 }'
+  printf '%s\n' "$accepted" | awk -F'\t' -v r="$round" 'NF { a = $2; gsub(/\|/, "\\|", a); printf "| r%s/%s | %s | %s | %s | %s |\n", r, $1, a, $3, $4, $5 }'
 else
   echo "No decisions posted."
 fi

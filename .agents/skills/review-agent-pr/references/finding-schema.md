@@ -189,7 +189,12 @@ failed: the reader uses this section to decide how far to trust the review.
 | Source | Why |
 |---|---|
 | `AGENTS.md` | standards |
+| `spec/issue-19.md` (read to line 412 of 412) | the spec |
 | `src/billing/invoice.ts` (full file) | changed file |
+
+Each spec file (`spec/*.md`) you read is listed with how far you read it, "(read to line
+<n> of <n>)", and read to its last line: a script checks this against the file's length.
+The spec-alignment reviewer lists every spec file.
 
 ### Checks performed
 | # | Check | Scope | Result |

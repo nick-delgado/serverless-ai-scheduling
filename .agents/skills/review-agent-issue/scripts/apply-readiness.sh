@@ -41,12 +41,14 @@ body="$run/issue-body.md"
 [ -s "$round_file" ] || { echo "error: no readiness review of round $k at $round_file" >&2; exit 1; }
 [ -f "$body" ] || { echo "error: no description snapshot at $body (run get-readiness.sh)" >&2; exit 1; }
 
-# The owner's answers, as "<ID>\t<answer>\t<comment URL>".
-answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk -F'|' '
+# The owner's answers, as "<ID>\t<answer>\t<comment URL>". Table cells may hold an
+# escaped pipe (\|): split on the others only, and unescape it in the text.
+answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
   /^\| r[0-9]+\// {
-    id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id); sub(/^r[0-9]+\//, "", id)
-    ans = $3; gsub(/^[ \t]+|[ \t]+$/, "", ans)
-    url = $6; gsub(/^[ \t]+|[ \t]+$/, "", url)
+    l = $0; gsub(/\\\|/, "\034", l); split(l, c, "|")
+    id = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", id); sub(/^r[0-9]+\//, "", id)
+    ans = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", ans); gsub(/\034/, "|", ans)
+    url = c[6]; gsub(/^[ \t]+|[ \t]+$/, "", url)
     print id "\t" ans "\t" url
   }')"
 
@@ -74,7 +76,8 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk -F'|' '
     if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); next }
     if (mode == "q" && line ~ /^- \*\*Recommendation:\*\* \([a-z]\)/) { l = line; sub(/^- \*\*Recommendation:\*\* \(/, "", l); rec[qid] = substr(l, 1, 1); next }
     if (line ~ /^\| A-[0-9]+ \|/) {
-      split(line, c, "|"); aid = trim(c[2]); atext[aid] = trim(c[3]); aorder[++na] = aid
+      l = line; gsub(/\\\|/, "\034", l); split(l, c, "|")
+      aid = trim(c[2]); atext[aid] = trim(c[3]); gsub(/\034/, "|", atext[aid]); aorder[++na] = aid
       if (atext[aid] ~ /\(verify first\)|\(would have asked\)/) aflag[aid] = 1
       if (atext[aid] ~ /replaces r[0-9]+\/[QAE]-[0-9]+/) { r = atext[aid]; match(r, /replaces r[0-9]+\/[QAE]-[0-9]+/); supersedes[aid] = substr(r, RSTART + 9, RLENGTH - 9) }
       next

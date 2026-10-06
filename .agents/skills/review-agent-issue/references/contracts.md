@@ -20,7 +20,7 @@ All files live in `RUN_DIR` (outside any checkout).
 | File | Writer | Readers | Required | Check |
 |---|---|---|---|---|
 | `manifest.md` | orchestrator | every subagent | Sections `## 1.` to `## 6.`; the full spec commit | `validate.sh <run> manifest` |
-| `analysis/spec.md` | spec analyst | verifier | The sections of its brief's output | `validate.sh <run> analysis` |
+| `analysis/spec.md` | spec analyst | verifier | The sections of its brief's output; every file under `spec/` listed under "Sources read" as read to its last line | `validate.sh <run> analysis` |
 | `analysis/code.md` | codebase scout | verifier | The sections of its brief's output, including "Lines made stale" | `validate.sh <run> analysis` |
 | `readiness.md` | verifier, or refresh analyst | the owner, `apply-readiness.sh`, later the coding agent and PR reviewer | The first line and heading of `readiness-format.md`; the data line with the full spec commit; "Check these first" and "Relied on"; per question two or more options (one per line, each with a Scope label), a Recommendation and a Reply line; per assumption all five columns; no reuse by likeness; each edit's "Before" text verbatim in `issue-body.md` | `validate.sh <run> readiness` |
 
