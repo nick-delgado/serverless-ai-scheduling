@@ -22,13 +22,17 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  checkExpected,
   classify,
+  codeSpan,
   DEFAULT_TIMEOUT_SECONDS,
   type EditResult,
   failedTestNames,
   formatResult,
   isVitest,
   main,
+  MARKDOWN_HEADER,
+  markdownTable,
   occurrences,
   parseCliArgs,
   runCommand,
@@ -195,6 +199,21 @@ describe("classify", () => {
   });
 });
 
+describe("checkExpected", () => {
+  it.each([
+    ["KILLED", ["a.test.ts > rejects bad"], ["rejects bad"], "KILLED"],
+    ["KILLED", ["a.test.ts > one", "a.test.ts > rejects bad"], ["nothing", "rejects"], "KILLED"],
+    ["KILLED", ["a.test.ts > one"], ["rejects bad"], "KILLED-OTHER"],
+    ["KILLED", [], ["rejects bad"], "KILLED-OTHER"],
+    ["KILLED", ["a.test.ts > one"], undefined, "KILLED"],
+    ["KILLED", ["a.test.ts > one"], [], "KILLED"],
+    ["SURVIVED", [], ["rejects bad"], "SURVIVED"],
+    ["ERROR", [], ["rejects bad"], "ERROR"],
+  ] as const)("%s with failed %j and expect %j → %s", (status, failed, expected, result) => {
+    expect(checkExpected(status, failed, expected)).toBe(result);
+  });
+});
+
 describe("parseCliArgs", () => {
   it("takes an option's value after =", () => {
     expect(parseCliArgs(["e.json", "--timeout=7", "--only=a", "--", "npm"])).toMatchObject({
@@ -224,6 +243,7 @@ describe("parseCliArgs", () => {
       timeout: 7,
       json: "o.json",
       only: ["a", "b"],
+      markdown: false,
       cmd: ["npx", "vitest", "--", "x"],
     });
   });
@@ -232,8 +252,10 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["e.json", "--", "npm", "test"])).toEqual({
       editsFile: "e.json",
       timeout: DEFAULT_TIMEOUT_SECONDS,
+      markdown: false,
       cmd: ["npm", "test"],
     });
+    expect(parseCliArgs(["e.json", "--markdown", "--", "npm"]).markdown).toBe(true);
     expect(DEFAULT_TIMEOUT_SECONDS).toBe(300);
   });
 
@@ -287,7 +309,98 @@ describe("formatResult", () => {
   });
 });
 
+describe("codeSpan", () => {
+  it.each([
+    ["a ? 1", "`a ? 1`"],
+    ["a\nb", "`a⏎b`"],
+    ["a || b", "`a \\|\\| b`"],
+    ["x `y` z", "``x `y` z``"],
+    ["`y``", "``` `y`` ```"],
+    ["", "``"],
+  ])("%j → %s", (text, span) => {
+    expect(codeSpan(text)).toBe(span);
+  });
+});
+
+describe("markdownTable", () => {
+  const base = { file: "a.ts", find: "x", replace: "y", seconds: 1 };
+  it("has one row per result, with the edit, the status (and why), the failed tests, then the summary", () => {
+    const results: EditResult[] = [
+      { ...base, id: "k", status: "KILLED", failedTests: ["a.test.ts > one", "a.test.ts > two"] },
+      {
+        ...base,
+        id: "o|1",
+        status: "KILLED-OTHER",
+        expect: ["three", "four"],
+        failedTests: ["b.test.ts > b"],
+      },
+      { ...base, id: "s", status: "SURVIVED", failedTests: [] },
+      { ...base, id: "r", status: "REFUSED", failedTests: [], detail: "find occurs 2 times" },
+    ];
+    expect(markdownTable(results)).toEqual([
+      MARKDOWN_HEADER,
+      "|---|---|---|---|---|",
+      "| k | `a.ts` | `x` → `y` | KILLED | `a.test.ts > one`<br>`a.test.ts > two` |",
+      "| o\\|1 | `a.ts` | `x` → `y` | KILLED-OTHER (expected: three, four) | `b.test.ts > b` |",
+      "| s | `a.ts` | `x` → `y` | SURVIVED | — |",
+      "| r | `a.ts` | `x` → `y` | REFUSED (find occurs 2 times) | — |",
+      "",
+      "4 edits: 1 killed, 1 killed other tests, 1 survived, 0 timed out, 0 errors, 1 refused",
+    ]);
+    expect(MARKDOWN_HEADER).toBe("| Edit | File | Change | Status | Failed tests |");
+  });
+});
+
 describe("main", () => {
+  it("reads an edit as KILLED only when a test its expect list names went red, and exits 1 otherwise", async () => {
+    const edits = editsFile([
+      { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["rejects bad"] },
+      { id: "o", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["keeps the rest"] },
+    ]);
+    const code = await main([edits, "--json", "out.json", "--", join(dir, "vitest"), "run"], deps());
+    expect(out.slice(0, 5)).toEqual([
+      "KILLED k target.txt: ok ? 1 → bad ? 1",
+      "    ✗ target.test.ts > suite rejects bad",
+      "KILLED-OTHER o target.txt: ok ? 1 → bad ? 1",
+      "    ✗ target.test.ts > suite rejects bad",
+      "    (expected: keeps the rest)",
+    ]);
+    expect(out.at(-1)).toContain("2 edits: 1 killed, 1 killed other tests, 0 survived");
+    expect(code).toBe(1);
+    const { results } = JSON.parse(readFileSync(join(dir, "out.json"), "utf8")) as { results: EditResult[] };
+    expect(results.map((r) => r.expect)).toEqual([["rejects bad"], ["keeps the rest"]]);
+  });
+
+  it("reads a killed edit with an expect list as KILLED-OTHER when the command names no tests", async () => {
+    const edits = editsFile([
+      { id: "o", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["x"] },
+    ]);
+    expect(await main([edits, "--", ...checker()], deps())).toBe(1);
+    expect(out[0]).toBe("KILLED-OTHER o target.txt: ok ? 1 → bad ? 1");
+  });
+
+  it("with --markdown, prints the progress to stderr and only the table and summary to stdout", async () => {
+    const edits = editsFile([
+      { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
+      { id: "s", file: "target.txt", find: "const ok", replace: "const fine" },
+    ]);
+    const code = await main([edits, "--markdown", "--", join(dir, "vitest"), "run"], deps());
+    expect(out).toEqual([
+      MARKDOWN_HEADER,
+      "|---|---|---|---|---|",
+      "| k | `target.txt` | `ok ? 1` → `bad ? 1` | KILLED | `target.test.ts > suite rejects bad` |",
+      "| s | `target.txt` | `const ok` → `const fine` | SURVIVED | — |",
+      "",
+      "2 edits: 1 killed, 0 killed other tests, 1 survived, 0 timed out, 0 errors, 0 refused",
+    ]);
+    expect(errors).toEqual([
+      "KILLED k target.txt: ok ? 1 → bad ? 1",
+      "    ✗ target.test.ts > suite rejects bad",
+      "SURVIVED s target.txt: const ok → const fine",
+    ]);
+    expect(code).toBe(1);
+  });
+
   it("applies each edit alone, restores the file after each, and reports KILLED and SURVIVED", async () => {
     const edits = editsFile([
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
@@ -298,7 +411,9 @@ describe("main", () => {
       "KILLED k target.txt: ok ? 1 → bad ? 1",
       "SURVIVED 2 target.txt: const ok → const fine",
     ]);
-    expect(out.at(-1)).toBe("\n2 edits: 1 killed, 1 survived, 0 timed out, 0 errors, 0 refused");
+    expect(out.at(-1)).toBe(
+      "\n2 edits: 1 killed, 0 killed other tests, 1 survived, 0 timed out, 0 errors, 0 refused",
+    );
     expect(code).toBe(1);
     expect(target()).toBe(TARGET);
   });
@@ -313,7 +428,9 @@ describe("main", () => {
       "KILLED k target.txt: ok ? 1 → bad ? 1",
       "TIMEOUT t target.txt: ok ? 1 → slow ? 1",
     ]);
-    expect(out.at(-1)).toBe("\n2 edits: 1 killed, 0 survived, 1 timed out, 0 errors, 0 refused");
+    expect(out.at(-1)).toBe(
+      "\n2 edits: 1 killed, 0 killed other tests, 0 survived, 1 timed out, 0 errors, 0 refused",
+    );
     expect(code).toBe(0);
     expect(target()).toBe(TARGET);
   });
@@ -437,6 +554,16 @@ describe("main", () => {
     ["an entry with no find", '[{"file":"target.txt","replace":"bad"}]', "edit 1 in"],
     ["an entry with no replace", '[{"file":"target.txt","find":"ok ? 1"}]', "edit 1 in"],
     ["a numeric id", '[{"id":1,"file":"target.txt","find":"ok ? 1","replace":"bad"}]', "edit 1 in"],
+    [
+      "an expect that isn't a list",
+      '[{"file":"target.txt","find":"ok ? 1","replace":"bad","expect":"t"}]',
+      "edit 1 in",
+    ],
+    [
+      "an expect with a number",
+      '[{"file":"target.txt","find":"ok ? 1","replace":"bad","expect":[1]}]',
+      "edit 1 in",
+    ],
   ])("exits 2 for %s, running and writing nothing", async (_, content, message) => {
     if (content !== undefined) writeFileSync(join(dir, "edits.json"), content);
     const code = await main(["edits.json", "--", ...checker()], deps());

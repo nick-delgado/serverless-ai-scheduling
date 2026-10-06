@@ -2,25 +2,30 @@
  * Exact-edit mutation runner (#113; the #72 PR #132 review's P1): makes each break of the definition of done's
  * seen-failing pass an exact edit with a recorded result.
  *
- *   npm run mutate -- <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] -- <test command...>
+ *   npm run mutate -- <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] [--markdown] -- <test command...>
  *
- * `edits.json` is a list of `{ "id"?, "file", "find", "replace" }` (paths relative to the current directory;
- * other fields are kept as notes). Each edit is applied on its own:
+ * `edits.json` is a list of `{ "id"?, "file", "find", "replace", "expect"? }` (paths relative to the current
+ * directory, which `npm run` makes the repo root; other fields are kept as notes). `expect` lists the tests the edit
+ * should turn red, as substrings of `<test file> > <test name>`. Each edit is applied on its own:
  *   - it is REFUSED unless `find` occurs exactly once in `file` (two copies of a statement take two edits,
  *     each with enough context to be unique);
  *   - the edit is written, the test command runs, and the file is restored, also on an error, SIGINT or
  *     SIGTERM (a SIGKILL of this process leaves the edit in place);
- *   - one line is printed: `KILLED|SURVIVED|ERROR|TIMEOUT|REFUSED <id> <file>: <find> → <replace>`, with
- *     newlines shown as ⏎.
+ *   - one line is printed: `KILLED|KILLED-OTHER|SURVIVED|ERROR|TIMEOUT|REFUSED <id> <file>: <find> → <replace>`,
+ *     with newlines shown as ⏎.
  * A command that names `vitest` gets Vitest's JSON reporter added, and a KILLED edit lists the tests that
  * failed (`    ✗ <test file> > <test name>`). A Vitest run that fails with no failing test (a compile error, a
  * crash, a failed import) is ERROR, not KILLED. Any other command that exits non-zero is KILLED, with no names.
+ * A KILLED edit with an `expect` list whose failed tests include none of them is KILLED-OTHER, and doesn't count as
+ * killed: an unrelated test went red (in PR #175 an esbuild syntax error did), or a non-Vitest command named none.
  * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT.
+ * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
+ * id, file, exact edit, status, failed tests) and the summary line, both from the same results.
  * The command first runs once unedited; if that run fails, nothing is mutated.
  *
  * An edit whose file can't be read is REFUSED; a command that can't be started is ERROR (or, unedited, a failed run).
  *
- * Exit codes: 0 every edit was killed or timed out; 1 an edit survived; 2 an edit was refused or errored, the
+ * Exit codes: 0 every edit was killed or timed out; 1 an edit survived or was KILLED-OTHER; 2 an edit was refused or errored, the
  * unedited run failed, or the arguments were wrong (including an edits file that can't be read or isn't a list of
  * edits, and an `--only` id no edit has).
  */
@@ -35,15 +40,17 @@ export interface Edit {
   file: string;
   find: string;
   replace: string;
+  expect?: string[];
 }
 
-export type Status = "KILLED" | "SURVIVED" | "ERROR" | "TIMEOUT" | "REFUSED";
+export type Status = "KILLED" | "KILLED-OTHER" | "SURVIVED" | "ERROR" | "TIMEOUT" | "REFUSED";
 
 interface EditResultBase {
   id: string;
   file: string;
   find: string;
   replace: string;
+  expect?: string[];
   failedTests: string[];
   seconds: number;
 }
@@ -65,12 +72,13 @@ export interface CliArgs {
   timeout: number;
   json?: string | undefined;
   only?: string[] | undefined;
+  markdown: boolean;
   cmd: string[];
 }
 
 export const DEFAULT_TIMEOUT_SECONDS = 300;
 export const USAGE =
-  "usage: mutate <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] -- <test command...>";
+  "usage: mutate <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] [--markdown] -- <test command...>";
 
 /** How many times `find` occurs in `text` (non-overlapping); an empty `find` occurs nowhere. */
 export function occurrences(text: string, find: string): number {
@@ -111,6 +119,16 @@ export function classify(
   return outcome.failedTests.length > 0 ? "KILLED" : "ERROR";
 }
 
+/** KILLED-OTHER for a KILLED edit whose `expect` list names none of its failed tests; else the status as it is. */
+export function checkExpected(
+  status: Exclude<Status, "REFUSED">,
+  failedTests: readonly string[],
+  expected: readonly string[] | undefined,
+): Exclude<Status, "REFUSED"> {
+  if (status !== "KILLED" || expected === undefined || expected.length === 0) return status;
+  return failedTests.some((test) => expected.some((name) => test.includes(name))) ? status : "KILLED-OTHER";
+}
+
 /** The arguments before the first `--` are the runner's own; everything after it is the test command. */
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const dash = argv.indexOf("--");
@@ -121,7 +139,12 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       args: argv.slice(0, dash),
       allowPositionals: true,
       strict: true,
-      options: { timeout: { type: "string" }, json: { type: "string" }, only: { type: "string" } },
+      options: {
+        timeout: { type: "string" },
+        json: { type: "string" },
+        only: { type: "string" },
+        markdown: { type: "boolean" },
+      },
     });
   } catch (err) {
     throw new Error(`${(err as Error).message}. ${USAGE}`, { cause: err });
@@ -137,15 +160,17 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     timeout,
     json: values.json,
     only: values.only?.split(","),
+    markdown: values.markdown ?? false,
     cmd: argv.slice(dash + 1),
   };
 }
 
-/** True for a `{ id?, file, find, replace }` entry with string fields (other fields are notes). */
+/** True for a `{ id?, file, find, replace, expect? }` entry with string fields (other fields are notes). */
 function isEdit(entry: unknown): entry is Edit {
-  const { id, file, find, replace } = (entry ?? {}) as Record<string, unknown>;
+  const { id, file, find, replace, expect } = (entry ?? {}) as Record<string, unknown>;
   return (
     (id === undefined || typeof id === "string") &&
+    (expect === undefined || (Array.isArray(expect) && expect.every((name) => typeof name === "string"))) &&
     typeof file === "string" &&
     typeof find === "string" &&
     typeof replace === "string"
@@ -164,7 +189,7 @@ export function readEdits(path: string): (Edit & { id: string })[] {
   return parsed.map((entry: unknown, i) => {
     if (!isEdit(entry))
       throw new Error(
-        `edit ${i + 1} in ${path} isn't { "id"?, "file", "find", "replace" } with string values`,
+        `edit ${i + 1} in ${path} isn't { "id"?, "file", "find", "replace", "expect"? } with string values (expect: a list)`,
       );
     return { ...entry, id: entry.id ?? String(i + 1) };
   });
@@ -240,7 +265,46 @@ export function formatResult(result: EditResult): string[] {
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
   if (result.status === "REFUSED") lines.push(`    (${result.detail})`);
+  if (result.status === "KILLED-OTHER") lines.push(`    (expected: ${(result.expect ?? []).join(", ")})`);
   return lines;
+}
+
+/** The header of the `--markdown` table; scripts/pr-evidence.ts finds the table by it. */
+export const MARKDOWN_HEADER = "| Edit | File | Change | Status | Failed tests |";
+
+/** `text` for a Markdown table cell: newlines as ⏎, pipes escaped. */
+const cell = (text: string) => shown(text).replaceAll("|", "\\|");
+
+/** `text` as one Markdown code span in a table cell, with a fence longer than any backtick run in it. */
+export function codeSpan(text: string): string {
+  const inner = cell(text);
+  const fence = "`".repeat(Math.max(0, ...(inner.match(/`+/g) ?? []).map((run) => run.length)) + 1);
+  const pad = inner.startsWith("`") || inner.endsWith("`") ? " " : "";
+  return `${fence}${pad}${inner}${pad}${fence}`;
+}
+
+/** The summary line of a run. */
+export function summary(results: readonly EditResult[]): string {
+  const count = (status: Status) => results.filter((r) => r.status === status).length;
+  return (
+    `${results.length} edits: ${count("KILLED")} killed, ${count("KILLED-OTHER")} killed other tests, ` +
+    `${count("SURVIVED")} survived, ${count("TIMEOUT")} timed out, ${count("ERROR")} errors, ${count("REFUSED")} refused`
+  );
+}
+
+/** The Seen-failing table for a PR body, one row per result, then the summary line. */
+export function markdownTable(results: readonly EditResult[]): string[] {
+  const rows = results.map((r) => {
+    const status =
+      r.status === "REFUSED"
+        ? `REFUSED (${r.detail})`
+        : r.status === "KILLED-OTHER"
+          ? `KILLED-OTHER (expected: ${(r.expect ?? []).join(", ")})`
+          : r.status;
+    const failed = r.failedTests.length > 0 ? r.failedTests.map(codeSpan).join("<br>") : "—";
+    return `| ${cell(r.id)} | ${codeSpan(r.file)} | ${codeSpan(r.find)} → ${codeSpan(r.replace)} | ${cell(status)} | ${failed} |`;
+  });
+  return [MARKDOWN_HEADER, "|---|---|---|---|---|", ...rows, "", summary(results)];
 }
 
 export interface MutateDeps {
@@ -253,8 +317,9 @@ export interface MutateDeps {
 /** The script's entry point; returns the exit code (see the header). */
 export async function main(argv: readonly string[], deps: MutateDeps = {}): Promise<number> {
   const cwd = deps.cwd ?? process.cwd();
-  const log = deps.log ?? ((line: string) => console.log(line));
+  const out = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
+  let log = out;
   let args: CliArgs;
   try {
     args = parseCliArgs(argv);
@@ -269,6 +334,8 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
     logError(`mutate: ${(err as Error).message}`);
     return 2;
   }
+  // With --markdown, stdout carries only the table and the summary, ready to paste.
+  if (args.markdown) log = logError;
   const only = args.only;
   const unmatched = (only ?? []).filter((id) => !all.some((edit) => edit.id === id));
   if (unmatched.length > 0) {
@@ -301,7 +368,13 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   try {
     for (const edit of edits) {
       const path = resolve(cwd, edit.file);
-      const base = { id: edit.id, file: edit.file, find: edit.find, replace: edit.replace };
+      const base = {
+        id: edit.id,
+        file: edit.file,
+        find: edit.find,
+        replace: edit.replace,
+        ...(edit.expect ? { expect: edit.expect } : {}),
+      };
       const refused = (detail: string): EditResult => ({
         ...base,
         status: "REFUSED",
@@ -332,7 +405,7 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
             original.replace(edit.find, () => edit.replace),
           );
           const outcome = await runCommand(args.cmd, args.timeout, cwd);
-          const status = classify(outcome);
+          const status = checkExpected(classify(outcome), outcome.failedTests ?? [], edit.expect);
           result = {
             ...base,
             status,
@@ -356,11 +429,9 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
     writeFileSync(resolve(cwd, args.json), JSON.stringify({ cmd: args.cmd, results }, null, 2) + "\n");
 
   const count = (status: Status) => results.filter((r) => r.status === status).length;
-  log(
-    `\n${results.length} edits: ${count("KILLED")} killed, ${count("SURVIVED")} survived, ` +
-      `${count("TIMEOUT")} timed out, ${count("ERROR")} errors, ${count("REFUSED")} refused`,
-  );
-  if (count("SURVIVED") > 0) return 1;
+  if (args.markdown) for (const line of markdownTable(results)) out(line);
+  else log(`\n${summary(results)}`);
+  if (count("SURVIVED") + count("KILLED-OTHER") > 0) return 1;
   return count("ERROR") + count("REFUSED") > 0 ? 2 : 0;
 }
 

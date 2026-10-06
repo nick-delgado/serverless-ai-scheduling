@@ -18,8 +18,8 @@ decisions with other agents working in parallel.
   absolute path you're given, or `$TMPDIR`.
 - Follow `CLAUDE.md` and the `task-workflow` skill (steps 4–8; the orchestrator has done claiming and
   worktree setup). Use `sam-deploy` for infra and `dev-journal` for story-worthy findings.
-- Definition of done: every item of the list in `CLAUDE.md`, including seeing each test fail, not only
-  green checks. Open a PR with the repo's template and `Closes #N`, then set `status:review`. Never merge.
+- Definition of done: every item of the list in `CLAUDE.md`, including seeing each test fail (`npm run
+  mutate`, whose `--markdown` table the PR body needs), not only green checks. Open a PR with the repo's template and `Closes #N`, then set `status:review`. Never merge.
 - Public repo: no AWS account IDs, emails, tokens, or passwords anywhere. Synthetic data only.
 - Be economical: read what you need, don't re-derive what the issue and ADRs already decide, and prefer
   one good verification over many redundant ones (the definition of done is not optional). If you're

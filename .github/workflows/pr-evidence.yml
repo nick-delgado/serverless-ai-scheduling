@@ -1,0 +1,35 @@
+# Seen-failing evidence (#184, B6-5): a PR that changes a source file carries an `npm run mutate -- … --markdown`
+# table naming it. The rule is in scripts/pr-evidence.ts and its tests; this only runs it. A separate workflow
+# because it reruns when the PR body is edited, which ci.yml's checks don't need.
+name: PR evidence
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Seen-failing evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # The body goes through the environment, never into the shell command.
+      - run: npx tsx scripts/pr-evidence.ts
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
