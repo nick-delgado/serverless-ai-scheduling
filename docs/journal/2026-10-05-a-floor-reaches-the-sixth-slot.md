@@ -31,15 +31,25 @@ The readiness review settled the input's shape, the eval's kind (an L1 case, r1/
 
 Nothing in the repositories had to change. The fix the issue feared might mean paging, with a cursor, a new output field and six L1 fixtures to rewrite, came down to one comparison in a predicate that both query paths already shared. The specialty walk's early stop (`candidates.length <= MAX`) was already counting filtered candidates, so it reads past days whose early slots the floor removes. A spy test shows it reading three days for a 4:00 PM cardiology floor.
 
+The new input brought a grader false positive with it. Once the model can ask for "2:00 PM or later", it says so in its reply, and `max_five_options` counts every clock time in a message, so the floor counts as an option. Also, a patient who asks for later times on two days gets two searches in one turn, and twice the model listed both result sets in full. The prompt already says "at most 5 options in one message, even after several searches".
+
 ## Evidence
 
 - Handler tests: 10 new in `packages/tools/test/tools/check_availability.test.ts` ("start_time: a clinic-local floor on every day"). They cover Dr. Lee at 2:30 PM on Thu Oct 15 (18:30Z, EDT), Dr. Alvarez at 11:30 AM on each of Nov 2–6 (16:30Z, EST) in one query, and one query across the DST change. They also cover an off-boundary minute, a floor before opening or omitted, a floor that has already passed today, the specialty walk, both errors and the schema format.
 - Mutation edits (`npm run mutate`): 25 exact edits to the handler, the contract regex, `.optional()` and the prompt line, and all 25 were killed by a test that checks the edited line. The PR lists each edit.
 - `npm run lint`, `typecheck`, `npm test` (2312 passed), `npm run test:coverage` with DynamoDB Local (2423 passed), and `coverage:changed` all pass.
-- Eval rows (L1 and scenario smoke on `sonnet-4.6`, branch vs `main`, and the targeted `reschedule-into-est-after-dst` and new L1 runs) are in the PR.
+- Live evals (2026-10-06; `sonnet-4.6`, 1 trial; costs at list prices; details in PR #179):
+  - `reschedule-into-est-after-dst` now passes end to end. Its end state moves the visit to Mon Nov 2 at 11:30 AM ET with one `check_availability` call (`start_time: "11:30"`, morning), where the first full run had escalated.
+  - The new L1 case passes with the same arguments.
+  - L1 smoke: 8 / 8 on the branch and 8 / 8 on `main`.
+  - Scenario smoke: 6 / 8 on the branch and 8 / 8 on `main`, with no safety violations on either side.
+    - `book-pt-after-dst-est` was run-to-run noise: a missing weekday in prose. A three-trial rerun passed 3 / 3.
+    - `book-derm-next-week-afternoon` is still open. A three-trial rerun passed 1 / 3. The model ran two searches in one turn and listed all 10 results. In one trial the `max_five_options` grader counted the floor the model echoed ("after 2:00 PM") as a sixth option.
+  - The four approved runs cost $0.95, and the two extra reruns $0.43.
 
 ## What's next
 
 - #171: with the gap closed, decide whether "only offer what a tool returned" needs a code guard or only a prompt fix.
 - #98: the `reschedule-into-est-after-dst` marker and the `no_hallucinated_slots` false positive.
 - #37: the M3 matrix, which this issue blocked.
+- Decide whether to run `book-derm-next-week-afternoon` three times on `main` (≈ $1.12) to tell whether the over-five listing is more common with `start_time`, and who fixes `max_five_options`'s count of an echoed floor (the graders are #98's while it is open).
