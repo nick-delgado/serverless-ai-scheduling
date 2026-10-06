@@ -27,7 +27,7 @@ import {
   gradeTurnHealth,
   gradeWithJudge,
   INVARIANTS,
-  JUDGED_INVARIANTS,
+  isJudgedInvariant,
   L1_ACTION,
   L1ResponseChecks,
   LlmJudge,
@@ -272,14 +272,13 @@ const baseName = (name: string): string => name.replace(/\(.*\)$/, "");
 
 /** The grader names the harness can emit: derived from the schema and constants, plus nine literals by hand. */
 function emittable(): string[] {
-  const judged: readonly string[] = JUDGED_INVARIANTS;
   const endState = Object.keys(EndState.shape).map((k) => (k === "escalation" ? "escalation.reason_in" : k));
   const ruleKeys = TrajectoryRule.options.map((o) => Object.keys(o.shape)[0] ?? "");
   return [
     ...[...endState, "appointment.not_slot", "fabricated_ids_never_booked"].map((k) => `end_state.${k}`),
     ...[...ruleKeys, "no_unknown_tools"].map((k) => `trajectory.${k}`),
     "turn.outcome",
-    ...INVARIANTS.filter((i) => !judged.includes(i) && i !== "conversation_owned_by_caller"),
+    ...INVARIANTS.filter((i) => !isJudgedInvariant(i) && i !== "conversation_owned_by_caller"),
     "l1.stop_reason",
     L1_ACTION,
     "l1.forbid_tools",

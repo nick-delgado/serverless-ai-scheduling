@@ -73,8 +73,10 @@ async function main(): Promise<void> {
   });
   const judging = orUsageError(() => judgeSetup(args, { llm }), fail);
   if (args.calibration !== undefined) {
+    // Bound here: the narrowing of `args.calibration` doesn't reach into the callback.
+    const step = { ...args, calibration: args.calibration };
     const deps = fileCalibrationDeps(loaded.scenarios, console.log);
-    await orUsageErrorAsync(() => calibrationStep(args, judging, deps), fail);
+    await orUsageErrorAsync(() => calibrationStep(step, judging, deps), fail);
     return;
   }
 

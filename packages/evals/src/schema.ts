@@ -239,7 +239,11 @@ export const INVARIANTS = [
 export const Invariant = z.enum(INVARIANTS);
 export type Invariant = z.infer<typeof Invariant>;
 
-/** LLM-judge dimensions (README "expect.judge"); scored by #32. */
+/**
+ * LLM-judge dimensions (README "expect.judge"). The LLM judge scores the ones with a rubric
+ * (`RUBRIC_DIMENSIONS`, `src/judge/rubrics.ts`); `no_hallucinated_slots` is graded deterministically, and
+ * the other entries report `skip`.
+ */
 export const JUDGE_DIMENSIONS = [
   "tone",
   "clarity",

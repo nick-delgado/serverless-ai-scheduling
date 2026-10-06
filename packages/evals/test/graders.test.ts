@@ -14,7 +14,7 @@ import {
   gradeTrajectoryRule,
   gradeTurnHealth,
   INVARIANTS,
-  JUDGED_INVARIANTS,
+  isJudgedInvariant,
   SKIPPED_INVARIANTS,
   type AppointmentMatcher,
   type EndState,
@@ -507,9 +507,8 @@ describe("every invariant is graded or reported (2e22f79/TEST-105)", () => {
       [{ kind: "patient", turn: 1, text: "hi" }],
       [...INVARIANTS],
     );
-    const judged: readonly string[] = JUDGED_INVARIANTS;
     expect(results.map((r) => r.name).sort()).toEqual(
-      INVARIANTS.filter((i) => !judged.includes(i))
+      INVARIANTS.filter((i) => !isJudgedInvariant(i))
         .map((i) => `invariant.${i}`)
         .sort(),
     );

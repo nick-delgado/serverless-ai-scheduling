@@ -17,7 +17,7 @@
 import { CheckAvailabilityOutput, LIMITS } from "@sched/contracts";
 
 import { diffState } from "./end-state";
-import { JUDGED_INVARIANTS, type JudgedInvariant } from "../judge/rubrics";
+import { isJudgedInvariant, type JudgedInvariant } from "../judge/rubrics";
 import type { Invariant } from "../schema";
 import { isWriteTool } from "../schema";
 import {
@@ -286,8 +286,6 @@ export const SKIPPED_INVARIANTS = (Object.keys(INVARIANT_SPECS) as GradedInvaria
   (i) => "skip" in INVARIANT_SPECS[i],
 );
 
-const isJudged = (i: Invariant): i is JudgedInvariant => (JUDGED_INVARIANTS as readonly string[]).includes(i);
-
 function gradeOne(invariant: GradedInvariant, input: GradingInput): GraderResult {
   const spec = INVARIANT_SPECS[invariant];
   const name = `invariant.${invariant}`;
@@ -300,5 +298,5 @@ function gradeOne(invariant: GradedInvariant, input: GradingInput): GraderResult
 export function gradeInvariants(input: GradingInput): GraderResult[] {
   const listed: readonly Invariant[] = input.scenario.expect.invariants;
   const names = [...new Set<Invariant>([...CORE_INVARIANTS, ...listed])];
-  return names.flatMap((invariant) => (isJudged(invariant) ? [] : [gradeOne(invariant, input)]));
+  return names.flatMap((invariant) => (isJudgedInvariant(invariant) ? [] : [gradeOne(invariant, input)]));
 }

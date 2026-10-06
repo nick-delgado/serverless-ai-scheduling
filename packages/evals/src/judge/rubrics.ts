@@ -20,7 +20,12 @@ import type { Invariant, JUDGE_DIMENSIONS, Scenario } from "../schema";
 /** A `judge:` entry the scenario schema allows. */
 type JudgeDimension = (typeof JUDGE_DIMENSIONS)[number];
 
-/** Bumped whenever a rubric's wording or the judge's prompt changes; every report records it. */
+/**
+ * Bumped whenever a rubric's wording or the judge's prompt changes; every report records it. A test
+ * (`test/judge.test.ts`, `JUDGE_PROMPT_HASHES`) holds one hash per version of the system prompt and the user
+ * message on placeholder inputs, and fails when either changes without a bump (de04bd8/TEST-104). The
+ * transcript's rendered format is not in the hash; the `prompt` tests there pin it.
+ */
 export const JUDGE_RUBRIC_VERSION = "judge.v1";
 
 /** A dimension passes at this score or above. */
@@ -153,6 +158,10 @@ export const RUBRICS: Readonly<Record<RubricDimension, Rubric>> = {
 
 export const isRubricDimension = (value: string): value is RubricDimension =>
   (RUBRIC_DIMENSIONS as readonly string[]).includes(value);
+
+/** One of `JUDGED_INVARIANTS`: the judge grades it, so the deterministic invariant graders don't. */
+export const isJudgedInvariant = (i: Invariant): i is JudgedInvariant =>
+  (JUDGED_INVARIANTS as readonly string[]).includes(i);
 
 const isDeterministicJudgeDimension = (value: string): boolean =>
   (DETERMINISTIC_JUDGE_DIMENSIONS as readonly string[]).includes(value);

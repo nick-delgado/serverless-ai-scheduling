@@ -3,6 +3,8 @@
  * rendered transcript, reply parsing, the judge client (retry once, cost, errors) against a scripted
  * model, and the grader results it produces.
  */
+import { createHash } from "node:crypto";
+
 import { MODEL_PROFILES, ScriptedLlmClient, scriptedMaxTokens, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
@@ -153,6 +155,45 @@ describe("prompt", () => {
 
   it("joins the agent's prompt as the model saw it", () => {
     expect(agentPromptText({ stable: "S", dynamic: "D" })).toBe("S\n\nD");
+  });
+});
+
+/**
+ * The rubric version's bump rule (`JUDGE_RUBRIC_VERSION`, `src/judge/rubrics.ts`; de04bd8/TEST-104,
+ * r1/Q-1 (a)): one hash per version of two texts, with the version itself replaced by a placeholder. The
+ * system prompt renders every rubric's question and anchors, `NEVER_CAME_UP_RULE` and `PASS_SCORE`; the user
+ * message, on fixed placeholder inputs, renders its wrapping of the agent's prompt, the transcript and a
+ * rejected reply. The transcript goes in as the placeholder `"<transcript>"`, so `renderJudgeTranscript`'s
+ * format is not in the hash: the `prompt` block's exact-string tests pin it. A recalibration that revises a
+ * rubric or the prompt (#159) bumps the version, adds an entry here and re-exports `calibration/*.json`; an
+ * old entry is never edited.
+ */
+const JUDGE_PROMPT_HASHES: Readonly<Record<string, string>> = {
+  "judge.v1": "0cebbfd53fbd2e0140a66218bdc38ceffa50fdebb9e5e1541b78d3a8f74f1505",
+};
+
+const judgePromptHash = (): string => {
+  const text = [
+    judgeSystemPrompt(RUBRIC_DIMENSIONS),
+    judgeUserMessage("<transcript>", "<system prompt>", [{ reply: "<reply>", problems: ["<problem>"] }]),
+  ].join("\n<<>>\n");
+  return createHash("sha256").update(text.replaceAll(JUDGE_RUBRIC_VERSION, "<version>")).digest("hex");
+};
+
+describe("the rubric version's bump rule (de04bd8/TEST-104)", () => {
+  it("the judge's prompt and rubrics hash to the entry for the current version", () => {
+    const rule =
+      "JUDGE_RUBRIC_VERSION is bumped whenever a rubric's wording or the judge's prompt changes (src/judge/rubrics.ts)";
+    const hash = judgePromptHash();
+    const known = JUDGE_PROMPT_HASHES[JUDGE_RUBRIC_VERSION];
+    expect(
+      known,
+      `${rule}: no hash for ${JUDGE_RUBRIC_VERSION}. Add "${JUDGE_RUBRIC_VERSION}": "${hash}" to JUDGE_PROMPT_HASHES.`,
+    ).toBeDefined();
+    expect(
+      hash,
+      `${rule}: the prompt changed under ${JUDGE_RUBRIC_VERSION}. Bump the version and add an entry for it; never edit an old entry.`,
+    ).toBe(known);
   });
 });
 

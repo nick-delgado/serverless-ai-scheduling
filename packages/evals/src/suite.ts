@@ -6,7 +6,7 @@
 import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
 
-import type { GraderResult } from "./graders";
+import { isDeterministicFailure, type GraderResult } from "./graders";
 import type { TrialJudge } from "./judge/judge";
 import {
   JUDGE_RUBRIC_VERSION,
@@ -330,9 +330,7 @@ export async function runSuite(
  * reason, if any. Judge scores below the pass mark are `judgeFails`, since they don't fail a trial.
  */
 export const failedChecks = (t: TrialResult | L1TrialResult): string[] => [
-  ...t.graders
-    .filter((g) => g.kind !== "judge" && g.status === "fail")
-    .map((g) => `${g.name}: ${g.detail ?? ""}`),
+  ...t.graders.filter(isDeterministicFailure).map((g) => `${g.name}: ${g.detail ?? ""}`),
   ...(t.reason !== undefined && t.status !== "pass" ? [t.reason] : []),
 ];
 
