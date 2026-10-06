@@ -61,7 +61,7 @@ npx tsx <trial>/scripts/mutate.ts <trial>/spikes/stryker/cases/<list>.json --jso
 git worktree remove --force .worktrees/113-at-<sha7>
 ```
 
-The historical edit lists ran with the runner as committed in `8cf1743` (`spikes/stryker/mutate.ts`), which `scripts/mutate.ts` replaced; the output format is the same. The gate ran from this branch's `scripts/coverage-changed.ts` against each old worktree, with #140's coverage options passed on the command line (the old `vitest.config.ts` files have none) and `@vitest/coverage-v8` 5.0.2 installed with `--no-save` where the commit predates #140.
+The historical edit lists ran with the runner as committed in `8cf1743` (`spikes/stryker/mutate.ts`), which `scripts/mutate.ts` replaced; the per-edit lines are the same, and the summary line now also counts `killed other tests` (#184). The gate ran from this branch's `scripts/coverage-changed.ts` against each old worktree, with #140's coverage options passed on the command line (the old `vitest.config.ts` files have none) and `@vitest/coverage-v8` 5.0.2 installed with `--no-save` where the commit predates #140.
 
 | Reviewed commit | PR | Gate base | Test command for the edit lists |
 |---|---|---|---|

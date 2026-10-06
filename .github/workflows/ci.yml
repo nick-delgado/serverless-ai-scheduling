@@ -57,8 +57,8 @@ jobs:
       - run: npm run coverage:changed
         env:
           COVERAGE_BASE: ${{ github.event.pull_request.base.sha }}
-      # Duplicate code in added lines (#184, B6-6; .jscpd.json). Report-only until the owner decides: calibrated on
-      # ten reviewed PRs, it flagged 2 of their 17 duplication findings, under the half the issue set for blocking.
+      # Duplicate code in added lines (#184, B6-6; .jscpd.json). Report-only by owner decision (2026-10-06): calibrated
+      # on ten reviewed PRs, it flagged 2 of their 17 duplication findings; the next process batch measures it again.
       - run: npm run dup:changed
         continue-on-error: true
         env:
