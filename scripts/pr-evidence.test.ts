@@ -101,7 +101,7 @@ describe("main", () => {
   });
   afterEach(() => repo.remove());
 
-  it("fails naming the added, changed and renamed source files the body leaves out, not deleted ones", () => {
+  it("fails naming the added (one with a non-ASCII name), changed and renamed source files the body leaves out, not deleted ones", () => {
     expect(main(["--base", "main"], { PR_BODY: table("scripts/kept.ts") }, deps())).toBe(1);
     expect(out).toEqual([
       "Changed source files no mutate table in the PR body names (2):",
