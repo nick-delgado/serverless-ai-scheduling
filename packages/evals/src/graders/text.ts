@@ -38,8 +38,8 @@ export const MONTH_NAMES = [
   "November",
   "December",
 ] as const;
-const MONTH_RE =
-  "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
+const MONTH_ALTERNATION =
+  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
 const WEEKDAY_RE = /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(day|nesday|rsday|urday|sday)?\b/i;
 
 /** A date + time the assistant mentions, normalized: `10-15 14:00`. */
@@ -64,8 +64,14 @@ function to24h(hour: number, minute: number, period: string): string {
   return hhmm(h, minute);
 }
 
-/** A month name and day, as `dateTimeMentions` reads a date ("October 15", "Oct. 15th"), without capture groups. */
-const MONTH_DAY = `\\b${MONTH_RE.replace("(", "(?:")}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b`;
+/**
+ * A month name and day as the graders read a date ("October 15", "Oct. 15th", "Sept 3"). With `capture`, the
+ * month name and the day are capture groups 1 and 2; without it, there are no capture groups.
+ */
+const monthDay = (capture: boolean): string => {
+  const open = capture ? "(" : "(?:";
+  return `\\b${open}${MONTH_ALTERNATION})\\.?\\s+${open}\\d{1,2})(?:st|nd|rd|th)?\\b`;
+};
 
 /**
  * "<Month> <day> … <h:mm> AM|PM" pairs, with the time at most 40 characters after the date
@@ -75,11 +81,8 @@ const MONTH_DAY = `\\b${MONTH_RE.replace("(", "(?:")}\\s+\\d{1,2}(?:st|nd|rd|th)
  * October 14's), or the word "and" (so "the week of November 2 and 11:30 AM" is no mention; #98).
  */
 export function dateTimeMentions(text: string): DateTimeMention[] {
-  const gap = `(?:(?!${MONTH_DAY}|\\band\\b)[^.;\\n?!]){0,40}?`;
-  const re = new RegExp(
-    `\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b${gap}\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`,
-    "gi",
-  );
+  const gap = `(?:(?!${monthDay(false)}|\\band\\b)[^.;\\n?!]){0,40}?`;
+  const re = new RegExp(`${monthDay(true)}${gap}\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`, "gi");
   const out: DateTimeMention[] = [];
   for (const m of text.matchAll(re)) {
     const [raw, month = "", day = "", hh = "", mm = "", period = ""] = m;
@@ -104,7 +107,7 @@ export function mentionsWeekday(text: string, weekday: string): boolean {
 
 /** Whether `text` names the date `month` (1-12) `day`: "October 15", "Oct. 15th", "Sept 3". */
 export function mentionsDate(text: string, month: number, day: number): boolean {
-  return [...text.matchAll(new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, "gi"))].some(
+  return [...text.matchAll(new RegExp(monthDay(true), "gi"))].some(
     ([, name = "", d = ""]) => monthIndex(name) === month - 1 && Number(d) === day,
   );
 }
