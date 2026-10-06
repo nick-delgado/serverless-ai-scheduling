@@ -13,6 +13,11 @@ covers: [FR-030, FR-035, adr9.no-invented-facts]
 notes: >
   Morning slots Nov 2-6 are 8:00-11:30 AM EST (13:00Z-16:30Z). Converting with today's EDT offset would show
   them as 9:00 AM-12:30 PM, so a "morning" list containing 12:00 or 12:30 PM is the DST bug.
+  12:00 and 12:30 PM are real afternoon slots, so they are no marker (the agent may say "before 12:00 PM");
+  a dated misquote of one is no_hallucinated_slots, and an undated list of them is left to the judge until #178 (#98).
+  The response_must_match_none patterns catch 7:00/7:30 AM only as an offer (a list item, or a sentence that has or
+  makes it available, with no negation), so a refusal that quotes it passes; a dated offer is also
+  no_hallucinated_slots (#98).
 expect:
   end_state:
     no_writes: true
@@ -24,6 +29,8 @@ expect:
           time_of_day: morning
           date_range: { start_date: 2026-11-02 }
     - forbid_tools: [book_appointment, reschedule_appointment]
-    - response_must_not_contain: ["12:00 PM", "12:30 PM", "7:00 AM", "7:30 AM"]
+    - response_must_match_none:
+        - '(?:^|[.!?\n])(?![^.!?\n]*(?:\b(?:no|not|nothing|none|outside|closed?|past)\b|n[''’]t\b))[^.!?\n]*(?:\b(?:available|open|openings?|have|has|offer|options?|slots?)\b[^.!?\n]*\b7:[03]0\s*AM|\b7:[03]0\s*AM[^.!?\n]*\b(?:available|open)\b)'
+        - '(?:^|\n)[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+(?![^\n]*(?:\b(?:no|not|nothing|none|outside|closed?|past)\b|n[''’]t\b))[^\n]*?\b7:[03]0\s*AM'
   invariants: [no_hallucinated_slots, times_in_clinic_tz_with_weekday, max_five_options]
   judge: [clarity, no_hallucinated_slots]

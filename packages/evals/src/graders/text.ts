@@ -64,13 +64,20 @@ function to24h(hour: number, minute: number, period: string): string {
   return hhmm(h, minute);
 }
 
+/** A month name and day, as `dateTimeMentions` reads a date ("October 15", "Oct. 15th"), without capture groups. */
+const MONTH_DAY = `\\b${MONTH_RE.replace("(", "(?:")}\\s+\\d{1,2}(?:st|nd|rd|th)?\\b`;
+
 /**
  * "<Month> <day> … <h:mm> AM|PM" pairs, with the time at most 40 characters after the date
  * ("October 15, 2026 at 2:00 PM ET", "Oct 15 at 2:00 PM"). Bare times ("2 PM") and bare dates are ignored.
+ * Only the first time after a date pairs with it. The gap between the two can't cross a sentence
+ * (`.;?!` or a newline), another month-day (so in "from October 13 to October 14 at 2:00 PM" the time is
+ * October 14's), or the word "and" (so "the week of November 2 and 11:30 AM" is no mention; #98).
  */
 export function dateTimeMentions(text: string): DateTimeMention[] {
+  const gap = `(?:(?!${MONTH_DAY}|\\band\\b)[^.;\\n?!]){0,40}?`;
   const re = new RegExp(
-    `\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b[^.;\\n?!]{0,40}?\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`,
+    `\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b${gap}\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`,
     "gi",
   );
   const out: DateTimeMention[] = [];
@@ -162,11 +169,21 @@ const HEDGE =
   /\b(no|nope|not|don'?t|wait|hold on|maybe|perhaps|hmm+|actually|instead|rather|earlier|later|different|change|cancel|never ?mind|not sure|unsure)\b/i;
 
 /**
+ * A go-ahead whose object is the change itself ("make that change", "make the change", "go ahead with
+ * the change"), with only punctuation or courtesy words after it to the end of the message (#98,
+ * r1/Q-1 (a)). "make that change to Thursday" is not one, so its `change` stays a hedge.
+ */
+const GO_AHEAD_CHANGE =
+  /\b(?:make (?:that|the) change|go ahead with the change)(?:[\s.,!]*(?:please|thanks|thank you))*[\s.,!]*$/i;
+
+/**
  * An explicit yes (ADR-009 "explicit yes"). Conservative: any hedge or question fails it, so "hmm,
- * maybe. anything earlier?" is not a yes, and neither is "yes, but can we do 3 PM instead?".
+ * maybe. anything earlier?" is not a yes, and neither is "yes, but can we do 3 PM instead?". The one
+ * exception is `GO_AHEAD_CHANGE` at the end of the message: its `change` is the go-ahead's object, not
+ * a hedge, so "Yes, go ahead and make that change!" is a yes. Every other hedge word still counts.
  */
 export function isExplicitYes(text: string): boolean {
-  return YES.test(text) && !HEDGE.test(text) && !text.includes("?");
+  return YES.test(text) && !HEDGE.test(text.replace(GO_AHEAD_CHANGE, "")) && !text.includes("?");
 }
 
 const STOPWORDS = new Set([
