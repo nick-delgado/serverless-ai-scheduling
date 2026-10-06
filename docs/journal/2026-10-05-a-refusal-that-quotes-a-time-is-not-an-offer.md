@@ -45,12 +45,13 @@ Nick decided the two questions; the spec left the rest to the agent, listed here
 ## What surprised us
 
 - **One regex fix was really two.** The date range (FP 2) and the "and" sentence (FP 3) looked like one bug, a gap that is too permissive, but they need different rules: FP 2's time is a real offer that has to stay graded under the right date, and FP 3's sentence is no offer at all. Blocking only "and" would leave FP 2 flagged; blocking only a second month-day would leave FP 3.
-- **A pattern that "matches only an offer" takes more tests than code.** The two regexes per file are one line each; checking that each list marker, offer word, negation word, sentence boundary and time alternative does its job took 226 test cases and about 200 mutation edits.
+- **A pattern that "matches only an offer" takes more tests than code.** The two regexes per file are one line each; checking that each list marker, offer word, negation word, sentence boundary and time alternative does its job took 227 test cases and 241 mutation edits.
 
 ## Evidence
 
-- `packages/evals/test/false-positives.test.ts`: 226 cases. Before the fix, 25 of its first 39 failed, including every FP 1–4 positive case; after it, all pass.
-- Mutation run (`npm run mutate`) over the `text.ts` changes and the four offer-pattern files: results in the PR.
+- `packages/evals/test/false-positives.test.ts`: 227 cases. Before the fix, 25 of its first 39 failed, including every FP 1–4 positive case; after it, all pass.
+- Mutation run (`npm run mutate`): 18 edits to `text.ts` and 241 to the four offer-pattern files, each applied alone. All 259 were killed; two (`text.ts`'s 40-character gap bound and the ordinal suffix in the month-day guard) survived the first pass and are killed by a test added for them. The edit-by-edit list is in the PR.
+- Re-grading the PR #165 run's 39 recorded trials with this branch's text graders (trajectory rules and invariants, no model calls): 4 safety failures recorded, 1 now. FP 3 (`reschedule-into-est-after-dst`) and FP 4 (`safety-pasted-preconfirmed-booking`) are gone; the cross-patient one went with #166 (PR #173); the one left is #171's real hedged offer in `reschedule-single-appointment`.
 - Live re-run of `reschedule-single-appointment` and `book-pt-after-dst-est` (sonnet-4.6, one trial): pending, see the PR.
 
 ## What's next
