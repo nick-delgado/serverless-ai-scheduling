@@ -121,7 +121,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
   - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), then `dup:changed`, report-only for now, on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
-  - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file is in no `npm run mutate -- … --markdown` table in the PR body.
+  - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file has no KILLED row in an `npm run mutate -- … --markdown` table in the PR body.
 
   A PR isn't done until all three are green.
 <!-- sync-end:ci-checks -->

@@ -20,7 +20,8 @@
  * killed: an unrelated test went red (in PR #175 an esbuild syntax error did), or a non-Vitest command named none.
  * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT.
  * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
- * id, file, exact edit, status, failed tests) and the summary line, both from the same results.
+ * id, file, exact edit, status, failed tests; a KILLED edit with no `expect` list reads `KILLED (no expect)`) and the
+ * summary line, both from the same results.
  * The command first runs once unedited; if that run fails, nothing is mutated.
  *
  * An edit whose file can't be read is REFUSED; a command that can't be started is ERROR (or, unedited, a failed run).
@@ -261,14 +262,21 @@ const shown = (text: string) => text.replaceAll("\n", "⏎");
 /** What a KILLED-OTHER edit expected to turn red (a result read back from JSON may lack its list). */
 const expected = (result: EditResult) => `expected: ${(result.expect ?? []).join(", ")}`;
 
+/** The note a result's status carries: why a REFUSED edit was refused, what a KILLED-OTHER edit expected. */
+function note(result: EditResult): string | undefined {
+  if (result.status === "REFUSED") return result.detail;
+  if (result.status === "KILLED-OTHER") return expected(result);
+  return undefined;
+}
+
 /** The printed lines for one result. */
 export function formatResult(result: EditResult): string[] {
   const lines = [
     `${result.status} ${result.id} ${result.file}: ${shown(result.find)} → ${shown(result.replace)}`,
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
-  if (result.status === "REFUSED") lines.push(`    (${result.detail})`);
-  if (result.status === "KILLED-OTHER") lines.push(`    (${expected(result)})`);
+  const why = note(result);
+  if (why !== undefined) lines.push(`    (${why})`);
   return lines;
 }
 
@@ -286,24 +294,27 @@ export function codeSpan(text: string): string {
   return `${fence}${pad}${inner}${pad}${fence}`;
 }
 
+/** A counter of `results` by status. */
+const countStatus = (results: readonly EditResult[]) => (status: Status) =>
+  results.filter((r) => r.status === status).length;
+
 /** The summary line of a run. */
 export function summary(results: readonly EditResult[]): string {
-  const count = (status: Status) => results.filter((r) => r.status === status).length;
+  const count = countStatus(results);
   return (
     `${results.length} edits: ${count("KILLED")} killed, ${count("KILLED-OTHER")} killed other tests, ` +
     `${count("SURVIVED")} survived, ${count("TIMEOUT")} timed out, ${count("ERROR")} errors, ${count("REFUSED")} refused`
   );
 }
 
-/** The Seen-failing table for a PR body, one row per result, then the summary line. */
+/**
+ * The Seen-failing table for a PR body, one row per result, then the summary line. A KILLED edit with no `expect`
+ * list reads `KILLED (no expect)`, so the table shows which kills named their test (545feee/SPEC-6 (b) on PR #185).
+ */
 export function markdownTable(results: readonly EditResult[]): string[] {
   const rows = results.map((r) => {
-    const status =
-      r.status === "REFUSED"
-        ? `REFUSED (${r.detail})`
-        : r.status === "KILLED-OTHER"
-          ? `KILLED-OTHER (${expected(r)})`
-          : r.status;
+    const why = r.status === "KILLED" && !r.expect?.length ? "no expect" : note(r);
+    const status = why === undefined ? r.status : `${r.status} (${why})`;
     const failed = r.failedTests.length > 0 ? r.failedTests.map(codeSpan).join("<br>") : "—";
     return `| ${cell(r.id)} | ${codeSpan(r.file)} | ${codeSpan(r.find)} → ${codeSpan(r.replace)} | ${cell(status)} | ${failed} |`;
   });
@@ -431,7 +442,7 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   if (args.json)
     writeFileSync(resolve(cwd, args.json), JSON.stringify({ cmd: args.cmd, results }, null, 2) + "\n");
 
-  const count = (status: Status) => results.filter((r) => r.status === status).length;
+  const count = countStatus(results);
   if (args.markdown) for (const line of markdownTable(results)) out(line);
   else log(`\n${summary(results)}`);
   if (count("SURVIVED") + count("KILLED-OTHER") > 0) return 1;

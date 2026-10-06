@@ -1,5 +1,5 @@
 # Seen-failing evidence (#184, B6-5): a PR that changes a source file carries an `npm run mutate -- … --markdown`
-# table naming it. The rule is in scripts/pr-evidence.ts and its tests; this only runs it. A separate workflow
+# table with a KILLED row for it. The rule is in scripts/pr-evidence.ts and its tests; this only runs it. A separate workflow
 # because it reruns when the PR body is edited, which ci.yml's checks don't need.
 name: PR evidence
 

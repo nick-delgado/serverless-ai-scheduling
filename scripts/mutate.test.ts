@@ -339,7 +339,13 @@ describe("markdownTable", () => {
   const base = { file: "a.ts", find: "x", replace: "y", seconds: 1 };
   it("has one row per result, with the edit, the status (and why), the failed tests, then the summary", () => {
     const results: EditResult[] = [
-      { ...base, id: "k", status: "KILLED", failedTests: ["a.test.ts > one", "a.test.ts > two"] },
+      {
+        ...base,
+        id: "k",
+        status: "KILLED",
+        expect: ["one"],
+        failedTests: ["a.test.ts > one", "a.test.ts > two"],
+      },
       {
         ...base,
         id: "o|1",
@@ -348,6 +354,7 @@ describe("markdownTable", () => {
         failedTests: ["b.test.ts > b"],
       },
       { ...base, id: "k2", status: "KILLED", failedTests: ["a.test.ts > three"] },
+      { ...base, id: "k3", status: "KILLED", expect: [], failedTests: ["a.test.ts > three"] },
       { ...base, id: "s", status: "SURVIVED", failedTests: [] },
       { ...base, id: "r", status: "REFUSED", failedTests: [], detail: "find occurs 2 times" },
     ];
@@ -356,11 +363,12 @@ describe("markdownTable", () => {
       "|---|---|---|---|---|",
       "| k | `a.ts` | `x` → `y` | KILLED | `a.test.ts > one`<br>`a.test.ts > two` |",
       "| o\\|1 | `a.ts` | `x` → `y` | KILLED-OTHER (expected: three, four) | `b.test.ts > b` |",
-      "| k2 | `a.ts` | `x` → `y` | KILLED | `a.test.ts > three` |",
+      "| k2 | `a.ts` | `x` → `y` | KILLED (no expect) | `a.test.ts > three` |",
+      "| k3 | `a.ts` | `x` → `y` | KILLED (no expect) | `a.test.ts > three` |",
       "| s | `a.ts` | `x` → `y` | SURVIVED | — |",
       "| r | `a.ts` | `x` → `y` | REFUSED (find occurs 2 times) | — |",
       "",
-      "5 edits: 2 killed, 1 killed other tests, 1 survived, 0 timed out, 0 errors, 1 refused",
+      "6 edits: 3 killed, 1 killed other tests, 1 survived, 0 timed out, 0 errors, 1 refused",
     ]);
     expect(MARKDOWN_HEADER).toBe("| Edit | File | Change | Status | Failed tests |");
   });
@@ -403,7 +411,7 @@ describe("main", () => {
     expect(out).toEqual([
       MARKDOWN_HEADER,
       "|---|---|---|---|---|",
-      "| k | `target.txt` | `ok ? 1` → `bad ? 1` | KILLED | `target.test.ts > suite rejects bad` |",
+      "| k | `target.txt` | `ok ? 1` → `bad ? 1` | KILLED (no expect) | `target.test.ts > suite rejects bad` |",
       "| s | `target.txt` | `const ok` → `const fine` | SURVIVED | — |",
       "",
       "2 edits: 1 killed, 0 killed other tests, 1 survived, 0 timed out, 0 errors, 0 refused",
