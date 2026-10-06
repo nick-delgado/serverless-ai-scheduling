@@ -123,7 +123,13 @@ The review is advisory: the owner decides whether work starts.
   questions; anything beyond becomes an assumption marked "(would have asked)".
 - **An assumption earns its place** only if it changes what the agent would do. It states
   something a reviewer can check against the code or the spec, names who acts ("the agent
-  adds ..."), and predicts nothing about tests not yet written.
+  adds ..."), and predicts nothing about tests not yet written. One that names where code
+  goes (a file, a function, a line) says whether the place is **required** or a
+  **suggestion**; it is required only when something depends on it (a test, a doc, another
+  issue's owned paths), which it names.
+- **Option text says exactly what it covers.** The agent copies an option's words into
+  code comments, docs and test names, so "everything", "all" or "the whole prompt" must be
+  literally true; otherwise name what is covered.
 - **Options are real alternatives** with their consequences and scope labels, one per line;
   recommend one, preferring what stays within the issue, and cite why. An option that needs
   a path outside the owned paths names it as "Owned paths: + `path`".
@@ -146,4 +152,12 @@ The review is advisory: the owner decides whether work starts.
   verification (a section of the issue template, the PR template, or the PR description).
 - **Suggested edits are exact:** the "Before" text exists verbatim in the current
   description, so the apply step can make the change mechanically.
+- **A prescribed command is run first.** An edit or criterion that names a command whose
+  output is the check (a search, a listing, a git query) is run against the default branch
+  before it is suggested, and its output is quoted under "What was checked". A command that
+  builds, tests, installs or writes is not run here: mark it "(verify first)", so the agent
+  runs it before relying on it.
+- **Existing rules come first.** An edit or assumption that conflicts with a rule in the
+  project's instruction files or templates (what counts as done, what needs a recorded
+  decision, how results are reported) quotes both and becomes a question.
 - **Line numbers** are lines of files at the default branch's commit named in the header.

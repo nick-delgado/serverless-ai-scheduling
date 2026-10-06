@@ -13,7 +13,8 @@ field names below, and the scripts that check them.
 | File | Writer | Readers | Contents |
 |---|---|---|---|
 | `pr.json`, `files.json`, `commits.txt`, `diff.patch`, `ci.txt` | `get-pr.sh` | everyone | The PR, its files, its commits (with dates), its diff, its checks |
-| `spec/issue-<n>.md` | `get-issue.sh` | reviewers, verifier, analyst | An issue with all its comments |
+| `spec/issue-<n>.md` | `get-issue.sh` | reviewers, verifier, analyst | The task's own issue with all its comments; read to its end |
+| `spec/background/issue-<n>.md` | `get-issue.sh --background` | reviewers, verifier | A linked issue (description and people's comments) or PR (description only), trimmed; searched, not read whole; the tracking issue is never saved |
 | `previous/` (report, earlier rounds, responses, decisions) | `get-previous.sh` | verifier, analyst | Earlier review rounds on the PR |
 | `changed-lines.txt`, `base-changes.txt` | `changed-lines.sh` | reviewers, verifier | The PR's own lines changed since the last review; the base branch's changes |
 | `spec-moves.md`, `spec-moves.patch` | `spec-moves.sh` | orchestrator (manifest), verifier, `assemble-report.sh` | Readiness state of the PR's issues; direction-document changes on the base branch since the work began and since readiness |
