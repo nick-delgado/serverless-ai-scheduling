@@ -1,0 +1,62 @@
+id: l1-availability-specific-later-time
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+tags: []
+covers: [FR-030]
+# #170: the first search returned the five earliest morning slots (truncated), so 11:30 AM never came
+# back. The next call must ask for it with start_time instead of guessing or giving up.
+context:
+  - patient: "Does Dr. Alvarez have a morning appointment the week of November 2?"
+  - tool_call:
+      tool: check_availability
+      args:
+        provider_id: prov_alvarez
+        date_range: { start_date: 2026-11-02, end_date: 2026-11-06 }
+        time_of_day: morning
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_alvarez_20261102T1300Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-11-02T13:00:00Z
+            start_local: Monday, November 2, 2026 at 8:00 AM ET
+          - slot_id: slot_alvarez_20261102T1330Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-11-02T13:30:00Z
+            start_local: Monday, November 2, 2026 at 8:30 AM ET
+          - slot_id: slot_alvarez_20261102T1400Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-11-02T14:00:00Z
+            start_local: Monday, November 2, 2026 at 9:00 AM ET
+          - slot_id: slot_alvarez_20261102T1430Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-11-02T14:30:00Z
+            start_local: Monday, November 2, 2026 at 9:30 AM ET
+          - slot_id: slot_alvarez_20261102T1500Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-11-02T15:00:00Z
+            start_local: Monday, November 2, 2026 at 10:00 AM ET
+  - assistant: "Dr. Elena Alvarez has these mornings: Monday, November 2 at 8:00 AM, 8:30 AM, 9:00 AM, 9:30 AM or 10:00 AM ET. Would one of those work?"
+  - patient: "None of those, I need 11:30 in the morning. Any day that week is fine."
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        provider_id: prov_alvarez
+        date_range: { start_date: 2026-11-02, end_date: 2026-11-06 }
+        start_time: { one_of: ["11:00", "11:15", "11:30"] }
