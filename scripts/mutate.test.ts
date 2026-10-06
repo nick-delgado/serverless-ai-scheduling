@@ -38,6 +38,7 @@ import {
   runCommand,
   stopRunning,
 } from "./mutate";
+import { logsTo, withConsole } from "./test/git-repo";
 
 const TARGET = "const ok = true;\nexport const value = ok ? 1 : 2;\n";
 
@@ -87,8 +88,9 @@ process.exit(bad ? 1 : 0);
 let dir: string;
 let out: string[];
 let errors: string[];
-const deps = () => ({ cwd: dir, log: (l: string) => out.push(l), logError: (l: string) => errors.push(l) });
+const deps = () => ({ cwd: dir, ...logsTo(out, errors) });
 const checker = () => ["node", join(dir, "checker.cjs")];
+const vitest = () => [join(dir, "vitest"), "run"];
 // The checker under sh, which stays its parent (the "; true" keeps sh from exec'ing node): killing only the process
 // the runner started would leave the checker running, so only a kill of the whole process group stops it.
 const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
@@ -357,7 +359,7 @@ describe("main", () => {
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["rejects bad"] },
       { id: "o", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["keeps the rest"] },
     ]);
-    const code = await main([edits, "--json", "out.json", "--", join(dir, "vitest"), "run"], deps());
+    const code = await main([edits, "--json", "out.json", "--", ...vitest()], deps());
     expect(out.slice(0, 5)).toEqual([
       "KILLED k target.txt: ok ? 1 → bad ? 1",
       "    ✗ target.test.ts > suite rejects bad",
@@ -384,7 +386,7 @@ describe("main", () => {
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
       { id: "s", file: "target.txt", find: "const ok", replace: "const fine" },
     ]);
-    const code = await main([edits, "--markdown", "--", join(dir, "vitest"), "run"], deps());
+    const code = await main([edits, "--markdown", "--", ...vitest()], deps());
     expect(out).toEqual([
       MARKDOWN_HEADER,
       "|---|---|---|---|---|",
@@ -450,7 +452,7 @@ describe("main", () => {
     vi.stubEnv("TMPDIR", tmp);
     try {
       const edits = editsFile([{ id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
-      await main([edits, "--", join(dir, "vitest"), "run"], deps());
+      await main([edits, "--", ...vitest()], deps());
       expect(readdirSync(tmp)).toEqual([]);
     } finally {
       vi.unstubAllEnvs();
@@ -499,7 +501,7 @@ describe("main", () => {
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
       { id: "e", file: "target.txt", find: "ok ? 1", replace: "crash ? 1" },
     ]);
-    const code = await main([edits, "--json", "out.json", "--", join(dir, "vitest"), "run"], deps());
+    const code = await main([edits, "--json", "out.json", "--", ...vitest()], deps());
     expect(out.slice(0, 3)).toEqual([
       "KILLED k target.txt: ok ? 1 → bad ? 1",
       "    ✗ target.test.ts > suite rejects bad",
@@ -510,7 +512,7 @@ describe("main", () => {
       cmd: string[];
       results: EditResult[];
     };
-    expect(written.cmd).toEqual([join(dir, "vitest"), "run"]);
+    expect(written.cmd).toEqual([...vitest()]);
     expect(written.results.map((r) => [r.id, r.status, r.failedTests])).toEqual([
       ["k", "KILLED", ["target.test.ts > suite rejects bad"]],
       ["e", "ERROR", []],
@@ -520,7 +522,7 @@ describe("main", () => {
 
   it("adds the dot and JSON reporters to Vitest, and keeps the last 2,000 characters of an errored run's output", async () => {
     const edits = editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "crash ? 1" }]);
-    await main([edits, "--json", "out.json", "--", join(dir, "vitest"), "run"], deps());
+    await main([edits, "--json", "out.json", "--", ...vitest()], deps());
     const { results } = JSON.parse(readFileSync(join(dir, "out.json"), "utf8")) as { results: EditResult[] };
     const detail = results[0]?.detail ?? "";
     expect(detail).toHaveLength(2000);
@@ -621,18 +623,16 @@ describe("main", () => {
   });
 
   it("logs to the console by default, relative to the process's directory", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const cwd = vi.spyOn(process, "cwd").mockReturnValue(dir);
     try {
-      editsFile([{ id: "a", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
-      expect(await main(["edits.json", "--", ...checker()])).toBe(0);
-      expect(log).toHaveBeenCalledWith("KILLED a target.txt: ok ? 1 → bad ? 1");
-      expect(await main(["edits.json"])).toBe(2);
-      expect(error).toHaveBeenCalledWith(expect.stringContaining("usage: mutate"));
+      await withConsole(async (log, error) => {
+        editsFile([{ id: "a", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
+        expect(await main(["edits.json", "--", ...checker()])).toBe(0);
+        expect(log).toHaveBeenCalledWith("KILLED a target.txt: ok ? 1 → bad ? 1");
+        expect(await main(["edits.json"])).toBe(2);
+        expect(error).toHaveBeenCalledWith(expect.stringContaining("usage: mutate"));
+      });
     } finally {
-      log.mockRestore();
-      error.mockRestore();
       cwd.mockRestore();
     }
   });

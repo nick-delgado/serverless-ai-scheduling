@@ -1,9 +1,10 @@
 # sync-start:ci-checks (restated in CLAUDE.md, "How work flows", the CI bullet)
 # Every PR and every push to any branch runs the checks agents run locally
 # (CLAUDE.md "Definition of done"), plus the changed-line coverage gate (#140),
-# which fails any line the branch adds that no test ran. PRs also run pr-evidence.yml (#184), which reruns when the
-# body is edited: a changed source file needs a mutate --markdown table in the body. No path filters on purpose: required status
-# checks must always report, or docs-only PRs would sit "pending" forever.
+# which fails any line the branch adds that no test ran, then a report-only duplicate-code
+# check on added lines (#184). PRs also run pr-evidence.yml (#184), rerun when the body is
+# edited: a changed source file needs a mutate --markdown table in the body. No path filters
+# on purpose: required status checks must always report, or docs-only PRs would sit "pending" forever.
 # A branch with an open PR gets two runs: the push run on its head, and the PR run
 # on its merge with the base. GitHub skips the PR run while the PR has a merge
 # conflict, so the push run guarantees every head is tested at least once.
@@ -56,6 +57,12 @@ jobs:
       - run: npm run coverage:changed
         env:
           COVERAGE_BASE: ${{ github.event.pull_request.base.sha }}
+      # Duplicate code in added lines (#184, B6-6; .jscpd.json). Report-only until the owner decides: calibrated on
+      # ten reviewed PRs, it flagged 2 of their 17 duplication findings, under the half the issue set for blocking.
+      - run: npm run dup:changed
+        continue-on-error: true
+        env:
+          DUP_BASE: ${{ github.event.pull_request.base.sha }}
 
   cfn-lint:
     name: cfn-lint

@@ -2,16 +2,12 @@
  * scripts/pr-evidence.ts: the table parser against hand-written PR bodies, and `main` against a throwaway git
  * repository whose feature branch adds, changes, renames and deletes files.
  */
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SOURCE_GLOBS } from "./coverage-changed";
 import { MARKDOWN_HEADER } from "./mutate";
 import { main, missingEvidence, namedFiles } from "./pr-evidence";
+import { gitRepo, logsTo, type TestRepo, withConsole } from "./test/git-repo";
 
 const table = (...files: string[]) =>
   [
@@ -77,45 +73,29 @@ describe("missingEvidence", () => {
 });
 
 describe("main", () => {
-  let repo: string;
+  let repo: TestRepo;
   let out: string[];
   let errors: string[];
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
-  const write = (file: string, text = "export const x = 1;\n") => {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), text);
-  };
-  const commit = (message: string) => {
-    git("add", "-A");
-    git("commit", "-q", "-m", message);
-  };
-  const deps = () => ({
-    cwd: repo,
-    log: (l: string) => out.push(l),
-    logError: (l: string) => errors.push(l),
-  });
+  const deps = () => ({ cwd: repo.dir, ...logsTo(out, errors) });
+  const write = (file: string) => repo.write(file, "export const x = 1;\n");
 
   beforeEach(() => {
-    repo = realpathSync(mkdtempSync(join(tmpdir(), "pr-evidence-")));
-    git("init", "-q", "-b", "main");
-    git("config", "user.email", "test@example.invalid");
-    git("config", "user.name", "Test");
-    git("config", "commit.gpgsign", "false");
+    repo = gitRepo("pr-evidence-");
     write("scripts/gone.ts");
-    write("scripts/old.ts", "a\nb\nc\nd\ne\nf\n");
+    repo.write("scripts/old.ts", "a\nb\nc\nd\ne\nf\n");
     write("scripts/kept.ts");
-    commit("base");
-    git("checkout", "-q", "-b", "feature");
-    git("rm", "-q", "scripts/gone.ts");
-    git("mv", "scripts/old.ts", "scripts/new.ts");
-    write("scripts/kept.ts", "export const x = 2;\n");
+    repo.commit("base");
+    repo.git("checkout", "-q", "-b", "feature");
+    repo.git("rm", "-q", "scripts/gone.ts");
+    repo.git("mv", "scripts/old.ts", "scripts/new.ts");
+    repo.write("scripts/kept.ts", "export const x = 2;\n");
     write("scripts/kept.test.ts");
-    write("docs/a.md", "# a\n");
-    commit("feature");
+    repo.write("docs/a.md", "# a\n");
+    repo.commit("feature");
     out = [];
     errors = [];
   });
-  afterEach(() => rmSync(repo, { recursive: true, force: true }));
+  afterEach(() => repo.remove());
 
   it("fails naming the added, changed and renamed source files the body leaves out, not deleted ones", () => {
     expect(main(["--base", "main"], { PR_BODY: table("scripts/kept.ts") }, deps())).toBe(1);
@@ -130,16 +110,16 @@ describe("main", () => {
   });
 
   it("passes a docs-only and test-only PR with no body", () => {
-    git("checkout", "-q", "main");
-    git("checkout", "-q", "-b", "docs");
-    write("docs/b.md", "# b\n");
+    repo.git("checkout", "-q", "main");
+    repo.git("checkout", "-q", "-b", "docs");
+    repo.write("docs/b.md", "# b\n");
     write("scripts/kept.test.ts");
-    commit("docs");
+    repo.commit("docs");
     expect(main(["--base", "main"], {}, deps())).toBe(0);
   });
 
   it("defaults the base to origin/main, and an empty PR_BASE counts as unset", () => {
-    git("update-ref", "refs/remotes/origin/main", "main");
+    repo.git("update-ref", "refs/remotes/origin/main", "main");
     expect(main([], { PR_BODY: "", PR_BASE: "" }, deps())).toBe(1);
     expect(errors).toHaveLength(1);
     expect(out.at(-1)).toBe("scripts/new.ts");
@@ -152,19 +132,13 @@ describe("main", () => {
     expect(errors[1]).toContain("usage: pr-evidence");
   });
 
-  it("logs to the console by default", () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
+  it("logs to the console by default", async () => {
+    await withConsole((log, error) => {
+      const body = table("scripts/kept.ts", "scripts/new.ts");
+      expect(main(["--base", "main"], { PR_BODY: body }, { cwd: repo.dir })).toBe(0);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("every changed source file"));
       expect(main(["--bogus"], {})).toBe(2);
       expect(error).toHaveBeenCalledWith(expect.stringContaining("usage: pr-evidence"));
-      expect(
-        main(["--base", "main"], { PR_BODY: table("scripts/kept.ts", "scripts/new.ts") }, { cwd: repo }),
-      ).toBe(0);
-      expect(log).toHaveBeenCalledWith(expect.stringContaining("every changed source file"));
-    } finally {
-      log.mockRestore();
-      error.mockRestore();
-    }
+    });
   });
 });

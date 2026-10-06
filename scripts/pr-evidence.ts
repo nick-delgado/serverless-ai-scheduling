@@ -13,13 +13,13 @@
  * Exit codes: 0 every changed source file is named; 1 one isn't; 2 the check couldn't run (bad arguments, no
  * merge base with the base).
  */
-import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 
 import {
   DEFAULT_BASE,
-  GIT_MAX_BUFFER,
   isSourceFile,
+  type ScriptDeps,
+  scriptIo,
   SOURCE_GLOBS,
   type SourceGlobs,
 } from "./coverage-changed";
@@ -54,20 +54,13 @@ export function missingEvidence(changed: readonly string[], body: string, globs:
   return changed.filter((file) => isSourceFile(file, globs) && !named.has(file));
 }
 
-export interface CliDeps {
-  cwd?: string;
-  log?: (line: string) => void;
-  logError?: (line: string) => void;
-}
-
 /** The script's entry point; returns the exit code (see the header). `vars` is the process environment. */
 export function main(
   argv: readonly string[],
   vars: Record<string, string | undefined>,
-  deps: CliDeps = {},
+  deps: ScriptDeps = {},
 ): number {
-  const log = deps.log ?? ((line: string) => console.log(line));
-  const logError = deps.logError ?? ((line: string) => console.error(line));
+  const { log, logError, git } = scriptIo(deps);
   let base: string;
   try {
     const { values } = parseArgs({ args: [...argv], options: { base: { type: "string" } }, strict: true });
@@ -76,8 +69,6 @@ export function main(
     logError(`usage: pr-evidence [--base <ref>] (${(err as Error).message})`);
     return 2;
   }
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER });
   let changed: string[];
   try {
     changed = git(

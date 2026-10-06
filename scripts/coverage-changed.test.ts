@@ -5,12 +5,11 @@
  * check against a throwaway repository. One test spawns the script to check its exit code, and the
  * tests of the coverage globs check the exported globs against the repository's own `src` trees.
  */
-import { execFileSync, spawnSync } from "node:child_process";
-import { globSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { globSync } from "node:fs";
+import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import vitestConfig from "../vitest.config";
 
@@ -27,6 +26,7 @@ import {
   type SourceGlobs,
   uncoveredLines,
 } from "./coverage-changed";
+import { gitRepo, type TestRepo, withConsole } from "./test/git-repo";
 
 /** Source globs for the throwaway repositories, whose source lives in `src/`. */
 const TEST_GLOBS: SourceGlobs = { include: ["src/**/*.{ts,tsx}"], exclude: SOURCE_GLOBS.exclude };
@@ -282,17 +282,12 @@ describe("parseCliArgs", () => {
 
 describe("main", () => {
   let repo: string;
+  let git: TestRepo["git"];
+  let write: TestRepo["write"];
+  let commit: TestRepo["commit"];
+  let remove: TestRepo["remove"];
   let out: string[];
   let errors: string[];
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" });
-  const write = (path: string, text: string) => {
-    mkdirSync(dirname(join(repo, path)), { recursive: true });
-    writeFileSync(join(repo, path), text);
-  };
-  const commit = (message: string) => {
-    git("add", "-A");
-    git("commit", "-q", "-m", message);
-  };
   /** Writes coverage JSON keyed by absolute path, as Vitest does. */
   const writeCoverage = (files: Record<string, FileCoverage>, path = "coverage/coverage-final.json") =>
     write(
@@ -313,11 +308,7 @@ describe("main", () => {
   const BASE = "export const one = 1;\nexport const two = 2;\nexport const three = 3;\n";
 
   beforeEach(() => {
-    repo = realpathSync(mkdtempSync(join(tmpdir(), "coverage-changed-")));
-    git("init", "-q", "-b", "main");
-    git("config", "user.email", "test@example.invalid");
-    git("config", "user.name", "Test");
-    git("config", "commit.gpgsign", "false");
+    ({ dir: repo, git, write, commit, remove } = gitRepo("coverage-changed-"));
     // A user's config can colour diffs, route them through an external tool, or turn rename detection off;
     // the gate must not depend on any of it.
     git("config", "color.diff", "always");
@@ -333,7 +324,7 @@ describe("main", () => {
   });
 
   afterEach(() => {
-    rmSync(repo, { recursive: true, force: true });
+    remove();
   });
 
   it("fails an uncovered added line, printing it as file:line", () => {
@@ -568,10 +559,8 @@ describe("main", () => {
     expect(result.status).toBe(1);
   });
 
-  it("logs to the console by default", () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
+  it("logs to the console by default", async () => {
+    await withConsole((log, error) => {
       expect(main(["--base", "main"], {}, { cwd: repo })).toBe(2);
       expect(error).toHaveBeenCalledWith(expect.stringMatching(/run `npm run test:coverage` first/));
       writeCoverage({});
@@ -580,9 +569,6 @@ describe("main", () => {
       // No deps at all: git runs in the process's directory, which still parses the arguments first.
       expect(main(["--nope"], {})).toBe(2);
       expect(error).toHaveBeenLastCalledWith(expect.stringMatching(/usage: coverage-changed/));
-    } finally {
-      log.mockRestore();
-      error.mockRestore();
-    }
+    });
   });
 });

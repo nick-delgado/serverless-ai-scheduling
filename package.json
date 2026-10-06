@@ -21,6 +21,7 @@
     "test:coverage": "vitest run --coverage",
     "coverage:changed": "tsx scripts/coverage-changed.ts",
     "mutate": "tsx scripts/mutate.ts",
+    "dup:changed": "tsx scripts/dup-changed.ts",
     "evals": "tsx packages/evals/src/cli.ts",
     "seed:data": "tsx scripts/seed-data.ts"
   },
@@ -38,6 +39,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
+    "jscpd": "^5.4.0",
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",

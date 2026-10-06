@@ -56,6 +56,7 @@ npm test                                 # all Vitest projects
 npm test -w packages/contracts           # one workspace
 npm run test:coverage                    # all Vitest projects with v8 coverage (coverage/coverage-final.json)
 npm run coverage:changed                 # fail on any line this branch adds that no test ran (vs origin/main; -- --base <ref>)
+npm run dup:changed                      # report jscpd clones with a side in lines this branch adds (.jscpd.json; -- --base <ref>)
 npm run mutate -- <edits.json> -- <cmd>  # apply each { file, find, replace, expect? } edit alone, run <cmd>, restore; prints KILLED/KILLED-OTHER/SURVIVED and the failed tests (--markdown: the PR's table)
 ```
 
@@ -118,7 +119,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 <!-- sync-start:ci-checks (restated in the header of .github/workflows/ci.yml) -->
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
-  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), on Node from `.nvmrc`.
+  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), then `dup:changed`, report-only for now, on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
   - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file is in no `npm run mutate -- … --markdown` table in the PR body.
 
