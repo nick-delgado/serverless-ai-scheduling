@@ -26,4 +26,7 @@ none fits, and never invent a class in a review: new classes are added by
 | `behaviour-defect` | The code gives a wrong result, crashes, mishandles an edge case, or breaks a safety or security rule (where no class above fits better). |
 | `convention` | A documented standard or an established convention is not followed (naming, structure, layering, error handling). |
 | `maintainability` | A code smell with no behavioural effect: bloat, coupling, dead code, needless indirection. |
+| `spec-moved` | The PR follows the spec as it stood when its work began, and the spec changed after that (the finding carries "Spec moved"). Not an agent mistake: measurements leave it out of agent-mistake counts, and count it to see how often the spec moves under work. |
 | `other` | None of the above. |
+
+`spec-moved` is always available, whether or not a project's tracked list names it.

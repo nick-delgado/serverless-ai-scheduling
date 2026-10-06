@@ -24,6 +24,7 @@ One block per finding. If there are none, write `No findings.` under the heading
 - **Introduced by this PR:** yes | worsened | pre-existing (only report pre-existing when the PR depended on it)
 - **Action:** fix now | needs owner decision | for the owner | noticed (see "Who acts on a finding")
 - **Changed since the last review:** yes | no | first review (the verifier sets this; see "Re-reviews")
+- **Spec moved:** <only when the verifier finds the spec changed under the work: "`<commit>` changed `<path>` "<section>" after the work began"; see "When the spec moved">
 
 <for "fix now" and "for the owner":>
 - **Suggested fix:** <the direction of the fix: what to change and where, naming the existing function, pattern, helper or doc to use>
@@ -142,6 +143,21 @@ your claim but should not have to redesign your fix:
   can enforce over new runtime checks, put a new test where tests of that subject already
   live, and write "Done when" as a condition ("a slot at 2:30 is not confirmed by '2 PM'"),
   not as a line number.
+- **Deferring to an upcoming issue** is an option only the verifier adds, from the related
+  issues the manifest lists, written as "(x) Defer to #N: <its acceptance criterion or owned
+  path that covers this, quoted>. Scope: moves to #N". It is offered only on that quoted
+  evidence, never for a blocker, a major behaviour defect, or where deferring would ship
+  this PR wrong on its own terms (a broken behaviour, a false claim), and never as the
+  only option: the owner chooses it.
+
+### When the spec moved
+
+Sometimes the PR follows the spec as it stood when its work began, and the spec has since
+changed (a PRD or ADR amendment merged on the base branch). That is not the agent's
+mistake. The verifier marks such a finding with "Spec moved", gives it the action
+`needs owner decision` (bring the PR to the new spec, or keep it and record the gap as a
+follow-up), and the root-cause analyst gives it the failure class `spec-moved`, which
+measurements do not count as an agent mistake.
 
 ### Line numbers
 

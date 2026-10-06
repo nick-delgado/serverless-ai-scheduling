@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check the file:line citations in review outputs against the code at the PR head.
 #
-# Usage: check-citations.sh <run-dir> <file>...
+# Usage: check-citations.sh [--strict] <run-dir> <file>...
 #
 # Every citation of the form path/to/file.ext:N or path/to/file.ext:N-M in the given files
 # is resolved against <run-dir>/worktree (or <run-dir> itself, for spec files) and checked
@@ -9,9 +9,17 @@
 # one tracked file in the worktree ends with it. Citations of files that cannot be found are listed but not counted as invalid:
 # they may name something outside the repository.
 #
-# Prints a summary and every invalid citation. Exits 1 when any citation is invalid.
+# Prints a summary and every invalid citation. Exits 1 when any citation is invalid, and with
+# --strict also when any citation cannot be resolved to a file (the verifier's output must
+# cite full paths).
 
 set -euo pipefail
+
+strict=no
+if [ "${1:-}" = "--strict" ]; then
+  strict=yes
+  shift
+fi
 
 if [ "$#" -lt 2 ] || [ ! -d "$1/worktree" ]; then
   echo "usage: $(basename "$0") <run-dir> <file>..." >&2
@@ -87,4 +95,5 @@ if [ "$unresolved" -gt 0 ]; then
   echo "not resolvable (not checked):$unresolved_list"
 fi
 
-[ "$invalid" -eq 0 ]
+[ "$invalid" -eq 0 ] || exit 1
+[ "$strict" = "no" ] || [ "$unresolved" -eq 0 ]

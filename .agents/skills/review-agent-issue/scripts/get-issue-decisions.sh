@@ -6,7 +6,9 @@
 # An answer is a line in an issue comment of the form
 #   Decision r<round>/<ID>: <answer>
 # where ID is a question (Q-1), an assumption the owner objects to (A-1) or a suggested edit
-# (E-1), for example "Decision r1/Q-2: (b)" or "Decision r1/E-1: accept". It counts when the
+# (E-1), or ALL to accept every recommendation and edit at once ("Decision r1/ALL: accept",
+# which does not cover items that need an explicit answer), for example
+# "Decision r1/Q-2: (b)" or "Decision r1/E-1: accept". It counts when the
 # comment was posted after the readiness review of that round, is not one of the harness's
 # own comments, and its author may decide for the repository: the repository's owner always
 # may; anyone else needs write, maintain or admin access; if that lookup is refused, a
@@ -40,7 +42,7 @@ lines_prog='.[] | select(.created_at > "SINCE")
   | . as $c
   | .body | split("\n")[]
   | sub("\r$"; "") | sub("^[ >]*`?"; "") | sub("`[ ]*$"; "")
-  | select(test("^Decision r[0-9]+/[QAE]-[0-9]+: "))
+  | select(test("^Decision r[0-9]+/([QAE]-[0-9]+|ALL): "))
   | "\($c.created_at)\t\($c.user.login)\t\($c.author_association)\t\($c.html_url)\t\(.)"'
 lines="$(gh api --paginate "repos/{owner}/{repo}/issues/${n}/comments" --jq "${lines_prog//SINCE/$since}" | sort)"
 

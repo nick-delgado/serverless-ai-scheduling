@@ -12,7 +12,9 @@ find what a careful implementer would need to ask, and what would mislead one.
 
 Read the issue (`<RUN_DIR>/spec/issue-<n>.md`, with all its comments; later comments
 override earlier text) and the issues it links to. List the requirements as `R-1`, `R-2`,
-..., each a single statement with its exact quote. For each acceptance criterion, say
+..., each a single statement with its exact quote. A comment starting
+`<!-- agent-pr-review:deferred` records work the owner deferred to this issue from a PR
+review: each is a requirement too, with the note as its source. For each acceptance criterion, say
 whether it can be tested as written, and if not, why (no observable outcome, no threshold,
 "works correctly", two readings).
 
@@ -23,6 +25,11 @@ does not settle: empty and boundary inputs, limits, how two options combine, err
 behaviour, what happens to existing data or callers, defaults, ordering, time zones, who may
 do what. For each, give the readings a reasonable implementer could take and what each
 would mean for the code and its users. Do not choose.
+
+Mark **Design needed** where the work must produce a design the issue does not give: sample
+or fixture data, how two flags or modes interact, where a matcher's boundaries lie or how
+far a negation reaches, the rules that recognise or classify an input. An agent left to
+invent these invents them differently from what the owner had in mind.
 
 ### 3. Conflicts and settled answers
 
@@ -59,6 +66,7 @@ searching the code for the names it uses. Quote each stale reference and what re
 ## Open behaviour
 ### OB-1: <the open point>
 - **Requirement:** R-<n>
+- **Design needed:** yes | no
 - **Readings:** (a) ... — consequence; (b) ... — consequence
 - **Settled by:** <quote and location, or "nothing found">
 

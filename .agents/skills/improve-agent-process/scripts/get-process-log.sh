@@ -50,4 +50,31 @@ for pr in $prs; do
   else
     echo "No response comment: no fixes or decisions recorded on this PR yet."
   fi
+
+  # What the reviews themselves say about the reviewer: per report, its counts line, and
+  # the earlier findings it withdrew (a sign an earlier round was wrong).
+  printf '\n======== reviewer signals on PR #%s ========\n' "$pr"
+  gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
+    --jq '.[] | select(.body | startswith("<!-- agent-pr-review:report")) | .body' |
+    awk '
+      /^<!-- agent-pr-review:report / { s = $0; sub(/.*sha=/, "", s); sub(/ .*/, "", s); if (s != last) { print "report " substr(s, 1, 7); last = s } }
+      /^Confirmed findings after verification: / { print "  " $0 }
+      /^By action: / { print "  " $0 }
+      /\| *withdrawn *\|/ { print "  withdrawn: " $0 }
+    ' || true
 done
+
+# Deferrals: findings the owner deferred to an upcoming issue, and that issue's state now.
+deferred="$(for pr in $prs; do
+  gh api --paginate "repos/{owner}/{repo}/issues/${pr}/comments" \
+    --jq '.[] | select(.body | startswith("<!-- agent-pr-review:response")) | .body' 2>/dev/null |
+    grep -oE '\| *[A-Za-z0-9-]+ *\| *deferred to #[0-9]+' | sed "s/^/#${pr} /" || true
+done | sort -u)"
+if [ -n "$deferred" ]; then
+  printf '\n======== deferrals ========\n'
+  printf '%s\n' "$deferred" | while IFS= read -r d; do
+    target="$(printf '%s' "$d" | grep -oE 'deferred to #[0-9]+' | grep -oE '[0-9]+')"
+    st="$(gh api "repos/{owner}/{repo}/issues/${target}" --jq '.state + (if .state_reason then " (" + .state_reason + ")" else "" end)' 2>/dev/null || echo unknown)"
+    echo "$(printf '%s' "$d" | tr -s ' |' ' ') · target is $st"
+  done
+fi
