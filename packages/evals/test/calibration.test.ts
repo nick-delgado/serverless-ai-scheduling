@@ -391,6 +391,14 @@ describe("calibrationStep", () => {
     out: "/out",
     dryRun: false,
   };
+  // A type-level check, never run: `npm run typecheck` goes red if `calibration` turns optional again,
+  // since the directive is then unused (de04bd8/SMELL-207).
+  // @ts-expect-error -- calibration is required (SMELL-207)
+  const _noCalibration: Parameters<typeof calibrationStep>[0] = {
+    calibrationDir: "c",
+    out: "o",
+    dryRun: false,
+  };
   const off: JudgeSetup = { kind: "off" };
   const on = () => ({ kind: "llm" as const, profile: MODEL_PROFILES["haiku-4.5"], judge: fixtureJudge() });
 

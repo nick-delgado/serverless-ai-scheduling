@@ -414,7 +414,9 @@ function parseFile<T>(schema: z.ZodType<T>, value: unknown, path: string): T {
  * Returns the report, when one was written.
  */
 export async function calibrationStep(
-  args: Pick<CliArgs, "calibration" | "calibrationDir" | "out" | "dryRun">,
+  args: Pick<CliArgs, "calibrationDir" | "out" | "dryRun"> & {
+    calibration: NonNullable<CliArgs["calibration"]>;
+  },
   judging: JudgeSetup,
   deps: CalibrationDeps,
 ): Promise<CalibrationReport | undefined> {
@@ -428,7 +430,7 @@ export async function calibrationStep(
       throw new CliArgError(`${path}: ${errorReason(error)}`);
     }
   };
-  if (args.calibration?.action === "export") {
+  if (args.calibration.action === "export") {
     const { from } = args.calibration;
     const existing = readJson(labelsPath);
     if (existing !== undefined && hasLabels(parseFile(LabelsFile, existing, labelsPath)))
