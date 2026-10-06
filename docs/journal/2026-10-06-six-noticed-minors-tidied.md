@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M3
-**Related:** issue #183, PR #165 (the LLM judge, #32), issues #34 and #159
+**Related:** issue #183, PR #191, PR #165 (the LLM judge, #32), issues #34 and #159
 
 ## What happened
 
@@ -27,5 +27,5 @@ These are the decisions the spec left open, each with the alternative it beat.
 
 ## Evidence
 
-- `npm run mutate` over the changed source files: 8 of 8 Vitest edits killed, plus 2 type-level edits killed by `tsc` (PR #<pr>).
+- `npm run mutate` over the changed source files: 8 of 8 Vitest edits killed, plus 2 type-level edits killed by `tsc` (PR #191).
 - The TEST-104 test first failed on a placeholder hash, then passed with the real one: `0cebbfd5…1505` for `judge.v1`.
