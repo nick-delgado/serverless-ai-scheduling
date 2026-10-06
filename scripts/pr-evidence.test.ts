@@ -19,8 +19,9 @@ const table = (...files: string[]) =>
 describe("namedFiles", () => {
   it("reads the File cell of every row of every mutate table, CRLF bodies included", () => {
     const body = [
-      "Intro | `not/a/table.ts` |",
-      table("scripts/a.ts", "packages/x/src/b.ts"),
+      "| Intro | `not/a/table.ts` |",
+      // Indented, as inside a list item or <details>.
+      table("scripts/a.ts", "packages/x/src/b.ts").replaceAll("\n", "\n  ").replace(/^/, "  "),
       "",
       "| `scripts/after-the-table.ts` |",
       table("scripts/c.ts").replaceAll("\n", "\r\n"),
@@ -82,7 +83,7 @@ describe("main", () => {
 
   beforeEach(() => {
     repo = gitRepo("pr-evidence-");
-    write("scripts/gone.ts");
+    repo.write("scripts/gone.ts", "export const gone = 1;\n");
     repo.write("scripts/old.ts", "a\nb\nc\nd\ne\nf\n");
     write("scripts/kept.ts");
     repo.commit("base");
@@ -90,6 +91,8 @@ describe("main", () => {
     repo.git("rm", "-q", "scripts/gone.ts");
     repo.git("mv", "scripts/old.ts", "scripts/new.ts");
     repo.write("scripts/kept.ts", "export const x = 2;\n");
+    // A non-ASCII name, which git quotes unless told not to.
+    repo.write("scripts/café.ts", "export const y = 1;\n");
     write("scripts/kept.test.ts");
     repo.write("docs/a.md", "# a\n");
     repo.commit("feature");
@@ -100,14 +103,15 @@ describe("main", () => {
 
   it("fails naming the added, changed and renamed source files the body leaves out, not deleted ones", () => {
     expect(main(["--base", "main"], { PR_BODY: table("scripts/kept.ts") }, deps())).toBe(1);
-    expect(out).toEqual(["Changed source files no mutate table in the PR body names (1):", "scripts/new.ts"]);
+    expect(out).toEqual([
+      "Changed source files no mutate table in the PR body names (2):",
+      "scripts/café.ts",
+      "scripts/new.ts",
+    ]);
     expect(errors[0]).toContain("--markdown");
   });
 
   it("passes when every changed source file is named, taking the base from PR_BASE", () => {
-    // A non-ASCII name too, which git would quote unless told not to.
-    repo.write("scripts/café.ts", "export const x = 1;\n");
-    repo.commit("non-ASCII");
     const body = table("scripts/kept.ts", "scripts/new.ts", "scripts/café.ts");
     expect(main([], { PR_BODY: body, PR_BASE: "main" }, deps())).toBe(0);
     expect(out).toEqual(["pr-evidence: every changed source file since main is in a mutate table."]);
@@ -123,10 +127,10 @@ describe("main", () => {
   });
 
   it("defaults the base to origin/main, and an empty PR_BASE counts as unset", () => {
-    repo.git("update-ref", "refs/remotes/origin/main", "main");
-    expect(main([], { PR_BODY: "", PR_BASE: "" }, deps())).toBe(1);
-    expect(errors).toHaveLength(1);
-    expect(out.at(-1)).toBe("scripts/new.ts");
+    // origin/main at the branch's head: nothing changed since it, where main would have changes.
+    repo.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    expect(main([], { PR_BODY: "", PR_BASE: "" }, deps())).toBe(0);
+    expect(out).toEqual(["pr-evidence: every changed source file since origin/main is in a mutate table."]);
   });
 
   it("exits 2 when it can't diff against the base, or for an unknown option", () => {
@@ -138,7 +142,7 @@ describe("main", () => {
 
   it("logs to the console by default", async () => {
     await withConsole((log, error) => {
-      const body = table("scripts/kept.ts", "scripts/new.ts");
+      const body = table("scripts/kept.ts", "scripts/new.ts", "scripts/café.ts");
       expect(main(["--base", "main"], { PR_BODY: body }, { cwd: repo.dir })).toBe(0);
       expect(log).toHaveBeenCalledWith(expect.stringContaining("every changed source file"));
       expect(main(["--bogus"], {})).toBe(2);

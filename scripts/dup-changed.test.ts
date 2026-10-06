@@ -119,7 +119,7 @@ describe("main", () => {
 
   it("skips without a merge base locally, and exits 2 for it in CI", () => {
     expect(main(["--base", "nope"], {}, deps())).toBe(0);
-    expect(errors[0]).toContain("SKIPPING: no merge base with nope");
+    expect(errors[0]).toContain("dup-changed: SKIPPING: no merge base with nope");
     expect(main(["--base", "nope"], { CI: "true" }, deps())).toBe(2);
     expect(errors[1]).toContain("CI must fetch the full history");
   });
