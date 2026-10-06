@@ -122,8 +122,9 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
   - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), then `dup:changed`, report-only for now, on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
   - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file has no KILLED row in an `npm run mutate -- … --markdown` table in the PR body.
+  - **`Journal links`** (same workflow): `scripts/journal-links.ts` fails when a journal entry the PR adds has no `PR #<this PR>` on its **Related** line, so it's red on a PR's first push until the "link PR #N" commit (`task-workflow` step 7). Not a required check.
 
-  A PR isn't done until all three are green.
+  A PR isn't done until all four are green.
 <!-- sync-end:ci-checks -->
 - **Recommended branch protection for `main`** (Nick enables it in Settings → Branches):
   - require a pull request before merging;
@@ -137,7 +138,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 
 - Every acceptance criterion in the issue is met.
 - Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)): break each thing the code you wrote does with `npm run mutate`, each edit's `expect` naming the test that should go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
-- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline, or a regression the owner accepted, recorded as a decision line in the issue's "Decisions and clarifications". The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
+- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline, or a regression the owner accepted, recorded as a decision line in the issue's "Decisions and clarifications"; an acceptance criterion that states a tolerance (such as FR-041's "no more than one case below") is that acceptance, given in advance. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
   - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).
