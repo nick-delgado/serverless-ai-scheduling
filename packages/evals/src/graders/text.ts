@@ -169,7 +169,7 @@ export function offeredClockTimes(text: string): { raw: string; index: number }[
   return listed.length > 0 ? listed : times;
 }
 
-/** The clinic timezone as written after a time:`CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
+/** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
 
 /**
