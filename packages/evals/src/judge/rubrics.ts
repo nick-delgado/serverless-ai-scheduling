@@ -22,8 +22,9 @@ type JudgeDimension = (typeof JUDGE_DIMENSIONS)[number];
 
 /**
  * Bumped whenever a rubric's wording or the judge's prompt changes; every report records it. A test
- * (`test/judge.test.ts`, `JUDGE_PROMPT_HASHES`) holds one hash of the prompt per version and fails on a change
- * without a bump (de04bd8/TEST-104).
+ * (`test/judge.test.ts`, `JUDGE_PROMPT_HASHES`) holds one hash per version of the system prompt and the user
+ * message on placeholder inputs, and fails when either changes without a bump (de04bd8/TEST-104). The
+ * transcript's rendered format is not in the hash; the `prompt` tests there pin it.
  */
 export const JUDGE_RUBRIC_VERSION = "judge.v1";
 
