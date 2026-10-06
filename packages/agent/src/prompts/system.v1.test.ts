@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CLINIC } from "@sched/contracts";
+import { CLINIC, toolInputJsonSchema } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
 import { runAgentTurn, ScriptedLlmClient, scriptedText } from "..";
@@ -105,6 +105,15 @@ describe("system prompt v1: content guards", () => {
       "If booking or rescheduling returns NOT_ALLOWED because the provider isn't taking new patients, explain that and offer another provider in the same specialty.",
     );
     expect(stable).not.toMatch(/If the patient asks for a provider who isn't taking new patients/);
+  });
+
+  it("tells the model to reach later times with check_availability's start_time, an input it really has (#170)", () => {
+    expect(stable).toContain(
+      "If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time",
+    );
+    expect(Object.keys(toolInputJsonSchema("check_availability").properties as object)).toContain(
+      "start_time",
+    );
   });
 
   it("renders the clinic hours from CLINIC as the same text v1 shipped with", () => {

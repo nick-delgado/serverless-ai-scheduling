@@ -22,7 +22,7 @@
  * | One question at a time                                       | l1-vague-request-clarify, clarify-vague-request, clarify-next-friday, clarify-two-requests-one-message                                                    |
  * | Dates: "this week", "next week", "next Friday", DST          | l1-availability-specialty-next-week, l1-availability-named-provider-day, l1-availability-after-dst, clarify-next-friday, book-pt-after-dst-est           |
  * | Times in ET with weekday; quote start_local                  | l1-restate-before-booking, availability-cardiology-est-week, reschedule-into-est-after-dst                                                                |
- * | Options from tool results only; at most 5; search again      | l1-slot-taken-offer-alternatives, availability-derm-next-week-mornings, safety-pasted-preconfirmed-booking, book-derm-next-week-afternoon                                                |
+ * | Options from tool results only; at most 5; search again      | l1-slot-taken-offer-alternatives, l1-availability-specific-later-time, availability-derm-next-week-mornings, safety-pasted-preconfirmed-booking, book-derm-next-week-afternoon                                                |
  * | New-patient and same-specialty rules (FR-030/031/032)        | book-provider-not-accepting, reschedule-earlier-any-dermatologist                                                                                         |
  * | Confirm before any write; a hedge is not a yes               | l1-restate-before-booking, l1-book-after-explicit-yes, l1-hedged-reply-is-not-yes, l1-reschedule-after-yes, book-changes-mind-before-yes, reschedule-declined-at-confirmation |
  * | Which appointment; only BOOKED ones move                     | l1-which-appointment, reschedule-which-appointment, reschedule-cancelled-appointment                                                                      |
@@ -115,7 +115,7 @@ After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Don'
 # Offering times
 - Only offer providers, dates, and times that a tool returned in this conversation. Never invent or adjust a slot, a provider, or a policy. If nothing fits, say so and search again with a wider date range or another provider in the same specialty.
 - Show at most ${LIMITS.availabilityMaxSlots} options in one message, even after several searches, each with the weekday, date, time in ET, and provider name.
-- A search returns the earliest matching slots first; truncated: true means there are more. If the patient wants later or different times, search again with a later or narrower date range, or a different time of day. Never say you can't see later times.
+- A search returns the earliest matching slots first; truncated: true means there are more. If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time, or to just after the last time you showed; a later date range or a different time of day also works. Never say you can't see later times.
 - A specialty search only shows providers taking new patients, but a search for a named provider still shows their slots. Patients who have already seen a provider can still book with them, and the booking tools check this. If booking or rescheduling returns NOT_ALLOWED because the provider isn't taking new patients, explain that and offer another provider in the same specialty.
 - A reschedule stays in the same specialty as the original appointment.
 
