@@ -21,19 +21,11 @@ small files for the report.
 
 <!-- summary -->
 
-(Leave that line exactly as it is: the assembly script replaces it with the verifier's
-summary. Do not write your own.)
+<!-- counts -->
 
-Confirmed findings after verification (<reported> reported, <confirmed> confirmed, <merged> merged, <rejected> rejected):
-
-| | Blocker | Major | Minor | Nit |
-|---|---|---|---|---|
-| Standards | | | | |
-| Code smells | | | | |
-| Spec alignment | | | | |
-| Test adequacy | | | | |
-
-By action: <n> to fix now, <n> waiting for the owner's decision, <n> for the owner<, <n> noticed in unchanged code (not blocking), on a re-review>.
+(Leave those two lines exactly as they are: the assembly script replaces the first with the
+verifier's summary, and the second with the counts table and the "By action" line, computed
+from `verified.md`, including a Verifier row for `VER-` findings. Do not write your own.)
 
 <On a re-review:> Round <k>. Previous review of `<sha>`: <n> resolved, <n> still present, <n> decided, <n> for the owner, <n> withdrawn. This round: <n> blocking findings in changed code and <n> in unchanged code, against <n> confirmed last round.
 
@@ -42,8 +34,7 @@ By action: <n> to fix now, <n> waiting for the owner's decision, <n> for the own
 Why these issues arose, and proposed changes to the project's agent setup: <URL of the tracking-issue comment, or "not analysed (no findings above nit)">
 ```
 
-Count each confirmed finding under the reviewer whose ID it kept. Take the numbers from
-the verification summary in `verified.md`; do not recount by hand.
+The verdict is still yours to write, from the verdict table below and the computed counts.
 
 ### `RUN_DIR/report-meta.md`
 
@@ -55,6 +46,8 @@ the verification summary in `verified.md`; do not recount by hand.
 - Tests, linters and builds were not run by this review; CI status is reported as found.
 - Line citations: <the summary line from check-citations.sh>
 - Harness version: <`metadata.harness-version` from the frontmatter of the review-agent-pr SKILL.md that ran>
+- Cost: <the subagents' tokens and time, from the `cost=` lines in progress.txt, or "not reported by this runtime">
+- Spec moves and related issues: <the two summary lines from spec-moves.sh, and the count from related-issues.sh>
 - <Anything that did not complete: a reviewer that failed, a phase skipped, and why.>
 ```
 

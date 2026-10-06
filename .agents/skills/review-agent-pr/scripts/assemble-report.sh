@@ -4,7 +4,8 @@
 # Usage:
 #   assemble-report.sh <run-dir> report <head-sha>
 #       Reads  report-head.md, report-meta.md, verified.md, findings/*.md
-#       Writes report-01.md, report-02.md, ...: the PR comments to post, in order. A report
+#       Writes report-01.md, report-02.md, ...: the PR comments to post, in order, and
+#       findings.json (one JSON object per confirmed finding, for counting). A report
 #       that fits in one comment is one part; a longer one is split between sections or
 #       findings into consecutive comments, each marked "part k/n". Also writes report.md,
 #       the whole report in one file, for the run's records (not posted).
@@ -221,13 +222,119 @@ label() {
   esac
 }
 
+# The counts for the report header, computed from verified.md so nobody copies them by
+# hand: confirmed findings by reviewer (from the ID prefix) and severity, by action, and
+# the rejected and merged totals.
+counts_block() {
+  local blocks rejected merged
+  blocks="$(h2 "$verified" "Confirmed findings" | awk '
+    /^[ ]*```/ { fence = !fence }
+    !fence && /^### / { if (id != "") print id "\t" sev "\t" act; id = $2; sub(/:$/, "", id); sev = ""; act = ""; next }
+    /^- \*\*Severity:\*\* / { sev = $0; sub(/^- \*\*Severity:\*\* */, "", sev); sub(/[ (].*/, "", sev) }
+    /^- \*\*Action:\*\* / { act = $0; sub(/^- \*\*Action:\*\* */, "", act); gsub(/`/, "", act); sub(/[ ]*[(—-].*$/, "", act); sub(/[ ]+$/, "", act) }
+    END { if (id != "") print id "\t" sev "\t" act }')"
+  rejected="$(h2 "$verified" "Rejected findings" | awk '
+    /^#+ *Merged|^\*\*Merged|^Merged/ { stop = 1 }
+    !stop && /^\| *[A-Z]+-[0-9]/ { n++ } END { print n + 0 }')"
+  merged="$(h2 "$verified" "Rejected findings" | awk '
+    /^#+ *Merged|^\*\*Merged|^Merged/ { on = 1; next }
+    on && /^\| *[A-Z]+-[0-9]/ { n++ } END { print n + 0 }')"
+  printf '%s\n' "$blocks" | awk -F'\t' -v rejected="$rejected" -v merged="$merged" '
+    NF >= 2 {
+      p = $1; sub(/-.*/, "", p)
+      r = (p == "STD" ? "Standards" : p == "SMELL" ? "Code smells" : p == "SPEC" ? "Spec alignment" : p == "TEST" ? "Test adequacy" : p == "VER" ? "Verifier" : "Other")
+      c[r, $2]++; seen[r] = 1; total++
+      a[$3]++
+    }
+    END {
+      printf "Confirmed findings after verification: %d (rejected %d, merged %d).\n\n", total, rejected, merged
+      print "| | Blocker | Major | Minor | Nit |"
+      print "|---|---|---|---|---|"
+      split("Standards|Code smells|Spec alignment|Test adequacy|Verifier|Other", rows, "|")
+      for (i = 1; i <= 6; i++) {
+        r = rows[i]
+        if (i <= 4 || seen[r]) printf "| %s | %d | %d | %d | %d |\n", r, c[r, "blocker"], c[r, "major"], c[r, "minor"], c[r, "nit"]
+      }
+      printf "\nBy action: %d to fix now, %d waiting for the owner'"'"'s decision, %d for the owner", a["fix now"], a["needs owner decision"], a["for the owner"]
+      if (a["noticed"] > 0) printf ", %d noticed in unchanged code (not blocking)", a["noticed"]
+      print "."
+    }'
+}
+
+# The readiness state of the PR's issues, from spec-moves.md: "#19 round 1 (Ready, applied)",
+# "none" when no issue had a readiness review, "unknown" without the file.
+readiness_state() {
+  [ -f "$run/spec-moves.md" ] || { echo "unknown"; return; }
+  awk '
+    /^## Readiness of the PR/ { on = 1; next }
+    on && /^## / { exit }
+    on && /^- #[0-9]+: (review|refresh) \(round [0-9]+\): / {
+      n = $2; sub(/:$/, "", n)
+      r = $0; sub(/^.*\(round /, "", r); sub(/\).*/, "", r)
+      v = $0; sub(/^[^)]*\): /, "", v); sub(/ ·.*/, "", v)
+      a = ($0 ~ /answers applied: yes/) ? ", applied" : ""
+      s = s (s == "" ? "" : "; ") n " round " r " (" v a ")"
+    }
+    END { print (s == "" ? "none" : s) }' "$run/spec-moves.md"
+}
+
+# The cost of the run, from the cost lines the orchestrator appends to progress.txt
+# ("cost=<phase>:<who>:<tokens>:<seconds>", where the runtime reports them).
+cost_state() {
+  grep '^cost=' "$run/progress.txt" 2>/dev/null | awk -F: '
+    { n++; if ($3 ~ /^[0-9]+$/) tok += $3; else tu = 1; if ($4 ~ /^[0-9]+$/) sec += $4; else su = 1 }
+    END {
+      if (n == 0) { print "not reported"; exit }
+      printf "%s tokens, %s min in %d subagents\n", (tu ? "≥" : "") tok, (su ? "≥" : "") int(sec / 60 + 0.5), n
+    }' | grep . || echo "not reported"
+}
+
+# findings.json: one JSON object per line per confirmed finding, for improve-agent-process to
+# count from without reading prose.
+write_findings_json() {
+  local out="$1" round version lines readiness
+  readiness="$(readiness_state)"
+  if [ -s "$run/previous/report.md" ]; then round="re-review"; else round="first"; fi
+  version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
+  lines="$({ grep -o '"additions":[0-9]*' "$run/pr.json" | head -n 1; grep -o '"deletions":[0-9]*' "$run/pr.json" | head -n 1; } 2>/dev/null | cut -d: -f2 | awk '{ s += $1 } END { print s + 0 }')"
+  {
+    h2 "$rootcause" "Cause summary" 2>/dev/null | awk -F'|' '/^\| *[A-Z]+-[0-9]/ {
+      id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id); sub(/[ (].*/, "", id)
+      cls = $4; gsub(/[ \t`]/, "", cls); cause = $5; gsub(/`/, "", cause); gsub(/^[ \t]+|[ \t]+$/, "", cause)
+      print "CLASS\t" id "\t" cls "\t" cause }'
+    h2 "$verified" "Confirmed findings" | sed 's/^/BODY\t/'
+  } | awk -F'\t' -v pr="${pr_number:-}" -v sha="$report_sha" -v round="$round" -v version="$version" -v lines="${lines:-0}" -v readiness="$readiness" '
+    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/\t/, " ", s); return s }
+    function emit() {
+      if (id == "") return
+      printf "{\"pr\":%s,\"commit\":\"%s\",\"round\":\"%s\",\"changed_lines\":%s,\"harness_version\":\"%s\",\"id\":\"%s\",\"title\":\"%s\",\"severity\":\"%s\",\"action\":\"%s\",\"changed_since_last_review\":\"%s\",\"location\":\"%s\",\"failure_class\":\"%s\",\"cause\":\"%s\",\"spec_moved\":%s,\"readiness\":\"%s\"}\n", (pr == "" ? "null" : pr), sha, round, lines, esc(version), esc(id), esc(title), sev, act, esc(chg), esc(loc), esc(cls[id]), esc(cause[id]), (moved ? "true" : "false"), esc(readiness)
+    }
+    $1 == "CLASS" { cls[$2] = $3; cause[$2] = $4; next }
+    $1 == "BODY" {
+      line = substr($0, 6)
+      if (line ~ /^[ ]*```/) fence = !fence
+      if (!fence && line ~ /^### /) { emit(); id = line; sub(/^### /, "", id); title = id; sub(/:.*/, "", id); sub(/^[^:]*: */, "", title); sev = ""; act = ""; chg = ""; loc = ""; moved = 0; next }
+      if (line ~ /^- \*\*Spec moved:\*\*/) moved = 1
+      if (line ~ /^- \*\*Severity:\*\* /) { sev = line; sub(/^- \*\*Severity:\*\* */, "", sev); sub(/[ (].*/, "", sev) }
+      if (line ~ /^- \*\*Action:\*\* /) { act = line; sub(/^- \*\*Action:\*\* */, "", act); gsub(/`/, "", act); sub(/[ ]*[(—-].*$/, "", act); sub(/[ ]+$/, "", act) }
+      if (line ~ /^- \*\*Changed since the last review:\*\* /) { chg = line; sub(/^- \*\*Changed since the last review:\*\* */, "", chg); sub(/[ (—].*/, "", chg) }
+      if (line ~ /^- \*\*Location:\*\*/ && match(line, /`[^`]+`/)) loc = substr(line, RSTART + 1, RLENGTH - 2)
+    }
+    END { emit() }' > "$out"
+}
+
 build_report() {
   local r f summary
 
   # The summary in the header is the verifier's, inserted here so the orchestrator never
   # writes its own.
   summary="$(h2 "$verified" "Summary" | trim)"
-  SUMMARY="$summary" awk '$0 == "<!-- summary -->" { print ENVIRON["SUMMARY"]; next } { print }' "$run/report-head.md" | trim
+  local counts
+  counts="$(counts_block)"
+  SUMMARY="$summary" COUNTS="$counts" awk '
+    $0 == "<!-- summary -->" { print ENVIRON["SUMMARY"]; next }
+    $0 == "<!-- counts -->" { print ENVIRON["COUNTS"]; next }
+    { print }' "$run/report-head.md" | trim
 
   printf '\n### Fix now\n\n'
   echo "For the agent that wrote this PR: fix these. Nothing here needs a product decision."
@@ -345,10 +452,10 @@ build_process() {
   # 1,000 changed lines without reading prose.
   local round lines began version
   if [ -s "$run/previous/report.md" ]; then round="re-review"; else round="first"; fi
-  lines="$(sed -n 's/.*"additions":\([0-9]*\).*"deletions":\([0-9]*\).*/\1 \2/p' "$run/pr.json" 2>/dev/null | head -n 1 | awk '{ print $1 + $2 }')"
-  began="$(sed -n 's/^======== [0-9a-f]* \([0-9T:Z-]*\) ========$/\1/p' "$run/commits.txt" 2>/dev/null | head -n 1)"
+  lines="$({ grep -o '"additions":[0-9]*' "$run/pr.json" | head -n 1; grep -o '"deletions":[0-9]*' "$run/pr.json" | head -n 1; } 2>/dev/null | cut -d: -f2 | awk '{ s += $1 } END { print s + 0 }')"
+  began="$(sed -n 's/^======== [0-9a-f]* \([0-9T:Z-]*\) ========$/\1/p' "$run/commits.txt" 2>/dev/null | head -n 1 || true)"
   version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
-  echo "Round: ${round} · Changed lines: ${lines:-unknown} · Work began: ${began:-unknown} · Harness version: ${version:-unknown}"
+  echo "Round: ${round} · Changed lines: ${lines:-unknown} · Work began: ${began:-unknown} · Harness version: ${version:-unknown} · Readiness: $(readiness_state) · Cost: $(cost_state)"
   echo
   echo "Why the agent produced the findings of that review, and what could change in the project's docs, skills, prompts, specs and guardrails. Causes are inferences from the repository: the agent's prompt and transcript were not available."
 
@@ -394,6 +501,9 @@ case "$mode" in
 
     whole="$run/report.md"
     build_report > "$whole"
+    pr_number="$(grep -o '"number":[0-9]*' "$run/pr.json" 2>/dev/null | head -n 1 | cut -d: -f2)"
+    write_findings_json "$run/findings.json"
+    echo "wrote $run/findings.json ($(wc -l < "$run/findings.json" | tr -d ' ') findings)"
     rm -f "$run"/report-[0-9][0-9].md
 
     # Split into parts that each fit in one comment, leaving room for the part's marker,

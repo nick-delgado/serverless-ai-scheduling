@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.05"
+  harness-version: "2026.10.06"
 ---
 
 # Address a PR review
@@ -35,6 +35,10 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
 - **Stay inside the task's scope.** The limits that applied to the original work (the
   issue's owned paths, files not to touch) still apply. Something you cannot do within them
   is a question for the owner (step 6), never a silent skip.
+- **Never edit or delete a comment** on the PR or an issue, yours or anyone's, including
+  your own earlier responses. To correct something you posted, say so in your next
+  response, quoting what was wrong. The comments are the record the next review and the
+  process measurements read; an edited one changes history under them.
 - **Temporary files outside every checkout.** Drafts, notes and the response file go under
   `${TMPDIR:-/tmp}/agent-pr-review/<owner>-<repo>-pr-<n>/fix/`, as absolute paths, never in a
   repository checkout where they could be committed. If whoever started you named a
@@ -126,9 +130,9 @@ Take them in order (blockers and majors first). For each finding:
    about, see the test fail, then restore it. Break each part on its own: every condition
    of a compound check, every operand of a comparison, every flag or option. A test that
    fails when the whole line is deleted can still pass when one half of an `&&` is wrong.
-   If you change a test that a recorded break cites (in the PR description's evidence, a
-   journal entry or an earlier response), redo that break against the changed test and
-   update the record: a changed test can stop catching what it used to.
+   Where the project records evidence that a test can fail (in the PR description, an
+   earlier response, or wherever its rules keep it), keep that evidence true when you
+   change the test: a changed test can stop catching what it used to.
    - **Fix the class, not just the instance.** If the finding is one case of a pattern
      (one missing case among similar ones, one parser rule among several), search the PR's
      own changes for the same mistake and fix every instance, testing each.
@@ -186,6 +190,24 @@ reviewed commit (`d34b6df/SPEC-1`) in the response's summary text, since IDs res
 every review round.
 
 Without a decision, the status is `waiting for decision`.
+
+**A decision to defer to an upcoming issue** ("Defer to #N") changes nothing in this PR.
+Record it on the target issue, so its readiness review and its agent see it, with a note
+written to your temporary directory:
+
+```markdown
+<!-- agent-pr-review:deferred pr=<n> review=<reviewed short sha> finding=<ID> -->
+**Deferred to this issue from PR #<n>** by the owner's [decision](<comment URL or "in session">):
+<the finding's title>
+
+- **What to do here:** <the finding's suggested fix, or the chosen option's text>
+- **Where:** <the finding's locations>
+- **Covered by:** <the criterion or owned path the option quoted>
+```
+
+Post it with `<SKILL_DIR>/scripts/post-deferral.sh <N> <note file>`, and give the finding
+the status `deferred to #N` with a link to the note. If the issue is closed, the note is
+not posted: add it to your questions for the owner (step 6).
 
 The response's Decision column is the review's record of a decision. Do not turn a decision
 into a rule in instruction files or skills, and do not post it on the tracking issue: that
@@ -327,8 +349,8 @@ conversation shows each round in order. Format:
 Every finding in the report gets a row, in the report's order. A finding you fixed in a
 different way from its suggested fix gets a note saying why. Statuses: `fixed`,
 `decided, no change`, `already fixed`, `disputed`, `not fixed` (nits only),
-`not fixed: needs owner`, `follow-up issue` (with the issue linked), `waiting for decision`,
-`for the owner`. A `disputed` or `not fixed` row always has a note with the reason. The
+`not fixed: needs owner`, `follow-up issue` (with the issue linked), `deferred to #N` (with
+the note linked), `waiting for decision`, `for the owner`. A `disputed` or `not fixed` row always has a note with the reason. The
 Decision column is filled for every finding the owner decided, and left empty otherwise.
 
 When decisions arrive after you have posted, run the skill again. It posts a new response;

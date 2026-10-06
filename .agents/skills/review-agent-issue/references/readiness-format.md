@@ -18,10 +18,16 @@ starts. Nothing about who wrote the issue or why.>
 
 Round: <k> · Questions: <n> · Assumptions: <n> · Suggested edits: <n> · Spec commit: <full sha of the default branch read> · Harness version: <version>
 
+**Check these first:** <the IDs of the (at most three) assumptions most likely to be wrong
+and most expensive if they are, as `A-2, A-5`; or "none">
+
 **To answer:** reply on this issue with one line per item, in the form shown under each
 (`Decision r<k>/<ID>: <answer>`): an option's letter or your own words for a question,
-"accept" or "reject" for an edit, and your correction for an assumption you disagree with.
-Then ask for the apply step, which writes your answers into the issue's description.
+"accept" or "reject" for an edit, "ok" or your correction for an assumption. To take every
+recommendation and edit at once, `Decision r<k>/ALL: accept`; it does not cover the
+assumptions under "Check these first" or those marked "(verify first)" or "(would have
+asked)", which each need their own line. Only `Decision` lines are applied, never other
+replies. Then ask for the apply step, which writes your answers into the issue's description.
 
 ### Questions
 
@@ -32,13 +38,14 @@ Then ask for the apply step, which writes your answers into the issue's descript
 - **Why it matters:** <what goes wrong, and how expensively, if the agent guesses wrong>
 - **Source:** <the issue's words, or the PRD, ADR or decision it conflicts with, quoted with
   its location; or "the issue is silent on this">
-- **Options:**
+- **Options:** (one per line)
   - (a) <option>: <what it means for the code and for users>. Scope: within the issue | adds <...>
-  - (b) <option>: <...>. Scope: <...>
+  - (b) <option>: <...>. Scope: <...>. Owned paths: + `<path>`
 - **Recommendation:** (<letter>), because <reason, citing a source the owner can check>.
   No conditions here: if the recommended choice holds only under a condition, write the
   condition into that option's own text. The apply step records the chosen option's text,
-  not the recommendation.
+  not the recommendation, and adds each path an option names after "Owned paths: +" to the
+  issue's owned paths.
 - **Reply:** `Decision r<k>/Q-1: (<letter>)`
 
 ### Assumptions
@@ -47,7 +54,7 @@ The coding agent will follow these unless you correct them.
 
 | ID | Assumption | Basis | Makes stale | To correct |
 |---|---|---|---|---|
-| A-1 | <what the agent will do> | <the source or convention it follows> | <doc lines this assumption contradicts and the agent must update, as `path:line`; or "nothing"> | `Decision r<k>/A-1: <your correction>` |
+| A-1 | <what the agent will do> | <the source or convention it follows> | <every line this assumption contradicts and the agent must update, as `path:line`, one per line (`<br>`): docs, comments, test names, and lines that name this issue's number; or "nothing"> | `Decision r<k>/A-1: <your correction>` |
 
 An assumption the review could not check, such as how an external library, service or
 platform behaves, is marked **(verify first)**: the agent establishes the behaviour before
@@ -72,7 +79,9 @@ After:
 
 ### Reuse, dependencies and risks
 
-- **Reuse:** <existing code to use instead of writing new, with path:line>
+- **Reuse:** <existing code to use instead of writing new, with path:line, and how: "import
+  `<name>` from `<path>`"; "move `<name>` from `<path>` to a shared module and import it
+  from both" (naming the owned path that adds); or a question, when neither fits>
 - **Dependencies:** <issues or PRs this work needs, and their state>
 - **Overlaps:** <open PRs touching the same files>
 - **Size:** <estimate, and a suggested split if the issue is too broad>
@@ -107,11 +116,25 @@ The review is advisory: the owner decides whether work starts.
 ## Rules
 
 - **A question earns its place** only if a reasonable implementer could go two ways and a
-  wrong guess would cost a fix round, rework, or a behaviour the owner did not want. Every
-  other open point is an assumption. At most seven questions; anything beyond becomes an
-  assumption marked "(would have asked)".
-- **Options are real alternatives** with their consequences and scope labels; recommend
-  one, preferring what stays within the issue, and cite why.
+  wrong guess would cost a fix round, rework, or a behaviour the owner did not want. A
+  design the work must produce (sample data, how two flags interact, where a matcher's
+  boundaries lie or how far a negation reaches, the rules that recognise an input) is a
+  question, never an assumption: the agent would otherwise invent it. At most seven
+  questions; anything beyond becomes an assumption marked "(would have asked)".
+- **An assumption earns its place** only if it changes what the agent would do. It states
+  something a reviewer can check against the code or the spec, names who acts ("the agent
+  adds ..."), and predicts nothing about tests not yet written.
+- **Options are real alternatives** with their consequences and scope labels, one per line;
+  recommend one, preferring what stays within the issue, and cite why. An option that needs
+  a path outside the owned paths names it as "Owned paths: + `path`".
+- **Reuse is said as an action:** import it, move it and share it, or ask. Never "like
+  `X`" or "as `X` does": an agent told to follow an example copies it. Code that is not
+  exported, or lies outside the owned paths, is reused by naming the export to add (and
+  the owned path that needs) or by asking.
+- **One story:** the questions' options, the assumptions, the summary and the suggested
+  edits agree with each other and with the issue's goal. An issue line that an
+  assumption's basis shows is wrong gets an edit; a stale line is cited the same way
+  wherever it appears.
 - **Never re-ask** what an earlier round, an applied decision on this issue, or a decision
   recorded elsewhere in the project (an ADR, the PRD, an owner decision on another PR)
   already settled; cite it as the basis of an assumption instead.
@@ -119,8 +142,8 @@ The review is advisory: the owner decides whether work starts.
   ("When <condition>, <observable result>"), then any detail. An edit that prescribes
   following a precedent ("test it as #142 does") is suggested only after checking that the
   precedent's preconditions hold for this issue (same kind of input, same infrastructure).
-  A criterion that only a browser or a person can check gets an edit to the issue's
-  Verification section saying how it will be checked.
+  Route a criterion a test cannot check to wherever the project records manual
+  verification (a section of the issue template, the PR template, or the PR description).
 - **Suggested edits are exact:** the "Before" text exists verbatim in the current
   description, so the apply step can make the change mechanically.
 - **Line numbers** are lines of files at the default branch's commit named in the header.

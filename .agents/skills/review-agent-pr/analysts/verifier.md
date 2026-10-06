@@ -24,6 +24,13 @@ For each finding, in every findings file:
    be there, and the rule must apply to this kind of file or situation. For a precedent,
    open the cited examples and check they really agree with each other. For a spec clause,
    check that no later issue comment changed it.
+   - **Did the spec move under the work?** For a finding measured against a direction
+     document (PRD, ADR, architecture), check `<RUN_DIR>/spec-moves.md` and
+     `spec-moves.patch` (named in the manifest). If the clause changed on the base branch
+     after the work began or after the readiness review settled the issue, and the PR
+     follows the earlier text, add the field "Spec moved" naming the commit and the
+     section, and settle the action as `needs owner decision` (step 8): options to bring
+     the PR to the new text, or keep it and open a follow-up issue.
 3. **Is it this PR's doing?** Check the location against `<RUN_DIR>/diff.patch`. If the
    lines were not added or changed by the PR and the PR did not rely on them, reject as
    pre-existing.
@@ -128,6 +135,14 @@ Then, across all files:
     - **The class, and the next round:** where a fix addresses one instance of a pattern,
       name the other instances in the PR. Rewrite suggestions that would plant the next
       finding (see the finding schema).
+    - **Upcoming issues** (`<RUN_DIR>/related-issues.md`, named in the manifest): a
+      suggested fix or recommended option that would pre-empt or contradict a related
+      issue's acceptance criteria or settled decisions is rewritten to agree with them, or,
+      when it cannot, becomes `needs owner decision` quoting both. Where a related issue's
+      quoted acceptance criterion or owned path covers a finding's fix, you may add a
+      "Defer to #N" option as the finding schema describes, never for a blocker, a major
+      behaviour defect, or a fix without which this PR ships wrong; a finding with that
+      option is `needs owner decision`, and the recommendation still weighs fixing now.
     - **Nits:** on a re-review, keep at most five nits in all, the ones that matter most;
       reject the rest with the reason "nit cap".
 

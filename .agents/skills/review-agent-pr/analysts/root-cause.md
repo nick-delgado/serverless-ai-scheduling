@@ -136,7 +136,9 @@ For each cause or pattern worth acting on, write a concrete proposal. Rules:
 <one row per blocker, major and minor; the evidence cell is one sentence with its path:line.
 The failure class is exactly one from the tracked list in the manifest (or, if it has none,
 `<SKILL_DIR>/references/failure-classes.md`), or `other`. It names what went wrong, which
-stays stable while causes shift; the project counts it to see whether its changes worked.>
+stays stable while causes shift; the project counts it to see whether its changes worked.
+A finding the verifier marked "Spec moved" is always `spec-moved`, and its cause is the
+spec change, not the agent.>
 
 Nits, not analysed: <IDs, or "none">
 

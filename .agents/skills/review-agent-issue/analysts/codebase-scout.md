@@ -31,6 +31,18 @@ Search for code the work should use rather than write again: helpers, types, sch
 constants, test utilities, fixtures. Search by likely names and synonyms and by the kind of
 data involved. Cite each with `path:line` and what it does. Record your searches.
 
+For each, say how it can be reused: **import** (it is exported, and importing it needs no
+path outside the owned paths); **move and share** (it is not exported or lives in another
+module: name the export to add or the shared module to move it to, and the owned path that
+needs); or **ask** (neither fits, for example it belongs to another issue's open work).
+
+### 3a. Lines the work will make stale
+
+List every line the work will make wrong: docs, code comments, test names and descriptions,
+and any line that names this issue's number (`#<n>`, "issue <n>", a TODO pointing at it).
+Search for the issue's number and for the names the criteria change. One `path:line` per
+entry.
+
 ### 4. Dependencies and overlaps
 
 - Issues the issue depends on or links to: open or closed, and whether their work has
@@ -73,8 +85,12 @@ deprecated module the work would build on.
 <gaps, line-number paths, missing paths; or "Cover the map." or "The issue lists none.">
 
 ## Reuse
-| What | Where | Use for |
-|---|---|---|
+| What | Where | Use for | How (import / move and share: <export or module, owned path> / ask) |
+|---|---|---|---|
+
+## Lines made stale
+| Line | Why it goes stale |
+|---|---|
 
 ## Searches run
 | Query | Purpose | Hits |
