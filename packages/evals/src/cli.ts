@@ -7,7 +7,10 @@
  * Live runs call Bedrock (cost real money): every call goes through the shared per-model rate limiter
  * with 429 backoff, a budget guard stops the run at `--max-cost`, and the estimated cost is printed
  * before the first call. Results: `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}`
- * (git-ignored).
+ * (git-ignored), and a copy outside every checkout (#195), in
+ * `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/<checkout directory name>/` (default
+ * `~/.local/state/…`; `EVAL_RESULTS_COPY_DIR` replaces the directory above `<checkout directory name>`;
+ * see `results-copy.ts`). The last line prints both `.json` paths; a `--dry-run` writes neither.
  *
  * Scenario mode drives unscripted turns with the LLM patient simulator (#31) on `--simulator-profile`
  * (default `SIMULATOR_MODEL_PROFILE`, else `sonnet-4.6`), through the same rate-limited client as the
@@ -27,7 +30,8 @@
  * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
  * (list cases and the estimate, no calls), `--out <dir>`.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,7 +47,6 @@ import {
   orUsageError,
   orUsageErrorAsync,
   parseCliArgs,
-  resultsBasePath,
   runOptions,
   selectCases,
   simulatorSetup,
@@ -51,11 +54,19 @@ import {
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
 import { rateLimited } from "./rate-limit";
+import {
+  prepareResultsCopyDir,
+  resultsCopyDir,
+  resultsWrittenMessages,
+  writeRunResults,
+} from "./results-copy";
 import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
+/** The checkout running the CLI: `packages/evals/src/../../..`. */
+const CHECKOUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's tested functions (setup, options, the calibration step and files, usage errors); what stays here is untested wiring: the client, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and the results writes. */
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's tested functions (setup, options, the calibration step and files, usage errors); what stays here is untested wiring: the client, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results lines. */
 function fail(message: string): never {
   console.error(`evals: ${message}`);
   process.exit(2);
@@ -80,6 +91,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Checked before the dry-run return and any model call; created only for a live run (#195, r1/Q-3, r1/Q-4).
+  const copyDir = orUsageError(
+    () => resultsCopyDir({ env: process.env, home: homedir(), checkout: CHECKOUT }),
+    fail,
+  );
   const cases = selectCases(loaded, args);
   if (cases.length === 0) fail("no cases match");
   const setup = orUsageError(
@@ -98,6 +114,7 @@ async function main(): Promise<void> {
   );
   for (const line of skips) console.log(line);
   if (args.dryRun) return;
+  orUsageError(() => prepareResultsCopyDir(copyDir), fail);
 
   const report = await runSuite(
     cases,
@@ -113,12 +130,10 @@ async function main(): Promise<void> {
     }),
   );
 
-  mkdirSync(args.out, { recursive: true });
-  const base = resultsBasePath(report, args.out);
   const md = markdownSummary(report);
-  writeFileSync(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
-  writeFileSync(`${base}.md`, `${md}\n`);
-  console.log(`\n${md}\n\nevals: wrote ${base}.json`);
+  const written = resultsWrittenMessages(writeRunResults(report, md, { out: args.out, copyDir }));
+  if (written.warning !== undefined) console.error(written.warning);
+  console.log(`\n${md}\n\n${written.line}`);
   process.exitCode = exitCodeFor(report.summary);
 }
 
