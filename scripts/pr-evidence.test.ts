@@ -19,20 +19,21 @@ const table = (...files: string[]) =>
 describe("killedFiles", () => {
   it("reads the File cell of every row of every mutate table, CRLF bodies included", () => {
     const body = [
-      "| Intro | `not/a/table.ts` |",
+      // Rows outside a table, KILLED status included, name nothing.
+      "| Intro | `not/a/table.ts` | c | KILLED | — |",
       // Indented, as inside a list item or <details>.
       table("scripts/a.ts", "packages/x/src/b.ts").replaceAll("\n", "\n  ").replace(/^/, "  "),
       "",
-      "| `scripts/after-the-table.ts` |",
+      "| 2 | `scripts/after-the-table.ts` | c | KILLED | — |",
       table("scripts/c.ts").replaceAll("\n", "\r\n"),
     ].join("\n");
     expect([...killedFiles(body)]).toEqual(["scripts/a.ts", "packages/x/src/b.ts", "scripts/c.ts"]);
   });
 
   it("ends a table at the first line that isn't a row", () => {
-    expect([...killedFiles(`${table("scripts/a.ts")}\ntext\n| 2 | \`scripts/b.ts\` |`)]).toEqual([
-      "scripts/a.ts",
-    ]);
+    expect([
+      ...killedFiles(`${table("scripts/a.ts")}\ntext\n| 2 | \`scripts/b.ts\` | c | KILLED | — |`),
+    ]).toEqual(["scripts/a.ts"]);
   });
 
   it("reads a file in a longer fence, or with escaped pipes in the cells before it", () => {
