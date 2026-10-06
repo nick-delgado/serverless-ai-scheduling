@@ -1,6 +1,6 @@
 # 2026-10-06 — Six "noticed" minors from the judge's PR, tidied, and a hash that pins the judge's prompt to its version
 
-**Chapter:** 4. Teaching the agent to schedule
+**Chapter:** 5. What the evals showed
 **Milestone:** M3
 **Related:** issue #183, PR #191, PR #165 (the LLM judge, #32), issues #34 and #159
 
