@@ -32,7 +32,7 @@ Amplify Auth with Cognito only (ADR-005): `src/auth/` wraps `signIn`, `signOut` 
 
 ## The mock API
 
-`src/mocks` stands in for `POST /api/session` and `POST /api/chat`. Its responses are validated against `@sched/contracts`, and the chat stream keeps the real API's timing: no response headers until the first event (`firstEventMs`, default 1 s), so start a "processing" state on send, not on the response (ADR-007).
+`src/mocks` stands in for `POST /api/session` and `POST /api/chat`. Its responses are validated against `@sched/contracts`, and the chat stream keeps the real API's timing: no response headers until the first event, so start a "processing" state on send, not on the response (ADR-007). A turn that continues a conversation sends its first event after `firstEventMs` (default 1 s). A turn that starts one sends its `conversation` event after `latencyMs`, as the real API does once the message is stored, and the reply `firstEventMs` later; its `rate_limited` and `unavailable` faults then answer 200 with that event and an `error` (#160).
 
 - **Dev server:** on by default. `VITE_MOCK_API=off npm run dev -w apps/web` turns it off. In the browser console, `schedMock.set({ chatFault: "mid_stream" })` changes the options (kept in local storage), `schedMock.options()` shows them, and `schedMock.reset()` restores the defaults.
 - **Tests:** `src/test/setup.ts` installs it for every test, with no delays and no faults. `configureMockApi({ ... })` from `src/mocks/node` changes options for one test; they reset after each test. `server.use(...)` from the same module overrides a handler.

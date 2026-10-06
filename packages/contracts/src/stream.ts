@@ -32,6 +32,19 @@ export const ChatTextResetEvent = z.strictObject({
   keepChars: z.int().nonnegative(),
 });
 
+/**
+ * Names the new conversation a turn opened (contracts v1.2, #160). Sent once, as the first event, as
+ * soon as the patient's message is stored and before the agent runs, on a turn that starts a
+ * conversation (no `conversationId` in the request, or one that read as empty). The client remembers
+ * it as it does `done.conversationId`, so a Retry after the stream is cut continues the conversation
+ * instead of storing the message again in a new one (FR-015). Not terminal. A turn that continues a
+ * stored conversation doesn't send it.
+ */
+export const ChatConversationEvent = z.strictObject({
+  type: z.literal("conversation"),
+  conversationId: ConversationId,
+});
+
 export const ChatDoneEvent = z.strictObject({
   type: z.literal("done"),
   conversationId: ConversationId,
@@ -65,6 +78,7 @@ export const ChatStreamEvent = z.discriminatedUnion("type", [
   ChatStatusEvent,
   ChatTextDeltaEvent,
   ChatTextResetEvent,
+  ChatConversationEvent,
   ChatDoneEvent,
   ChatErrorEvent,
 ]);

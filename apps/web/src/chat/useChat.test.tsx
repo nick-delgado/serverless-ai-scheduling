@@ -221,6 +221,8 @@ describe("useChat: which failures without an error event offer Retry (#138)", ()
     await waitFor(() => expect(result.current.messages).toHaveLength(2));
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
+    // Nothing named a conversation before the failure, so the first turn's Retry has none (#160).
+    expect(bodies[1]?.conversationId).toBeUndefined();
   });
 
   it.each([
@@ -237,6 +239,52 @@ describe("useChat: which failures without an error event offer Retry (#138)", ()
     const { result, onUnauthorized } = await sendFailing(new ChatHttpError(401));
     expect(result.current.error).toEqual({ message: SIGNED_OUT_ERROR, retryable: false });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useChat: the conversation event (#160)", () => {
+  const SUB = "c2a4e6b8-1d3f-4a5b-8c7d-9e0f1a2b3c4d";
+  const NAMED = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+  const named: ChatStreamEvent = { type: "conversation", conversationId: NAMED };
+
+  /** A ChatApi whose first send delivers the conversation event, then rejects with `failure`. */
+  function cutAfterNaming(failure: unknown) {
+    const bodies: ChatRequest[] = [];
+    const api: ChatApi = {
+      getSession: () => Promise.resolve(SESSIONS.no_upcoming),
+      sendChat: (request, onEvent) => {
+        bodies.push(request);
+        if (bodies.length === 1) {
+          onEvent(named);
+          return Promise.reject(failure);
+        }
+        const answer = doneEvent({ conversationId: NAMED, messageId: "msg_000001" });
+        onEvent(answer);
+        return Promise.resolve([answer]);
+      },
+    };
+    return { api, bodies };
+  }
+
+  it.each([
+    ["a stream cut after it", new ChatStreamEndedError("ended")],
+    ["a network error mid-read", new TypeError("network error")],
+  ])("Retry after %s resends with the conversation it named", async (_, failure) => {
+    localStorage.clear();
+    const { api, bodies } = cutAfterNaming(failure);
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant, sub: SUB }));
+    await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
+    act(() => {
+      result.current.send("Hi");
+    });
+    await waitFor(() => expect(result.current.error).toEqual({ message: GENERIC_ERROR, retryable: true }));
+    // Remembered as `done` would be: for the next send and for a reload (FR-014).
+    expect(readLoginSession()).toEqual({ sub: SUB, conversationId: NAMED });
+
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    expect(bodies[0]?.conversationId).toBeUndefined();
+    expect(bodies[1]).toEqual({ ...bodies[0], conversationId: NAMED });
   });
 });
 

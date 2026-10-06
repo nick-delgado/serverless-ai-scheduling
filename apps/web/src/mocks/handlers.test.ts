@@ -52,6 +52,12 @@ async function readEvents(
   return { events, chunks, arrivals };
 }
 
+/** Narrow away undefined, failing the test instead of using a non-null assertion. */
+function defined<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("expected a value");
+  return value;
+}
+
 /** Milliseconds from now until `promise` settles (resolved or rejected). */
 async function elapsedUntilSettled(promise: Promise<unknown>): Promise<number> {
   const start = performance.now();
@@ -93,17 +99,29 @@ describe("POST /api/session", () => {
 });
 
 describe("POST /api/chat", () => {
-  it("streams status, then text deltas, then done, as NDJSON", async () => {
+  it("streams the new conversation, then status, then text deltas, then done, as NDJSON", async () => {
     const res = await postChat();
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe(NDJSON_CONTENT_TYPE);
     const { events } = await readEvents(res);
 
-    expect(events[0]).toMatchObject({ type: "status", tool: "check_availability" });
-    expect(events.slice(1, -1).every((e) => e.type === "text_delta")).toBe(true);
+    const named = events[0];
+    if (named?.type !== "conversation") throw new Error("expected the conversation event first");
+    expect(events[1]).toMatchObject({ type: "status", tool: "check_availability" });
+    expect(events.slice(2, -1).every((e) => e.type === "text_delta")).toBe(true);
     expect(events.length).toBeGreaterThan(10);
-    expect(events.at(-1)?.type).toBe("done");
+    expect(events.at(-1)).toMatchObject({ type: "done", conversationId: named.conversationId });
     expect(visibleText(events)).toBe(REPLIES.tools.text);
+  });
+
+  it("names a new conversation for an ID it hasn't seen (the real API reads it as empty), never that ID", async () => {
+    const unknown = "5b8e2c1a-7d6f-4e3b-9a1c-2d3e4f5a6b7c";
+    const { events } = await readEvents(
+      await postChat({ conversationId: unknown, clientMessageId: CLIENT_MESSAGE_ID, text: "Hi" }),
+    );
+    expect(events[0]?.type).toBe("conversation");
+    expect(events[0]).not.toHaveProperty("conversationId", unknown);
+    expect(events.at(-1)).toMatchObject({ type: "done", messageId: "msg_000002" });
   });
 
   it("starts a conversation, then continues it with increasing message IDs", async () => {
@@ -119,8 +137,10 @@ describe("POST /api/chat", () => {
           text: "Book Wednesday.",
         }),
       )
-    ).events.at(-1);
-    expect(second).toMatchObject({
+    ).events;
+    // A continued conversation isn't named again.
+    expect(second.map((e) => e.type)).not.toContain("conversation");
+    expect(second.at(-1)).toMatchObject({
       type: "done",
       conversationId: first.conversationId,
       messageId: "msg_000004",
@@ -154,10 +174,27 @@ describe("POST /api/chat", () => {
   it("holds the response headers until the first event, then streams events in separate chunks", async () => {
     configureMockApi({ firstEventMs: 120, eventIntervalMs: 5, chatReply: "plain" });
     const sent = performance.now();
-    const res = await postChat();
+    const res = await postChat({
+      conversationId: RESTORE_CONVERSATION_ID,
+      clientMessageId: CLIENT_MESSAGE_ID,
+      text: "Yes please.",
+    });
     expect(performance.now() - sent).toBeGreaterThanOrEqual(100);
     const { events, chunks } = await readEvents(res);
     expect(chunks).toBe(events.length);
+  });
+
+  it("sends a new conversation's event after latencyMs, and the model's first event firstEventMs later", async () => {
+    configureMockApi({ latencyMs: 80, firstEventMs: 200, eventIntervalMs: 5, chatReply: "plain" });
+    const sent = performance.now();
+    const res = await postChat();
+    const headers = performance.now() - sent;
+    expect(headers).toBeGreaterThanOrEqual(60);
+    expect(headers).toBeLessThan(180);
+    const { events, arrivals, chunks } = await readEvents(res);
+    expect(events[0]?.type).toBe("conversation");
+    expect(chunks).toBe(events.length);
+    expect(defined(arrivals[1]) - sent).toBeGreaterThanOrEqual(240);
   });
 
   it("waits eventIntervalMs between events after the first", async () => {
@@ -173,13 +210,19 @@ describe("POST /api/chat", () => {
   });
 
   // Every response that doesn't wait on the model: the faults that answer before the body is read,
-  // the 400 for a malformed body, and the 429/503 faults.
+  // the 400 for a malformed body, the daily cap, and the 429/503 faults in a continued conversation
+  // (on a first turn they answer 200 after the `conversation` event, timed above).
+  const continued = {
+    conversationId: RESTORE_CONVERSATION_ID,
+    clientMessageId: CLIENT_MESSAGE_ID,
+    text: "Yes please.",
+  };
   it.each([
     ["network", undefined],
     ["unauthorized", undefined],
     ["none", { clientMessageId: "not-a-uuid", text: "" }],
-    ["rate_limited", undefined],
-    ["unavailable", undefined],
+    ["rate_limited", continued],
+    ["unavailable", continued],
     ["daily_cap", undefined],
   ] as const)("waits latencyMs before answering with chatFault %s", async (chatFault, body) => {
     configureMockApi({ chatFault, latencyMs: 80 });
@@ -202,14 +245,67 @@ describe("POST /api/chat", () => {
   it.each([
     ["rate_limited", 429, "RATE_LIMITED"],
     ["unavailable", 503, "AGENT_UNAVAILABLE"],
-  ] as const)("injects %s as %i with one retryable %s event", async (chatFault, status, code) => {
-    configureMockApi({ chatFault });
-    const res = await postChat();
-    expect(res.status).toBe(status);
-    expect(parseChatResponseBody(await res.text())).toEqual([
-      expect.objectContaining({ type: "error", code, retryable: true }),
-    ]);
-  });
+  ] as const)(
+    "injects %s in a continued conversation as %i with one retryable %s event that names it",
+    async (chatFault, status, code) => {
+      configureMockApi({ chatFault });
+      const res = await postChat({
+        conversationId: RESTORE_CONVERSATION_ID,
+        clientMessageId: CLIENT_MESSAGE_ID,
+        text: "Yes please.",
+      });
+      expect(res.status).toBe(status);
+      expect(parseChatResponseBody(await res.text())).toEqual([
+        expect.objectContaining({
+          type: "error",
+          code,
+          retryable: true,
+          conversationId: RESTORE_CONVERSATION_ID,
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    ["rate_limited", "RATE_LIMITED"],
+    ["unavailable", "AGENT_UNAVAILABLE"],
+  ] as const)(
+    "injects %s on a turn that starts a conversation as 200, the conversation event, then a retryable %s naming it",
+    async (chatFault, code) => {
+      configureMockApi({ chatFault });
+      const res = await postChat();
+      expect(res.status).toBe(200);
+      const events = parseChatResponseBody(await res.text());
+      const named = events[0];
+      if (named?.type !== "conversation") throw new Error("expected the conversation event first");
+      expect(events).toEqual([
+        named,
+        expect.objectContaining({
+          type: "error",
+          code,
+          retryable: true,
+          conversationId: named.conversationId,
+        }),
+      ]);
+    },
+  );
+
+  it.each(["rate_limited", "unavailable"] as const)(
+    "stores the patient's message on a continued turn that fails with %s, so the next reply counts it",
+    async (chatFault) => {
+      configureMockApi({ chatFault });
+      await (await postChat(continued)).text();
+      configureMockApi({ chatFault: "none" });
+      const { events } = await readEvents(await postChat(continued));
+      // The restored conversation's next message is msg_000003: the failed turn stored it, so the
+      // resend is msg_000004 (the mock ignores clientMessageId) and its reply msg_000005.
+      expect(events.at(-1)).toMatchObject({
+        type: "done",
+        conversationId: RESTORE_CONVERSATION_ID,
+        messageId: "msg_000005",
+      });
+    },
+  );
 
   it("injects the daily cap as 429 with one RATE_LIMITED event that isn't retryable and names the front desk", async () => {
     configureMockApi({ chatFault: "daily_cap" });
@@ -224,6 +320,28 @@ describe("POST /api/chat", () => {
     expect(events[0]).toHaveProperty("message", DAILY_CAP_MESSAGE);
   });
 
+  it("remembers a conversation whose first turn failed after naming it, so a Retry with its ID continues it", async () => {
+    configureMockApi({ chatFault: "unavailable" });
+    const named = parseChatResponseBody(await (await postChat()).text())[0];
+    if (named?.type !== "conversation") throw new Error("expected the conversation event first");
+
+    configureMockApi({ chatFault: "none" });
+    const { events } = await readEvents(
+      await postChat({
+        conversationId: named.conversationId,
+        clientMessageId: CLIENT_MESSAGE_ID,
+        text: "Any openings with Dr. Lee?",
+      }),
+    );
+    expect(events.map((e) => e.type)).not.toContain("conversation");
+    // The mock ignores clientMessageId, so the resend counts as a new message after the stored one.
+    expect(events.at(-1)).toMatchObject({
+      type: "done",
+      conversationId: named.conversationId,
+      messageId: "msg_000003",
+    });
+  });
+
   it("injects a failure mid-stream: 200, part of the reply, then a retryable error", async () => {
     configureMockApi({ chatFault: "mid_stream" });
     const res = await postChat();
@@ -233,8 +351,15 @@ describe("POST /api/chat", () => {
     expect(partial).not.toBe("");
     expect(partial.length).toBeLessThan(REPLIES.tools.text.length);
     expect(REPLIES.tools.text.startsWith(partial)).toBe(true);
+    const named = events[0];
+    if (named?.type !== "conversation") throw new Error("expected the conversation event first");
     expect(events.filter(isTerminalEvent)).toEqual([
-      expect.objectContaining({ type: "error", code: "AGENT_UNAVAILABLE", retryable: true }),
+      expect.objectContaining({
+        type: "error",
+        code: "AGENT_UNAVAILABLE",
+        retryable: true,
+        conversationId: named.conversationId,
+      }),
     ]);
     expect(events.at(-1)?.type).toBe("error");
   });

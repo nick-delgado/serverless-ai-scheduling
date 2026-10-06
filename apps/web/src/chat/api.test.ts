@@ -1,8 +1,8 @@
-import { type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
+import { type ChatRequest, type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { REPLIES, SESSIONS } from "../mocks/fixtures";
+import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi, server } from "../mocks/node";
 import { type ChatApi, ChatHttpError, createChatApi } from "./api";
 import { ChatProtocolError } from "./streamClient";
@@ -24,9 +24,9 @@ function captureAuthorization() {
   return seen;
 }
 
-async function send(api = createChatApi()) {
+async function send(api = createChatApi(), body: ChatRequest = request) {
   const seen: ChatStreamEvent[] = [];
-  const events = await api.sendChat(request, (event) => seen.push(event));
+  const events = await api.sendChat(body, (event) => seen.push(event));
   return { seen, events };
 }
 
@@ -117,7 +117,8 @@ describe("createChatApi", () => {
     expect(contentType).toBe("application/json");
     expect(body).toEqual(request);
     expect(seen).toEqual(events);
-    expect(seen.slice(0, -1)).toEqual(REPLIES.tools.events);
+    expect(seen[0]?.type).toBe("conversation");
+    expect(seen.slice(1, -1)).toEqual(REPLIES.tools.events);
     expect(seen.at(-1)?.type).toBe("done");
   });
 
@@ -125,7 +126,8 @@ describe("createChatApi", () => {
     "delivers the error event of a %s response instead of throwing",
     async (chatFault) => {
       configureMockApi({ chatFault });
-      const { seen } = await send();
+      // A continued conversation, which the mock still answers 429/503 (#160).
+      const { seen } = await send(undefined, { ...request, conversationId: RESTORE_CONVERSATION_ID });
       expect(seen).toEqual([expect.objectContaining({ type: "error", retryable: true })]);
     },
   );

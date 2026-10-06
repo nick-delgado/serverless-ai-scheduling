@@ -4,22 +4,26 @@
  * A turn runs from send until its reply has been fully typed out:
  * - `waiting` is true from send until the first `text_delta` arrives (FR-012: the typing indicator
  *   starts on send, because the API's headers only come with its first event, ADR-007);
+ * - a `conversation` event (the first line of a turn that starts a conversation, #160) sets the
+ *   conversation as `done` does, before the agent runs;
  * - `status` events become tool-status chips for the rest of the turn;
  * - `text_delta` / `text_reset` go through the typewriter (FR-013); `done` lets it finish;
  * - when the typewriter has revealed everything, the reply joins the messages and is announced once
  *   through the live region (not per character).
  *
- * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list. An
- *   `error` event that names a conversation (the server stored the message, #104) sets it as `done`
- *   does, so Retry after a failed first turn continues that conversation, and so does a reload.
+ * Errors (FR-015, #27) end the turn with `error` set; the patient's message stays in the list. A
+ *   `conversation` event, or an `error` event that names a conversation (the server stored the
+ *   message, #104), sets it as `done` does, so Retry after a failed first turn continues that
+ *   conversation, and so does a reload.
  * - Retry is offered only for a stream `error` event with `retryable: true`, a network failure
  *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`), a 5xx
  *   without an `error` event, or a stream that ends without `done` or `error` (`ChatStreamEndedError`,
  *   #138). It resends the same text with the same `clientMessageId` and `conversationId`, without
  *   adding the message again; the server de-duplicates it (#104). Any other error shows its message
  *   without Retry (the daily cap's front-desk number); so do a 4xx without an event and a malformed
- *   stream. A failed first turn whose failure named no conversation resends without one, which stores
- *   the message again in a new conversation (#160).
+ *   stream. A first turn that failed before its `conversation` line arrived (a network failure
+ *   before any byte, or API Gateway's or CloudFront's own 5xx) resends without one, which stores the
+ *   message again in a new conversation (#160).
  * - A 401 means the sign-in has ended: the session call's 401, a turn's 401 without an event body
  *   (API Gateway's authorizer), and a turn's `UNAUTHORIZED` error event (the chat handler's own 401).
  *   The page shows `SIGNED_OUT_ERROR` without Retry and calls `onUnauthorized`, which signs the
@@ -250,6 +254,10 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
           case "text_reset":
             typewriter.reset(event.keepChars);
             if (typewriter.received.length === 0) setTurn((t) => (t ? { ...t, waiting: true } : t));
+            break;
+          case "conversation":
+            // Sent before the agent runs on a turn that starts a conversation (#160).
+            rememberConversation(event.conversationId);
             break;
           case "done": {
             rememberConversation(event.conversationId);
