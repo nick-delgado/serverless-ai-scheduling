@@ -114,7 +114,7 @@ describe("normalise / lostLines", () => {
     ]);
   });
 
-  it("flags a pointer rewritten in place, removed, or reordered (PR #175's ADR-008 edit)", () => {
+  it("flags a pointer rewritten in place, removed, or reordered", () => {
     const pointed = base.replace("We use X.", "We use X. *(Refined: a.)* *(Superseded: b.)*");
     const line = "We use X. *(Refined: a.)* *(Superseded: b.)*";
     expect(lostLines(pointed, pointed.replace("a.)*", "a, and done.)*"))).toEqual([line]);
@@ -124,7 +124,7 @@ describe("normalise / lostLines", () => {
     );
   });
 
-  it("flags a pointer rewritten or removed in an amendment, where line edits pass", () => {
+  it("flags a pointer rewritten or removed in an amendment, where line edits pass (PR #175's ADR-008 edit)", () => {
     const pointed = base.replace("Old.", "Old. *(Done in #1.)* *(Done in #1.)*");
     expect(lostPointers(pointed, pointed.replace("Old.", "New."))).toEqual([]);
     expect(lostPointers(pointed, pointed.replace("Old.", "New. *(Done in #2.)*"))).toEqual([]);
