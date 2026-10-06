@@ -233,6 +233,180 @@ describe("check_availability", () => {
     });
   });
 
+  describe("start_time: a clinic-local floor on every day (#170)", () => {
+    it("reaches a slot past the first five of a day: Dr. Lee at 2:30 PM on Thu Oct 15 (EDT)", async () => {
+      const result = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-15"),
+        time_of_day: "afternoon",
+        start_time: "14:30",
+      });
+      expect(outputOf(result).slots[0]).toMatchObject({
+        slot_id: "slot_lee_20261015T1830Z",
+        start_utc: "2026-10-15T18:30:00Z", // EDT, UTC-4
+        start_local: "Thursday, October 15, 2026 at 2:30 PM ET",
+      });
+      expect(localTimes(result)).toEqual([
+        "2:30 PM ET",
+        "3:00 PM ET",
+        "3:30 PM ET",
+        "4:00 PM ET",
+        "4:30 PM ET",
+      ]);
+      expect(outputOf(result).truncated).toBe(false);
+    });
+
+    it("applies the floor to every day on the wall clock: Dr. Alvarez at 11:30 AM, Nov 2-6 (EST)", async () => {
+      const { slots, truncated } = outputOf(
+        await run({
+          provider_id: "prov_alvarez",
+          date_range: days("2026-11-02", "2026-11-06"),
+          time_of_day: "morning",
+          start_time: "11:30",
+        }),
+      );
+      // 11:30 AM EST is 16:30Z; a UTC-4 reading would have put the floor an hour early.
+      expect(slots.map((s) => [s.start_utc, s.start_local])).toEqual([
+        ["2026-11-02T16:30:00Z", "Monday, November 2, 2026 at 11:30 AM ET"],
+        ["2026-11-03T16:30:00Z", "Tuesday, November 3, 2026 at 11:30 AM ET"],
+        ["2026-11-04T16:30:00Z", "Wednesday, November 4, 2026 at 11:30 AM ET"],
+        ["2026-11-05T16:30:00Z", "Thursday, November 5, 2026 at 11:30 AM ET"],
+        ["2026-11-06T16:30:00Z", "Friday, November 6, 2026 at 11:30 AM ET"],
+      ]);
+      expect(truncated).toBe(false);
+    });
+
+    it("judges the floor on each side of the DST change in one query", async () => {
+      const { slots } = outputOf(
+        await run({
+          provider_id: "prov_kowalski",
+          date_range: days("2026-10-30", "2026-11-02"),
+          start_time: "16:30",
+        }),
+      );
+      expect(slots.map((s) => s.start_utc)).toEqual(["2026-10-30T20:30:00Z", "2026-11-02T21:30:00Z"]);
+    });
+
+    it("rounds an off-boundary minute up to the next slot", async () => {
+      const result = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-15"),
+        start_time: "11:15",
+      });
+      expect(localTimes(result).at(0)).toBe("11:30 AM ET");
+    });
+
+    it("is no floor in effect before opening, or when omitted", async () => {
+      const early = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-15"),
+        start_time: "07:00",
+      });
+      expect(localTimes(early).at(0)).toBe("8:00 AM ET");
+
+      const lee = fixture.providers.find((p) => p.providerId === "prov_lee");
+      if (!lee) throw new Error("the fixture has no prov_lee");
+      const midnight = openSlot(lee, "2026-10-17T04:00:00Z"); // Sat Oct 17, 12:00 AM ET
+      repos = createInMemoryRepositories({
+        seed: { ...fixture, slots: [...fixture.slots, midnight] },
+        clock,
+        ids: sequentialIds(),
+      });
+      const input = { provider_id: "prov_lee", date_range: days("2026-10-17") };
+      expect(outputOf(await run(input)).slots.map((s) => s.slot_id)).toEqual([midnight.slotId]);
+      expect(outputOf(await run({ ...input, start_time: "00:01" })).slots).toEqual([]);
+    });
+
+    it("leaves today's past-date clamp as it is when the floor has already passed", async () => {
+      // Now is Mon Oct 5, 9:00 AM ET.
+      const result = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-05"),
+        start_time: "08:00",
+      });
+      expect(localTimes(result).at(0)).toBe("9:30 AM ET");
+    });
+
+    it("makes the specialty walk read on to later days when the floor filters out a day's early slots", async () => {
+      const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
+      const { slots, truncated } = outputOf(
+        await run({
+          specialty: "cardiology",
+          date_range: days("2026-10-06", "2026-10-09"),
+          start_time: "16:00",
+        }),
+      );
+      expect(byDay.mock.calls.map((c) => c[1])).toEqual(["2026-10-06", "2026-10-07", "2026-10-08"]);
+      expect(slots.map((s) => s.start_local)).toEqual([
+        "Tuesday, October 6, 2026 at 4:00 PM ET",
+        "Tuesday, October 6, 2026 at 4:30 PM ET",
+        "Wednesday, October 7, 2026 at 4:00 PM ET",
+        "Wednesday, October 7, 2026 at 4:30 PM ET",
+        "Thursday, October 8, 2026 at 4:00 PM ET",
+      ]);
+      expect(truncated).toBe(true);
+    });
+
+    it("accepts the last slot's start, and rejects closing time or later with the clinic hours", async () => {
+      const last = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-15"),
+        start_time: "16:30",
+      });
+      expect(localTimes(last)).toEqual(["4:30 PM ET"]);
+      const byProvider = vi.spyOn(repos.slots, "listOpenByProvider");
+      for (const startTime of ["17:00", "23:59"]) {
+        const error = errorOf(
+          await run({ provider_id: "prov_lee", date_range: days("2026-10-15"), start_time: startTime }),
+        );
+        expect(error.code).toBe("INVALID_INPUT");
+        expect(error.message).toContain("closing time");
+        expect(error.hint).toContain(CLINIC.hours);
+      }
+      expect(byProvider).not.toHaveBeenCalled();
+    });
+
+    it("rejects an afternoon start_time with time_of_day morning, but not with afternoon or any", async () => {
+      const error = errorOf(
+        await run({
+          provider_id: "prov_lee",
+          date_range: days("2026-10-15"),
+          time_of_day: "morning",
+          start_time: "12:00",
+        }),
+      );
+      expect(error.code).toBe("INVALID_INPUT");
+      expect(error.hint).toContain("time_of_day afternoon or any");
+      for (const timeOfDay of ["afternoon", "any"]) {
+        const result = await run({
+          provider_id: "prov_lee",
+          date_range: days("2026-10-15"),
+          time_of_day: timeOfDay,
+          start_time: "12:00",
+        });
+        expect(localTimes(result).at(0)).toBe("12:00 PM ET");
+      }
+      // A morning floor with time_of_day afternoon is an ordinary AND: afternoon slots only.
+      const afternoon = await run({
+        provider_id: "prov_lee",
+        date_range: days("2026-10-15"),
+        time_of_day: "afternoon",
+        start_time: "09:00",
+      });
+      expect(localTimes(afternoon).at(0)).toBe("12:00 PM ET");
+    });
+
+    it("rejects a start_time that isn't HH:MM 24-hour, in the schema", async () => {
+      for (const startTime of ["11:30 AM", "9:30", "24:00", "11:60"]) {
+        const error = errorOf(
+          await run({ provider_id: "prov_lee", date_range: days("2026-10-15"), start_time: startTime }),
+        );
+        expect(error.code).toBe("INVALID_INPUT");
+        expect(error.message).toMatch(/^Invalid input for check_availability/);
+      }
+    });
+  });
+
   describe("by specialty (AP-5 sparse index)", () => {
     it("uses the specialty+day index and stops once it has enough", async () => {
       const byDay = vi.spyOn(repos.slots, "listOpenBySpecialtyAndDay");
