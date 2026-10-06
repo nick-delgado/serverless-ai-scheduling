@@ -22,7 +22,7 @@ The readiness review settled the rule, the recorded and hand-built texts and the
 - **A bold heading is not a list item.** `**Tuesday, October 13**` starts with `*`, but the prefix needs a space or tab after the marker, so `**After 2:00 PM on Tuesday:**` above a list is prose and its time doesn't count. A bulleted heading, `- After 2:00 PM on Tuesday:`, does count (r1/A-8), and a test pins that known gap.
 - **The `invariants()` grading helper moved from `graders.test.ts` to `helpers.ts`**, as the review's reuse pointer suggested, so the new file imports it instead of copying it.
 - **Every recorded trial in the new tests is graded with `max_five_options` passed explicitly**, not only the two `clarify-*` ones A-6 names. The tests read only that result, and passing it keeps each case independent of its scenario's list.
-- **The two-digit bound of a list number is tested from below only.** Breaking `\d{1,2}` to `\d` turns the merged ten-line list's count from 10 to 9, and its test goes red. No test pins the upper bound (a three-digit "100." line), because no message numbers that far.
+- **A list number has one or two digits, as in #98's prefix.** Breaking `\d{1,2}` to `\d` turns the merged ten-line list's count from 10 to 9, and its test goes red; breaking it to `\d+` makes a hand-built line starting "100." a list line, and that test goes red. The upper-bound case was added after the review of `203a07f` (TEST-2).
 
 ## What surprised us
 
@@ -41,7 +41,7 @@ Per-message counted times of each recorded trial whose verdict could move, befor
 | `clarify-two-requests-one-message#1` | no | 0,1,0,**8**,3,3 | 0,1,0,**6**,3,3 | (fail, stays) |
 | `clarify-unsupported-specialty#1` | no | 0,0,**10**,5,5,0,1,1 | 0,0,**10**,5,5,0,1,1 | (fail, stays) |
 
-The new tests assert each of these verdicts. Before the grader changed, 14 of the new file's 20 cases failed. `npm run mutate` broke each part of the rule (each prefix alternative, the indent, the space after the marker, the number width, the line anchor, the line-index step, both line bounds, the fallback, the limit and the detail count): 18 edits, 18 killed.
+The new tests assert each of these verdicts. With the file as committed in `34afa54`, before that commit changed the grader, 14 of its 20 cases failed. After the review of `203a07f` the file has 25 cases, and putting the old every-time rule back (`return times;`) turns 18 of them red. `npm run mutate` broke these parts of the rule: each prefix alternative, the indent, a tab as the indent, the gap after the marker and a tab as that gap, the number width from below (`\d`) and above (`\d+`), the line anchor, the line-index step, both line bounds, counting one time per list line, the fallback, the limit and the detail count: 22 edits, 22 killed.
 
 ## What's next
 
