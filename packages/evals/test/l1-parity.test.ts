@@ -3,8 +3,18 @@
  * in `packages/agent`). What each still builds itself is its tools and messages, so this test sends the
  * same conversation through the real `runAgentTurn` and checks that L1's tools and messages equal the
  * loop's, apart from the rolling message cache point L1 lacks on purpose (it makes one call only).
+ * It also checks what L1 hands the builder (32474a5/TEST-1): the rest of L1's request equals
+ * `profileRequest(profile, system)`, so L1 passes on its profile and its whole system prompt, with no
+ * `maxTokens` override. That compares L1 with the builder, not with the loop.
  */
-import { MODEL_PROFILES, runAgentTurn, ScriptedLlmClient, scriptedText, scriptedToolUse } from "@sched/agent";
+import {
+  MODEL_PROFILES,
+  profileRequest,
+  runAgentTurn,
+  ScriptedLlmClient,
+  scriptedText,
+  scriptedToolUse,
+} from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import { createTrialEnvironment, interimSystemPrompt, l1Messages, l1Request, type L1Case } from "../src";
@@ -45,6 +55,14 @@ describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
       // Known difference: the loop adds a rolling cache point to the last user message (for the next call);
       // L1 makes exactly one call, so it has no use for one.
       expect(withoutCachePoints(ours)).toEqual(withoutCachePoints(loop));
+    });
+
+    it("passes its profile and system prompt to the shared builder, with no override (32474a5/TEST-1)", async () => {
+      const profile = MODEL_PROFILES[name];
+      const env = await createTrialEnvironment(c);
+      const system = interimSystemPrompt(env.clock.now(), "Walter");
+      const { tools: _tools, messages: _messages, ...rest } = l1Request(c, profile, system);
+      expect(rest).toEqual(profileRequest(profile, system));
     });
   },
 );
