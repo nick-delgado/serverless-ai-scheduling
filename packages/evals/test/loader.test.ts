@@ -184,6 +184,25 @@ describe("schema: strictness and contract checks", () => {
     expect(Scenario.safeParse({ ...rest, expect: { ...ex, trajectroy: [] } }).success).toBe(false);
   });
 
+  it("rejects an end-state local_time that isn't HH:MM, with the shared contracts message (#182)", () => {
+    const doc = {
+      ...base,
+      expect: {
+        ...base.expect,
+        end_state: {
+          ...base.expect.end_state,
+          appointment: { ...base.expect.end_state.appointment, local_time: "9:30" },
+        },
+      },
+    };
+    expect(Scenario.safeParse(doc).error?.issues).toEqual([
+      expect.objectContaining({
+        path: ["expect", "end_state", "appointment", "local_time"],
+        message: "Expected a time as HH:MM (24-hour)",
+      }),
+    ]);
+  });
+
   it("rejects a tool name that isn't in the contracts", () => {
     const doc = {
       ...base,
