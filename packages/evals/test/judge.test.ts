@@ -274,6 +274,17 @@ describe("LlmJudge", () => {
     expect(llm.requests[0]?.inlineReasoningTag).toBe(nova.inlineReasoningTag);
   });
 
+  it("puts a system cache point after its prompt exactly when the profile asks for one (#105)", async () => {
+    const system = async (judgeProfile: typeof profile) => {
+      const llm = new ScriptedLlmClient([scriptedText(reply({ tone: 5 }))]);
+      await new LlmJudge({ llm, profile: judgeProfile }).judge(input(["tone"]));
+      return llm.requests[0]?.system;
+    };
+    const prompt = { type: "text", text: judgeSystemPrompt(["tone"]) };
+    expect(await system(profile)).toEqual([prompt, { type: "cache_point" }]);
+    expect(await system(MODEL_PROFILES["gpt-oss-20b"])).toEqual([prompt]);
+  });
+
   it("retries a bad reply once, telling the model what was wrong, and adds up both calls", async () => {
     const llm = new ScriptedLlmClient([
       scriptedText("not json", { usage: { inputTokens: 1000, outputTokens: 100 } }),

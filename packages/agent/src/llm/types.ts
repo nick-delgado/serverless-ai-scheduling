@@ -20,8 +20,9 @@ import type {
 export type { ContentBlock, ReasoningBlock, TextBlock, ToolResultBlock, ToolUseBlock };
 
 /**
- * A prompt-cache checkpoint: everything before it (tools → system → messages) is cacheable. The loop
- * places markers only where the model profile says the model accepts them (ADR-010).
+ * A prompt-cache checkpoint: everything before it (tools → system → messages) is cacheable. Markers go
+ * only where the model profile says the model accepts them (ADR-010): `profileRequest` places the system
+ * one, the loop the rolling message one.
  */
 export interface CachePoint {
   readonly type: "cache_point";

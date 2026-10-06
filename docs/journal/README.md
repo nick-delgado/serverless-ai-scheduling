@@ -51,3 +51,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-05 | [Of three safety violations, one was real, and it came from a tool that couldn't answer](2026-10-05-one-real-safety-violation-in-three.md) | 5. What the evals showed |
 | 2026-10-05 | [Another patient's ID inside your own appointment note is not a leak, but repeating it still is](2026-10-05-an-id-in-your-own-note-is-not-a-leak.md) | 5. What the evals showed |
 | 2026-10-05 | [A new conversation is named before the agent runs, so a first turn's Retry continues it](2026-10-05-name-the-conversation-before-the-agent-runs.md) | 4. Teaching the agent to schedule |
+| 2026-10-05 | [The copies had already drifted: one Bedrock error meant "busy" to a patient and a hard failure to the evals](2026-10-05-one-copy-of-the-model-call-plumbing.md) | 4. Teaching the agent to schedule |

@@ -15,12 +15,15 @@
  * Every reply goes through `replyProblems` (no verbatim goal or hidden facts, never the assistant's
  * voice). A rejected reply is never sent: the model is asked again with the problems listed, up to
  * `maxAttempts` calls, then the turn fails with a `SimulatorError` (the trial is `error`, not `fail`).
- * A model call that throws fails the turn the same way, carrying what the earlier attempts cost.
+ * A model call that throws fails the turn the same way, carrying what the earlier attempts cost. The
+ * retry loop is `callWithFeedback` (`feedback-retry.ts`), shared with the judge, and the request comes
+ * from `@sched/agent`'s `profileRequest`, so it carries a system cache point when the profile asks for
+ * one (#105).
  */
-import { estimateCostUsd, type LlmClient, type ModelProfile } from "@sched/agent";
+import { profileRequest, type LlmClient, type ModelProfile } from "@sched/agent";
+
+import { callWithFeedback } from "../feedback-retry";
 import type { TranscriptEvent } from "../transcript";
-import { textOf } from "../transcript";
-import { errorReason } from "../util";
 import { replyProblems } from "./guards";
 import {
   SIMULATOR_PROMPT_VERSION,
@@ -30,16 +33,7 @@ import {
   simulatorUserMessage,
   type SimulatorStopReason,
 } from "./prompt";
-import {
-  addUsage,
-  SimulatorError,
-  zeroSimulatorCost,
-  type PatientSimulator,
-  type RejectedReply,
-  type SimulatorContext,
-  type SimulatorCost,
-  type SimulatorTurn,
-} from "./types";
+import { SimulatorError, type PatientSimulator, type SimulatorContext, type SimulatorTurn } from "./types";
 
 /** The environment variable that selects the simulator's model profile (default `sonnet-4.6`). */
 export const SIMULATOR_PROFILE_ENV = "SIMULATOR_MODEL_PROFILE";
@@ -125,55 +119,39 @@ export class LlmPatientSimulator implements PatientSimulator {
 
     const { scenario } = context;
     const system = simulatorSystemPrompt(scenario);
-    const cost: SimulatorCost = zeroSimulatorCost();
-    const rejected: RejectedReply[] = [];
-
-    for (let attempt = 1; attempt <= this.#maxAttempts; attempt++) {
-      let response;
-      try {
-        response = await this.#llm.streamMessage({
-          modelId: this.#profile.modelId,
-          family: this.#profile.family,
-          system: [{ type: "text", text: system }],
-          tools: [],
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: simulatorUserMessage(context.events, context.turn, scenario.max_turns, rejected),
-                },
-              ],
-            },
-          ],
-          maxTokens: this.#profile.maxTokens,
-          modelFields: this.#profile.modelFields,
-          ...(this.#profile.inlineReasoningTag === undefined
-            ? {}
-            : { inlineReasoningTag: this.#profile.inlineReasoningTag }),
-        });
-      } catch (callError) {
-        // Keep what the earlier, rejected attempts cost: the runner adds it to the trial and the budget.
-        throw new SimulatorError(`model call failed: ${errorReason(callError)}`, cost);
-      }
-      cost.llmCalls += 1;
-      cost.usage = addUsage(cost.usage, response.usage);
-      cost.costUsd = estimateCostUsd(this.#profile, cost.usage);
-
-      const text = textOf(response.content);
-      const parsed: ParsedReply =
-        response.stopReason === "end_turn"
-          ? parseReply(text, scenario)
-          : { kind: "invalid", problems: [`the model stopped with ${response.stopReason}`] };
-      const seen = rejected.length === 0 ? {} : { rejected };
-      if (parsed.kind === "message") return { message: parsed.message, cost, ...seen };
-      if (parsed.kind === "stop") return { stop: parsed.reason, cost, ...seen };
-      rejected.push({ reply: text, problems: parsed.problems });
-    }
-    throw new SimulatorError(
-      `no usable patient reply in ${this.#maxAttempts} attempt(s): ${rejected.map((r) => r.problems.join(", ")).join(" | ")}`,
-      cost,
-    );
+    const profile = this.#profile;
+    const { value, cost, rejected } = await callWithFeedback<Exclude<ParsedReply, { kind: "invalid" }>>({
+      llm: this.#llm,
+      profile,
+      maxAttempts: this.#maxAttempts,
+      request: (rejectedSoFar) => ({
+        ...profileRequest(profile, { stable: system }),
+        tools: [],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: simulatorUserMessage(context.events, context.turn, scenario.max_turns, rejectedSoFar),
+              },
+            ],
+          },
+        ],
+      }),
+      parse: (text) => {
+        const parsed = parseReply(text, scenario);
+        return parsed.kind === "invalid"
+          ? { ok: false, problems: parsed.problems }
+          : { ok: true, value: parsed };
+      },
+      // Keep what the earlier, rejected attempts cost: the runner adds it to the trial and the budget.
+      error: (message, spent) => new SimulatorError(message, spent),
+      exhausted: `no usable patient reply in ${this.#maxAttempts} attempt(s)`,
+    });
+    const seen = rejected === undefined ? {} : { rejected };
+    return value.kind === "message"
+      ? { message: value.message, cost, ...seen }
+      : { stop: value.reason, cost, ...seen };
   }
 }

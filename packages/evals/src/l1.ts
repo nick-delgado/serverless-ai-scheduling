@@ -3,16 +3,14 @@
  * with every contract tool offered, and compare the next action with the expectation. No tool runs.
  */
 import {
-  CACHE_POINT,
   estimateCostUsd,
-  type CachePoint,
+  profileRequest,
   type ContentBlock,
   type LlmClient,
   type LlmMessage,
   type LlmRequest,
   type LlmResponse,
   type LlmStopReason,
-  type LlmSystemText,
   type ModelProfile,
   type SystemPrompt,
 } from "@sched/agent";
@@ -78,19 +76,7 @@ export function l1Messages(c: L1Case): LlmMessage[] {
 }
 
 export function l1Request(c: L1Case, profile: ModelProfile, system: SystemPrompt): LlmRequest {
-  const systemBlocks: (LlmSystemText | CachePoint)[] = [{ type: "text", text: system.stable }];
-  if (profile.cachePoints.system) systemBlocks.push(CACHE_POINT);
-  if (system.dynamic) systemBlocks.push({ type: "text", text: system.dynamic });
-  return {
-    modelId: profile.modelId,
-    family: profile.family,
-    system: systemBlocks,
-    tools: toolDefinitionsForModel(),
-    messages: l1Messages(c),
-    maxTokens: profile.maxTokens,
-    modelFields: profile.modelFields,
-    ...(profile.inlineReasoningTag === undefined ? {} : { inlineReasoningTag: profile.inlineReasoningTag }),
-  };
+  return { ...profileRequest(profile, system), tools: toolDefinitionsForModel(), messages: l1Messages(c) };
 }
 
 /** What the model did next. */

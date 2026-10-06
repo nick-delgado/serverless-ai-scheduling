@@ -184,6 +184,7 @@ flowchart LR
   S3_03 --> F104
   S3_03 --> F105
   S7_02 --> F105
+  S7_03 --> F105
   S3_02 --> F107
   S7_02 --> F108
   S3_04 --> F121
@@ -281,7 +282,7 @@ Streams S1–S8: auth, data, agent, tools, chat UI, voice, evals, escalation; sp
 | [#99](https://github.com/nick-delgado/serverless-ai-scheduling/issues/99) | SPA deep links: a CloudFront Function on the web stack's default behavior | chat-ui | infra | FR-001, FR-016 | #24 |
 | [#100](https://github.com/nick-delgado/serverless-ai-scheduling/issues/100) | scripts/deploy-web.sh: build the SPA, sync it to the site bucket, invalidate CloudFront | chat-ui | infra | FR-050 | #24 |
 | [#104](https://github.com/nick-delgado/serverless-ai-scheduling/issues/104) | Chat retries: de-duplicate by clientMessageId, and return the conversation ID after a failed first turn (runs in parallel with #27) | agent | feature | FR-014, FR-015 | #17 |
-| [#105](https://github.com/nick-delgado/serverless-ai-scheduling/issues/105) | Share agent helpers in @sched/agent: one isThrottle, and one profile-to-request mapping (absorbs #85) | agent | chore | FR-015, FR-040 | #17, #31 |
+| [#105](https://github.com/nick-delgado/serverless-ai-scheduling/issues/105) | Share agent helpers in @sched/agent: one isThrottle, and one profile-to-request mapping (absorbs #85) | agent | chore | FR-015, FR-040 | #17, #31, #32 |
 | [#108](https://github.com/nick-delgado/serverless-ai-scheduling/issues/108) | Patient simulator follow-ups: its own default profile, a stale env var, four test gaps | evals | chore | FR-040 | #31 |
 | [#113](https://github.com/nick-delgado/serverless-ai-scheduling/issues/113) | Spike: trial Stryker mutation testing against the hand-made seen-failing pass | foundation | spike | NFR-009 | — |
 | [#114](https://github.com/nick-delgado/serverless-ai-scheduling/issues/114) | One set of clinic-date helpers in @sched/contracts, used by the tools and the system prompt | agent | chore | FR-030, FR-035 | — |
