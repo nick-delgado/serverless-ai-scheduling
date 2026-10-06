@@ -48,19 +48,15 @@ import {
   type LlmResponse,
   type LlmStreamHandlers,
 } from "./llm/types";
-import { profileRequest } from "./llm/request";
+import { profileRequest, type RequestSystem } from "./llm/request";
 import type { Clock, ToolExecutionResult, ToolExecutor } from "./ports";
 import { fallbackProfileFor, type ModelProfile } from "./profiles";
 import { addUsage, zeroUsage } from "./usage";
 
-/** The system prompt, split for prompt caching. The real prompt comes from `prompts/` (#16). */
-export interface SystemPrompt {
+/** The system prompt, split for prompt caching (`RequestSystem`). The real prompt comes from `prompts/` (#16). */
+export interface SystemPrompt extends RequestSystem {
   /** Recorded in the trace as `promptVersion`, e.g. `"system.v1"`. */
   version: string;
-  /** Byte-identical on every request. The cache breakpoint goes on this block (after the tools). */
-  stable: string;
-  /** Volatile context rendered after the breakpoint: today's date, timezone, patient first name. */
-  dynamic?: string;
 }
 
 export interface AgentLimits {

@@ -16,9 +16,11 @@
 import type { ModelProfile } from "../profiles";
 import { CACHE_POINT, type CachePoint, type LlmRequest, type LlmSystemText } from "./types";
 
-/** System text split for caching: `stable` is byte-identical on every request, `dynamic` changes. */
+/** System text split for caching. The agent loop's `SystemPrompt` extends it with a `version`. */
 export interface RequestSystem {
+  /** Byte-identical on every request. The cache breakpoint goes on this block (after the tools). */
   stable: string;
+  /** Volatile context rendered after the breakpoint: today's date, timezone, patient first name. */
   dynamic?: string;
 }
 
