@@ -18,9 +18,12 @@ import { parseArgs } from "node:util";
 
 import { DEFAULT_BASE, type ScriptDeps, scriptIo } from "./coverage-changed";
 
+/** The value of an entry's `**<name>:**` line (Chapter, Milestone, Related), trimmed; none when it's missing or empty. */
+export const field = (text: string, name: string): string | undefined =>
+  new RegExp(`^\\*\\*${name}:\\*\\*[ \\t]*(.+?)\\s*$`, "m").exec(text)?.[1];
+
 /** The value of an entry's `**Related:**` line, if it has one. */
-export const relatedLine = (text: string): string | undefined =>
-  /^\*\*Related:\*\*(.*)$/m.exec(text)?.[1]?.trim();
+export const relatedLine = (text: string): string | undefined => field(text, "Related");
 
 /** True when `text` has a Related line naming `PR #<pr>`, and not only a longer number that starts with it. */
 export function linksPr(text: string, pr: string): boolean {

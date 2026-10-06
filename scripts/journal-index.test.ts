@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { field } from "./journal-links";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const journal = join(root, "docs", "journal");
 
@@ -35,10 +37,6 @@ export function indexRows(readme: string): { file: string; chapter: string }[] {
     ([, file = "", chapter = ""]) => ({ file, chapter }),
   );
 }
-
-/** The value of an entry's `**<field>:**` line, if it has one. */
-export const field = (text: string, name: string): string | undefined =>
-  new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.+?)\\s*$`, "m").exec(text)?.[1];
 
 /** Every way the entries and the index disagree, one line each; empty when they agree. */
 export function journalProblems(input: {
@@ -136,7 +134,8 @@ describe("docs/journal", () => {
   const skillTable = chapters(
     readFileSync(join(root, ".claude", "skills", "dev-journal", "SKILL.md"), "utf8"),
   );
-  const rows = indexRows(readFileSync(join(journal, "README.md"), "utf8"));
+  const readme = readFileSync(join(journal, "README.md"), "utf8");
+  const rows = indexRows(readme);
   const entries = new Map(
     readdirSync(journal)
       .filter((file) => ENTRY.test(file))
@@ -149,6 +148,8 @@ describe("docs/journal", () => {
     expect(skillTable.size).toBe(6);
     expect(entries.size).toBeGreaterThan(40);
     expect(rows.length).toBeGreaterThan(40);
+    // Every table line but the header is a row, so a malformed one can't drop out unchecked.
+    expect(rows.length).toBe(readme.split("\n").filter((line) => line.startsWith("| ")).length - 1);
   });
 
   it("every entry's chapter and milestone match the skill's table and its one README row, and every row's file exists", () => {

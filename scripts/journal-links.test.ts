@@ -25,13 +25,15 @@ describe("linksPr", () => {
     expect(linksPr(entry("#194, PR #42, ADR-008"), "42")).toBe(true);
   });
 
-  it("fails a line without it, a longer number, a bare issue reference, or no Related line at all", () => {
+  it("fails a line without it, a longer number, a bare issue reference, or an empty or missing Related line", () => {
     expect(linksPr(entry("#194, PR #188"), "42")).toBe(false);
     expect(linksPr(entry("PR #420"), "42")).toBe(false);
     expect(linksPr(entry("#42"), "42")).toBe(false);
     expect(linksPr(entry("XPR #42"), "42")).toBe(false);
     expect(linksPr(entry(), "42")).toBe(false);
     expect(relatedLine(entry())).toBeUndefined();
+    // An empty Related line doesn't borrow the next line's text.
+    expect(linksPr("**Related:**\n**Note:** PR #42", "42")).toBe(false);
   });
 });
 
@@ -87,6 +89,22 @@ describe("main", () => {
     expect(out).toEqual(["journal-links: every journal entry added since main names PR #42 (2 added)."]);
   });
 
+  it("doesn't count an entry renamed since the base as added", () => {
+    repo.write("docs/journal/2026-10-06-café.md", entry("#194, PR #42"));
+    repo.git("mv", "docs/journal/2026-10-01-old.md", "docs/journal/2026-10-07-moved.md");
+    repo.commit("link PR #42, rename an old entry");
+    expect(main(["--base", "main", "--pr", "42"], {}, deps())).toBe(0);
+    expect(out).toEqual(["journal-links: every journal entry added since main names PR #42 (2 added)."]);
+  });
+
+  it("takes --pr and --base over PR_NUMBER and PR_BASE", () => {
+    expect(main(["--pr", "42", "--base", "main"], { PR_NUMBER: "7", PR_BASE: "nope" }, deps())).toBe(1);
+    expect(out).toEqual([
+      "Journal entries this PR adds whose Related line doesn't name PR #42 (1):",
+      "docs/journal/2026-10-06-café.md",
+    ]);
+  });
+
   it("reads the entry at HEAD, not in the working tree", () => {
     repo.write("docs/journal/2026-10-06-café.md", entry("#194, PR #42"));
     expect(main(["--base", "main"], { PR_NUMBER: "42" }, deps())).toBe(1);
@@ -102,12 +120,13 @@ describe("main", () => {
 
   it("exits 2 with no PR number, a bad one, an unknown option, or a base it can't diff against", () => {
     expect(main(["--base", "main"], {}, deps())).toBe(2);
-    expect(main(["--base", "main", "--pr", "0"], {}, deps())).toBe(2);
+    for (const bad of ["0", "42x", "x42"]) expect(main(["--base", "main", "--pr", bad], {}, deps())).toBe(2);
     expect(main(["--bogus"], { PR_NUMBER: "42" }, deps())).toBe(2);
-    expect(errors.slice(0, 3).every((line) => line.startsWith("usage: journal-links"))).toBe(true);
+    expect(errors.length).toBe(5);
+    expect(errors.every((line) => line.startsWith("usage: journal-links"))).toBe(true);
     expect(errors[0]).toContain('no PR number (got ""');
     expect(main(["--base", "nope", "--pr", "42"], {}, deps())).toBe(2);
-    expect(errors[3]).toContain("can't diff against nope");
+    expect(errors[5]).toContain("can't diff against nope");
   });
 
   it("logs to the console by default", async () => {
