@@ -27,5 +27,5 @@ These are the decisions the spec left open, each with the alternative it beat.
 
 ## Evidence
 
-- `npm run mutate` over the changed source files: 8 of 8 Vitest edits killed, plus 2 type-level edits killed by `tsc` (PR #191).
+- `npm run mutate` over the changed source files: 8 of 8 Vitest edits killed, plus 4 type-level edits killed by `tsc`: two for SMELL-207, and two that drop a `JUDGE_DIMENSIONS` entry the STD-4 comment names (PR #191).
 - The TEST-104 test first failed on a placeholder hash, then passed with the real one: `0cebbfd5…1505` for `judge.v1`.
