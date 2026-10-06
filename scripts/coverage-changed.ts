@@ -211,14 +211,64 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   }
 }
 
-export interface CliDeps {
+/** What a script's `main` takes besides its options (shared with pr-evidence.ts and dup-changed.ts, #184). */
+export interface ScriptDeps {
   /** Directory git runs in; defaults to the process's working directory. */
   cwd?: string;
   log?: (line: string) => void;
   logError?: (line: string) => void;
+}
+
+export interface CliDeps extends ScriptDeps {
   /** Which files are source; defaults to the coverage globs in vitest.config.ts. */
   sources?: SourceGlobs;
 }
+
+export type Git = (...args: string[]) => string;
+
+/** The deps' loggers (the console by default), and a git runner in `deps.cwd`. */
+export function scriptIo(deps: ScriptDeps): {
+  log: (line: string) => void;
+  logError: (line: string) => void;
+  git: Git;
+} {
+  return {
+    log: deps.log ?? ((line: string) => console.log(line)),
+    logError: deps.logError ?? ((line: string) => console.error(line)),
+    git: (...args: string[]) =>
+      execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER }),
+  };
+}
+
+/**
+ * Undefined when `base` has a merge base with HEAD. Otherwise the exit code, after saying why: 2 in CI, which must
+ * fetch the full history, and 0 locally, where the check skips.
+ */
+export function noMergeBase(
+  script: string,
+  base: string,
+  git: Git,
+  vars: Record<string, string | undefined>,
+  logError: (line: string) => void,
+): number | undefined {
+  try {
+    git("merge-base", base, "HEAD");
+    return undefined;
+  } catch {
+    if (vars.CI) {
+      logError(`${script}: no merge base with ${base} (CI must fetch the full history).`);
+      return 2;
+    }
+    logError(`${script}: SKIPPING: no merge base with ${base} (fetch it, or pass --base <ref>).`);
+    return 0;
+  }
+}
+
+/** The lines added since `base`, by `git diff -U0 -M <base>...HEAD`, whatever the user's diff config. */
+export const addedSince = (git: Git, base: string): Map<string, AddedLine[]> =>
+  parseAddedLines(
+    git("-c", "core.quotePath=false", "diff", "-U0", "-M", "--no-color", "--no-ext-diff", `${base}...HEAD`),
+  );
 
 /** The script's entry point; returns the exit code (see the header). `vars` is the process environment. */
 export function main(
@@ -226,10 +276,7 @@ export function main(
   vars: Record<string, string | undefined>,
   deps: CliDeps = {},
 ): number {
-  const log = deps.log ?? ((line: string) => console.log(line));
-  const logError = deps.logError ?? ((line: string) => console.error(line));
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: deps.cwd, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER });
+  const { log, logError, git } = scriptIo(deps);
   let args: CliArgs;
   try {
     args = parseCliArgs(argv);
@@ -245,33 +292,15 @@ export function main(
     logError(`coverage-changed: no ${coverageFile}; run \`npm run test:coverage\` first.`);
     return 2;
   }
-  try {
-    git("merge-base", base, "HEAD");
-  } catch {
-    if (vars.CI) {
-      logError(`coverage-changed: no merge base with ${base} (CI must fetch the full history).`);
-      return 2;
-    }
-    logError(`coverage-changed: SKIPPING: no merge base with ${base} (fetch it, or pass --base <ref>).`);
-    return 0;
-  }
+  const skip = noMergeBase("coverage-changed", base, git, vars, logError);
+  if (skip !== undefined) return skip;
 
-  const diff = git(
-    "-c",
-    "core.quotePath=false",
-    "diff",
-    "-U0",
-    "-M",
-    "--no-color",
-    "--no-ext-diff",
-    `${base}...HEAD`,
-  );
   const coverage = coverageByFile(
     JSON.parse(readFileSync(coverageFile, "utf8")) as Record<string, FileCoverage>,
     root,
   );
   const { uncovered, unexplained } = checkChanged(
-    parseAddedLines(diff),
+    addedSince(git, base),
     coverage,
     deps.sources ?? SOURCE_GLOBS,
   );

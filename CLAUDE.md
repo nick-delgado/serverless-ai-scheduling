@@ -56,7 +56,8 @@ npm test                                 # all Vitest projects
 npm test -w packages/contracts           # one workspace
 npm run test:coverage                    # all Vitest projects with v8 coverage (coverage/coverage-final.json)
 npm run coverage:changed                 # fail on any line this branch adds that no test ran (vs origin/main; -- --base <ref>)
-npm run mutate -- <edits.json> -- <cmd>  # apply each { file, find, replace } edit alone, run <cmd>, restore; prints KILLED/SURVIVED and the failed tests
+npm run dup:changed                      # report jscpd clones with a side in lines this branch adds (.jscpd.json; -- --base <ref>)
+npm run mutate -- <edits.json> -- <cmd>  # apply each { file, find, replace, expect? } edit alone, run <cmd>, restore; prints KILLED/KILLED-OTHER/SURVIVED and the failed tests (--markdown: the PR's table)
 ```
 
 The coverage gate checks committed changes only. A deliberate exception is a `/* v8 ignore next -- <reason> */` hint (or `start`/`stop`) in the diff; a hint without a reason fails. Lines only DynamoDB Local reaches show as uncovered locally unless it is running (`npm run dynamodb:local -w packages/tools`).
@@ -106,7 +107,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
   - Also callable: `haiku-4.5` (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), `nova-2-lite` (`us.amazon.nova-2-lite-v1:0`), `nova-pro` (`us.amazon.nova-pro-v1:0`), `gpt-oss-120b` (`openai.gpt-oss-120b-1:0`), `gpt-oss-20b` (`openai.gpt-oss-20b-1:0`).
   - **Not entitled:** `opus-5` and `sonnet-5` stay defined but resolving them throws; AWS denied access ("not available for this account"), and the proprietary GPT-5.x models are blocked the same way.
   - Model choice is config, not code (ADR-010); the M3 eval matrix picks the default. Pace bulk calls to each profile's `rpm` (`packages/agent/src/profiles.ts`), the account quota.
-- Eval runs call Bedrock and cost real money. Say what a run will cost before starting a full matrix run.
+- Eval runs call Bedrock and cost real money. Say what a run will cost before any live run beyond what was approved.
 
 ## How work flows
 
@@ -118,14 +119,15 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - `packages/contracts` is the integration seam. Changing a schema there is a cross-stream change. Call it out in the PR description.
 <!-- sync-start:ci-checks (restated in the header of .github/workflows/ci.yml) -->
 - **CI** (`.github/workflows/ci.yml`) runs on every push to any branch and on every PR, with two jobs. A PR with a merge conflict is tested on its branch head only, not on its merge with `main`, until `main` is merged into it:
-  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), on Node from `.nvmrc`.
+  - **`Lint, typecheck, test`**: `npm ci`, then lint, typecheck, `npm run test:coverage` (the whole suite with coverage, DynamoDB Local included) and the `coverage:changed` gate against the PR's base (`origin/main` on push runs), then `dup:changed`, report-only for now, on Node from `.nvmrc`.
   - **`cfn-lint`**: every `infra/**/*.yaml`.
+  - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file has no KILLED row in an `npm run mutate -- … --markdown` table in the PR body.
 
-  A PR isn't done until both are green.
+  A PR isn't done until all three are green.
 <!-- sync-end:ci-checks -->
 - **Recommended branch protection for `main`** (Nick enables it in Settings → Branches):
   - require a pull request before merging;
-  - require status checks `Lint, typecheck, test` and `cfn-lint` to pass;
+  - require status checks `Lint, typecheck, test`, `cfn-lint` and `Seen-failing evidence` to pass;
   - require branches to be up to date;
   - block force pushes.
 
@@ -134,8 +136,8 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## Definition of done
 
 - Every acceptance criterion in the issue is met.
-- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)). Start from the code you wrote, not from your tests: break each thing it does on its own (each `&&`/`||`/`??` operand, ternary or regex branch, flag, guard and threshold; each value it passes on, such as a default, a copied field, a key, or an injected clock or option; each ordering and wait) and see a test go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
-- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
+- Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)): break each thing the code you wrote does with `npm run mutate`, each edit's `expect` naming the test that should go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
+- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline, or a regression the owner accepted, recorded as a decision line in the issue's "Decisions and clarifications". The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
   - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).

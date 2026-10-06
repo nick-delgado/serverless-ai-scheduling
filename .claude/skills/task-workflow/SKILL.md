@@ -85,7 +85,8 @@ Run the issue's verification commands, then the CLAUDE.md **definition of done**
 
 - [ ] Every acceptance criterion is met (check each one explicitly).
 - [ ] `npm run lint && npm run typecheck && npm test` passes.
-- [ ] If you touched the agent, prompts, tools, or model config: `npm run evals -- --suite smoke` shows no regression against the baseline. Put the numbers in the PR.
+- [ ] Seen failing: `npm run mutate` with `expect`, and its `--markdown` table in the PR body (the `Seen-failing evidence` check).
+- [ ] If you touched the agent, prompts, tools, or model config: `npm run evals -- --suite smoke` shows no regression against the baseline, or one the owner accepted (`CLAUDE.md`). Put the numbers in the PR.
 - [ ] If you touched infra: `sam validate --lint` passes, and it's deployed to `dev` (or the PR says why not).
 - [ ] Docs: an ADR for any new or changed significant technical decision, PRD traceability if requirements moved, and a journal entry if something was story-worthy or you decided something the spec left open (see step 8).
 - [ ] No secrets, real PII, or credentials anywhere in the diff.

@@ -12,7 +12,7 @@ Closes #
 <!-- Commands you ran and their results. Paste eval numbers if the agent, prompts, tools, or model config changed. -->
 
 - [ ] `npm run lint && npm run typecheck && npm test`
-- [ ] Seen failing: first run `npm run test:coverage && npm run coverage:changed` and give every line it prints a test (or a `/* v8 ignore next -- <reason> */` hint); coverage shows that a line ran, not that a test checks it. Then break each thing the code does, as `CLAUDE.md`'s definition of done says, and list each break you made, as the exact edit (an operand, a flag, a bound, not "the X check") → the test(s) that went red, one line each. Claims elsewhere go no further; a claim about a search names what it covered instead of "only", "every" or "none".
+- [ ] Seen failing: first run `npm run test:coverage && npm run coverage:changed` and give every line it prints a test (or a `/* v8 ignore next -- <reason> */` hint); coverage shows that a line ran, not that a test checks it. Then paste `npm run mutate -- … --markdown` output covering every changed source file. Claims elsewhere go no further; a claim about a search names what it covered instead of "only", "every" or "none".
 - [ ] Checked by hand only, with no test: what, and why no test could check it ("None" is a fine answer)
 - [ ] Eval smoke suite on the development-default profile (if agent/prompt/tools/model changed): task success __ / __ vs baseline __, safety violations __
 - [ ] `sam validate --lint` + deployed to `dev` (if infra changed)
@@ -23,7 +23,7 @@ Closes #
 
 ## Decisions the spec left open
 
-<!-- Behaviour you chose where the issue, PRD, ADRs and contracts are silent, and any acceptance criterion you couldn't meet as written. List them once, each with the alternative it beat, in the journal entry's "Why we chose" section, and link that entry here; a second list drifts. "None" is a fine answer. -->
+<!-- Behaviour you chose where the issue, PRD, ADRs and contracts are silent, and any acceptance criterion you couldn't meet as written. List them once, each with the alternative it beat, in the journal entry's "Why we chose" section (a rule for one tool's behaviour stays in its handler header, which the list links), and link that entry here; a second list drifts. "None" is a fine answer. -->
 
 ## Docs
 
