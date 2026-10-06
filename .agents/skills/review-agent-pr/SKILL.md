@@ -2,7 +2,7 @@
 name: review-agent-pr
 description: Thorough multi-reviewer review of a GitHub pull request that was produced by an AI coding agent. Runs parallel specialist reviewers (documented standards, code smells, spec alignment, test adequacy), verifies every finding, and posts one evidence-backed report as a PR comment that separates what the agent should fix from what needs the owner's decision. Also analyses why the agent produced each issue and logs the causes and proposed improvements to the project's docs, prompts, skills and tests on a tracking issue. Use when asked to review, audit or evaluate a PR or branch written by an AI agent, or to find out why an agent's output went wrong. Also runs a cheaper re-check of a PR that was reviewed before, verifying only what changed since and what became of each earlier finding, when asked to re-check a PR.
 metadata:
-  harness-version: "2026.10.06.2"
+  harness-version: "2026.10.06.3"
 ---
 
 # Review an agent-authored PR
@@ -209,9 +209,14 @@ Look in this order and stop at the first level that yields a usable spec.
      `commits.txt`: `#123`, issue URLs, tracker keys such as `ABC-123`. (An issue linked
      only through GitHub's sidebar, with no keyword, is not visible through REST: if the
      PR names no issue at all, say so in the manifest's gaps.)
-   - Save each GitHub issue with its comments:
+   - Save each issue the PR closes or names, with its comments:
      `<SKILL_DIR>/scripts/get-issue.sh <m> "$RUN_DIR"` writes `RUN_DIR/spec/issue-<m>.md`.
-     Follow one level of links to a parent issue or epic if the issue points at one.
+     These are the task's spec, and reviewers read them to their end.
+   - Save the issues and PRs those issues link to, one level deep, as background:
+     `<SKILL_DIR>/scripts/get-issue.sh <m> "$RUN_DIR" --background` writes
+     `RUN_DIR/spec/background/issue-<m>.md`, trimmed to what can be spec (an issue's
+     description and people's comments; a PR's description; never the agent-process
+     tracking issue). Reviewers search these and read the parts the spec points to.
    - A reference to a tracker you cannot read (Jira, Linear, and so on) is recorded as
      "referenced, not accessible". Do not guess its content.
 2. **Spec files in the repository**, when no issue was found or the issue has no requirements
