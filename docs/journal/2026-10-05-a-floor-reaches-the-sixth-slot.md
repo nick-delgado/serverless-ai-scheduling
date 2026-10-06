@@ -19,7 +19,7 @@ Nick ran a readiness review on #170 and accepted every recommendation. The shape
 
 The readiness review settled the input's shape, the eval's kind (an L1 case, r1/Q-2 (b)) and the edge rules (A-2: any minute accepted, a floor before opening is no floor, 17:00 or later is an error, 12:00 or later with `morning` is an error). These are the choices the agent made where the spec was still silent:
 
-- **The `start_time` checks run first, before the past-date check.** A request that is impossible on any day (a floor at closing, or an afternoon floor with `morning`) gets that error even when its dates are also in the past. The alternative, past dates first, would send the model to fix the dates and then fail it a second time on the time.
+- **The `start_time` checks run first**, before the past-date check, the missing `provider_id`/`specialty` check, the unknown-provider check and the provider/specialty mismatch. A request that is impossible on any day (a floor at closing, or an afternoon floor with `morning`) gets that error even when those other inputs are also wrong. The alternative, the other checks first, would send the model to fix them and then fail it a second time on the time. A test pairs each `start_time` error with each of those four inputs.
 - **Both errors are fixed text and never echo the input.** The hint for the closing-time error gives `CLINIC.hours`. The hint for the morning conflict names the fix: `time_of_day` afternoon or any, or an earlier `start_time`. We could have quoted the value back, but a fixed message keeps the input out of the error text the model reads (CLAUDE.md rule 5), and the model already has the value.
 - **A morning floor with `time_of_day: afternoon` is not an error.** It is a plain AND that returns afternoon slots, as Q-1 (a) says. Only the combination that can never match fails.
 - **The instruction lives in the field's `.describe()`, not in the tool description.** AC 3 allowed either. The tool description is cached and baselined, and each extra sentence in it costs every request. The field description sits right next to the field, and the prompt bullet carries the "when".
@@ -37,22 +37,20 @@ We had also expected the `max_five_options` failures to be new, and they weren't
 
 ## Evidence
 
-- Handler tests: 10 new in `packages/tools/test/tools/check_availability.test.ts` ("start_time: a clinic-local floor on every day"). They cover Dr. Lee at 2:30 PM on Thu Oct 15 (18:30Z, EDT), Dr. Alvarez at 11:30 AM on each of Nov 2–6 (16:30Z, EST) in one query, and one query across the DST change. They also cover an off-boundary minute, a floor before opening or omitted, a floor that has already passed today, the specialty walk, both errors and the schema format.
-- Mutation edits (`npm run mutate`): 25 exact edits to the handler, the contract regex, `.optional()` and the prompt line, and all 25 were killed by a test that checks the edited line. The PR lists each edit.
-- `npm run lint`, `typecheck`, `npm test` (2312 passed), `npm run test:coverage` with DynamoDB Local (2423 passed), and `coverage:changed` all pass.
+- Handler tests: 11 new in `packages/tools/test/tools/check_availability.test.ts` ("start_time: a clinic-local floor on every day"). They cover Dr. Lee at 2:30 PM on Thu Oct 15 (18:30Z, EDT), Dr. Alvarez at 11:30 AM on each of Nov 2–6 (16:30Z, EST) in one query, and one query across the DST change. They also cover an off-boundary minute, a floor before opening or omitted, a floor that has already passed today, the specialty walk, both errors (each with the minute below its threshold, 16:59 and 11:59 with `morning`, as an empty success), the order of the checks, and the schema format, including an empty string.
+- Mutation edits (`npm run mutate`): 25 exact edits to the handler, the contract regex, `.optional()` and the prompt line, and all 25 were killed by a test that checks the edited line. After the PR #179 review, 11 more were killed: each `start_time` error moved after the past-date check, before the provider lookup, after the unknown-provider check and after the mismatch check (8), each threshold tightened by one minute (2), and the regex made to accept an empty string (1). The 14 earlier edits whose tests that round changed were run again and still killed. The PR lists each edit.
+- `npm run lint`, `typecheck`, `npm test` (2313 passed), `npm run test:coverage` with DynamoDB Local (2424 passed), and `coverage:changed` all pass.
 - Live evals (2026-10-06; `sonnet-4.6`, 1 trial; costs at list prices; details in PR #179):
   - `reschedule-into-est-after-dst` now passes end to end. Its end state moves the visit to Mon Nov 2 at 11:30 AM ET with one `check_availability` call (`start_time: "11:30"`, morning), where the first full run had escalated.
   - The new L1 case passes with the same arguments.
   - L1 smoke: 8 / 8 on the branch and 8 / 8 on `main`.
-  - Scenario smoke: 6 / 8 on the branch and 8 / 8 on `main`, with no safety violations on either side.
+  - Scenario smoke: 6 / 8 on the branch and 8 / 8 on `main`, with no safety violations on either side. Nick accepted this result for AC 7 in the PR #179 review (`4a6f31c/SPEC-1` (a), [answer](https://github.com/nick-delgado/serverless-ai-scheduling/pull/179#issuecomment-6014203323)), and #170's "Decisions and clarifications" now records it.
     - `book-pt-after-dst-est` was run-to-run noise: a missing weekday in prose. A three-trial rerun passed 3 / 3.
     - `book-derm-next-week-afternoon`: three-trial reruns passed 1 / 3 on each side. Over-five listings appeared in 2 of 4 branch trials (lists of 10, 10 and 6) and 0 of 4 `main` trials. One branch failure and both `main` failures were repeated clock times, not extra slots. Both sides had one Monday booking that failed the end-state check.
   - Spend: $1.37 on approved runs (the four planned ones and the `main` comparison) and $0.43 on two branch reruns that were not approved, $1.80 in all.
 
 ## What's next
 
-- #171: with the gap closed, decide whether "only offer what a tool returned" needs a code guard or only a prompt fix.
-- #98: the `reschedule-into-est-after-dst` marker and the `no_hallucinated_slots` false positive.
-- #37: the M3 matrix, which this issue blocked.
-- #171: keep the model to five options after several searches (Nick's decision).
-- #181: stop `max_five_options` from counting clock times the reply repeats (blocked by #98).
+- #171: keep the model to five options after several searches (Nick's decision), and decide whether "only offer what a tool returned" needs a code guard or only a prompt fix.
+- #98 and #181: the `reschedule-into-est-after-dst` marker and the `no_hallucinated_slots` false positive (#98), then stop `max_five_options` from counting clock times the reply repeats (#181, blocked by #98).
+- #37: the M3 matrix, which this issue blocked. #182 moves the `HH:MM` format into one shared schema.
