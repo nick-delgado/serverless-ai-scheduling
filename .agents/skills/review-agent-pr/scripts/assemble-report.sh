@@ -298,9 +298,9 @@ write_findings_json() {
   version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
   lines="$({ grep -o '"additions":[0-9]*' "$run/pr.json" | head -n 1; grep -o '"deletions":[0-9]*' "$run/pr.json" | head -n 1; } 2>/dev/null | cut -d: -f2 | awk '{ s += $1 } END { print s + 0 }')"
   {
-    h2 "$rootcause" "Cause summary" 2>/dev/null | awk -F'|' '/^\| *[A-Z]+-[0-9]/ {
+    h2 "$rootcause" "Cause summary" 2>/dev/null | awk -F'|' '{ gsub(/\\\|/, "\034") } /^\| *[A-Z]+-[0-9]/ {
       id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id); sub(/[ (].*/, "", id)
-      cls = $4; gsub(/[ \t`]/, "", cls); cause = $5; gsub(/`/, "", cause); gsub(/^[ \t]+|[ \t]+$/, "", cause)
+      cls = $4; gsub(/[ \t`]/, "", cls); cause = $5; gsub(/`/, "", cause); gsub(/^[ \t]+|[ \t]+$/, "", cause); gsub(/\034/, "|", cause)
       print "CLASS\t" id "\t" cls "\t" cause }'
     h2 "$verified" "Confirmed findings" | sed 's/^/BODY\t/'
   } | awk -F'\t' -v pr="${pr_number:-}" -v sha="$report_sha" -v round="$round" -v version="$version" -v lines="${lines:-0}" -v readiness="$readiness" '

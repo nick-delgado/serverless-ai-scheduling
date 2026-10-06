@@ -123,6 +123,7 @@ case "$stage" in
     rm -f "$run/.validate-findings"
     # Minor table: a valid Action cell in every row.
     h2 "$f" "Minor findings table" | awk -F'|' '
+      { gsub(/\\\|/, "\034") }
       /^\|/ { n++; if (n <= 2) next
         a = $4; gsub(/`/, "", a); gsub(/^[ \t]+|[ \t]+$/, "", a)
         if (a !~ /^(fix now|for the owner|noticed)$/) print "minor table row \"" $2 "\": Action must be fix now, for the owner or noticed (got \"" a "\")"
@@ -146,6 +147,7 @@ case "$stage" in
     done
     classes="$(tracked_classes | tr '\n' ' ')"
     h2 "$f" "Cause summary" | awk -F'|' -v classes=" $classes " '
+      { gsub(/\\\|/, "\034") }
       /^\|/ { n++; if (n <= 2) next
         sev = $3; gsub(/[ \t`]/, "", sev); cls = $4; gsub(/[ \t`]/, "", cls)
         if (sev !~ /^(blocker|major|minor)$/) print "cause summary row \"" $2 "\": Severity must be blocker, major or minor (got \"" sev "\")"

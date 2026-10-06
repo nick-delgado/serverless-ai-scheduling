@@ -5,25 +5,25 @@
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/address-pr-review/SKILL.md",
-      "computedHash": "f59f7f4e6d58956c9d2d361d91fc029a8d823ea71e7b8150c4e8b37b89dac344"
+      "computedHash": "9e6e973d281fd5ca79103321484588873641a0b8482de34f55878cd238d1e3fa"
     },
     "improve-agent-process": {
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/improve-agent-process/SKILL.md",
-      "computedHash": "3c16995398509445786c2a7a932c748a97042b38d14522c51b566b44a88c610b"
+      "computedHash": "02de8aed0db3ccf3ac359141f31d3bd0d68913b20939916d6817e63beb11a36f"
     },
     "review-agent-issue": {
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/review-agent-issue/SKILL.md",
-      "computedHash": "9955e327e6d673c9c5029a28cfb9973fea1accd6ec7812589b7040b033062415"
+      "computedHash": "f8fc6da450c494cde46bf9ca32998a6c551a735386d60f9e941562eae7a60a5e"
     },
     "review-agent-pr": {
       "source": "nick-delgado/agent-review-harness",
       "sourceType": "github",
       "skillPath": "skills/review-agent-pr/SKILL.md",
-      "computedHash": "02a40a68e1a24425fc7ff3cac5bafa79dc74f24a440793aa371f318d0b6fdb36"
+      "computedHash": "ef0ac96bf22920e552deb68aeca9a55c48a8566488ed8fc74ec5f3746b197e98"
     }
   }
 }

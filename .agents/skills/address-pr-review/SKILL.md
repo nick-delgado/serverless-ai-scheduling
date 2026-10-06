@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.06"
+  harness-version: "2026.10.06.2"
 ---
 
 # Address a PR review
@@ -44,6 +44,10 @@ Paths below are relative to the directory that contains this file (`SKILL_DIR`).
   repository checkout where they could be committed. If whoever started you named a
   relative scratch directory, put it under that directory, not in the repository. If you
   start subagents of your own, give them absolute paths only.
+- **Read long output from a file, in ranges.** Send a script's long output to a file
+  under your temporary directory and read that in line ranges to its last line. If your
+  tool cuts output short and saves the rest to a file of its own, do not read that copy:
+  re-read your own file in ranges.
 - **GitHub through REST only.** Use the scripts in `scripts/` and `gh api` with REST paths
   (`repos/{owner}/{repo}/...`). Do not use `gh pr`, `gh issue`, `gh repo` or `gh api
   graphql`: they go through GraphQL, which some environments (Claude Code cloud sessions,
@@ -72,14 +76,15 @@ step 10:
 ### 1. Get the report
 
 ```sh
-<SKILL_DIR>/scripts/get-review.sh <pr-number>
+<SKILL_DIR>/scripts/get-review.sh <pr-number> > "<temporary directory>/review.md"
 ```
 
-It prints the latest review report on the PR: its author and URL, how many comments it was
+It writes the latest review report on the PR: its author and URL, how many comments it was
 posted in (`report-parts`), the commit it reviewed (`reviewed-commit`), the PR's current
 head (`pr-head`), whether they match, and the report itself. A long report is posted as
 consecutive comments marked "part k of n"; the script joins them, so read its output, not
-the PR's comments one by one. If the PR number was not given, use the open PR whose head is the current commit
+the PR's comments one by one. A report is long: read the file in line ranges to its last
+line before you act on any finding. If the PR number was not given, use the open PR whose head is the current commit
 (`gh api "repos/{owner}/{repo}/commits/$(git rev-parse HEAD)/pulls" --jq '.[0].number'`).
 
 - No report: stop and tell the user.
