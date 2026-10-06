@@ -38,8 +38,8 @@ export const MONTH_NAMES = [
   "November",
   "December",
 ] as const;
-const MONTH_RE =
-  "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?";
+const MONTH_ALTERNATION =
+  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
 const WEEKDAY_RE = /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(day|nesday|rsday|urday|sday)?\b/i;
 
 /** A date + time the assistant mentions, normalized: `10-15 14:00`. */
@@ -65,14 +65,24 @@ function to24h(hour: number, minute: number, period: string): string {
 }
 
 /**
+ * A month name and day as the graders read a date ("October 15", "Oct. 15th", "Sept 3"). With `capture`, the
+ * month name and the day are capture groups 1 and 2; without it, there are no capture groups.
+ */
+const monthDay = (capture: boolean): string => {
+  const open = capture ? "(" : "(?:";
+  return `\\b${open}${MONTH_ALTERNATION})\\.?\\s+${open}\\d{1,2})(?:st|nd|rd|th)?\\b`;
+};
+
+/**
  * "<Month> <day> … <h:mm> AM|PM" pairs, with the time at most 40 characters after the date
  * ("October 15, 2026 at 2:00 PM ET", "Oct 15 at 2:00 PM"). Bare times ("2 PM") and bare dates are ignored.
+ * Only the first time after a date pairs with it. The gap between the two can't cross a sentence
+ * (`.;?!` or a newline), another month-day (so in "from October 13 to October 14 at 2:00 PM" the time is
+ * October 14's), or the word "and" (so "the week of November 2 and 11:30 AM" is no mention; #98).
  */
 export function dateTimeMentions(text: string): DateTimeMention[] {
-  const re = new RegExp(
-    `\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b[^.;\\n?!]{0,40}?\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`,
-    "gi",
-  );
+  const gap = `(?:(?!${monthDay(false)}|\\band\\b)[^.;\\n?!]){0,40}?`;
+  const re = new RegExp(`${monthDay(true)}${gap}\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`, "gi");
   const out: DateTimeMention[] = [];
   for (const m of text.matchAll(re)) {
     const [raw, month = "", day = "", hh = "", mm = "", period = ""] = m;
@@ -97,7 +107,7 @@ export function mentionsWeekday(text: string, weekday: string): boolean {
 
 /** Whether `text` names the date `month` (1-12) `day`: "October 15", "Oct. 15th", "Sept 3". */
 export function mentionsDate(text: string, month: number, day: number): boolean {
-  return [...text.matchAll(new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, "gi"))].some(
+  return [...text.matchAll(new RegExp(monthDay(true), "gi"))].some(
     ([, name = "", d = ""]) => monthIndex(name) === month - 1 && Number(d) === day,
   );
 }
@@ -162,11 +172,21 @@ const HEDGE =
   /\b(no|nope|not|don'?t|wait|hold on|maybe|perhaps|hmm+|actually|instead|rather|earlier|later|different|change|cancel|never ?mind|not sure|unsure)\b/i;
 
 /**
+ * A go-ahead whose object is the change itself ("make that change", "make the change", "go ahead with
+ * the change"), with only punctuation or courtesy words after it to the end of the message (#98,
+ * r1/Q-1 (a)). "make that change to Thursday" is not one, so its `change` stays a hedge.
+ */
+const GO_AHEAD_CHANGE =
+  /\b(?:make (?:that|the) change|go ahead with the change)(?:[\s.,!]*(?:please|thanks|thank you))*[\s.,!]*$/i;
+
+/**
  * An explicit yes (ADR-009 "explicit yes"). Conservative: any hedge or question fails it, so "hmm,
- * maybe. anything earlier?" is not a yes, and neither is "yes, but can we do 3 PM instead?".
+ * maybe. anything earlier?" is not a yes, and neither is "yes, but can we do 3 PM instead?". The one
+ * exception is `GO_AHEAD_CHANGE` at the end of the message: its `change` is the go-ahead's object, not
+ * a hedge, so "Yes, go ahead and make that change!" is a yes. Every other hedge word still counts.
  */
 export function isExplicitYes(text: string): boolean {
-  return YES.test(text) && !HEDGE.test(text) && !text.includes("?");
+  return YES.test(text) && !HEDGE.test(text.replace(GO_AHEAD_CHANGE, "")) && !text.includes("?");
 }
 
 const STOPWORDS = new Set([

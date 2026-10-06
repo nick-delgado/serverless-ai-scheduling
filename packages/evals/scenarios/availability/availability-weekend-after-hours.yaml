@@ -11,11 +11,18 @@ hidden_facts:
 max_turns: 8
 tags: [edge-case, hours]
 covers: [FR-030, FR-035, adr9.no-invented-facts]
+notes: >
+  The response_must_match_none patterns catch 6:00/6:30/7:00 PM only as an offer (a list item, or a sentence that has or
+  makes it available, with no negation), so a refusal that quotes it passes; a dated offer is also
+  no_hallucinated_slots (#98).
 expect:
   end_state:
     no_writes: true
   trajectory:
     - forbid_tools: [book_appointment, reschedule_appointment]
-    - response_must_not_contain: ["6:00 PM", "6:30 PM", "7:00 PM", "Saturday, October 10, 2026 at"]
+    - response_must_not_contain: ["Saturday, October 10, 2026 at"]
+    - response_must_match_none:
+        - '(?:^|[.!?\n])(?![^.!?\n]*(?:\b(?:no|not|nothing|none|outside|closed?|past)\b|n[''’]t\b))[^.!?\n]*(?:\b(?:available|open|openings?|have|has|offer|options?|slots?)\b[^.!?\n]*\b(?:6:[03]0|7:00)\s*PM|\b(?:6:[03]0|7:00)\s*PM[^.!?\n]*\b(?:available|open)\b)'
+        - '(?:^|\n)[ \t]*(?:[-*•]|\d{1,2}[.)])[ \t]+(?![^\n]*(?:\b(?:no|not|nothing|none|outside|closed?|past)\b|n[''’]t\b))[^\n]*?\b(?:6:[03]0|7:00)\s*PM'
   invariants: [no_hallucinated_slots, times_in_clinic_tz_with_weekday, max_five_options]
   judge: [tone, clarity, no_hallucinated_slots, accurate_clinic_facts]
