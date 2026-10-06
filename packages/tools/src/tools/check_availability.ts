@@ -17,6 +17,22 @@
  * which use the offset in effect on each day (the fixture window crosses the Nov 1, 2026 DST change).
  * `time_of_day` is judged on the clinic wall clock: morning is before 12:00 ET, afternoon 12:00 ET or later.
  *
+ * `start_time` (#170, decisions r1/Q-1 and A-2): a clinic-local wall-clock floor, `HH:MM`, applied to every
+ * day in the range, so a slot past the first `LIMITS.availabilityMaxSlots` of a day can be reached.
+ * - It filters in `offerable`, like `time_of_day`, and combines with it as a strict AND. The repositories
+ *   still read whole days, and the specialty walk counts only slots that pass, so it reads on to later days.
+ * - Omitted → no floor; the search is exactly what it was before #170.
+ * - Empty (`""`) or not `HH:MM` 24-hour → INVALID_INPUT from the contract's schema, before this handler runs.
+ * - Any minute is accepted: "11:15" returns slots from 11:30. A time before opening is no floor in effect.
+ * - At or after closing (`CLINIC.closeHour`) → INVALID_INPUT with the clinic hours, since no slot can match.
+ * - Conflicting: 12:00 or later with `time_of_day: morning` → INVALID_INPUT with a hint, since no slot can
+ *   match. A morning floor with `afternoon` is not a conflict: it returns afternoon slots.
+ *   Both are errors rather than an empty success the model could misreport as "fully booked".
+ * - Checks, in order: those two `start_time` errors come first, before the past-date check, the missing
+ *   provider_id/specialty check, the unknown-provider check and the provider/specialty mismatch, so a
+ *   request that can match on no day gets that error even when its other inputs are also wrong.
+ * - Past: on today, a floor that has already passed changes nothing; the past-date rules below still apply.
+ *
  * Past dates (decision): only slots that start strictly after `ctx.clock.now()` are ever offered.
  * - A range that is partly in the past is clamped to "from now"; the model isn't told, it just gets future slots.
  * - A range that ends before today (clinic-local) is INVALID_INPUT with a hint to ask for future dates,
@@ -27,6 +43,7 @@
  * days are walked in order, so the candidates are already sorted and are only cut to the limit.
  */
 import {
+  CLINIC,
   LIMITS,
   type Provider,
   type ProviderId,
@@ -38,15 +55,24 @@ import {
 import { addDays, clinicDateOf, clinicDateRangeUtc, formatClinicDateTime, toZonedParts } from "../clock";
 import { toolFail, toolOk, type ToolHandler } from "../registry";
 
-const NOON = 12;
+const NOON_MINUTES = 12 * 60;
+const CLOSE_MINUTES = CLINIC.closeHour * 60;
 const MAX = LIMITS.availabilityMaxSlots;
 
 type TimeOfDay = ToolInput<"check_availability">["time_of_day"];
 
-function matchesTimeOfDay(startUtc: string, timeOfDay: TimeOfDay): boolean {
+/** Minutes after clinic-local midnight at which a slot starts. */
+function wallClockMinutes(startUtc: string): number {
+  const { hour, minute } = toZonedParts(new Date(startUtc));
+  return hour * 60 + minute;
+}
+
+/** `HH:MM` (already validated by the contract) as minutes after midnight. */
+const minutesOf = (hhmm: string): number => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+
+function matchesTimeOfDay(minutes: number, timeOfDay: TimeOfDay): boolean {
   if (timeOfDay === "any") return true;
-  const hour = toZonedParts(new Date(startUtc)).hour;
-  return timeOfDay === "morning" ? hour < NOON : hour >= NOON;
+  return timeOfDay === "morning" ? minutes < NOON_MINUTES : minutes >= NOON_MINUTES;
 }
 
 /** A slot that can be offered, with the provider it will be described by. */
@@ -65,7 +91,28 @@ const toSlotOption = ({ slot, provider }: Candidate): SlotOption => ({
 });
 
 export const checkAvailability: ToolHandler<"check_availability"> = async (input, ctx) => {
-  const { provider_id: providerId, specialty, date_range: range, time_of_day: timeOfDay } = input;
+  const {
+    provider_id: providerId,
+    specialty,
+    date_range: range,
+    time_of_day: timeOfDay,
+    start_time: startTime,
+  } = input;
+  const floor = startTime === undefined ? 0 : minutesOf(startTime);
+  if (floor >= CLOSE_MINUTES) {
+    return toolFail(
+      "INVALID_INPUT",
+      "start_time is at or after closing time, so no slot can start then.",
+      `Clinic hours are ${CLINIC.hours}. Ask the patient for an earlier time, or search the next day without start_time.`,
+    );
+  }
+  if (timeOfDay === "morning" && floor >= NOON_MINUTES) {
+    return toolFail(
+      "INVALID_INPUT",
+      "start_time is in the afternoon but time_of_day is morning, so no slot can match both.",
+      "Call check_availability again with time_of_day afternoon or any, or with an earlier start_time.",
+    );
+  }
   const now = ctx.clock.now();
   const nowMs = now.getTime();
   const today = clinicDateOf(now);
@@ -79,14 +126,15 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
   }
   const firstDay = range.start_date < today ? today : range.start_date;
 
-  // Future, in the requested part of the day, and by a provider in `providers`. A slot whose provider
-  // record is missing can't be named to the patient, so it is left out rather than failing the search.
+  // Future, in the requested part of the day, at or after start_time, and by a provider in `providers`. A
+  // slot whose provider record is missing can't be named to the patient, so it is left out rather than
+  // failing the search.
   const offerable = (slots: readonly Slot[], providers: ReadonlyMap<ProviderId, Provider>): Candidate[] =>
     slots.flatMap((slot) => {
       const provider = providers.get(slot.providerId);
-      return provider && Date.parse(slot.startUtc) > nowMs && matchesTimeOfDay(slot.startUtc, timeOfDay)
-        ? [{ slot, provider }]
-        : [];
+      if (!provider || Date.parse(slot.startUtc) <= nowMs) return [];
+      const minutes = wallClockMinutes(slot.startUtc);
+      return minutes >= floor && matchesTimeOfDay(minutes, timeOfDay) ? [{ slot, provider }] : [];
     });
 
   let candidates: Candidate[];

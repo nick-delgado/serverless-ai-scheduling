@@ -80,7 +80,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 
 | ID | Pri | Requirement | Acceptance criteria |
 |---|---|---|---|
-| FR-030 | M | **Check availability** | Understands a provider name, a specialty, date ranges ("next week"), and time-of-day preferences. Presents at most 5 options, in the clinic timezone, with provider and weekday. All options come from tool results. A specialty search leaves out providers not taking new patients; a search by provider still shows their slots. "This week" is the rest of the current Monday–Friday week and "next week" is Monday–Friday of the following week; morning is before 12:00 PM ET, afternoon 12:00 PM ET or later. Only future slots are offered; for a past date the agent asks for an upcoming one. The agent asks for a specialty or provider before searching. |
+| FR-030 | M | **Check availability** | Understands a provider name, a specialty, date ranges ("next week"), and time-of-day preferences. Presents at most 5 options, in the clinic timezone, with provider and weekday. All options come from tool results. A specialty search leaves out providers not taking new patients; a search by provider still shows their slots. "This week" is the rest of the current Monday–Friday week and "next week" is Monday–Friday of the following week; morning is before 12:00 PM ET, afternoon 12:00 PM ET or later. Only future slots are offered; for a past date the agent asks for an upcoming one. A patient can ask for a specific time or for times later than those shown, and the agent searches again from that time of day, so every open slot can be reached. The agent asks for a specialty or provider before searching. |
 | FR-031 | M | **Book a new appointment** | Collects provider/specialty, slot, and reason. **Restates the details and gets an explicit yes before booking.** On success, confirms with date, time, provider, and location. On conflict (slot just taken), apologizes and offers alternatives. A new patient (one with no BOOKED or COMPLETED appointment with that provider) can't book a provider who isn't taking new patients; the agent offers another in the same specialty. Repeating a booking the patient already holds confirms it rather than failing. |
 | FR-032 | M | **Reschedule an existing appointment** | Identifies which appointment (asks if there are several), finds new options, confirms, then moves it **atomically**: the old slot is freed and the new one booked in one transaction. The new time stays in the same specialty, and a move to a provider not taking new patients follows the booking rule. Only BOOKED appointments can be moved; a cancelled one gets an offer to book anew. Repeating a move that already happened confirms it. |
 | FR-033 | M | **Look up own appointments and profile** | "When is my next appointment?" is answered from records. Shows only the logged-in patient's data. |
@@ -190,7 +190,7 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | FR-022 | #10, #28, #29, #36, #40 |
 | FR-023 | #10, #28, #29, #36, #40 |
 | FR-024 | #28, #29, #36, #40 |
-| FR-030 | #4, #16, #19, #33, #36, #40, #77, #80, #114 |
+| FR-030 | #4, #16, #19, #33, #36, #40, #77, #80, #114, #170 |
 | FR-031 | #4, #16, #21, #33, #36, #40, #80 |
 | FR-032 | #4, #16, #22, #33, #36, #40, #88 |
 | FR-033 | #4, #16, #20, #33, #36, #40, #80 |

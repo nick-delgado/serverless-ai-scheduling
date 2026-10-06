@@ -121,6 +121,15 @@ describe("input validation rules", () => {
     expect(parsed.time_of_day).toBe("any");
   });
 
+  it("takes an optional start_time as 24-hour HH:MM, with no default (#170)", () => {
+    const base = { date_range: { start_date: "2026-11-02", end_date: "2026-11-06" } };
+    expect(CheckAvailabilityInput.parse(base)).not.toHaveProperty("start_time");
+    for (const ok of ["00:00", "08:00", "11:30", "19:59", "23:59"])
+      expect(CheckAvailabilityInput.safeParse({ ...base, start_time: ok }).success).toBe(true);
+    for (const bad of ["24:00", "11:60", "9:30", "11:30 AM", "11:30:00", "1130", ""])
+      expect(CheckAvailabilityInput.safeParse({ ...base, start_time: bad }).success).toBe(false);
+  });
+
   it("rejects a date range that ends before it starts", () => {
     expect(DateRange.safeParse({ start_date: "2026-10-14", end_date: "2026-10-13" }).success).toBe(false);
   });
