@@ -20,7 +20,7 @@
  * from `@sched/agent`'s `profileRequest`, so it carries a system cache point when the profile asks for
  * one (#105).
  */
-import { profileRequest, type LlmClient, type ModelProfile } from "@sched/agent";
+import { profileRequest, type LlmClient, type ModelProfile, type ModelProfileName } from "@sched/agent";
 
 import { callWithFeedback } from "../feedback-retry";
 import type { TranscriptEvent } from "../transcript";
@@ -35,8 +35,15 @@ import {
 } from "./prompt";
 import { SimulatorError, type PatientSimulator, type SimulatorContext, type SimulatorTurn } from "./types";
 
-/** The environment variable that selects the simulator's model profile (default `sonnet-4.6`). */
+/** The environment variable that selects the simulator's model profile (default `DEFAULT_SIMULATOR_PROFILE`). */
 export const SIMULATOR_PROFILE_ENV = "SIMULATOR_MODEL_PROFILE";
+
+/**
+ * The simulator's profile when neither `--simulator-profile` nor `SIMULATOR_MODEL_PROFILE` names one
+ * (ADR-008's 2026-10-02 amendment). Its own value, not the agent's `DEFAULT_MODEL_PROFILE`, so the M3
+ * matrix (#37) moving the agent's default doesn't move the simulator (#108).
+ */
+export const DEFAULT_SIMULATOR_PROFILE: ModelProfileName = "sonnet-4.6";
 
 export interface LlmPatientSimulatorOptions {
   /** A live client wrapped in `rateLimited()`, or a scripted one in tests. */

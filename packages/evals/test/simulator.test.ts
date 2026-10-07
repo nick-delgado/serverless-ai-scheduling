@@ -92,7 +92,12 @@ describe("simulator prompt", () => {
     expect(prompt).toContain("It is now Monday, October 5, 2026 at 9:00 AM ET.");
     expect(prompt).toContain("You play ONLY the patient.");
     expect(prompt).toContain("Never write the assistant's part.");
-    expect(simulatorSystemPrompt({ ...ESCALATE, hidden_facts: null })).toContain("## Private facts");
+  });
+
+  it("with no hidden facts, the Private facts section's facts are (none) (TEST-105)", () => {
+    const text = simulatorSystemPrompt({ ...ESCALATE, hidden_facts: null });
+    const section = /## Private facts\n([\s\S]*?)\n\n## /.exec(text)?.[1];
+    expect(section?.split("\n").at(-1)).toBe("(none)");
   });
 
   it("the transcript has only what the patient saw: no tool calls or tool results", () => {
@@ -400,6 +405,32 @@ describe("LlmPatientSimulator", () => {
       ).toBe(1);
     });
 
+    it("counts from an escalation that is the first event, and counts patient messages only (Stryker 232, 240)", () => {
+      expect(messagesSinceEscalation([escalated(), patient("did it go?")])).toBe(1);
+      expect(
+        messagesSinceEscalation([escalated(), assistant("done"), assistant("anything else?"), patient("no")]),
+      ).toBe(1);
+    });
+
+    it("by default the patient may send two messages after an escalation: it asks after one, stops after two (TEST-103)", async () => {
+      const afterOne = [
+        patient("person please"),
+        escalated(),
+        assistant("Call 1-800-555-0199."),
+        patient("sent?"),
+        assistant("Yes, it went through."),
+      ];
+      const llm = new ScriptedLlmClient([scriptedText("ok thanks")]);
+      expect(await sim(llm).next(ctx({ scenario: ESCALATE, events: afterOne }))).toMatchObject({
+        message: "ok thanks",
+      });
+      const afterTwo = [...afterOne, patient("ok thanks"), assistant("Anything else?")];
+      expect(await sim(llm).next(ctx({ scenario: ESCALATE, events: afterTwo }))).toEqual({
+        stop: "escalated",
+      });
+      expect(llm.requests).toHaveLength(1);
+    });
+
     it("after turnsAfterEscalation more messages it stops as escalated, without calling the model", async () => {
       const events = [
         patient("person please"),
@@ -491,22 +522,24 @@ describe("LlmPatientSimulator in a scenario trial", () => {
     expect(r.llmCalls).toBe(5); // the agent's calls only
   });
 
-  it("the run summary reports the simulator's share of the cost", async () => {
+  it("the run summary reports the simulator's share of the cost, summed over the trials (TEST-202)", async () => {
     const report = await runSuite([BOOK], {
       mode: "scenario",
       suite: "smoke",
-      llm: new ScriptedLlmClient(goodBookingSteps()),
+      llm: new ScriptedLlmClient([...goodBookingSteps(), ...goodBookingSteps()]),
       llmName: "scripted",
       profile: SCRIPTED_PROFILE,
-      trials: 1,
-      simulator: sim(new ScriptedLlmClient(simSteps())),
+      trials: 2,
+      simulator: sim(new ScriptedLlmClient([...simSteps(), ...simSteps()])),
     });
-    const trial = report.cases[0]?.trials[0];
-    const simCost = trial?.kind === "scenario" ? trial.simulatorCost.costUsd : -1;
-    expect(simCost).toBeGreaterThan(0);
-    expect(report.summary.simulatorCostUsd).toBe(simCost);
-    expect(report.summary.costUsd).toBe(trial?.costUsd);
-    expect(markdownSummary(report)).toContain(`(simulator $${simCost.toFixed(4)})`);
+    const trials = report.cases[0]?.trials ?? [];
+    expect(trials.map((t) => t.status)).toEqual(["pass", "pass"]);
+    const simCosts = trials.map((t) => (t.kind === "scenario" ? t.simulatorCost.costUsd : -1));
+    expect(simCosts[0]).toBeGreaterThan(0);
+    const simTotal = (simCosts[0] ?? 0) + (simCosts[1] ?? 0);
+    expect(report.summary.simulatorCostUsd).toBeCloseTo(simTotal, 12);
+    expect(report.summary.costUsd).toBeCloseTo((trials[0]?.costUsd ?? 0) + (trials[1]?.costUsd ?? 0), 12);
+    expect(markdownSummary(report)).toContain(`(simulator $${simTotal.toFixed(4)})`);
   });
 
   it("a simulator failure makes the trial an error (not a fail), with its cost kept", async () => {
@@ -617,6 +650,29 @@ describe("ReplayPatientSimulator", () => {
     expect(await replay.next(ctx({ trial: 2 }))).toEqual({ message: "trial two" });
     expect(await replay.next(ctx({ trial: 1 }))).toEqual({ message: "trial one" });
     expect(await replay.next(ctx({ trial: 1, turn: 2 }))).toEqual({ stop: "replay exhausted" });
+  });
+
+  it("fromReport keys a recording by scenario and trial: two scenarios with the same trial each replay their own (TEST-104)", async () => {
+    const replay = ReplayPatientSimulator.fromReport({
+      cases: [
+        { id: BOOK.id, trials: [{ trial: 1, simulatorTurns: [{ turn: 1, message: "the booking one" }] }] },
+        {
+          id: ESCALATE.id,
+          trials: [{ trial: 1, simulatorTurns: [{ turn: 1, message: "the escalation one" }] }],
+        },
+      ],
+    });
+    expect(await replay.next(ctx({ scenario: BOOK }))).toEqual({ message: "the booking one" });
+    expect(await replay.next(ctx({ scenario: ESCALATE }))).toEqual({ message: "the escalation one" });
+  });
+
+  it("is named replay when the file names no simulator, and leaves out trials without simulator turns (Stryker 395, 417, 421, 423)", async () => {
+    expect(new ReplayPatientSimulator({}).name).toBe("replay");
+    const replay = ReplayPatientSimulator.fromReport({ cases: [{ id: BOOK.id, trials: [{ trial: 1 }] }] });
+    expect(replay.name).toBe("replay");
+    await expect(replay.next(ctx())).rejects.toThrow(
+      new SimulatorError(`no recorded simulator turns for ${BOOK.id}#1`),
+    );
   });
 
   it("a file that isn't a results file fails at fromReport, naming the bad field (8bea70b/SMELL-3)", () => {

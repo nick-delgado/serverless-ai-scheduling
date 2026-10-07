@@ -10,7 +10,15 @@ import { parseArgs } from "node:util";
 
 import type { z } from "zod";
 
-import { estimateCostUsd, resolveModelProfile, type LlmClient, type ModelProfile } from "@sched/agent";
+import {
+  DEFAULT_MODEL_PROFILE,
+  estimateCostUsd,
+  MODEL_PROFILE_ENV,
+  resolveModelProfile,
+  type LlmClient,
+  type ModelProfile,
+  type ModelProfileName,
+} from "@sched/agent";
 
 import {
   calibrationMarkdown,
@@ -33,6 +41,7 @@ import { skipReason } from "./runner";
 import { errorReason, issueText } from "./util";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import {
+  DEFAULT_SIMULATOR_PROFILE,
   LlmPatientSimulator,
   ReplayPatientSimulator,
   scriptOnlySimulator,
@@ -43,16 +52,24 @@ import type { RateLimitStats } from "./rate-limit";
 import { MODES, type Mode, type RunReport, type RunSuiteOptions, type RunSummary } from "./suite";
 import { promptFor } from "./system-prompt";
 
+/** A model profile name as the command line gave it, unresolved, and the flag or variable that gave it. */
+export interface ProfileSetting {
+  name: string;
+  /** `--profile`, `--simulator-profile` or `SIMULATOR_MODEL_PROFILE`, `--judge-profile` or `JUDGE_MODEL_PROFILE`. */
+  from: string;
+}
+
 export interface CliArgs {
   suite: Suite;
   mode: Mode;
   /** The resolved `--profile` (default: the development default profile). */
   profile: ModelProfile;
   /**
-   * Scenario mode: the patient simulator's profile (#31), from `--simulator-profile`, else
-   * `SIMULATOR_MODEL_PROFILE`, else the development default. Unused with `--replay`.
+   * The patient simulator's profile name (#31), from `--simulator-profile`, else `SIMULATOR_MODEL_PROFILE`;
+   * unset or empty means `DEFAULT_SIMULATOR_PROFILE`. Resolved by `simulatorSetup` only for an
+   * LLM-simulated scenario run, so a bad value can't break an L1, replay or calibration run (#108).
    */
-  simulatorProfile: ModelProfile;
+  simulatorProfile?: ProfileSetting;
   /** Scenario mode: a results JSON whose recorded simulator turns are replayed instead (#31). */
   replay?: string;
   /** False with `--no-judge`: scenario trials aren't judged (#32). */
@@ -61,7 +78,7 @@ export interface CliArgs {
    * The judge's profile name, from `--judge-profile`, else `JUDGE_MODEL_PROFILE`; unset means the default
    * (`haiku-4.5`). Resolved by `judgeSetup` only when a run will judge (r1/A-10).
    */
-  judgeProfile?: string;
+  judgeProfile?: ProfileSetting;
   /**
    * Calibration instead of a run (#32): `export` picks transcripts from a results file (no model calls);
    * `agreement` judges the labelled ones and reports judge–human agreement.
@@ -84,13 +101,32 @@ export class CliArgError extends Error {
 const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
   (list as readonly string[]).includes(value);
 
-/** `--profile`, resolved: an unknown or unentitled name is a usage error (exit 2), not a failed eval. */
-function resolveProfile(name: string | undefined, flag = "--profile"): ModelProfile {
+/**
+ * A profile setting, resolved by `@sched/agent`'s `resolveModelProfile`, the one place that checks names
+ * and entitlement. An empty or whitespace-only name means `fallback`. An unknown or unentitled name is a
+ * usage error (exit 2), not a failed eval, and its message names the flag or variable that gave it in
+ * place of `AGENT_MODEL_PROFILE` (#108, r1/Q-3, b4d4dab/SPEC-2).
+ */
+function resolveProfile({ name, from }: ProfileSetting, fallback: ModelProfileName): ModelProfile {
   try {
-    return resolveModelProfile(name);
+    return resolveModelProfile(name.trim() || fallback);
   } catch (error) {
-    throw new CliArgError(`${flag}: ${errorReason(error)}`);
+    /* v8 ignore next -- resolveModelProfile throws only Error; anything else isn't a usage error, so it goes up as is */
+    if (!(error instanceof Error)) throw error;
+    throw new CliArgError(error.message.replace(MODEL_PROFILE_ENV, from));
   }
+}
+
+/** The flag's value, else the environment variable's, with where it came from; neither is `undefined`. */
+function settingOf(
+  flag: string,
+  flagValue: string | undefined,
+  envName: string,
+  env: Readonly<Record<string, string | undefined>>,
+): ProfileSetting | undefined {
+  if (flagValue !== undefined) return { name: flagValue, from: flag };
+  const envValue = env[envName];
+  return envValue === undefined ? undefined : { name: envValue, from: envName };
 }
 
 /** Parse and validate `argv` (without the node and script paths). Throws `CliArgError`. */
@@ -139,17 +175,20 @@ export function parseCliArgs(
     throw new CliArgError("--export-calibration and --calibrate are separate steps; pass one");
   if (values.calibrate && values["no-judge"])
     throw new CliArgError("--calibrate needs the judge; drop --no-judge");
-  const judgeProfile = values["judge-profile"] ?? env[JUDGE_PROFILE_ENV];
+  const judgeProfile = settingOf("--judge-profile", values["judge-profile"], JUDGE_PROFILE_ENV, env);
+  const simulatorProfile = settingOf(
+    "--simulator-profile",
+    values["simulator-profile"],
+    SIMULATOR_PROFILE_ENV,
+    env,
+  );
   const maxCostUsd = Number(values["max-cost"]);
   if (!(maxCostUsd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
   return {
     suite,
     mode,
-    profile: resolveProfile(values.profile),
-    simulatorProfile: resolveProfile(
-      values["simulator-profile"] ?? env[SIMULATOR_PROFILE_ENV],
-      "--simulator-profile",
-    ),
+    profile: resolveProfile({ name: values.profile ?? "", from: "--profile" }, DEFAULT_MODEL_PROFILE),
+    ...(simulatorProfile === undefined ? {} : { simulatorProfile }),
     ...(values.replay === undefined ? {} : { replay: values.replay }),
     judge: !values["no-judge"],
     ...(judgeProfile === undefined ? {} : { judgeProfile }),
@@ -206,20 +245,23 @@ export interface SimulatorSetupDeps {
 
 /**
  * Pick the run's simulator from the arguments, once, for both the run and the estimate. Scenario mode
- * uses the LLM simulator on `simulatorProfile`, or replays `--replay`. A replay file that can't be read
- * or isn't a results file is a usage error (exit 2).
+ * uses the LLM simulator on `simulatorProfile` (unset or empty: `DEFAULT_SIMULATOR_PROFILE`), or replays
+ * `--replay`. The profile is resolved only on that LLM branch, so a bad `SIMULATOR_MODEL_PROFILE` can't
+ * break any other run (#108). A bad profile, or a replay file that can't be read or isn't a results
+ * file, is a usage error (exit 2).
  */
 export function simulatorSetup(
   args: Pick<CliArgs, "mode" | "replay" | "simulatorProfile">,
   deps: SimulatorSetupDeps,
 ): SimulatorSetup {
   if (args.mode !== "scenario") return { kind: "script-only" };
-  if (args.replay === undefined)
-    return {
-      kind: "llm",
-      profile: args.simulatorProfile,
-      simulator: new LlmPatientSimulator({ llm: deps.llm, profile: args.simulatorProfile }),
-    };
+  if (args.replay === undefined) {
+    const profile = resolveProfile(
+      args.simulatorProfile ?? { name: "", from: SIMULATOR_PROFILE_ENV },
+      DEFAULT_SIMULATOR_PROFILE,
+    );
+    return { kind: "llm", profile, simulator: new LlmPatientSimulator({ llm: deps.llm, profile }) };
+  }
   try {
     return { kind: "replay", simulator: ReplayPatientSimulator.fromReport(deps.readReplay(args.replay)) };
   } catch (error) {
@@ -242,7 +284,11 @@ export function judgeSetup(
   const judges =
     args.calibration === undefined ? args.mode === "scenario" : args.calibration.action === "agreement";
   if (!judges || !args.judge) return { kind: "off" };
-  const profile = resolveProfile(args.judgeProfile ?? DEFAULT_JUDGE_PROFILE, "--judge-profile");
+  // An empty judge setting still means the development default, not the judge's (A-4's quirk, kept).
+  const profile = resolveProfile(
+    args.judgeProfile ?? { name: DEFAULT_JUDGE_PROFILE, from: "--judge-profile" },
+    DEFAULT_MODEL_PROFILE,
+  );
   return { kind: "llm", profile, judge: new LlmJudge({ llm: deps.llm, profile }) };
 }
 

@@ -66,4 +66,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-06 | [One diff helper for two PR checks, and a path limit that only a moved file can see](2026-10-06-one-diff-helper-for-two-checks.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [The web tests wait by hops, not seconds, and the last flake under load is a closed socket](2026-10-06-the-web-tests-wait-by-hops-not-seconds.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [The prompt and the tools now read the clinic calendar from one place, and two of its mutations only fail outside UTC](2026-10-07-one-copy-of-the-clinic-calendar.md) | 4. Teaching the agent to schedule |
+| 2026-10-07 | [The patient simulator keeps its own default, and a bad simulator setting only breaks the runs that use it](2026-10-07-the-simulator-keeps-its-own-default.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [Three rules that lived in two or three places now live in one](2026-10-07-three-rules-each-written-once.md) | 4. Teaching the agent to schedule |
