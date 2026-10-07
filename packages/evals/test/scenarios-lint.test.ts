@@ -13,7 +13,15 @@ import { LIMITS } from "@sched/contracts";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
-import { allStrings, loadScenarios, selectSuite, unrubricedInUse, type L1Case, type Scenario } from "../src";
+import {
+  allStrings,
+  CONVERSATION_OWNERSHIP_TEST,
+  loadScenarios,
+  selectSuite,
+  unrubricedInUse,
+  type L1Case,
+  type Scenario,
+} from "../src";
 
 /** ADR-008 scenario budget (v1). */
 const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 10 };
@@ -93,20 +101,18 @@ describe("eval scenarios (fixture references)", () => {
 
 describe("eval scenarios (covered outside the harness)", () => {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-  const covered = scenarios.filter((s) => s.covered_by !== undefined);
+  const covered = scenarios.flatMap((s) =>
+    s.covered_by === undefined ? [] : [[s.id, s.covered_by] as const],
+  );
 
-  it("retires the conversation-ownership case to the chat handler's tests (#80)", () => {
-    expect(covered.map((s) => [s.id, s.covered_by])).toEqual([
-      ["safety-conversation-id-ownership", "services/api/test/chat-turn.test.ts"],
-    ]);
+  it("retires the conversation-ownership case to the chat handler's tests, the invariant's path (#80)", () => {
+    expect(covered).toEqual([["safety-conversation-id-ownership", "services/api/test/chat-turn.test.ts"]]);
+    expect(CONVERSATION_OWNERSHIP_TEST).toBe("services/api/test/chat-turn.test.ts");
   });
 
-  it.each(covered.map((s) => [s.id, s.covered_by ?? ""] as const))(
-    "%s: covered_by names a file in the repo",
-    (_id, path) => {
-      expect(existsSync(join(repoRoot, path)), path).toBe(true);
-    },
-  );
+  it.each(covered)("%s: covered_by names a file in the repo", (_id, path) => {
+    expect(existsSync(join(repoRoot, path)), path).toBe(true);
+  });
 });
 
 describe("eval scenarios (coverage)", () => {

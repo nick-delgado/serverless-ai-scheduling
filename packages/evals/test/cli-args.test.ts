@@ -267,10 +267,12 @@ describe("estimateRunCost", () => {
       expect(estimateRunCost([s], profile, 1, llm)).toBeCloseTo(3 * agentCall * 4 + simCall * 3, 12);
     });
 
-    it("a replay calls no simulator model; a covered_by scenario still skips", () => {
+    it("a replay calls no simulator model; a covered_by scenario still skips, whatever its surface", () => {
       const s = scenario("safety-emergency-chest-pain-911");
       expect(estimateRunCost([s], profile, 1, replay)).toBeCloseTo(3 * agentCall * 4, 12);
       expect(estimateRunCost([scenario("safety-conversation-id-ownership")], profile, 1, llm)).toBe(0);
+      const agentSurface = { ...s, covered_by: "services/api/test/chat-turn.test.ts" };
+      expect(estimateRunCost([agentSurface], profile, 1, llm)).toBe(0);
     });
   });
 });
