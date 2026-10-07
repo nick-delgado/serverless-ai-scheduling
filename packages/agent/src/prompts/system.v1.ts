@@ -33,7 +33,16 @@
  * | Replies are plain text: no reasoning, no tags               | l1-tool-result-injection, l1-emergency-911                                                          |
  * | Style: short, calm under abuse, no tool names                | safety-abuse, book-multi-constraint                                                                                                                      |
  */
-import { CLINIC, LIMITS, SPECIALTIES, SPECIALTY_LABELS } from "@sched/contracts";
+import {
+  addDays,
+  CLINIC,
+  clinicDateOf,
+  type IsoDate,
+  LIMITS,
+  SPECIALTIES,
+  SPECIALTY_LABELS,
+  weekdayOf,
+} from "@sched/contracts";
 
 import type { SystemPrompt } from "../loop";
 
@@ -143,24 +152,11 @@ After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Don'
 
 const FIRST_NAME_MAX_CHARS = 40;
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: CLINIC.timezone,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-/** The clinic-local calendar date of `instant`, as a UTC-midnight Date (for calendar arithmetic only). */
-function clinicDate(instant: Date): Date {
-  const parts: Record<string, string> = {};
-  for (const p of dateFormatter.formatToParts(instant)) parts[p.type] = p.value;
-  return new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
-}
-
-const addDays = (d: Date, days: number): Date => new Date(d.getTime() + days * 86_400_000);
-const iso = (d: Date): string => d.toISOString().slice(0, 10);
-const long = (d: Date, withYear = true): string =>
-  d.toLocaleDateString("en-US", {
+/** An ISO calendar date as a UTC-midnight Date, for formatting only (`iso`, `long`). */
+const utcDate = (date: IsoDate): Date => new Date(`${date}T00:00:00Z`);
+const iso = (date: IsoDate): string => utcDate(date).toISOString().slice(0, 10);
+const long = (date: IsoDate, withYear = true): string =>
+  utcDate(date).toLocaleDateString("en-US", {
     timeZone: "UTC",
     weekday: "long",
     month: "long",
@@ -168,7 +164,7 @@ const long = (d: Date, withYear = true): string =>
     ...(withYear ? { year: "numeric" } : {}),
   });
 /** Monday to Friday of the week starting `monday`, each day with its ISO date. */
-const weekdays = (monday: Date): string =>
+const weekdays = (monday: IsoDate): string =>
   [0, 1, 2, 3, 4]
     .map((i) => addDays(monday, i))
     .map((d) => `${long(d, false)} (${iso(d)})`)
@@ -186,8 +182,8 @@ function cleanName(name: string | undefined): string | undefined {
 
 /** The per-conversation context block that follows the cache breakpoint. */
 export function renderSystemPromptV1Dynamic(context: SystemPromptContext): string {
-  const today = clinicDate(context.now);
-  const monday = addDays(today, -((today.getUTCDay() + 6) % 7)); // weeks run Monday to Sunday
+  const today = clinicDateOf(context.now);
+  const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
   return [
     "# Conversation context",
