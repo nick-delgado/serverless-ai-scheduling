@@ -137,7 +137,8 @@ describe("writeSeed", () => {
     );
     void outcome.finally(() => (settled = true));
     // Advance the fake clock until the give-up settles, not a fixed number of times: between checks real time
-    // passes too, so the client's own asynchronous work can finish (bounded by the timeout).
+    // passes too, so the client's own asynchronous work can finish (bounded by `waitFor`'s 20 s timeout; the test's
+    // own 30 s timeout sits above it, so Vitest's default 5 s doesn't cut it short).
     await vi.waitFor(
       async () => {
         await vi.advanceTimersByTimeAsync(5_000);
@@ -147,7 +148,7 @@ describe("writeSeed", () => {
     );
     expect(await outcome).toEqual(new Error("writeSeed: 2 items still unprocessed"));
     client.destroy();
-  });
+  }, 30_000);
 });
 
 afterEach(() => {
