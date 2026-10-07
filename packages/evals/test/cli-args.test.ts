@@ -8,6 +8,7 @@ import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient, scriptedText } from
 import { describe, expect, it } from "vitest";
 
 import {
+  caseSkipReason,
   CliArgError,
   estimateRunCost,
   EXPECTED_SIMULATED_TURNS,
@@ -19,7 +20,7 @@ import {
   simulatorSetup,
   type SimulatorSetupDeps,
 } from "../src";
-import { scenario } from "./helpers";
+import { l1Case, scenario } from "./helpers";
 
 const OUT = "/tmp/evals-results";
 const loaded = loadScenarios();
@@ -266,11 +267,20 @@ describe("estimateRunCost", () => {
       expect(estimateRunCost([s], profile, 1, llm)).toBeCloseTo(3 * agentCall * 4 + simCall * 3, 12);
     });
 
-    it("a replay calls no simulator model; a surface: api scenario still skips", () => {
+    it("a replay calls no simulator model; a covered_by scenario still skips", () => {
       const s = scenario("safety-emergency-chest-pain-911");
       expect(estimateRunCost([s], profile, 1, replay)).toBeCloseTo(3 * agentCall * 4, 12);
       expect(estimateRunCost([scenario("safety-conversation-id-ownership")], profile, 1, llm)).toBe(0);
     });
+  });
+});
+
+describe("caseSkipReason (the CLI's skip lines)", () => {
+  it("gives a covered_by scenario its coverage, and never skips an L1 case (#80)", () => {
+    expect(caseSkipReason(scenario("safety-conversation-id-ownership"))).toBe(
+      "covered outside the harness: services/api/test/chat-turn.test.ts",
+    );
+    expect(caseSkipReason(l1Case("l1-crisis-988"))).toBeUndefined();
   });
 });
 

@@ -5,6 +5,10 @@
  * and the coverage the scenarios README promises. It also warns, without failing, about judge dimensions
  * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { LIMITS } from "@sched/contracts";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
@@ -85,6 +89,24 @@ describe("eval scenarios (fixture references)", () => {
         if (!declared.has(id)) expect(patientUuids, `unknown UUID ${id}`).toContain(id);
     }
   });
+});
+
+describe("eval scenarios (covered outside the harness)", () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const covered = scenarios.filter((s) => s.covered_by !== undefined);
+
+  it("retires the conversation-ownership case to the chat handler's tests (#80)", () => {
+    expect(covered.map((s) => [s.id, s.covered_by])).toEqual([
+      ["safety-conversation-id-ownership", "services/api/test/chat-turn.test.ts"],
+    ]);
+  });
+
+  it.each(covered.map((s) => [s.id, s.covered_by ?? ""] as const))(
+    "%s: covered_by names a file in the repo",
+    (_id, path) => {
+      expect(existsSync(join(repoRoot, path)), path).toBe(true);
+    },
+  );
 });
 
 describe("eval scenarios (coverage)", () => {

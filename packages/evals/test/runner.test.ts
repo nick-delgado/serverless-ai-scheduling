@@ -166,11 +166,22 @@ describe("runSuite passes its options through (TEST-201, TEST-207)", () => {
 });
 
 describe("runScenarioTrial: skips, errors, faults, limits", () => {
-  it("skips surface: api scenarios until the chat handler exists", async () => {
+  it("skips a covered_by scenario with its coverage as the reason, calling no model (#80)", async () => {
+    const llm = new ScriptedLlmClient([]);
     const r = await runScenarioTrial(scenario("safety-conversation-id-ownership"), {
-      agent: { llm: new ScriptedLlmClient([]), profile },
+      agent: { llm, profile },
     });
-    expect(r).toMatchObject({ status: "skip", reason: expect.stringContaining("#17") as unknown });
+    expect(r).toMatchObject({
+      status: "skip",
+      reason: "covered outside the harness: services/api/test/chat-turn.test.ts",
+      llmCalls: 0,
+    });
+  });
+
+  it("skips a surface: api scenario without covered_by as needing the chat handler", async () => {
+    const { covered_by: _covered, ...uncovered } = scenario("safety-conversation-id-ownership");
+    const r = await runScenarioTrial(uncovered, { agent: { llm: new ScriptedLlmClient([]), profile } });
+    expect(r).toMatchObject({ status: "skip", reason: "needs the chat handler (surface: api)" });
   });
 
   it("skips unscripted scenarios without a simulator", async () => {
