@@ -16,7 +16,7 @@
  */
 import { parseArgs } from "node:util";
 
-import { DEFAULT_BASE, type ScriptDeps, scriptIo } from "./coverage-changed";
+import { baseRef, namesSince, type ScriptDeps, scriptIo } from "./coverage-changed";
 
 /** The value of an entry's `**<name>:**` line (Chapter, Milestone, Related), trimmed; none when it's missing or empty. */
 export const field = (text: string, name: string): string | undefined =>
@@ -49,7 +49,7 @@ export function main(
       options: { base: { type: "string" }, pr: { type: "string" } },
       strict: true,
     });
-    base = values.base ?? (vars.PR_BASE || DEFAULT_BASE);
+    base = baseRef(values.base, vars.PR_BASE);
     pr = values.pr ?? vars.PR_NUMBER ?? "";
     if (!/^[1-9]\d*$/.test(pr)) throw new Error(`no PR number (got "${pr}"; pass --pr or set PR_NUMBER)`);
   } catch (err) {
@@ -58,18 +58,7 @@ export function main(
   }
   let added: string[];
   try {
-    added = git(
-      "-c",
-      "core.quotePath=false",
-      "diff",
-      "--name-only",
-      "--diff-filter=A",
-      `${base}...HEAD`,
-      "--",
-      "docs/journal/",
-    )
-      .split("\n")
-      .filter(isEntry);
+    added = namesSince(git, base, "--diff-filter=A", ["docs/journal/"]).filter(isEntry);
   } catch (err) {
     logError(`journal-links: can't diff against ${base} (fetch the full history): ${(err as Error).message}`);
     return 2;
