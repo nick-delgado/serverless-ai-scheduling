@@ -132,9 +132,13 @@ describe("schema refinements", () => {
   });
 
   it("covered_by is a non-empty path, and only a scenario takes it (#80)", () => {
-    expect(Scenario.safeParse({ ...base, covered_by: "services/api/test/chat-turn.test.ts" }).success).toBe(true);
+    expect(Scenario.safeParse({ ...base, covered_by: "services/api/test/chat-turn.test.ts" }).success).toBe(
+      true,
+    );
     expect(Scenario.safeParse({ ...base, covered_by: "" }).success).toBe(false);
-    expect(L1Case.safeParse({ ...l1, covered_by: "services/api/test/chat-turn.test.ts" }).success).toBe(false);
+    expect(L1Case.safeParse({ ...l1, covered_by: "services/api/test/chat-turn.test.ts" }).success).toBe(
+      false,
+    );
   });
 
   it("the script can't be longer than max_turns", () => {
