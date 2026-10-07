@@ -1,3 +1,4 @@
+import * as contracts from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +13,9 @@ import {
   utcOffsetMinutes,
   zonedTimeToUtc,
   type Clock,
+  type ZonedParts,
 } from "../src/clock";
+import * as clock from "../src/clock";
 
 const at = (date: string, hour: number, minute = 0): string =>
   zonedTimeToUtc(date, { hour, minute }).toISOString();
@@ -70,6 +73,11 @@ describe("startsAfter (the bookable rule, #77)", () => {
 });
 
 describe("clinic time (America/New_York)", () => {
+  it("re-exports the shared clinic-date helpers from @sched/contracts, so callers keep their imports (#114)", () => {
+    for (const name of ["addDays", "clinicDateOf", "toZonedParts", "weekdayOf"] as const)
+      expect(clock[name], name).toBe(contracts[name]);
+  });
+
   describe("DST end, Sunday Nov 1, 2026 (EDT −4 → EST −5)", () => {
     it("uses −4 before and −5 after the 2 AM transition (06:00Z)", () => {
       expect(utcOffsetMinutes(new Date("2026-11-01T05:59:00Z"))).toBe(-240);
@@ -106,7 +114,7 @@ describe("clinic time (America/New_York)", () => {
     for (const date of ["2026-10-13", "2026-11-03", "2027-01-15", "2027-07-01"]) {
       for (let m = 8 * 60; m < 17 * 60; m += 30) {
         const utc = zonedTimeToUtc(date, { hour: Math.floor(m / 60), minute: m % 60 });
-        const p = toZonedParts(utc);
+        const p: ZonedParts = toZonedParts(utc); // the type is re-exported too (#114)
         expect([p.hour, p.minute]).toEqual([Math.floor(m / 60), m % 60]);
         expect(clinicDateOf(utc)).toBe(date);
       }
