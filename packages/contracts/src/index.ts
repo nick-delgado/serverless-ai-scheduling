@@ -7,6 +7,7 @@
  * - `trace`: per-turn agent trace (ADR-001)
  * - `stream`: chat stream events + NDJSON helpers (ADR-007)
  * - `api`: HTTP request/response shapes for the SPA
+ * - `dates`: clinic-date helpers (clinic calendar day, calendar arithmetic), shared by the tools and the prompt
  *
  * Changing a schema here is a cross-stream change; call it out in the PR (CLAUDE.md).
  * Valid examples for every schema: `@sched/contracts/testing`.
@@ -14,6 +15,7 @@
 export * from "./api";
 export * from "./clinic";
 export * from "./content";
+export * from "./dates";
 export * from "./domain";
 export * from "./ids";
 export * from "./primitives";
