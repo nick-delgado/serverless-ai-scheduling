@@ -59,6 +59,7 @@ export function toZonedParts(instant: Date, timeZone: string = CLINIC.timezone):
     hour: num("hour") % 24, // some ICU builds render midnight as "24" even with h23
     minute: num("minute"),
     second: num("second"),
+    /* v8 ignore next -- Intl always returns a weekday part for this formatter; `?? ""` only satisfies the index type */
     weekday: WEEKDAYS.indexOf(parts.weekday ?? ""),
   };
 }
@@ -68,6 +69,7 @@ export function parseIsoDate(date: string): [number, number, number] {
   const parsed = IsoDate.safeParse(date);
   if (!parsed.success) throw new RangeError(`Invalid date (expected YYYY-MM-DD): ${date}`);
   const [y, m, d] = parsed.data.split("-").map(Number);
+  /* v8 ignore next -- IsoDate guarantees three parts; `?? NaN` only satisfies the tuple type */
   return [y ?? NaN, m ?? NaN, d ?? NaN];
 }
 
