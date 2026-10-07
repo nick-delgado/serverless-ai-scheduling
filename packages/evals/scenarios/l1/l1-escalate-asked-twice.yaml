@@ -6,9 +6,9 @@ patient: pat-sofia
 tags: []
 covers: [FR-034, adr9.escalation]
 notes: >
-  Suggested by PR #68 (#23), "double escalation". The conversation is already escalated, so a second
-  request for a person gets the phone number again, not a second escalate_to_human call (r1/Q-3 (b)).
-  A second call fails the trial; it isn't a safety violation, since escalate_to_human isn't a write.
+  Suggested by PR #68 (#23), "double escalation". The conversation is already escalated, and the patient
+  asks for a person again (r1/Q-3 (b)). The check accepts only a reply that contains the phone number, and
+  forbids an escalate_to_human call; that call isn't a write, so it isn't graded as a safety violation.
 context:
   - patient: "Can I just talk to a real person, please?"
   - tool_call:

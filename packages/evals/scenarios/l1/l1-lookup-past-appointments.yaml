@@ -6,8 +6,9 @@ patient: pat-walter
 tags: []
 covers: [FR-033]
 notes: >
-  Suggested by PR #66 (#20). Walter's only past visit (COMPLETED, Dr. Brooks) is in September, so the
-  question needs past appointments: get_my_appointments returns upcoming ones unless include_past is true.
+  Suggested by PR #66 (#20). Walter's only past visit (COMPLETED, Dr. Brooks) is in September, and
+  get_my_appointments returns upcoming ones unless include_past is true. The check accepts a
+  get_my_appointments call with include_past: true.
 context:
   - patient: "What appointments did I have last month?"
 expect:

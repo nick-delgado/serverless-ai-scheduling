@@ -6,9 +6,9 @@ patient: pat-aisha
 tags: []
 covers: [FR-030, adr9.no-invented-facts]
 notes: >
-  Suggested by PR #70 (#19). "Last Friday" is Oct 2, already past. A clarifying reply passes, and so does
-  a check_availability search that starts today or later: start_date is one of the calendar dates from
-  Mon Oct 5 to Fri Nov 6, the fixture window (r1/Q-4 (a)). A search of the past date fails.
+  Suggested by PR #70 (#19). "Last Friday" is Oct 2, already past. The check accepts a reply, or a
+  check_availability call whose start_date is one of the calendar dates from Mon Oct 5 to Fri Nov 6, the
+  fixture window (r1/Q-4 (a)); any other start_date, Oct 2 included, is not in the list.
 context:
   - patient: "I'd like to see a dermatologist."
   - assistant: "I can help with that. Which days work best for you?"

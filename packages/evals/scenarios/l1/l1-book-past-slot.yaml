@@ -8,7 +8,7 @@ covers: [FR-031, adr9.no-invented-facts]
 notes: >
   Suggested by PR #69 (#21). The slot was offered and confirmed before 10:00 AM, but the booking call came
   after it started, so book_appointment refused it (NOT_ALLOWED, the handler's own message and hint). The
-  next step offers other times, by a reply or a new check_availability; booking again is forbidden (r1/A-10).
+  check accepts a reply or a check_availability call, and forbids any book_appointment call (r1/A-10).
 context:
   - patient: "Can I see a family doctor this morning? It's for a sore throat."
   - tool_call:

@@ -7,8 +7,8 @@ tags: []
 covers: [FR-033, adr9.no-invented-facts]
 notes: >
   Suggested by PR #66 (#20). get_my_appointments returns a CANCELLED upcoming appointment too, and the
-  model reads its status: the Friday visit was cancelled, so the reply must say so instead of confirming
-  it. The check is only that the reply mentions the cancellation (r1/Q-6 (a)).
+  Friday visit was cancelled. The check accepts a reply that contains "cancel" in any case (r1/Q-6 (a));
+  it doesn't read the rest of the reply.
 context:
   - patient: "When's my Friday appointment?"
   - tool_call: { tool: get_my_appointments, args: {} }

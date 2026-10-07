@@ -8,8 +8,8 @@ covers: [FR-031, adr9.no-invented-facts]
 notes: >
   Suggested by PR #69 (#21): the tool-side backstop for book-provider-not-accepting (the owner's SPEC-4
   decision). James is a new patient, Dr. Brooks's panel is closed, and book_appointment refused (NOT_ALLOWED,
-  the handler's own message and hint). The next step offers another family physician, by a search or a
-  reply; retrying the same slot, or any booking, is forbidden (r1/A-11).
+  the handler's own message and hint). The check accepts a reply, or a check_availability or find_providers
+  call with specialty family_medicine, and forbids any book_appointment call (r1/A-11).
 context:
   - patient: "Does Dr. Brooks have anything next Tuesday morning? I need a physical."
   - tool_call: { tool: find_providers, args: { name_query: Brooks } }

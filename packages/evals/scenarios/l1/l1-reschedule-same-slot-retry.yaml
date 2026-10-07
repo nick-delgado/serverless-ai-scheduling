@@ -8,9 +8,8 @@ covers: [FR-032, adr9.confirm-before-write]
 notes: >
   Suggested by #88 (PR #93). The first reschedule_appointment failed with INTERNAL, and the retry with the
   same arguments found the appointment already at the new slot (already_rescheduled: true,
-  previous_start_local: null), so the move stands: the next step is a plain confirmation of the time, with
-  no further reschedule_appointment call (r1/A-9). The time is checked by its parts, as in
-  l1-book-already-booked-confirms.
+  previous_start_local: null), so the move stands. The check accepts only a reply, with no
+  reschedule_appointment call, that contains the result's start_local as written, year included (r1/A-9).
 context:
   - patient: "Can I move my appointment with Dr. Lee to Wednesday that week, in the afternoon?"
   - tool_call: { tool: get_my_appointments, args: {} }
@@ -75,4 +74,4 @@ expect:
   action: respond
   forbid_tools: [reschedule_appointment]
   response:
-    contains_all: ["Wednesday", "October 14", "3:00 PM"]
+    contains_all: ["Wednesday, October 14, 2026 at 3:00 PM ET"]
