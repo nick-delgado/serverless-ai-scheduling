@@ -19,6 +19,13 @@ import { runRepositoryContract } from "../contract/repositories.contract";
 import { AISHA, APPT, CONV_A, MARIA, NOW, SLOT, WALTER, contractSeed, message } from "../contract/scenario";
 import { dynamoLocalAvailable, localClient, tableFactory } from "./local";
 
+/** The sort key a `GetItem` reads, or null for any other command (input as sent: plain or marshalled). */
+function getItemSortKey(commandName: string, input: unknown): string | null {
+  if (commandName !== "GetItemCommand") return null;
+  const sk = (input as { Key?: { SK?: string | { S?: string } } }).Key?.SK;
+  return (typeof sk === "string" ? sk : sk?.S) ?? null;
+}
+
 const available = await dynamoLocalAvailable();
 const client = localClient();
 const tables = tableFactory(client);
@@ -87,18 +94,30 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       expect(await raw(keys.slot("prov_lee", "2026-10-13T19:00:00Z"))).not.toHaveProperty("GSI1PK");
     });
 
+    /** The racing repositories' clock, later than `repos`' so their writes are told apart (`updatedAt`). */
+    const LATER = "2026-10-05T13:05:00.000Z";
+
     /**
-     * Repositories on a second client whose first `TransactWriteItems` runs `rival` just before it is
-     * sent, standing in for a concurrent writer that commits between this call's read and its write.
-     * `rival` writes through the test's own `repos` or `doc`, whose client has no middleware. `codes`
-     * records the cancellation codes if that transaction is cancelled.
+     * Repositories on a second client whose first `TransactWriteItems` (or, with `on: "slotRead"`, first
+     * `GetItem` of a slot) runs `rival` just before it is sent, standing in for a concurrent writer that
+     * commits between this call's reads or before its write. `rival` writes through the test's own `repos`
+     * or `doc`, whose client has no middleware. `codes` records the cancellation codes if that transaction
+     * is cancelled; `reads` records the sort key of every `GetItem` the racing client sends.
      */
-    function withRival(rival: () => Promise<unknown>) {
+    function withRival(rival: () => Promise<unknown>, on: "transact" | "slotRead" = "transact") {
       const racing = localClient();
-      const state: { fired: boolean; codes: (string | undefined)[] | null } = { fired: false, codes: null };
+      const state: { fired: boolean; codes: (string | undefined)[] | null; reads: string[] } = {
+        fired: false,
+        codes: null,
+        reads: [],
+      };
       racing.middlewareStack.add(
         (next, context) => async (args) => {
-          if (context.commandName !== "TransactWriteItemsCommand" || state.fired) return next(args);
+          const sk = getItemSortKey(context.commandName, args.input);
+          if (sk !== null) state.reads.push(sk);
+          const trigger =
+            on === "transact" ? context.commandName === "TransactWriteItemsCommand" : sk?.startsWith("SLOT#");
+          if (!trigger || state.fired) return next(args);
           state.fired = true;
           await rival();
           try {
@@ -115,7 +134,7 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       const racingRepos = createDynamoRepositories({
         tableName,
         client: racing,
-        clock: new FrozenClock(NOW),
+        clock: new FrozenClock(LATER),
         ids: sequentialIds(),
       });
       return { repos: racingRepos, state, destroy: () => racing.destroy() };
@@ -134,6 +153,22 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
           ExpressionAttributeValues: { ":c": "CANCELLED" },
         }),
       );
+
+    /**
+     * `result` is the retry answer carrying the appointment as stored after the rival's move into
+     * `SLOT.leeTue2pm` (not this call's own unwritten version, which has the later `updatedAt`), and the
+     * old slot is OPEN while the new one is BOOKED by the appointment.
+     */
+    async function expectRetryOfStoredMove(result: RescheduleResult) {
+      const stored = await repos.appointments.get(MARIA, APPT.mariaLee);
+      expect(stored).toMatchObject({ status: "BOOKED", slotId: SLOT.leeTue2pm, updatedAt: NOW });
+      expect(result).toEqual({ ok: true, alreadyRescheduled: true, appointment: stored });
+      expect(await repos.slots.get(SLOT.mariaHeld)).toMatchObject({ status: "OPEN" });
+      expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({
+        status: "BOOKED",
+        appointmentId: APPT.mariaLee,
+      });
+    }
 
     /** Move Maria's appointment into `SLOT.leeTue2pm` with `rival` racing it, and expect CONFLICT. */
     async function expectConflictAgainst(rival: () => Promise<unknown>) {
@@ -167,18 +202,31 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       const failed = "ConditionalCheckFailed";
       expect(racing.state.codes).toEqual([failed, failed, failed]);
       expect(rivalResult).toMatchObject({ ok: true, alreadyRescheduled: false });
-      expect(result).toMatchObject({
-        ok: true,
-        alreadyRescheduled: true,
-        appointment: { appointmentId: APPT.mariaLee, status: "BOOKED", slotId: SLOT.leeTue2pm },
-      });
-      expect(result).not.toHaveProperty("previous");
-      expect(await repos.slots.get(SLOT.mariaHeld)).toMatchObject({ status: "OPEN" });
-      expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({
-        status: "BOOKED",
-        appointmentId: APPT.mariaLee,
-      });
+      await expectRetryOfStoredMove(result);
       racing.destroy();
+    });
+
+    it("a reschedule that reads the new slot after an identical move committed answers the retry (#207)", async () => {
+      // The rival makes the same move after this call read the appointment but before it reads the new
+      // slot, so the slot is BOOKED by this appointment. The re-read finds it BOOKED in newSlotId.
+      const racing = withRival(() => moveMariaTo(repos, SLOT.leeTue2pm), "slotRead");
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      racing.destroy();
+      expect(racing.state.fired).toBe(true);
+      await expectRetryOfStoredMove(result);
+    });
+
+    it("a reschedule that reads the new slot after another appointment took it answers SLOT_UNAVAILABLE without a re-read", async () => {
+      const racing = withRival(
+        () => repos.appointments.book({ patientId: AISHA, slotId: SLOT.leeTue2pm, reason: "Rash" }),
+        "slotRead",
+      );
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      racing.destroy();
+      expect(result).toEqual({ ok: false, reason: "SLOT_UNAVAILABLE" });
+      // One read of the appointment, one of the slot: a slot held by another appointment isn't re-checked.
+      expect(racing.state.reads).toEqual([`APPT#${APPT.mariaLee}`, "SLOT#2026-10-13T18:00:00Z"]);
+      expect(await repos.appointments.get(MARIA, APPT.mariaLee)).toMatchObject({ slotId: SLOT.mariaHeld });
     });
 
     it("reschedule returns CONFLICT when a concurrent move took the appointment to another slot", async () => {

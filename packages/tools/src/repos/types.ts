@@ -177,8 +177,9 @@ export interface AppointmentRepo {
    *
    * Idempotent when read: an appointment already in `newSlotId` returns `alreadyRescheduled: true` and
    * writes nothing. A DynamoDB call that read the appointment before a concurrent move into the same slot
-   * committed re-reads it when its transaction is cancelled on the appointment, and gives the same answer
-   * if it is BOOKED in `newSlotId`; otherwise CONFLICT (#207).
+   * committed re-reads it, and gives the same answer if it is BOOKED in `newSlotId` (#207): when it finds
+   * the new slot already held by this appointment (otherwise SLOT_UNAVAILABLE), and when its transaction
+   * is cancelled on the appointment (otherwise CONFLICT).
    */
   reschedule(command: RescheduleCommand): Promise<RescheduleResult>;
 }

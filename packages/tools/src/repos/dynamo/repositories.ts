@@ -3,7 +3,9 @@
  * in-memory ones; both pass `test/contract/repositories.contract.ts`.
  *
  * - Multi-item writes are one `TransactWriteItems` with condition expressions (CLAUDE.md rule 2). A failed
- *   condition is mapped to the typed business result by looking at which item's condition failed.
+ *   condition is mapped to the typed business result by looking at which item's condition failed; some
+ *   branches re-read an item first (`book`'s slot, `reschedule`'s appointment, #207), since the write that
+ *   beat this one may be the caller's own identical retry.
  * - `TransactionConflict` (another transaction touching the same item at the same moment) is retried from
  *   the top, re-reading state, a bounded number of times.
  * - Base-table reads are strongly consistent. GSI1 queries (AP-3, AP-5) can't be: on the real table a
@@ -346,17 +348,31 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
     async reschedule({ patientId, appointmentId, newSlotId }) {
       PatientId.parse(patientId);
       const apptKey = keys.appointment(patientId, appointmentId);
+      /** BOOKED in `newSlotId` is this call's retry (#77, #207): answered with `a` as read, no write. */
+      const asRetry = (a: Appointment | null): RescheduleResult | null =>
+        a && a.status === "BOOKED" && a.slotId === newSlotId
+          ? { ok: true, alreadyRescheduled: true, appointment: a }
+          : null;
 
       return retrying<RescheduleResult>(
         async () => {
           const appt = await getItem(apptKey, appointmentFrom);
           if (!appt) return { ok: false, reason: "APPOINTMENT_NOT_FOUND" };
           if (appt.status !== "BOOKED") return { ok: false, reason: "APPOINTMENT_NOT_BOOKED" };
-          if (appt.slotId === newSlotId) return { ok: true, alreadyRescheduled: true, appointment: appt };
+          const retry = asRetry(appt);
+          if (retry) return retry;
           const newKey = slotKey(newSlotId);
           const newSlot = newKey ? await getItem(newKey, slotFrom) : null;
           if (!newKey || !newSlot) return { ok: false, reason: "SLOT_NOT_FOUND" };
-          if (newSlot.status !== "OPEN") return { ok: false, reason: "SLOT_UNAVAILABLE" };
+          if (newSlot.status !== "OPEN") {
+            // Held by this appointment: an identical move committed between our two reads (#207).
+            // Re-read the appointment to be sure. A slot held by another appointment isn't ours.
+            const held =
+              newSlot.appointmentId === appointmentId
+                ? asRetry(await getItem(apptKey, appointmentFrom))
+                : null;
+            return held ?? { ok: false, reason: "SLOT_UNAVAILABLE" };
+          }
           const old = parseSlotId(appt.slotId);
           if (!old)
             throw new Error(`Invariant violated: appointment ${appointmentId} has slotId ${appt.slotId}`);
@@ -440,10 +456,7 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
               // The appointment moved or changed status since we read it. Re-read: an identical
               // concurrent move that committed first leaves it BOOKED in newSlotId, which is this
               // call's retry (#207). Anything else means the caller's view is stale. Never RETRY.
-              const current = await getItem(apptKey, appointmentFrom);
-              return current && current.status === "BOOKED" && current.slotId === newSlotId
-                ? { ok: true, alreadyRescheduled: true, appointment: current }
-                : { ok: false, reason: "CONFLICT" };
+              return asRetry(await getItem(apptKey, appointmentFrom)) ?? { ok: false, reason: "CONFLICT" };
             }
             if (codes[1] === CONDITION_FAILED) return { ok: false, reason: "SLOT_UNAVAILABLE" };
             if (codes[0] === CONDITION_FAILED) {
