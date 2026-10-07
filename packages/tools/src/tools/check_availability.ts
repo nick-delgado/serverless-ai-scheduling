@@ -42,18 +42,18 @@
  * Order: the repositories return slots ascending by start (AP-4) or by start, then providerId (AP-5), and
  * days are walked in order, so the candidates are already sorted and are only cut to the limit.
  */
-import {
-  CLINIC,
-  LIMITS,
-  type Provider,
-  type ProviderId,
-  type Slot,
-  type SlotOption,
-  type ToolInput,
-} from "@sched/contracts";
+import { CLINIC, LIMITS, type Provider, type ProviderId, type Slot, type ToolInput } from "@sched/contracts";
 
-import { addDays, clinicDateOf, clinicDateRangeUtc, formatClinicDateTime, toZonedParts } from "../clock";
-import { toolFail, toolOk, type ToolHandler } from "../registry";
+import {
+  addDays,
+  clinicDateOf,
+  clinicDateRangeUtc,
+  formatClinicDateTime,
+  startsAfter,
+  toZonedParts,
+} from "../clock";
+import { toolFail, toolOk, type ToolHandler } from "../handler";
+import { toSlotOption } from "./summaries";
 
 const NOON_MINUTES = 12 * 60;
 const CLOSE_MINUTES = CLINIC.closeHour * 60;
@@ -81,15 +81,6 @@ interface Candidate {
   provider: Provider;
 }
 
-const toSlotOption = ({ slot, provider }: Candidate): SlotOption => ({
-  slot_id: slot.slotId,
-  provider_id: slot.providerId,
-  provider_name: provider.displayName,
-  specialty: slot.specialty,
-  start_utc: slot.startUtc,
-  start_local: formatClinicDateTime(slot.startUtc),
-});
-
 export const checkAvailability: ToolHandler<"check_availability"> = async (input, ctx) => {
   const {
     provider_id: providerId,
@@ -114,7 +105,6 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
     );
   }
   const now = ctx.clock.now();
-  const nowMs = now.getTime();
   const today = clinicDateOf(now);
 
   if (range.end_date < today) {
@@ -132,7 +122,7 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
   const offerable = (slots: readonly Slot[], providers: ReadonlyMap<ProviderId, Provider>): Candidate[] =>
     slots.flatMap((slot) => {
       const provider = providers.get(slot.providerId);
-      if (!provider || Date.parse(slot.startUtc) <= nowMs) return [];
+      if (!provider || !startsAfter(slot.startUtc, now)) return [];
       const minutes = wallClockMinutes(slot.startUtc);
       return minutes >= floor && matchesTimeOfDay(minutes, timeOfDay) ? [{ slot, provider }] : [];
     });
@@ -175,5 +165,8 @@ export const checkAvailability: ToolHandler<"check_availability"> = async (input
     );
   }
 
-  return toolOk({ slots: candidates.slice(0, MAX).map(toSlotOption), truncated: candidates.length > MAX });
+  return toolOk({
+    slots: candidates.slice(0, MAX).map(({ slot, provider }) => toSlotOption(slot, provider)),
+    truncated: candidates.length > MAX,
+  });
 };

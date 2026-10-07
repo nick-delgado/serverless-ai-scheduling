@@ -10,21 +10,10 @@
  * - An empty list is a success, not NOT_FOUND. A patient with no profile also gets `[]`, which reveals nothing.
  * - `reason` is the patient's own stored text: returned as data, never spliced into a message (rule 5).
  */
-import type { Appointment, AppointmentSummary, Provider, ProviderId } from "@sched/contracts";
+import type { Provider, ProviderId } from "@sched/contracts";
 
-import { formatClinicDateTime } from "../clock";
-import { toolOk, type ToolHandler } from "../registry";
-
-const toAppointmentSummary = (a: Appointment, provider: Provider): AppointmentSummary => ({
-  appointment_id: a.appointmentId,
-  provider_id: a.providerId,
-  provider_name: provider.displayName,
-  specialty: a.specialty,
-  start_utc: a.startUtc,
-  start_local: formatClinicDateTime(a.startUtc),
-  status: a.status,
-  reason: a.reason,
-});
+import { toolOk, type ToolHandler } from "../handler";
+import { toAppointmentSummary } from "./summaries";
 
 export const getMyAppointments: ToolHandler<"get_my_appointments"> = async (input, ctx) => {
   const nowMs = ctx.clock.now().getTime();
