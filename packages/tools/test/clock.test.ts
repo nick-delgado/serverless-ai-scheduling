@@ -74,8 +74,10 @@ describe("startsAfter (the bookable rule, #77)", () => {
 
 describe("clinic time (America/New_York)", () => {
   it("re-exports the shared clinic-date helpers from @sched/contracts, so callers keep their imports (#114)", () => {
-    for (const name of ["addDays", "clinicDateOf", "toZonedParts", "weekdayOf"] as const)
+    for (const name of ["addDays", "clinicDateOf", "toZonedParts", "weekdayOf"] as const) {
+      expect(contracts[name], name).toBeTypeOf("function");
       expect(clock[name], name).toBe(contracts[name]);
+    }
   });
 
   describe("DST end, Sunday Nov 1, 2026 (EDT −4 → EST −5)", () => {
