@@ -146,7 +146,14 @@ describe("get_my_appointments", () => {
 
   it("reports INTERNAL rather than inventing a name when an appointment's provider record is missing", async () => {
     vi.spyOn(repos.providers, "get").mockResolvedValue(null);
-    expect(errorOf(await run(MARIA)).code).toBe("INTERNAL");
+    const causes: unknown[] = [];
+    const executor = createToolExecutor({ get_my_appointments: getMyAppointments }, contextFor(MARIA), {
+      onInternalError: (error) => causes.push(error),
+    });
+    const result = await executor.execute({ id: "toolu_test", name: "get_my_appointments", input: {} });
+    expect(errorOf(result).code).toBe("INTERNAL");
+    // The handler's own guard, not a TypeError from reading a null provider.
+    expect(String(causes[0])).toMatch(/Appointment references unknown provider prov_lee/);
   });
 
   it("rejects invalid input", async () => {

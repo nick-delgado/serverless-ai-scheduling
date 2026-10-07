@@ -111,7 +111,7 @@ export const Escalation = z.strictObject({
   notification: z.strictObject({
     status: z.enum(["PENDING", "SENT", "FAILED"]),
     messageId: z.string().min(1).optional(),
-    error: z.string().max(500).optional(),
+    error: z.string().max(LIMITS.escalationNotificationErrorMaxChars).optional(),
   }),
 });
 export type Escalation = z.infer<typeof Escalation>;

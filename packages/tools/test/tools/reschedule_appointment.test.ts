@@ -3,6 +3,7 @@ import { EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
+import { cancelledBrooksVisit } from "./established";
 import { FrozenClock } from "../../src/clock";
 import {
   createToolExecutor,
@@ -13,7 +14,7 @@ import {
 } from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
-import { TOOL_ERROR_CODE_FOR, type Repositories, type RescheduleErrorReason } from "../../src/repos/types";
+import type { Repositories, RescheduleFailureReason } from "../../src/repos/types";
 import { rescheduleAppointment } from "../../src/tools/reschedule_appointment";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
@@ -36,6 +37,7 @@ const LEE_NOV_2_10AM_EST = "slot_lee_20261102T1500Z"; // Monday after it (UTC-5)
 const LEE_OCT_5_8AM = "slot_lee_20261005T1200Z"; // an hour before "now": OPEN but in the past
 const OKAFOR_OCT_14_9AM = "slot_okafor_20261014T1300Z"; // another dermatologist
 const BROOKS_OCT_14_9AM = "slot_brooks_20261014T1300Z"; // family medicine, not taking new patients
+const BROOKS_OCT_6_10AM = "slot_brooks_20261006T1400Z"; // another open Brooks slot
 const ALVAREZ_OCT_14_10AM = "slot_alvarez_20261014T1400Z"; // family medicine, taking new patients
 const HADDAD_OCT_14_9AM = "slot_haddad_20261014T1300Z"; // cardiology
 const LEE_NOT_A_SLOT = "slot_lee_20261013T1845Z"; // well-formed id, no such slot (not on the 30-minute grid)
@@ -178,6 +180,34 @@ describe("reschedule_appointment", () => {
       );
       expect(error.message).toMatch(/new patients/);
       expect(error.hint).toMatch(/another provider in the same specialty/);
+    });
+
+    it("allows a move to a provider not taking new patients when the patient's only visit with them is BOOKED", async () => {
+      // Sofia has no history with Dr. Brooks. Book one future visit with him directly through the repo (the
+      // tool rule doesn't apply to setup), then move her Alvarez appointment to another of his slots.
+      await bookFor(SOFIA, BROOKS_OCT_6_10AM, "Blood pressure check");
+      const out = outputOf(await move(SOFIA, SOFIA_APPT, BROOKS_OCT_14_9AM));
+      expect(out.appointment).toMatchObject({
+        provider_id: "prov_brooks",
+        start_utc: "2026-10-14T13:00:00Z",
+      });
+      expect(slotOf(BROOKS_OCT_14_9AM)).toMatchObject({ status: "BOOKED", appointmentId: SOFIA_APPT });
+    });
+
+    it("NOT_ALLOWED when the patient's only visit with that provider is CANCELLED", async () => {
+      // A test-local seed (decision r1/Q-3): Sofia's only Brooks appointment was cancelled, so she is still new.
+      const fixture = buildClinicFixture();
+      const cancelled = cancelledBrooksVisit(SOFIA);
+      repos = createInMemoryRepositories({
+        seed: { ...fixture, appointments: [...fixture.appointments, cancelled] },
+        clock,
+        ids: sequentialIds(),
+      });
+      const error = await expectFailureChangesNothing(
+        () => move(SOFIA, SOFIA_APPT, BROOKS_OCT_14_9AM),
+        "NOT_ALLOWED",
+      );
+      expect(error.message).toMatch(/new patients/);
     });
 
     it("allows an existing patient to move to a provider who isn't taking new patients", async () => {
@@ -361,19 +391,12 @@ describe("reschedule_appointment", () => {
       expect(repos.snapshot()).toEqual(before);
     });
 
-    it("INTERNAL when the repository reports SAME_SLOT but the appointment can no longer be read", async () => {
-      const realGet = repos.appointments.get;
-      let reads = 0;
+    it("INTERNAL for a slot whose provider is missing, before anything is written", async () => {
       const stubbed: Repositories = {
         ...repos,
-        appointments: {
-          ...repos.appointments,
-          // The first read (before the write) finds it; the re-read after SAME_SLOT does not.
-          get: (patientId, appointmentId) =>
-            reads++ === 0 ? realGet(patientId, appointmentId) : Promise.resolve(null),
-          reschedule: () => Promise.resolve({ ok: false, reason: "SAME_SLOT" }),
-        },
+        providers: { ...repos.providers, get: () => Promise.resolve(null) },
       };
+      const before = repos.snapshot();
       const causes: unknown[] = [];
       const result = await run(
         MARIA,
@@ -382,22 +405,8 @@ describe("reschedule_appointment", () => {
         { onInternalError: (error) => causes.push(error) },
       );
       expect(errorOf(result).code).toBe("INTERNAL");
-      // The handler's own guard, not a TypeError from reading a null appointment.
-      expect(String(causes[0])).toMatch(/vanished after SAME_SLOT/);
-    });
-
-    it("INTERNAL for a slot whose provider is missing, before anything is written", async () => {
-      const stubbed: Repositories = {
-        ...repos,
-        providers: { ...repos.providers, get: () => Promise.resolve(null) },
-      };
-      const before = repos.snapshot();
-      const result = await run(
-        MARIA,
-        { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST },
-        stubbed,
-      );
-      expect(errorOf(result).code).toBe("INTERNAL");
+      // The handler's own guard, not a TypeError from reading a null provider.
+      expect(String(causes[0])).toMatch(/Slot slot_lee_20261102T1500Z references unknown provider prov_lee/);
       expect(repos.snapshot()).toEqual(before);
     });
   });
@@ -414,15 +423,17 @@ describe("reschedule_appointment", () => {
     expect(await repos.appointments.listForPatient(MARIA)).toHaveLength(1);
   });
 
-  it("answers already_rescheduled when the repository reports SAME_SLOT (a concurrent retry moved it first)", async () => {
+  it("answers already_rescheduled when the repository answers a retry (a concurrent retry moved it first)", async () => {
     const realReschedule = repos.appointments.reschedule;
     const stubbed: Repositories = {
       ...repos,
       appointments: {
         ...repos.appointments,
         reschedule: async (command) => {
-          await realReschedule(command); // the other call's move lands first...
-          return { ok: false, reason: "SAME_SLOT" }; // ...so this one finds the appointment already there
+          const first = await realReschedule(command); // the other call's move lands first...
+          if (!first.ok) throw new Error(`setup failed: ${first.reason}`);
+          // ...so this one finds the appointment already there.
+          return { ok: true, alreadyRescheduled: true, appointment: first.appointment };
         },
       },
     };
@@ -451,17 +462,13 @@ describe("reschedule_appointment", () => {
   describe("maps every repository failure reason", () => {
     // Some reasons can't be reached through the fixture (CONFLICT is DynamoDB-only; the pre-checks catch
     // others first), so stub the repo's answer to prove each still maps to a code and a next step.
-    const cases: [RescheduleErrorReason, ToolError["error"]["code"]][] = [
+    const cases: [RescheduleFailureReason, ToolError["error"]["code"]][] = [
       ["APPOINTMENT_NOT_FOUND", "NOT_FOUND"],
       ["APPOINTMENT_NOT_BOOKED", "NOT_ALLOWED"],
       ["SLOT_NOT_FOUND", "NOT_FOUND"],
       ["SLOT_UNAVAILABLE", "SLOT_UNAVAILABLE"],
       ["CONFLICT", "INTERNAL"],
     ];
-    it("has no error code for SAME_SLOT, which is answered as a success", () => {
-      expect(Object.keys(TOOL_ERROR_CODE_FOR)).not.toContain("SAME_SLOT");
-    });
-
     it.each(cases)("%s → %s with a hint", async (reason, code) => {
       const stubbed: Repositories = {
         ...repos,

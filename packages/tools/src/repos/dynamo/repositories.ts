@@ -352,7 +352,7 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
           const appt = await getItem(apptKey, appointmentFrom);
           if (!appt) return { ok: false, reason: "APPOINTMENT_NOT_FOUND" };
           if (appt.status !== "BOOKED") return { ok: false, reason: "APPOINTMENT_NOT_BOOKED" };
-          if (appt.slotId === newSlotId) return { ok: false, reason: "SAME_SLOT" };
+          if (appt.slotId === newSlotId) return { ok: true, alreadyRescheduled: true, appointment: appt };
           const newKey = slotKey(newSlotId);
           const newSlot = newKey ? await getItem(newKey, slotFrom) : null;
           if (!newKey || !newSlot) return { ok: false, reason: "SLOT_NOT_FOUND" };
@@ -432,7 +432,7 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
                 },
               },
             ]);
-            return { ok: true, appointment: moved, previous: appt };
+            return { ok: true, alreadyRescheduled: false, appointment: moved, previous: appt };
           } catch (err) {
             const codes = cancellationCodes(err);
             if (!codes) throw err;

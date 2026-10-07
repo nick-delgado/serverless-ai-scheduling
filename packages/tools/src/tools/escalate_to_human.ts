@@ -28,7 +28,7 @@
 import { CLINIC, LIMITS, type Escalation } from "@sched/contracts";
 
 import { sendEscalationNotice } from "../notify/notice";
-import { toolFail, toolOk, type ToolContext, type ToolHandler } from "../registry";
+import { toolFail, toolOk, type ToolContext, type ToolHandler } from "../handler";
 
 function notifyStaff(escalation: Escalation, ctx: ToolContext): Promise<Escalation["notification"]> {
   if (!ctx.notifier) return Promise.resolve({ status: "FAILED", error: "No notifier configured" });

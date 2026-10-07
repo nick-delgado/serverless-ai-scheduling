@@ -3,16 +3,8 @@
  * Identity comes from ctx.patientId (the verified JWT), never from input (CLAUDE.md rule 1).
  * Only what the output schema asks for is returned: no date of birth or other PII (ADR-009).
  */
-import type { Provider, ProviderSummary } from "@sched/contracts";
-
-import { toolFail, toolOk, type ToolHandler } from "../registry";
-
-const toProviderSummary = (p: Provider): ProviderSummary => ({
-  provider_id: p.providerId,
-  display_name: p.displayName,
-  specialty: p.specialty,
-  accepting_new_patients: p.acceptingNewPatients,
-});
+import { toolFail, toolOk, type ToolHandler } from "../handler";
+import { toProviderSummary } from "./summaries";
 
 export const getPatientProfile: ToolHandler<"get_patient_profile"> = async (_input, ctx) => {
   const patient = await ctx.repos.patients.get(ctx.patientId);
