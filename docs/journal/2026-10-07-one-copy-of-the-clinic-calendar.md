@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #114, PR #102 (finding `7e3e8bd/SMELL-1`), #34, PRD FR-030, FR-035
+**Related:** #114, PR #208, PR #102 (finding `7e3e8bd/SMELL-1`), #34, PRD FR-030, FR-035
 
 ## What happened
 The system prompt's "Today / This week / Next week" lines (PR #102) had their own copy of the clinic-date arithmetic, because `@sched/agent` can't import `@sched/tools`, where `clinicDateOf`, `addDays` and `weekdayOf` lived. Two copies of "which day is it at the clinic" can drift, and a wrong weekday in the prompt becomes a wrong booking.
