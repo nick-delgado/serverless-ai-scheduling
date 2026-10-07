@@ -22,14 +22,13 @@ import {
   TOOLS,
   toolDefinitionsForModel,
   type ModelToolDefinition,
-  type ToolErrorCode,
-  type ToolInput,
-  type ToolOutput,
 } from "@sched/contracts";
 
-import type { Clock } from "./clock";
-import type { Notifier } from "./notify";
-import type { Repositories } from "./repos/types";
+import { toolFail, type ToolContext, type ToolHandler, type ToolHandlerResult } from "./handler";
+
+// The handler types and helpers live in ./handler (so handlers never import this module); `@sched/tools`
+// exposes them through this re-export.
+export { toolFail, toolOk, type ToolContext, type ToolHandler, type ToolHandlerResult } from "./handler";
 
 // Tool handlers: each tool issue adds its import under its own line (keeps parallel PRs conflict-free).
 // #19 find_providers, check_availability
@@ -70,43 +69,10 @@ export interface ToolExecutor {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Handlers and registry
+// Registry (the handler types are in ./handler)
 // ---------------------------------------------------------------------------------------------
 
-/** What a handler may use. `patientId` comes from the verified JWT, never from tool input. */
-export interface ToolContext {
-  readonly patientId: PatientId;
-  readonly conversationId: ConversationId;
-  readonly clock: Clock;
-  readonly repos: Repositories;
-  /** Staff notifications (escalate_to_human). Optional: without it, escalations are recorded as FAILED. */
-  readonly notifier?: Notifier;
-}
-
-export type ToolHandlerResult<N extends ToolName> =
-  { ok: true; output: ToolOutput<N> } | { ok: false; error: ToolError };
-
-/** A tool implementation. Input is already validated and defaulted; the output is validated after. */
-export type ToolHandler<N extends ToolName> = (
-  input: ToolInput<N>,
-  ctx: ToolContext,
-) => Promise<ToolHandlerResult<N>>;
-
 export type ToolRegistry = { readonly [N in ToolName]?: ToolHandler<N> };
-
-/** Success result for a handler (the handler's `ToolHandler<N>` return type checks the output shape). */
-export function toolOk<O>(output: O): { ok: true; output: O } {
-  return { ok: true, output };
-}
-
-/** Failure result for a handler. `hint` tells the model what to do next. */
-export function toolFail(
-  code: ToolErrorCode,
-  message: string,
-  hint?: string,
-): { ok: false; error: ToolError } {
-  return { ok: false, error: { error: hint === undefined ? { code, message } : { code, message, hint } } };
-}
 
 /**
  * The production registry. Tool issues (#19–#23) each add one entry under their comment.

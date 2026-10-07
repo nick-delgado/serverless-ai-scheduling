@@ -1,4 +1,12 @@
-import { CLINIC, TOOLS, type ConversationMessage, type ToolError, type ToolOutput } from "@sched/contracts";
+import {
+  CLINIC,
+  Escalation,
+  LIMITS,
+  TOOLS,
+  type ConversationMessage,
+  type ToolError,
+  type ToolOutput,
+} from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -232,6 +240,21 @@ describe("escalate_to_human", () => {
     outputOf(await run(MARIA));
     const stored = await repos.escalations.getForConversation(MARIA, CONV);
     expect(stored?.notification).toEqual({ status: "FAILED", error: `Error: ${"x".repeat(493)}` });
+  });
+
+  it("the Escalation schema accepts a notification error of exactly the limit and rejects one character more", () => {
+    const max = LIMITS.escalationNotificationErrorMaxChars;
+    const escalation = (error: string) => ({
+      escalationId: EXAMPLES.EscalationId,
+      conversationId: CONV,
+      patientId: MARIA,
+      reason: INPUT.reason,
+      summary: INPUT.summary,
+      createdAt: "2026-10-05T13:00:00.000Z",
+      notification: { status: "FAILED", error },
+    });
+    expect(Escalation.safeParse(escalation("x".repeat(max))).success).toBe(true);
+    expect(Escalation.safeParse(escalation("x".repeat(max + 1))).success).toBe(false);
   });
 
   it("records FAILED and still returns the phone and hours when building the notice fails", async () => {

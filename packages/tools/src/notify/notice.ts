@@ -5,14 +5,17 @@
  * built from the records as stored at retry time: the transcript is the conversation's messages then, which
  * may differ from the first attempt's (later turns, or none once the messages expire).
  */
-import type { ConversationMessage, Escalation, PatientId, Patient } from "@sched/contracts";
+import {
+  LIMITS,
+  type ConversationMessage,
+  type Escalation,
+  type PatientId,
+  type Patient,
+} from "@sched/contracts";
 
 import { formatClinicDateTime } from "../clock";
 import type { Repositories } from "../repos/types";
 import type { EscalationNotice, Notifier, TranscriptLine } from "./types";
-
-/** The longest error text stored on an escalation's notification (the `Escalation` contract's limit). */
-export const NOTIFICATION_ERROR_MAX_CHARS = 500;
 
 /** Patient/assistant text only. Tool results travel in user messages; they are skipped with every non-text block. */
 export function transcriptOf(messages: readonly ConversationMessage[]): TranscriptLine[] {
@@ -47,10 +50,10 @@ export function buildEscalationNotice(
   };
 }
 
-/** `error` as stored on a FAILED notification: `name: message`, capped, and never empty. */
+/** `error` as stored on a FAILED notification: `name: message`, capped at the `Escalation` contract's limit, and never empty. */
 export function notificationErrorText(error: unknown): string {
   const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  return text.slice(0, NOTIFICATION_ERROR_MAX_CHARS) || "Unknown error";
+  return text.slice(0, LIMITS.escalationNotificationErrorMaxChars) || "Unknown error";
 }
 
 /** The result of one send, as it is recorded on the escalation. */

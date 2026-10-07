@@ -57,6 +57,8 @@ File: `packages/tools/src/tools/<tool_name>.ts` (snake_case, matching the tool n
 
 **Use only what `ToolContext` gives you:** `ctx.patientId`, `ctx.conversationId`, `ctx.clock`, `ctx.repos`. No imports of AWS SDKs, `process.env`, argument-less `new Date()` or `Date.now()` (anything that reads the real clock; parsing a stored timestamp with `new Date(iso)` is fine), or module-level state. This is what lets the eval harness run the real handler against in-memory repos at a frozen instant (rule 3). If a tool needs a new dependency (the `Notifier` for escalate_to_human), add it to the context through an injected interface with an in-memory fake, and call out the `ToolContext` change in the PR, since every tool and both callers share it.
 
+**Shared pieces.** Import `ToolHandler`, `ToolContext`, `toolOk` and `toolFail` from `../handler`, never from `../registry`: the registry imports every handler, and `test/import-cycle.test.ts` fails on the cycle. Build providers, appointments and slots with the shared mappers in `./summaries` (`toProviderSummary`, `toAppointmentSummary`, `toSlotOption`), and decide whether a slot or appointment can still be booked or moved with `startsAfter(startUtc, now)` from `../clock` (strictly after `now`), so every tool describes those records and judges bookability the same way (#77). `get_my_appointments`' "upcoming" filter (at or after `now`; #125 makes it `isUpcoming`) is a different rule at the boundary.
+
 **Identity.** Every patient-owned read or write uses `ctx.patientId`. Repos return `null` (or `*_NOT_FOUND`) for another patient's records, so a cross-patient attempt looks exactly like "doesn't exist". Keep it that way in your messages: say "No appointment with that ID for you", never "That appointment belongs to someone else". Confirming existence leaks information.
 
 **Writes are atomic.** Booking and rescheduling go through `appointments.book` / `appointments.reschedule`, which are one transaction each (rule 2). Don't read a slot, decide, then write. The repo's conditional write is the check. Tool-level rules that need "now" (for example "can't book a slot in the past") belong in the handler, using `ctx.clock.now()`, and run *before* the write but *after* the patient's own retry check: a patient who already holds the slot gets it back even if it has started (ADR-004 "first checks"; the full order is in `book_appointment.ts`'s header).
@@ -160,16 +162,8 @@ This is the pattern, not the shipped code (#20 owns the real file). It's the sim
  * get_patient_profile (FR-037): the logged-in patient's name and preferred provider.
  * Identity comes from ctx.patientId (the verified JWT), never from input (CLAUDE.md rule 1).
  */
-import type { Provider, ProviderSummary } from "@sched/contracts";
-
-import { toolFail, toolOk, type ToolHandler } from "../registry";
-
-const toProviderSummary = (p: Provider): ProviderSummary => ({
-  provider_id: p.providerId,
-  display_name: p.displayName,
-  specialty: p.specialty,
-  accepting_new_patients: p.acceptingNewPatients,
-});
+import { toolFail, toolOk, type ToolHandler } from "../handler";
+import { toProviderSummary } from "./summaries";
 
 export const getPatientProfile: ToolHandler<"get_patient_profile"> = async (_input, ctx) => {
   const patient = await ctx.repos.patients.get(ctx.patientId);

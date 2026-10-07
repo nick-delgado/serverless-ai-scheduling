@@ -61,4 +61,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-06 | [Six "noticed" minors from the judge's PR, tidied, and a hash that pins the judge's prompt to its version](2026-10-06-six-noticed-minors-tidied.md) | 5. What the evals showed |
 | 2026-10-06 | [Three reviews asked for the same journal fix, so a test checks it now](2026-10-06-the-journal-index-checks-itself.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [Eval results now outlive the worktree that ran them](2026-10-06-eval-results-outlive-the-worktree.md) | 5. What the evals showed |
+| 2026-10-06 | [A same-slot reschedule retry is now the repository's success, not the handler's workaround](2026-10-06-a-retry-is-the-repositorys-answer-too.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [Ten cases the tool PRs asked for land as L1, and the API-surface case retires to the handler's tests](2026-10-06-tool-pr-cases-land-as-l1.md) | 4. Teaching the agent to schedule |
