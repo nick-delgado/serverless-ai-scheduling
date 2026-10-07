@@ -2,9 +2,13 @@
  * When `until` gives up (#134): only after both its hop floor and its real-time floor. The clock is
  * `performance.now()`, stubbed here so each condition check moves it a known step.
  */
+import { getConfig } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { UNTIL_MIN_HOPS, UNTIL_MIN_MS, until, untilFound } from "./testUtils";
+import { UNTIL_MIN_HOPS, until, untilFound } from "./testUtils";
+
+/** `until`'s time floor: the `asyncUtilTimeout` src/test/setup.ts sets. */
+const minMs = () => getConfig().asyncUtilTimeout;
 
 // Each test runs hundreds of real hops, which a loaded runner can stretch past the 5 s default.
 vi.setConfig({ testTimeout: 20_000 });
@@ -31,11 +35,11 @@ describe("until", () => {
     // 5 ms per check: past the hop floor at 2.5 s, so only the time floor keeps it going to 600 checks.
     const { checks, condition } = neverWithClock(5);
     await expect(until(condition)).rejects.toThrow("until: the condition never held");
-    expect(checks.count).toBe(UNTIL_MIN_MS / 5);
+    expect(checks.count).toBe(minMs() / 5);
   });
 
   it("runs its hop floor even when the time floor has long passed", async () => {
-    const { checks, condition } = neverWithClock(10 * UNTIL_MIN_MS);
+    const { checks, condition } = neverWithClock(10 * minMs());
     await expect(until(condition)).rejects.toThrow("until: the condition never held");
     expect(checks.count).toBe(UNTIL_MIN_HOPS);
   });
