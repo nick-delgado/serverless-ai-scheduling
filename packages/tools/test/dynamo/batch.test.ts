@@ -15,6 +15,9 @@ import {
 } from "../../src/repos/dynamo/repositories";
 import { contractSeed } from "../contract/scenario";
 
+// A copy of `scripts/seed-data.test.ts`' fakeClient, by #125's A-7: that file keeps it for its SSM tests,
+// and a test helper isn't worth a package export.
+// jscpd:ignore-start
 /** A client whose `send` records each command's input and answers with `reply(input, call)`. */
 function fakeClient(reply: (input: BatchWriteCommandInput, call: number) => unknown) {
   const sent: BatchWriteCommandInput[] = [];
@@ -26,6 +29,7 @@ function fakeClient(reply: (input: BatchWriteCommandInput, call: number) => unkn
   };
   return { sent, client: client as unknown as Pick<DynamoDBDocumentClient, "send"> };
 }
+// jscpd:ignore-end
 
 const requestsOf = (input: BatchWriteCommandInput) => input.RequestItems?.t1 ?? [];
 const giveUp = (n: number) => new Error(`${String(n)} still unprocessed`);

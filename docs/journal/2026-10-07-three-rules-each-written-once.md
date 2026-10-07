@@ -28,7 +28,7 @@ Nick settled the open questions before work started (decision lines r1/Q-1 to Q-
 
 ## Evidence
 
-- **Seen failing:** 28 exact edits with `npm run mutate`, each applied alone, to the helper (batch size, attempt cap, wait, the put, delete and table filters), its export, `writeSeed`'s requests, `deleteRows`' keys, give-up text and wait, `visibleTextsOf` and the separator, each caller's join and filter (loop stored and streamed, restore patient and assistant, transcript), `isUpcoming`'s boundary, its export and both call sites. All 28 went red in the test named in each edit's `expect`. The PR lists them.
+- **Seen failing:** 31 exact edits with `npm run mutate`, each applied alone, to the helper (batch size, attempt cap, wait, default timer, the put, delete, other-kind and table filters), its export, `writeSeed`'s requests and give-up text, `deleteRows`' keys, give-up text and wait, `visibleTextsOf` and the separator, each caller's join and filter (loop stored and streamed, restore patient and assistant, transcript), `isUpcoming`'s boundary, its export and both call sites. All 31 went red in the test named in each edit's `expect`. The PR lists them. `writeSeed`'s give-up is tested with a real `DynamoDBClient` whose middleware answers every call with all its puts unprocessed, under fake timers, so the test needs neither DynamoDB Local nor 25 seconds of waits.
 - **Eval smoke runs** (Nick approved them in r1/Q-4; agent and simulator on `sonnet-4.6`, judge on `haiku-4.5`, 1 trial per case, one at a time):
 
   | Run | `main` @ `6d1e593` | This branch |
