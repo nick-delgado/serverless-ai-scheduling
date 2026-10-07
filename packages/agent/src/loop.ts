@@ -36,6 +36,8 @@ import {
   type TurnId,
   type TurnOutcome,
   type TurnTrace,
+  VISIBLE_TEXT_SEPARATOR,
+  visibleTextsOf,
 } from "@sched/contracts";
 
 import { FALLBACK_MESSAGES } from "./fallback-messages";
@@ -103,8 +105,11 @@ export interface AgentTurnResult {
   error?: unknown;
 }
 
-/** Streamed between separate text blocks so a preamble and the answer don't run together. */
-export const TEXT_BLOCK_SEPARATOR = "\n\n";
+/**
+ * Streamed between separate text blocks so a preamble and the answer don't run together: the contracts'
+ * `VISIBLE_TEXT_SEPARATOR`, kept under this name for `@sched/agent`'s callers.
+ */
+export const TEXT_BLOCK_SEPARATOR = VISIBLE_TEXT_SEPARATOR;
 
 export function runAgentTurn(input: RunAgentTurnInput): Promise<AgentTurnResult> {
   return new AgentTurn(input).run();
@@ -323,7 +328,7 @@ class AgentTurn {
         if (text.length === 0) return;
         if (separatorPending) {
           separatorPending = false;
-          this.#stream(TEXT_BLOCK_SEPARATOR);
+          this.#stream(VISIBLE_TEXT_SEPARATOR);
         }
         this.#stream(text);
       },
@@ -436,7 +441,7 @@ class AgentTurn {
       refusal: FALLBACK_MESSAGES.refusal,
       malformed_output: FALLBACK_MESSAGES.malformedOutput,
     }[outcome];
-    if (this.#streamedChars > 0) this.#stream(TEXT_BLOCK_SEPARATOR);
+    if (this.#streamedChars > 0) this.#stream(VISIBLE_TEXT_SEPARATOR);
     this.#stream(text);
     this.#keptChars = this.#streamedChars;
     this.#newMessages.push({ role: "assistant", content: [{ type: "text", text }] });
@@ -502,7 +507,6 @@ function requestMessages(messages: readonly LlmMessage[], profile: ModelProfile)
 function storedText(messages: LlmMessage[]): string {
   return messages
     .filter((m) => m.role === "assistant")
-    .flatMap((m) => m.content.map((b) => (b.type === "text" ? b.text : "")))
-    .filter((text) => text.length > 0)
-    .join(TEXT_BLOCK_SEPARATOR);
+    .flatMap((m) => visibleTextsOf(m.content))
+    .join(VISIBLE_TEXT_SEPARATOR);
 }

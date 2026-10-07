@@ -13,6 +13,7 @@ import {
 } from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
+import { isUpcoming } from "../../src/index";
 import { getMyAppointments } from "../../src/tools/get_my_appointments";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
@@ -176,5 +177,15 @@ describe("get_my_appointments", () => {
     }
 
     expect(repos.snapshot()).toEqual(before); // read-only
+  });
+});
+
+describe("isUpcoming (shared with the session greeting, #125)", () => {
+  const now = new Date("2026-10-13T18:30:00Z");
+
+  it("counts an appointment starting exactly now as upcoming, and one a minute earlier as past", () => {
+    expect(isUpcoming({ startUtc: "2026-10-13T18:30:00Z" }, now)).toBe(true);
+    expect(isUpcoming({ startUtc: "2026-10-13T18:31:00Z" }, now)).toBe(true);
+    expect(isUpcoming({ startUtc: "2026-10-13T18:29:00Z" }, now)).toBe(false);
   });
 });

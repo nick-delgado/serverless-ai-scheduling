@@ -28,15 +28,10 @@ import { parseArgs } from "node:util";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
-import {
-  BatchWriteCommand,
-  type DynamoDBDocumentClient,
-  paginateQuery,
-  type QueryCommandInput,
-} from "@aws-sdk/lib-dynamodb";
+import { type DynamoDBDocumentClient, paginateQuery, type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import type { Appointment, Patient, Slot } from "@sched/contracts";
 import { type ClinicSeed, clinicDateOf } from "@sched/tools";
-import { createDocumentClient, keys, writeSeed } from "@sched/tools/dynamo";
+import { batchWrite, createDocumentClient, keys, writeSeed } from "@sched/tools/dynamo";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS, type FixturePatientAlias } from "@sched/tools/fixtures";
 
 import { mappingPath, readMapping, type UserMapping } from "./seed-users";
@@ -227,36 +222,23 @@ export async function readExisting(
   return { keys: new Set(byKey.keys()), patientCreatedAt };
 }
 
-/** Most `BatchWriteItem` calls per batch of 25 deletes before `deleteRows` gives up. */
-export const DELETE_MAX_ATTEMPTS = 8;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
- * Delete `rows` by key in batches of 25, re-sending the deletes DynamoDB returns as unprocessed after
- * waiting `50 * 2^attempt` ms, at most `DELETE_MAX_ATTEMPTS` calls per batch. `wait` is injectable so tests
- * don't sleep.
+ * Delete `rows` by key (`PK` and `SK` only) through `batchWrite`, which re-sends unprocessed deletes.
+ * `wait` is injectable so tests don't sleep.
  */
 export async function deleteRows(
   doc: Pick<DynamoDBDocumentClient, "send">,
   tableName: string,
   rows: readonly Row[],
-  wait: (ms: number) => Promise<void> = sleep,
+  wait?: (ms: number) => Promise<void>,
 ): Promise<void> {
-  for (let i = 0; i < rows.length; i += 25) {
-    let requests: { DeleteRequest: { Key: Row } }[] = rows
-      .slice(i, i + 25)
-      .map((r) => ({ DeleteRequest: { Key: { PK: r.PK, SK: r.SK } } }));
-    for (let attempt = 1; requests.length > 0; attempt++) {
-      if (attempt > DELETE_MAX_ATTEMPTS)
-        throw new Error(`reset: ${requests.length} deletes still unprocessed`);
-      const out = await doc.send(new BatchWriteCommand({ RequestItems: { [tableName]: requests } }));
-      requests = (out.UnprocessedItems?.[tableName] ?? []).flatMap((r) =>
-        r.DeleteRequest?.Key ? [{ DeleteRequest: { Key: r.DeleteRequest.Key } }] : [],
-      );
-      if (requests.length > 0) await wait(50 * 2 ** attempt);
-    }
-  }
+  await batchWrite(
+    doc,
+    tableName,
+    rows.map((r) => ({ DeleteRequest: { Key: { PK: r.PK, SK: r.SK } } })),
+    (unprocessed) => new Error(`reset: ${String(unprocessed)} deletes still unprocessed`),
+    wait,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------

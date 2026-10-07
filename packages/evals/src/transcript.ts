@@ -3,8 +3,14 @@
  * calls with their results, in the order they happened. Built from the loop's stored messages and trace,
  * so it sees exactly what the patient saw and what the tools returned.
  */
-import { TEXT_BLOCK_SEPARATOR, type LlmMessage } from "@sched/agent";
-import { ToolError, type ContentBlock, type ToolCallTrace } from "@sched/contracts";
+import type { LlmMessage } from "@sched/agent";
+import {
+  ToolError,
+  VISIBLE_TEXT_SEPARATOR,
+  visibleTextsOf,
+  type ContentBlock,
+  type ToolCallTrace,
+} from "@sched/contracts";
 
 import { isRecord } from "./util";
 import { isWriteTool, type WriteTool } from "./schema";
@@ -35,9 +41,9 @@ export type TranscriptEvent =
 
 export type ToolCallEvent = Extract<TranscriptEvent, { kind: "tool_call" }>;
 
-/** The text blocks of one message, joined the way the loop joins them for the patient. */
+/** The visible text of one message, joined the way the loop joins it for the patient. */
 export const textOf = (blocks: readonly ContentBlock[]): string =>
-  blocks.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(TEXT_BLOCK_SEPARATOR);
+  visibleTextsOf(blocks).join(VISIBLE_TEXT_SEPARATOR);
 
 function parseJson(text: string): unknown {
   try {

@@ -7,22 +7,22 @@
  *   part of the agent's turn and isn't shown.
  * - Everything the assistant said between two patient messages is ONE bubble, its non-empty text blocks
  *   joined by a blank line, in order. That is exactly what the live stream built: the loop streams one
- *   bubble per turn and separates text blocks with `TEXT_BLOCK_SEPARATOR` (`packages/agent/src/loop.ts`).
+ *   bubble per turn and separates text blocks with the same `VISIBLE_TEXT_SEPARATOR` from `@sched/contracts`,
+ *   where `visibleTextsOf` defines which blocks are visible.
  *   A closing reply stored for an interrupted turn (`history.ts`) joins the bubble it closes.
  * - The assistant bubble's `id` and `createdAt` are those of its last assistant message with text: for a
  *   completed turn that's the stored reply, the same `messageId` the live `done` event carried.
  *
- * Kept free of `@sched/agent` so the session Lambda doesn't bundle the agent loop; a test pins
- * `DISPLAY_TEXT_SEPARATOR` to the loop's `TEXT_BLOCK_SEPARATOR`.
+ * Kept free of `@sched/agent` so the session Lambda doesn't bundle the agent loop
+ * (`test/session-bundle.test.ts` checks).
  */
-import { messageIdForSeq, type ConversationMessage, type DisplayMessage } from "@sched/contracts";
-
-/** Must equal `TEXT_BLOCK_SEPARATOR` in `@sched/agent` (pinned by `test/display.test.ts`). */
-export const DISPLAY_TEXT_SEPARATOR = "\n\n";
-
-function textOf(message: ConversationMessage): string[] {
-  return message.content.flatMap((b) => (b.type === "text" && b.text.length > 0 ? [b.text] : []));
-}
+import {
+  messageIdForSeq,
+  VISIBLE_TEXT_SEPARATOR,
+  visibleTextsOf,
+  type ConversationMessage,
+  type DisplayMessage,
+} from "@sched/contracts";
 
 export function toDisplayMessages(messages: readonly ConversationMessage[]): DisplayMessage[] {
   const out: DisplayMessage[] = [];
@@ -32,7 +32,7 @@ export function toDisplayMessages(messages: readonly ConversationMessage[]): Dis
       out.push({
         id: messageIdForSeq(reply.last.seq),
         role: "assistant",
-        text: reply.texts.join(DISPLAY_TEXT_SEPARATOR),
+        text: reply.texts.join(VISIBLE_TEXT_SEPARATOR),
         createdAt: reply.last.createdAt,
       });
     }
@@ -40,14 +40,14 @@ export function toDisplayMessages(messages: readonly ConversationMessage[]): Dis
   };
 
   for (const message of messages) {
-    const texts = textOf(message);
+    const texts = visibleTextsOf(message.content);
     if (texts.length === 0) continue;
     if (message.role === "user") {
       flush();
       out.push({
         id: messageIdForSeq(message.seq),
         role: "patient",
-        text: texts.join(DISPLAY_TEXT_SEPARATOR),
+        text: texts.join(VISIBLE_TEXT_SEPARATOR),
         createdAt: message.createdAt,
       });
     } else if (reply) {

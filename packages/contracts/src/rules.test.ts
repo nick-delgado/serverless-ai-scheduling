@@ -215,3 +215,22 @@ describe("PatientId (the Cognito sub)", () => {
     expect(PatientId.safeParse(value).success).toBe(false);
   });
 });
+
+describe("visible text (#125): one rule for the stream, the stored reply, restore and the eval transcript", () => {
+  it("keeps the non-empty text blocks, in order, and nothing the model kept to itself", () => {
+    const blocks: C.ContentBlock[] = [
+      { type: "reasoning", family: "anthropic.claude", modelId: "m", text: "thinking" },
+      { type: "text", text: "Let me check." },
+      { type: "tool_use", id: "tu_1", name: "get_my_appointments", input: {} },
+      { type: "tool_result", toolUseId: "tu_1", content: "{}" },
+      { type: "text", text: "" },
+      { type: "text", text: "You have no upcoming appointments." },
+    ];
+    expect(C.visibleTextsOf(blocks)).toEqual(["Let me check.", "You have no upcoming appointments."]);
+    expect(C.visibleTextsOf([])).toEqual([]);
+  });
+
+  it("joins visible text with a blank line", () => {
+    expect(C.VISIBLE_TEXT_SEPARATOR).toBe("\n\n");
+  });
+});

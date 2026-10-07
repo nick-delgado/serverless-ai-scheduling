@@ -3,6 +3,10 @@
  * AWS SDK: `import { createDynamoRepositories } from "@sched/tools/dynamo"`.
  */
 export {
+  BATCH_WRITE_MAX_CALLS,
+  BATCH_WRITE_SIZE,
+  batchWrite,
+  type BatchWriteRequest,
   createDocumentClient,
   createDynamoRepositories,
   writeSeed,
