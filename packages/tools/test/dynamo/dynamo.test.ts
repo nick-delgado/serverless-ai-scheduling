@@ -20,7 +20,7 @@ import { AISHA, APPT, CONV_A, MARIA, NOW, SLOT, WALTER, contractSeed, message } 
 import { dynamoLocalAvailable, localClient, tableFactory } from "./local";
 
 /** The sort key a `GetItem` reads, or null for any other command (input as sent: plain or marshalled). */
-function getItemSortKey(commandName: string, input: unknown): string | null {
+function getItemSortKey(commandName: string | undefined, input: unknown): string | null {
   if (commandName !== "GetItemCommand") return null;
   const sk = (input as { Key?: { SK?: string | { S?: string } } }).Key?.SK;
   return (typeof sk === "string" ? sk : sk?.S) ?? null;
