@@ -40,7 +40,10 @@ afterEach(() => {
 describe("useChat", () => {
   it("refuses a blank message, and a second one while a turn is in progress", async () => {
     configureMockApi({ firstEventMs: 50 });
-    const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
+    // One api for every render: a new one reruns the session effect on each render, which loops once
+    // the session answers (#206).
+    const api = createChatApi();
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant }));
     expect(result.current.send("   ")).toBe(false);
     expect(result.current.messages).toEqual([]);
     let first = false;
@@ -57,7 +60,10 @@ describe("useChat", () => {
 
   it("keys the reply with the messageId from done", async () => {
     serveEvents([delta("Hello."), done]);
-    const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
+    // One api for every render: a new one reruns the session effect on each render, which loops once
+    // the session answers (#206).
+    const api = createChatApi();
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant }));
     act(() => {
       result.current.send("Hi");
     });
