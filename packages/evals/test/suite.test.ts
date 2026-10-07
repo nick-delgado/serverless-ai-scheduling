@@ -263,6 +263,12 @@ describe("runSuite / summarize", () => {
     expect(md).toMatch(/\| l1-book-after-explicit-yes \| fail \| 50% \| l1\.action: responded instead/);
   });
 
+  it("an L1 summary has no simulator cost, in the JSON or the markdown (TEST-202)", async () => {
+    const report = await suite(STEPS);
+    expect(report.summary.simulatorCostUsd).toBeUndefined();
+    expect(markdownSummary(report)).not.toContain("(simulator $");
+  });
+
   it("the report snapshots the rate limiter's stats when it is given one (8c21660/SMELL-405)", async () => {
     const stats: RateLimitStats = { calls: 7, retries: 1, throttles: 1 };
     const report = await suite(STEPS, { rateLimit: { stats } });

@@ -1,6 +1,6 @@
 # ADR-008: Evaluation strategy
 
-- **Status:** Accepted (amended 2026-09-29: harness rule semantics, #30; amended 2026-10-02: the patient simulator, #31; amended 2026-10-03: CI gate, model matrix, API-surface case, judge agreement, #123; see [Amendment](#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123); amended 2026-10-05: the inline-tag filter covers every profile, #107, see [Amendment](#amendment-2026-10-05-the-inline-tag-filter-covers-every-profile-107); amended 2026-10-05: the LLM judge, #32, see [Amendment](#amendment-2026-10-05-the-llm-judge-32); amended 2026-10-05: L1 builds its request with the shared builder, #105, see [Amendment](#amendment-2026-10-05-l1-builds-its-request-with-the-shared-builder-105))
+- **Status:** Accepted (amended 2026-09-29: harness rule semantics, #30; amended 2026-10-02: the patient simulator, #31; amended 2026-10-03: CI gate, model matrix, API-surface case, judge agreement, #123; see [Amendment](#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123); amended 2026-10-05: the inline-tag filter covers every profile, #107, see [Amendment](#amendment-2026-10-05-the-inline-tag-filter-covers-every-profile-107); amended 2026-10-05: the LLM judge, #32, see [Amendment](#amendment-2026-10-05-the-llm-judge-32); amended 2026-10-05: L1 builds its request with the shared builder, #105, see [Amendment](#amendment-2026-10-05-l1-builds-its-request-with-the-shared-builder-105); amended 2026-10-07: an unrecorded replay turn ends that conversation, #108, see [Amendment](#amendment-2026-10-07-an-unrecorded-replay-turn-ends-that-conversation-108))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD §7 (eval targets), FR-040, FR-041, ADR-001, ADR-002, ADR-009
@@ -169,7 +169,7 @@ Other invariants a file lists are graded deterministically where a marker exists
 - **Guards:** before a reply is sent, deterministic checks reject one that copies 8 or more consecutive words of the goal or a hidden fact (a quoted line inside a fact is something the patient says, so it may go out as written), names a fact's snake_case key, speaks as the assistant (a speaker label, tool names or tool-call syntax, or phrases like "I've booked you"), or talks about the role-play. A rejected reply is never sent: the model is asked again with the problems listed, 3 calls at most, and then the trial is `error`, not `fail`. A goal shorter than the 8-word window is exempt from the verbatim check, like a short fact: reciting it in full reads as a natural opening line (owner decision, PR #97).
 - **Escalation stop:** after a successful `escalate_to_human`, the patient may send 2 more messages, then the simulator stops as `escalated` without calling the model.
 - **Accounting:** each trial records its simulator's turns, tokens, calls and cost. `costUsd` is the whole conversation, agent plus simulator, so the budget guard sees both. *(Refined by the [2026-10-05 amendment](#amendment-2026-10-05-the-llm-judge-32): the judge's cost sits beside it, and the budget guard adds it.)* The summary also reports the simulator's share.
-- **Replay:** `--replay <results.json>` replays the recorded simulator turns by scenario, trial and turn number, with no simulator calls. A turn the recording doesn't have stops the run with `replay exhausted`.
+- **Replay:** `--replay <results.json>` replays the recorded simulator turns by scenario, trial and turn number, with no simulator calls. A turn the recording doesn't have stops the run with `replay exhausted`. *(Refined by the [2026-10-07 amendment](#amendment-2026-10-07-an-unrecorded-replay-turn-ends-that-conversation-108): it ends that conversation, not the run.)*
 
 ## Amendment (2026-10-03): CI gate, model matrix, API-surface case, judge agreement (#123)
 
@@ -210,3 +210,12 @@ The L1 parity test (`packages/evals/test/l1-parity.test.ts`) keeps two checks, o
 
 - **Against the loop:** L1's tools and messages equal the loop's first request's, apart from the loop's rolling message cache point, and the tool-call rendering check (`2e22f79/TEST-304`) stays. The comparisons of the profile-derived fields with the loop's are gone, since both now come from the same function.
 - **Against the builder** (owner decision `32474a5/TEST-1` (a) on PR #175): the rest of L1's request equals `profileRequest(profile, system)`, so a different profile, a partial system prompt, a `maxTokens` override, or a system cache point dropped on a profile that sets one (`sonnet-4.6`, `nova-pro`) fails it.
+
+## Amendment (2026-10-07): an unrecorded replay turn ends that conversation (#108)
+
+The decision stands; this corrects the 2026-10-02 amendment's replay line to what `packages/evals/src/simulator/replay.ts` has done since #31. A replay looks up each turn by scenario ID, trial number and turn number:
+
+- **A turn the recording doesn't have** (the agent run went differently from the recorded one) ends that conversation, that trial only, with `replay exhausted`. The rest of the run goes on.
+- **A scenario and trial the recording doesn't have at all** is a `SimulatorError`, so that trial is `error`, not `fail`.
+
+`packages/evals/test/simulator.test.ts` covers both, and that the lookup keys on the scenario as well as the trial (#108, TEST-104).
