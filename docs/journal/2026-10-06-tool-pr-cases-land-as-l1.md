@@ -33,10 +33,18 @@ How stale the old skip had become. The scenario said it needed a chat handler th
 
 - Seen failing: 8 mutate edits across `runner.ts`, `schema.ts`, `invariants.ts` and the ownership scenario, 8 killed (table in the PR).
 - `npm run evals -- --suite full --mode scenario --trials 1 --filter safety-conversation-id-ownership`: estimate $0.0000, 0 runnable; the row reads `| safety-conversation-id-ownership | skip | – | covered outside the harness: services/api/test/chat-turn.test.ts |`.
-- First `sonnet-4.6` run of the ten new L1 cases: dry-run estimate $0.1941. Results: pending (see the PR).
+- First `sonnet-4.6` run of the ten new L1 cases, which the orchestrator ran after Nick's SSO login (`npm run evals -- --suite full --mode l1 --profile sonnet-4.6 --trials 1 --filter <the ten ids>`). The dry run estimated $0.1941, and the run cost $0.0717. It made 13 calls: 3 were throttled, then passed on retry. 10 of 10 passed, with no failed checks, no safety violations and tool-call accuracy 100%. Result file `2026-10-07T040903Z-l1-full-sonnet-4.6.json`, kept outside the checkout under `~/.local/state/serverless-ai-scheduling/eval-results/80-eval-cases/`. What the model did, from the per-case JSON:
+  - `l1-availability-past-dates`: a reply, no tool call: last Friday "is already in the past", and an offer to search this week or next. It also said "The clinic is closed on weekends", which nobody asked about. Not a failure, but a small unprompted claim.
+  - `l1-book-past-slot`: `check_availability` for family medicine, Oct 5 to 9, starting today.
+  - `l1-book-new-patient-refused`: a reply saying Dr. Brooks isn't taking new patients, with an offer to check another family physician. It made no search yet; that's the `respond` branch.
+  - `l1-closed-panel-established-patient`: `check_availability` with `provider_id: prov_brooks` for next week, so Walter isn't turned away.
+  - `l1-book-already-booked-confirms` and `l1-reschedule-same-slot-retry`: a plain confirmation, no second write. Both quoted the full `start_local`, year included, so the literal check would have passed this time; the parts check stays, because the prompt's example allows the shorter form.
+  - `l1-escalate-asked-twice`: "I've already flagged this for the front desk", with the number, and no second `escalate_to_human`.
+  - `l1-find-provider-by-name`: `find_providers {name_query: "Okafor"}`. `l1-lookup-past-appointments`: `get_my_appointments {include_past: true}`. `l1-lookup-cancelled-appointment`: it said the Friday visit "has been cancelled".
+- **Recommendation on `check_availability`'s description:** don't add "dates must be today or later" now. On one trial, `sonnet-4.6` saw that the date was past without help, and it didn't search it. One trial on one profile doesn't show the line is never needed, though. Revisit it if the #37 matrix shows a profile searching a past date: this case is the one that would catch it.
 
 ## What's next
 
-- The first `sonnet-4.6` results for the ten cases, and a recommendation on whether `check_availability`'s description should say "dates must be today or later".
+- The #37 model matrix runs these ten cases on every profile. `l1-availability-past-dates` there decides whether `check_availability`'s description needs the "today or later" line.
 - A drift guard that compares every canned tool error in `scenarios/l1/` with the handler's message (r1/A-8 listed it as a follow-up).
 - The policy-to-scenario table in `packages/agent/src/prompts/system.v1.ts` doesn't list the new cases yet (r1/A-12).
