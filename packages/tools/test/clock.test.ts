@@ -7,6 +7,7 @@ import {
   clinicDateRangeUtc,
   formatClinicDateTime,
   FrozenClock,
+  startsAfter,
   SystemClock,
   toZonedParts,
   utcOffsetMinutes,
@@ -51,6 +52,22 @@ describe("Clock", () => {
   it("FrozenClock rejects invalid instants", () => {
     expect(() => new FrozenClock("not a date")).toThrow(RangeError);
     expect(() => new FrozenClock("2026-10-05T13:00:00Z").advance(Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe("startsAfter (the bookable rule, #77)", () => {
+  const now = new Date("2026-10-05T13:00:00Z");
+
+  it("is false for a start equal to now: that slot or appointment has already started", () => {
+    expect(startsAfter("2026-10-05T13:00:00Z", now)).toBe(false);
+  });
+
+  it("is true for a start 1 ms after now", () => {
+    expect(startsAfter("2026-10-05T13:00:00.001Z", now)).toBe(true);
+  });
+
+  it("is false for a start before now", () => {
+    expect(startsAfter("2026-10-05T12:59:59.999Z", now)).toBe(false);
   });
 });
 

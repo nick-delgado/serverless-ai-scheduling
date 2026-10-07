@@ -28,6 +28,8 @@ export const LIMITS = {
   reasonMaxChars: 300,
   escalationSummaryMinChars: 10,
   escalationSummaryMaxChars: 1000,
+  /** Longest error text stored on an escalation's FAILED notification (`Escalation.notification.error`). */
+  escalationNotificationErrorMaxChars: 500,
 } as const;
 
 export const SPECIALTIES = [
