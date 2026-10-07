@@ -9,8 +9,8 @@
  *   `$HOME/.local/state/serverless-ai-scheduling/eval-results/` (r1/Q-1, r1/Q-5). There is no flag and no
  *   off switch.
  * - Files go in one subdirectory per checkout, named after the checkout's directory (r1/Q-2).
- * - A copy directory inside the checkout running the CLI, or inside the checkout holding it when it is a
- *   worktree under `.worktrees/`, is a usage error (r1/Q-4), checked before any model call, `--dry-run`
+ * - A copy directory (the per-checkout subdirectory the files go to) inside the checkout running the CLI,
+ *   or inside the checkout holding it when it is a worktree under `.worktrees/`, is a usage error (r1/Q-4), checked before any model call, `--dry-run`
  *   included. A live run creates the directory before its first model call, and a failure there is a
  *   usage error (r1/Q-3); a `--dry-run` creates nothing (r1/A-1).
  * - After the run the primary pair is written first, then the copy; a failed copy write is a warning
@@ -63,21 +63,22 @@ export function isInsideDir(dir: string, root: string): boolean {
 }
 
 /**
- * The run's copy directory: `<base>/<checkout directory name>`. A base inside one of the checkout's
- * roots is a usage error naming it.
+ * The run's copy directory: `<base>/<checkout directory name>`. A copy directory inside one of the
+ * checkout's roots is a usage error naming both. The check is on the directory the files go to, not the
+ * base: a base that is the main checkout's parent puts them in the checkout itself.
  */
 export function resultsCopyDir(deps: {
   env: Readonly<Record<string, string | undefined>>;
   home: string;
   checkout: string;
 }): string {
-  const base = resultsCopyBaseDir(deps.env, deps.home);
-  const inside = checkoutRoots(deps.checkout).find((root) => isInsideDir(base, root));
+  const dir = join(resultsCopyBaseDir(deps.env, deps.home), basename(deps.checkout));
+  const inside = checkoutRoots(deps.checkout).find((root) => isInsideDir(dir, root));
   if (inside !== undefined)
     throw new CliArgError(
-      `the results copy directory ${base} is inside the repository checkout ${inside}; set ${RESULTS_COPY_DIR_ENV} to a directory outside it`,
+      `the results copy directory ${dir} is inside the repository checkout ${inside}; set ${RESULTS_COPY_DIR_ENV} to a directory outside it`,
     );
-  return join(base, basename(deps.checkout));
+  return dir;
 }
 
 /** The file system calls the results writes need. */

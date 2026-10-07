@@ -103,7 +103,7 @@ describe("resultsCopyDir", () => {
     const env = { [RESULTS_COPY_DIR_ENV]: "/r/repo/.worktrees/195-copy/keep" };
     expect(() => resultsCopyDir({ env, home: HOME, checkout: "/r/repo/.worktrees/195-copy" })).toThrow(
       new CliArgError(
-        "the results copy directory /r/repo/.worktrees/195-copy/keep is inside the repository checkout /r/repo/.worktrees/195-copy; set EVAL_RESULTS_COPY_DIR to a directory outside it",
+        "the results copy directory /r/repo/.worktrees/195-copy/keep/195-copy is inside the repository checkout /r/repo/.worktrees/195-copy; set EVAL_RESULTS_COPY_DIR to a directory outside it",
       ),
     );
   });
@@ -113,6 +113,20 @@ describe("resultsCopyDir", () => {
     expect(() => resultsCopyDir({ env, home: HOME, checkout: "/r/repo/.worktrees/195-copy" })).toThrow(
       /inside the repository checkout \/r\/repo;/,
     );
+  });
+
+  it("refuses an override that is the main checkout's parent, where the files would land in the checkout", () => {
+    const env = { [RESULTS_COPY_DIR_ENV]: "/r" };
+    expect(() => resultsCopyDir({ env, home: HOME, checkout: "/r/repo" })).toThrow(
+      new CliArgError(
+        "the results copy directory /r/repo is inside the repository checkout /r/repo; set EVAL_RESULTS_COPY_DIR to a directory outside it",
+      ),
+    );
+  });
+
+  it("accepts the same parent override from a worktree, whose copy lands beside the checkout", () => {
+    const env = { [RESULTS_COPY_DIR_ENV]: "/r" };
+    expect(resultsCopyDir({ env, home: HOME, checkout: "/r/repo/.worktrees/195-copy" })).toBe("/r/195-copy");
   });
 
   it("refuses a default that lands inside the checkout (a home inside the repo)", () => {
