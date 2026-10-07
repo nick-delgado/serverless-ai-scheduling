@@ -111,8 +111,9 @@ function resolveProfile({ name, from }: ProfileSetting, fallback: ModelProfileNa
   try {
     return resolveModelProfile(name.trim() || fallback);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new CliArgError(message.replace(MODEL_PROFILE_ENV, from));
+    /* v8 ignore next -- resolveModelProfile throws only Error; anything else isn't a usage error, so it goes up as is */
+    if (!(error instanceof Error)) throw error;
+    throw new CliArgError(error.message.replace(MODEL_PROFILE_ENV, from));
   }
 }
 
