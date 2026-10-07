@@ -97,6 +97,28 @@ describe("main", () => {
     expect(out).toEqual(["journal-links: every journal entry added since main names PR #42 (2 added)."]);
   });
 
+  it("counts an entry moved into docs/journal/ from outside it as added", () => {
+    repo.git("checkout", "-q", "main");
+    repo.write("docs/draft.md", entry("#194"));
+    repo.commit("a draft outside the journal");
+    repo.git("checkout", "-q", "-b", "moved");
+    repo.git("mv", "docs/draft.md", "docs/journal/2026-10-08-draft.md");
+    repo.commit("move the draft into the journal");
+    expect(main(["--base", "main", "--pr", "42"], {}, deps())).toBe(1);
+    expect(out).toEqual([
+      "Journal entries this PR adds whose Related line doesn't name PR #42 (1):",
+      "docs/journal/2026-10-08-draft.md",
+    ]);
+  });
+
+  it("doesn't count an added file under docs/journal/ that isn't an entry", () => {
+    repo.write("docs/journal/2026-10-06-café.md", entry("#194, PR #42"));
+    repo.write("docs/journal/diagram.svg", "<svg/>\n");
+    repo.commit("link PR #42, add a diagram");
+    expect(main(["--base", "main", "--pr", "42"], {}, deps())).toBe(0);
+    expect(out).toEqual(["journal-links: every journal entry added since main names PR #42 (2 added)."]);
+  });
+
   it("takes --pr and --base over PR_NUMBER and PR_BASE", () => {
     expect(main(["--pr", "42", "--base", "main"], { PR_NUMBER: "7", PR_BASE: "nope" }, deps())).toBe(1);
     expect(out).toEqual([

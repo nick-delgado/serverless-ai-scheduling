@@ -61,3 +61,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-06 | [Six "noticed" minors from the judge's PR, tidied, and a hash that pins the judge's prompt to its version](2026-10-06-six-noticed-minors-tidied.md) | 5. What the evals showed |
 | 2026-10-06 | [Three reviews asked for the same journal fix, so a test checks it now](2026-10-06-the-journal-index-checks-itself.md) | 4. Teaching the agent to schedule |
 | 2026-10-06 | [Eval results now outlive the worktree that ran them](2026-10-06-eval-results-outlive-the-worktree.md) | 5. What the evals showed |
+| 2026-10-06 | [One diff helper for two PR checks, and a path limit that only a moved file can see](2026-10-06-one-diff-helper-for-two-checks.md) | 4. Teaching the agent to schedule |
