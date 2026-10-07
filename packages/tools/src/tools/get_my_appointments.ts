@@ -2,7 +2,8 @@
  * get_my_appointments (FR-033): the logged-in patient's appointments, upcoming only unless `include_past`.
  * Identity comes from ctx.patientId (the verified JWT), never from input (CLAUDE.md rule 1).
  *
- * - "Upcoming" means the appointment starts at or after `ctx.clock.now()`; anything that started earlier is
+ * - "Upcoming" means the appointment starts at or after `ctx.clock.now()` (`isUpcoming`, which the session
+ *   greeting shares); anything that started earlier is
  *   past. Every status is returned (a CANCELLED upcoming appointment is still useful: "did my cancellation
  *   go through?"); the model reads `status`.
  * - In start-time order, ties by appointment id: AP-2 (`appointments.listForPatient`) returns that order in
@@ -10,16 +11,26 @@
  * - An empty list is a success, not NOT_FOUND. A patient with no profile also gets `[]`, which reveals nothing.
  * - `reason` is the patient's own stored text: returned as data, never spliced into a message (rule 5).
  */
-import type { Provider, ProviderId } from "@sched/contracts";
+import type { Appointment, Provider, ProviderId } from "@sched/contracts";
 
 import { toolOk, type ToolHandler } from "../handler";
 import { toAppointmentSummary } from "./summaries";
 
+/**
+ * True when `appointment` starts at or after `now`: the one "upcoming" rule, shared by this tool (FR-033)
+ * and the session greeting (FR-010) so they agree on which appointment is next. The "still bookable"
+ * checks (`startsAfter` in `../clock`) deliberately use the opposite boundary: an appointment starting
+ * exactly now is upcoming but can't be rescheduled (`reschedule_appointment`).
+ */
+export function isUpcoming(appointment: Pick<Appointment, "startUtc">, now: Date): boolean {
+  return Date.parse(appointment.startUtc) >= now.getTime();
+}
+
 export const getMyAppointments: ToolHandler<"get_my_appointments"> = async (input, ctx) => {
-  const nowMs = ctx.clock.now().getTime();
+  const now = ctx.clock.now();
   const all = await ctx.repos.appointments.listForPatient(ctx.patientId);
 
-  const selected = all.filter((a) => input.include_past || Date.parse(a.startUtc) >= nowMs);
+  const selected = all.filter((a) => input.include_past || isUpcoming(a, now));
 
   // One read per distinct provider. A missing provider is a broken invariant (appointments reference seeded
   // providers), so it throws and the executor reports INTERNAL rather than inventing a name.

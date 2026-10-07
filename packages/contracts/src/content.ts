@@ -64,3 +64,17 @@ export const ContentBlock = z.discriminatedUnion("type", [
 ]);
 export type ContentBlock = z.infer<typeof ContentBlock>;
 export type ContentBlockType = ContentBlock["type"];
+
+/**
+ * Between two visible text blocks wherever they're joined for the patient: the live stream, the stored
+ * reply, a restored bubble and the eval transcript, so a preamble and the answer don't run together.
+ */
+export const VISIBLE_TEXT_SEPARATOR = "\n\n";
+
+/**
+ * The patient-visible text of `blocks`: the non-empty text blocks, in order. Tool calls, tool results and
+ * reasoning never reach the patient. Callers join the strings with `VISIBLE_TEXT_SEPARATOR`.
+ */
+export function visibleTextsOf(blocks: readonly ContentBlock[]): string[] {
+  return blocks.flatMap((b) => (b.type === "text" && b.text.length > 0 ? [b.text] : []));
+}

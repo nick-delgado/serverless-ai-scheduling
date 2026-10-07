@@ -1,7 +1,8 @@
 /**
  * The templated session greeting (FR-010): instant, no model call.
  *
- * - "Upcoming" is the get_my_appointments rule: the appointment starts at or after now. Only a BOOKED
+ * - "Upcoming" is the get_my_appointments rule (`isUpcoming` from `@sched/tools`): the appointment starts at
+ *   or after now. Only a BOOKED
  *   appointment is mentioned (a cancelled or completed one isn't something the patient is "booked" for).
  *   `listForPatient` returns start order (ties by appointment ID), so the first match is the next one.
  * - Times are the clinic's wall clock with the weekday, from `formatClinicDateTime` (the same `start_local`
@@ -10,7 +11,7 @@
  *   source of the name: the ID token carries no name claim (ADR-005).
  */
 import type { Appointment, Provider, UpcomingAppointment } from "@sched/contracts";
-import { formatClinicDateTime } from "@sched/tools";
+import { formatClinicDateTime, isUpcoming } from "@sched/tools";
 
 /**
  * `SessionResponse.patient.firstName` when no profile is on file. The contract requires a non-empty name,
@@ -21,8 +22,7 @@ export const NO_PROFILE_FIRST_NAME = "Patient";
 
 /** The patient's next BOOKED appointment that starts at or after `now`, or null. */
 export function nextUpcomingAppointment(appointments: readonly Appointment[], now: Date): Appointment | null {
-  const nowMs = now.getTime();
-  return appointments.find((a) => a.status === "BOOKED" && Date.parse(a.startUtc) >= nowMs) ?? null;
+  return appointments.find((a) => a.status === "BOOKED" && isUpcoming(a, now)) ?? null;
 }
 
 export function toUpcomingAppointment(appointment: Appointment, provider: Provider): UpcomingAppointment {

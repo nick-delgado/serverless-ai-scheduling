@@ -31,7 +31,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import {
   buildDataSeed,
-  DELETE_MAX_ATTEMPTS,
   deleteRows,
   dynamoClientFor,
   loadMapping,
@@ -200,40 +199,22 @@ describe("deleteRows", () => {
   const deletes = (input: Record<string, unknown>) =>
     ((input as BatchWriteCommandInput).RequestItems?.t1 ?? []).map((r) => r.DeleteRequest?.Key);
 
-  it("deletes by key in batches of 25 and re-sends only the unprocessed deletes after a wait", async () => {
-    const { sent, client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>((input, call) =>
-      call === 1
-        ? {
-            UnprocessedItems: {
-              t1: [
-                ...((input as BatchWriteCommandInput).RequestItems?.t1 ?? []).slice(3, 5),
-                { PutRequest: { Item: { PK: "x", SK: "y" } } },
-              ],
-            },
-          }
-        : {},
-    );
-    const waits: number[] = [];
-    await deleteRows(client, "t1", rows, async (ms) => void waits.push(ms));
+  it("deletes by PK and SK only", async () => {
+    const { sent, client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>(() => ({}));
+    await deleteRows(client, "t1", rows, async () => undefined);
     expect(sent.map(deletes)).toEqual([
       rows.slice(0, 25).map((r) => ({ PK: r.PK, SK: r.SK })),
-      rows.slice(3, 5).map((r) => ({ PK: r.PK, SK: r.SK })),
       rows.slice(25).map((r) => ({ PK: r.PK, SK: r.SK })),
     ]);
-    expect(waits).toEqual([100]);
   });
 
-  it(`gives up on a batch after ${String(DELETE_MAX_ATTEMPTS)} calls that leave deletes unprocessed`, async () => {
-    const { sent, client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>((input) => ({
+  it("names the deletes still unprocessed when it gives up", async () => {
+    const { client } = fakeClient<Pick<DynamoDBDocumentClient, "send">>((input) => ({
       UnprocessedItems: { t1: (input as BatchWriteCommandInput).RequestItems?.t1 },
     }));
-    const waits: number[] = [];
-    await expect(
-      deleteRows(client, "t1", rows.slice(0, 2), async (ms) => void waits.push(ms)),
-    ).rejects.toThrow("reset: 2 deletes still unprocessed");
-    expect(DELETE_MAX_ATTEMPTS).toBe(8);
-    expect(sent).toHaveLength(8);
-    expect(waits).toEqual([100, 200, 400, 800, 1600, 3200, 6400, 12800]);
+    await expect(deleteRows(client, "t1", rows.slice(0, 2), async () => undefined)).rejects.toThrow(
+      "reset: 2 deletes still unprocessed",
+    );
   });
 });
 

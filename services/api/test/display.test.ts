@@ -2,11 +2,10 @@
  * Restore shows what the patient saw live (`lib/display.ts`): text only, one assistant bubble per
  * stretch between patient messages, joined like the stream joins text blocks.
  */
-import { TEXT_BLOCK_SEPARATOR } from "@sched/agent";
 import { DisplayMessage, type ContentBlock, type ConversationMessage } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
-import { DISPLAY_TEXT_SEPARATOR, toDisplayMessages } from "../src/lib/display";
+import { toDisplayMessages } from "../src/lib/display";
 
 const CONV = "00000000-0000-4000-8000-0000000000c1";
 const TURN = "00000000-0000-4000-8000-0000000000d1";
@@ -46,10 +45,6 @@ const reasoning: ContentBlock = {
 };
 
 describe("toDisplayMessages", () => {
-  it("joins text blocks with the agent loop's separator", () => {
-    expect(DISPLAY_TEXT_SEPARATOR).toBe(TEXT_BLOCK_SEPARATOR);
-  });
-
   it("shows a tool-using turn as one patient bubble and one assistant bubble, text only", () => {
     seq = 0;
     const messages = [

@@ -4,7 +4,7 @@
 import type { LlmMessage } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
-import { turnEvents } from "../src";
+import { textOf, turnEvents } from "../src";
 
 describe("turnEvents", () => {
   it("emits the patient's message, but no empty patient event for a tool-result message (8c21660/TEST-302)", () => {
@@ -28,5 +28,32 @@ describe("turnEvents", () => {
       text: "what's my next appointment?",
       scriptStep: 1,
     });
+  });
+
+  it("joins one message's visible text blocks with a blank line, as the patient saw them (#125)", () => {
+    const messages: LlmMessage[] = [
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me check." },
+          { type: "reasoning", family: "anthropic.claude", modelId: "m", text: "hidden" },
+          { type: "text", text: "Dr. Lee is free Tuesday." },
+        ],
+      },
+    ];
+    expect(turnEvents(1, messages, [])[1]).toEqual({
+      kind: "assistant",
+      turn: 1,
+      text: "Let me check.\n\nDr. Lee is free Tuesday.",
+    });
+    // An empty block never reaches the patient (the loop and restore drop it too); a parsed TextBlock can't be empty.
+    expect(
+      textOf([
+        { type: "text", text: "a" },
+        { type: "text", text: "" },
+        { type: "text", text: "b" },
+      ]),
+    ).toBe("a\n\nb");
   });
 });

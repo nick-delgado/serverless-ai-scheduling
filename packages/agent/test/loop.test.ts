@@ -234,6 +234,24 @@ describe("runAgentTurn: stop_reason tool_use", () => {
     expect(textDeltas(input.events)).toBe(expected);
     expect(result.text).toBe(expected);
   });
+
+  it("stores and streams two text blocks of one response as one reply with a blank line between (#125)", async () => {
+    const llm = new ScriptedLlmClient([
+      {
+        content: [
+          { type: "text", text: "Here is what I found." },
+          { type: "text", text: "Dr. Lee is free Tuesday at 2:30 PM ET." },
+        ],
+        stopReason: "end_turn",
+      },
+    ]);
+    const input = turnInput(llm);
+
+    const result = await runAgentTurn(input);
+
+    expect(result.text).toBe("Here is what I found.\n\nDr. Lee is free Tuesday at 2:30 PM ET.");
+    expect(visibleText(input.events)).toBe(result.text);
+  });
 });
 
 describe("runAgentTurn: stop_reason max_tokens", () => {
@@ -369,6 +387,21 @@ describe("runAgentTurn: stop_reason refusal", () => {
     expect(result.text).toContain("911");
     expect(result.newMessages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(textDeltas(input.events)).toBe(FALLBACK_MESSAGES.refusal);
+  });
+
+  it("streams a blank line between an earlier preamble and the safe message, as it stores them (#125)", async () => {
+    const llm = new ScriptedLlmClient([
+      scriptedToolUse([CHECK], { text: "Let me check." }),
+      scriptedRefusal(),
+      scriptedRefusal(),
+    ]);
+    const input = turnInput(llm);
+
+    const result = await runAgentTurn(input);
+
+    expect(result.outcome).toBe("refusal");
+    expect(result.text).toBe(`Let me check.\n\n${FALLBACK_MESSAGES.refusal}`);
+    expect(visibleText(input.events)).toBe(result.text);
   });
 
   it("takes back partial text from a mid-stream refusal with text_reset before the retry streams", async () => {

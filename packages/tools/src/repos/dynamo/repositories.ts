@@ -623,9 +623,49 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
   return { patients, providers, slots, appointments, conversations, escalations };
 }
 
+/** Most `BatchWriteItem` calls per batch before `batchWrite` gives up. */
+export const BATCH_WRITE_MAX_CALLS = 8;
+/** `BatchWriteItem`'s limit: requests per call. */
+const BATCH_WRITE_SIZE = 25;
+
+/** One put or delete in a `BatchWriteItem` call. */
+export type BatchWriteRequest =
+  { PutRequest: { Item: Item } } | { DeleteRequest: { Key: Record<string, unknown> } };
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
- * Write a validated seed (`validateSeed`) with BatchWriteItem, 25 items per call, retrying unprocessed
- * items. **Unconditional puts:** existing items with the same keys are overwritten. For fresh tables
+ * Send `requests` to `tableName` with BatchWriteItem, `BATCH_WRITE_SIZE` per call. The one place
+ * `UnprocessedItems` is handled: the requests DynamoDB returns as unprocessed for the table, puts and
+ * deletes alike, are re-sent after waiting `50 * 2^call` ms, at most `BATCH_WRITE_MAX_CALLS` calls per
+ * batch. When the last call still leaves some unprocessed, it waits once more and throws
+ * `giveUp(<count still unprocessed>)`. `wait` is injectable so tests don't sleep.
+ */
+export async function batchWrite(
+  doc: Pick<DynamoDBDocumentClient, "send">,
+  tableName: string,
+  requests: readonly BatchWriteRequest[],
+  giveUp: (unprocessed: number) => Error,
+  wait: (ms: number) => Promise<void> = sleep,
+): Promise<void> {
+  for (let i = 0; i < requests.length; i += BATCH_WRITE_SIZE) {
+    let pending: BatchWriteRequest[] = requests.slice(i, i + BATCH_WRITE_SIZE);
+    for (let call = 1; pending.length > 0; call++) {
+      if (call > BATCH_WRITE_MAX_CALLS) throw giveUp(pending.length);
+      const out = await doc.send(new BatchWriteCommand({ RequestItems: { [tableName]: pending } }));
+      pending = (out.UnprocessedItems?.[tableName] ?? []).flatMap((r): BatchWriteRequest[] => {
+        if (r.PutRequest?.Item) return [{ PutRequest: { Item: r.PutRequest.Item } }];
+        if (r.DeleteRequest?.Key) return [{ DeleteRequest: { Key: r.DeleteRequest.Key } }];
+        return [];
+      });
+      if (pending.length > 0) await wait(50 * 2 ** call);
+    }
+  }
+}
+
+/**
+ * Write a validated seed (`validateSeed`) with `batchWrite` (25 items per call, unprocessed
+ * items re-sent). **Unconditional puts:** existing items with the same keys are overwritten. For fresh tables
  * (tests, DynamoDB Local) and for #14's dev seed script, which must decide how to treat existing data.
  */
 export async function writeSeed(options: {
@@ -641,16 +681,11 @@ export async function writeSeed(options: {
     ...seed.slots.map(slotItem),
     ...seed.appointments.map(appointmentItem),
   ];
-  for (let i = 0; i < items.length; i += 25) {
-    let requests = items.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } }));
-    for (let attempt = 1; requests.length > 0; attempt++) {
-      if (attempt > 8) throw new Error(`writeSeed: ${requests.length} items still unprocessed`);
-      const out = await doc.send(new BatchWriteCommand({ RequestItems: { [options.tableName]: requests } }));
-      requests = (out.UnprocessedItems?.[options.tableName] ?? []).flatMap((r) =>
-        r.PutRequest?.Item ? [{ PutRequest: { Item: r.PutRequest.Item } }] : [],
-      );
-      if (requests.length > 0) await backoff(attempt);
-    }
-  }
+  await batchWrite(
+    doc,
+    options.tableName,
+    items.map((Item) => ({ PutRequest: { Item } })),
+    (unprocessed) => new Error(`writeSeed: ${String(unprocessed)} items still unprocessed`),
+  );
   return { itemsWritten: items.length };
 }

@@ -13,3 +13,4 @@ export * from "./clock";
 export * from "./notify";
 export * from "./registry";
 export * from "./repos";
+export { isUpcoming } from "./tools/get_my_appointments";
