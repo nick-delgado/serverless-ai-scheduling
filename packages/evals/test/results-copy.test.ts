@@ -1,6 +1,7 @@
 /**
  * The copy of each run's results outside the checkout (`src/results-copy.ts`, #195): where it goes, the
- * repository-containment refusal, the early directory check, and the writes, against a temp directory.
+ * repository-containment refusal, the early directory check, the writes (against a temp directory, or
+ * fake file calls for order and failures), and the last line and warning.
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +17,7 @@ import {
   RESULTS_COPY_DIR_ENV,
   resultsCopyBaseDir,
   resultsCopyDir,
-  resultsWrittenMessages,
+  resultsWrittenLine,
   writeRunResults,
 } from "../src";
 
@@ -134,7 +135,7 @@ describe("resultsCopyDir", () => {
   });
 });
 
-describe("the writes, against a temp directory", () => {
+describe("the copy directory and the writes", () => {
   let tmp = "";
   const dir = (): string => (tmp = mkdtempSync(join(tmpdir(), "evals-results-copy-")));
   afterEach(() => {
@@ -142,27 +143,36 @@ describe("the writes, against a temp directory", () => {
     tmp = "";
   });
 
-  it("prepareResultsCopyDir creates the directory, parents included", () => {
+  it("prepareResultsCopyDir creates the directory, parents included, in a temp directory", () => {
     const copy = join(dir(), "state", "eval-results", "195-copy");
-    prepareResultsCopyDir(copy);
+    prepareResultsCopyDir(copy, { dryRun: false });
     expect(existsSync(copy)).toBe(true);
+  });
+
+  it("prepareResultsCopyDir creates nothing for a --dry-run", () => {
+    const made: string[] = [];
+    prepareResultsCopyDir("/c/195-copy", { dryRun: true }, { mkdir: (d) => made.push(d) });
+    expect(made).toEqual([]);
   });
 
   it("prepareResultsCopyDir turns a failure into a usage error naming the directory", () => {
     const fail = (): never => {
       throw new Error("EACCES: permission denied");
     };
-    expect(() => prepareResultsCopyDir("/nope/copy", { mkdir: fail })).toThrow(
+    expect(() => prepareResultsCopyDir("/nope/copy", { dryRun: false }, { mkdir: fail })).toThrow(
       new CliArgError("can't create the results copy directory /nope/copy: Error: EACCES: permission denied"),
     );
   });
 
-  it("writes the .json and .md pair to the primary directory and to the copy", () => {
+  it("writes the .json and .md pair to the primary directory and to the copy, in a temp directory", () => {
     const root = dir();
     const out = join(root, "checkout", "results");
     const copyDir = join(root, "state", "195-copy");
     const written = writeRunResults(report, "# summary", { out, copyDir });
-    expect(written).toEqual({ primary: join(out, STAMPED), copy: join(copyDir, STAMPED) });
+    expect(written).toEqual({
+      primary: join(out, STAMPED),
+      copy: { status: "written", path: join(copyDir, STAMPED) },
+    });
     for (const d of [out, copyDir]) {
       expect(readdirSync(d).sort()).toEqual([`${STAMPED}.json`, `${STAMPED}.md`]);
       expect(JSON.parse(readFileSync(join(d, `${STAMPED}.json`), "utf8"))).toEqual(report);
@@ -194,11 +204,11 @@ describe("the writes, against a temp directory", () => {
     // A relative --out naming the copy directory, as `npm run evals -- --out <relative>` would pass it.
     const out = relative(process.cwd(), "/same/dir");
     const written = writeRunResults(report, "md", { out, copyDir: "/same/x/../dir/" }, files);
-    expect(written).toEqual({ primary: join(out, STAMPED) });
+    expect(written).toEqual({ primary: join(out, STAMPED), copy: { status: "same" } });
     expect(writes).toEqual([join(out, `${STAMPED}.json`), join(out, `${STAMPED}.md`)]);
   });
 
-  it("returns a failed copy write as copyError, with the primary pair already written", () => {
+  it("returns a failed copy write as the copy's failed status, with the primary pair already written", () => {
     const root = dir();
     const out = join(root, "results");
     // A file where the copy's parent directory should be: mkdir fails even for root.
@@ -207,8 +217,11 @@ describe("the writes, against a temp directory", () => {
     const copyDir = join(blocker, "195-copy");
     const written = writeRunResults(report, "md", { out, copyDir });
     expect(written.primary).toBe(join(out, STAMPED));
-    expect(written.copy).toBe(join(copyDir, STAMPED));
-    expect(written.copyError).toMatch(/ENOTDIR|EEXIST/);
+    expect(written.copy).toEqual({
+      status: "failed",
+      path: join(copyDir, STAMPED),
+      error: expect.stringMatching(/ENOTDIR|EEXIST/) as unknown,
+    });
     expect(existsSync(`${written.primary}.json`)).toBe(true);
   });
 
@@ -225,25 +238,32 @@ describe("the writes, against a temp directory", () => {
   });
 });
 
-describe("resultsWrittenMessages", () => {
+describe("resultsWrittenLine", () => {
+  const noWarning = (warning: string): never => {
+    throw new Error(`unexpected warning: ${warning}`);
+  };
+
   it("names both .json paths on the last line", () => {
-    expect(resultsWrittenMessages({ primary: "/p/run", copy: "/c/run" })).toEqual({
-      line: "evals: wrote /p/run.json and the copy /c/run.json",
-    });
+    expect(
+      resultsWrittenLine({ primary: "/p/run", copy: { status: "written", path: "/c/run" } }, noWarning),
+    ).toBe("evals: wrote /p/run.json and the copy /c/run.json");
   });
 
   it("names the path once when the copy is the primary", () => {
-    expect(resultsWrittenMessages({ primary: "/p/run" })).toEqual({
-      line: "evals: wrote /p/run.json (also the copy location)",
-    });
+    expect(resultsWrittenLine({ primary: "/p/run", copy: { status: "same" } }, noWarning)).toBe(
+      "evals: wrote /p/run.json (also the copy location)",
+    );
   });
 
   it("warns, naming the copy path and the error, when the copy failed", () => {
-    expect(resultsWrittenMessages({ primary: "/p/run", copy: "/c/run", copyError: "Error: EACCES" })).toEqual(
-      {
-        line: "evals: wrote /p/run.json; the copy /c/run.json was not written",
-        warning: "evals: warning: couldn't write the results copy /c/run.json: Error: EACCES",
-      },
+    const warnings: string[] = [];
+    const written = {
+      primary: "/p/run",
+      copy: { status: "failed", path: "/c/run", error: "Error: EACCES" },
+    } as const;
+    expect(resultsWrittenLine(written, (w) => warnings.push(w))).toBe(
+      "evals: wrote /p/run.json; the copy /c/run.json was not written",
     );
+    expect(warnings).toEqual(["evals: warning: couldn't write the results copy /c/run.json: Error: EACCES"]);
   });
 });

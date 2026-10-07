@@ -20,10 +20,9 @@
  * The functions take the environment, the home directory, the checkout root and the file system as
  * parameters; `cli.ts` passes in the process's.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { CliArgError, resultsBasePath } from "./cli-args";
+import { CliArgError, type CliArgs, type FileWrites, nodeFileWrites, resultsBasePath } from "./cli-args";
 import type { RunReport } from "./suite";
 import { errorReason } from "./util";
 
@@ -81,23 +80,16 @@ export function resultsCopyDir(deps: {
   return dir;
 }
 
-/** The file system calls the results writes need. */
-export interface ResultsFiles {
-  mkdir: (dir: string) => void;
-  writeFile: (path: string, text: string) => void;
-}
-
-/** The real file system, for `cli.ts`. */
-export const nodeResultsFiles: ResultsFiles = {
-  mkdir: (dir) => mkdirSync(dir, { recursive: true }),
-  writeFile: (path, text) => writeFileSync(path, text),
-};
-
-/** Create the copy directory before a live run's first model call; a failure is a usage error (r1/Q-3). */
+/**
+ * Create the copy directory before a live run's first model call; a failure is a usage error (r1/Q-3).
+ * A `--dry-run` creates nothing (r1/A-1).
+ */
 export function prepareResultsCopyDir(
   dir: string,
-  files: Pick<ResultsFiles, "mkdir"> = nodeResultsFiles,
+  args: Pick<CliArgs, "dryRun">,
+  files: Pick<FileWrites, "mkdir"> = nodeFileWrites,
 ): void {
+  if (args.dryRun) return;
   try {
     files.mkdir(dir);
   } catch (error) {
@@ -105,24 +97,24 @@ export function prepareResultsCopyDir(
   }
 }
 
-/** Where a run's results went: base paths without the extension. */
+/** Where a run's results went (base paths without the extension), and what became of the copy. */
 export interface WrittenResults {
   primary: string;
-  /** The copy's base path; absent when it is the primary's. */
-  copy?: string;
-  /** Why the copy couldn't be written, when it couldn't. */
-  copyError?: string;
+  copy:
+    | { status: "same" }
+    | { status: "written"; path: string }
+    | { status: "failed"; path: string; error: string };
 }
 
 /**
  * Write the run's `.json` and `.md` to `out`, then to `copyDir`. A primary write that fails throws, as
- * before; a copy write that fails is returned as `copyError`.
+ * before; a copy write that fails is returned as the copy's `failed` status.
  */
 export function writeRunResults(
   report: Pick<RunReport, "startedAt" | "mode" | "suite" | "profile">,
   md: string,
   dirs: { out: string; copyDir: string },
-  files: ResultsFiles = nodeResultsFiles,
+  files: FileWrites = nodeFileWrites,
 ): WrittenResults {
   const writePair = (dir: string): string => {
     files.mkdir(dir);
@@ -132,26 +124,24 @@ export function writeRunResults(
     return base;
   };
   const primary = writePair(dirs.out);
-  const copyBase = resultsBasePath(report, dirs.copyDir);
-  if (resolve(copyBase) === resolve(primary)) return { primary };
+  const path = resultsBasePath(report, dirs.copyDir);
+  if (resolve(path) === resolve(primary)) return { primary, copy: { status: "same" } };
   try {
     writePair(dirs.copyDir);
-    return { primary, copy: copyBase };
+    return { primary, copy: { status: "written", path } };
   } catch (error) {
-    return { primary, copy: copyBase, copyError: errorReason(error) };
+    return { primary, copy: { status: "failed", path, error: errorReason(error) } };
   }
 }
 
 /**
- * What the CLI prints after the writes: the last line names both `.json` paths (r1/A-3), and a failed
- * copy also gets a warning for stderr naming the path and the error.
+ * The CLI's last line after the writes, naming both `.json` paths (r1/A-3). A failed copy also goes to
+ * `warn` (stderr, in `cli.ts`), naming the path and the error (r1/Q-3).
  */
-export function resultsWrittenMessages(written: WrittenResults): { line: string; warning?: string } {
-  const { primary, copy, copyError } = written;
-  if (copy === undefined) return { line: `evals: wrote ${primary}.json (also the copy location)` };
-  if (copyError === undefined) return { line: `evals: wrote ${primary}.json and the copy ${copy}.json` };
-  return {
-    line: `evals: wrote ${primary}.json; the copy ${copy}.json was not written`,
-    warning: `evals: warning: couldn't write the results copy ${copy}.json: ${copyError}`,
-  };
+export function resultsWrittenLine(written: WrittenResults, warn: (warning: string) => void): string {
+  const { primary, copy } = written;
+  if (copy.status === "same") return `evals: wrote ${primary}.json (also the copy location)`;
+  if (copy.status === "written") return `evals: wrote ${primary}.json and the copy ${copy.path}.json`;
+  warn(`evals: warning: couldn't write the results copy ${copy.path}.json: ${copy.error}`);
+  return `evals: wrote ${primary}.json; the copy ${copy.path}.json was not written`;
 }

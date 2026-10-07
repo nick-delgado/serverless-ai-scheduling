@@ -381,6 +381,18 @@ export interface CalibrationDeps {
   now: () => Date;
 }
 
+/** The file system calls the CLI's writes make: a directory with its parents, and a file. */
+export interface FileWrites {
+  mkdir: (dir: string) => void;
+  writeFile: (path: string, text: string) => void;
+}
+
+/** The real file system, for the calibration step's files and the run's results (`results-copy.ts`). */
+export const nodeFileWrites: FileWrites = {
+  mkdir: (dir) => mkdirSync(dir, { recursive: true }),
+  writeFile: (path, text) => writeFileSync(path, text),
+};
+
 /** The calibration step's real files and clock, for `cli.ts`. */
 export function fileCalibrationDeps(
   scenarios: readonly Scenario[],
@@ -389,8 +401,8 @@ export function fileCalibrationDeps(
   return {
     readJson: (path) => (existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as unknown) : undefined),
     writeFile: (path, text) => {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, text);
+      nodeFileWrites.mkdir(dirname(path));
+      nodeFileWrites.writeFile(path, text);
     },
     scenarios,
     log,

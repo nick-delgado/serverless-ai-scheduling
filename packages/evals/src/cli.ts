@@ -54,17 +54,12 @@ import {
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
 import { rateLimited } from "./rate-limit";
-import {
-  prepareResultsCopyDir,
-  resultsCopyDir,
-  resultsWrittenMessages,
-  writeRunResults,
-} from "./results-copy";
+import { prepareResultsCopyDir, resultsCopyDir, resultsWrittenLine, writeRunResults } from "./results-copy";
 import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's and results-copy.ts's tested functions (setup, options, the calibration step and files, usage errors, the results copy and its writes); what stays here is untested wiring: the client, the checkout path, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results lines. */
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's and results-copy.ts's tested functions (setup, options, the calibration step and files, usage errors, the results copy and its writes); what stays here is untested wiring: the client, the checkout path, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results line (the copy warning goes through results-copy.ts). */
 /** The checkout running the CLI: `packages/evals/src/../../..`. */
 const CHECKOUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -92,7 +87,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Checked before the dry-run return and any model call; created only for a live run (#195, r1/Q-3, r1/Q-4).
+  // Checked before any model call, `--dry-run` included (#195, r1/Q-4); created below only for a live run.
   const copyDir = orUsageError(
     () => resultsCopyDir({ env: process.env, home: homedir(), checkout: CHECKOUT }),
     fail,
@@ -114,8 +109,8 @@ async function main(): Promise<void> {
     `evals: ${mode} / ${suite} / ${profile.name} (${profile.modelId}): ${cases.length} case(s), ${cases.length - skips.length} runnable, ${trials} trial(s) each${simulator === undefined ? "" : `, simulator ${simulator.name}`}${judging.kind === "llm" ? `, judge ${judging.judge.name}` : ""}. Estimated cost ≈ $${estimate.toFixed(4)}${judging.kind === "llm" ? ", judge included" : ""} (budget guard $${maxCostUsd}).`,
   );
   for (const line of skips) console.log(line);
+  orUsageError(() => prepareResultsCopyDir(copyDir, args), fail);
   if (args.dryRun) return;
-  orUsageError(() => prepareResultsCopyDir(copyDir), fail);
 
   const report = await runSuite(
     cases,
@@ -132,9 +127,8 @@ async function main(): Promise<void> {
   );
 
   const md = markdownSummary(report);
-  const written = resultsWrittenMessages(writeRunResults(report, md, { out: args.out, copyDir }));
-  if (written.warning !== undefined) console.error(written.warning);
-  console.log(`\n${md}\n\n${written.line}`);
+  const line = resultsWrittenLine(writeRunResults(report, md, { out: args.out, copyDir }), console.error);
+  console.log(`\n${md}\n\n${line}`);
   process.exitCode = exitCodeFor(report.summary);
 }
 
