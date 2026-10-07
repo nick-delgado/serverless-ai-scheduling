@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #134, issue #122 / PR #130, issue #109 / PR #110, PR #133, issue #140, PRD NFR-005, the [2026-10-02](2026-10-02-a-timing-test-measured-the-reader.md) and [2026-10-04](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) entries
+**Related:** issue #134, PR #205, issue #122 / PR #130, issue #109 / PR #110, PR #133, issue #140, PRD NFR-005, the [2026-10-02](2026-10-02-a-timing-test-measured-the-reader.md) and [2026-10-04](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) entries
 
 ## What happened
 
