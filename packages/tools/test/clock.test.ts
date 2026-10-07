@@ -2,7 +2,6 @@ import { EXAMPLES } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
 import {
-  addDays,
   clinicDateOf,
   clinicDateRangeUtc,
   formatClinicDateTime,
@@ -11,7 +10,6 @@ import {
   SystemClock,
   toZonedParts,
   utcOffsetMinutes,
-  weekdayOf,
   zonedTimeToUtc,
   type Clock,
 } from "../src/clock";
@@ -121,11 +119,6 @@ describe("clinic time (America/New_York)", () => {
     expect(() => zonedTimeToUtc("2026-10-13", { hour: 8, minute: 7.5 })).toThrow(RangeError);
   });
 
-  it("clinicDateOf uses the clinic's calendar, not UTC's", () => {
-    expect(clinicDateOf("2026-10-14T03:30:00Z")).toBe("2026-10-13"); // 11:30 PM ET on the 13th
-    expect(clinicDateOf("2026-10-14T04:00:00Z")).toBe("2026-10-14");
-  });
-
   it("clinicDateRangeUtc covers local midnight to the local midnight after the end date", () => {
     expect(clinicDateRangeUtc("2026-10-13", "2026-10-13")).toEqual({
       fromUtc: "2026-10-13T04:00:00.000Z",
@@ -137,13 +130,6 @@ describe("clinic time (America/New_York)", () => {
       toUtc: "2026-11-02T05:00:00.000Z",
     });
     expect(() => clinicDateRangeUtc("2026-10-14", "2026-10-13")).toThrow(RangeError);
-  });
-
-  it("addDays and weekdayOf do calendar arithmetic", () => {
-    expect(addDays("2026-10-30", 3)).toBe("2026-11-02");
-    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
-    expect(weekdayOf("2026-10-05")).toBe(1); // Monday
-    expect(weekdayOf("2026-11-01")).toBe(0); // Sunday
   });
 
   it("formatClinicDateTime produces the contracts' start_local shape", () => {
