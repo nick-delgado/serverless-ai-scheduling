@@ -283,8 +283,9 @@ describe("parseCliArgs", () => {
 });
 
 describe("baseRef", () => {
-  it("takes --base, else a non-empty environment value, else origin/main", () => {
+  it("takes --base (an empty one too), else a non-empty environment value, else origin/main", () => {
     expect(baseRef("flag", "env")).toBe("flag");
+    expect(baseRef("", "env")).toBe("");
     expect(baseRef(undefined, "env")).toBe("env");
     expect(baseRef(undefined, "")).toBe("origin/main");
     expect(baseRef(undefined, undefined)).toBe("origin/main");
@@ -320,6 +321,10 @@ describe("namesSince", () => {
 
   it("limits the names to the given paths", () => {
     expect(namesSince(repo.git, "main", "--diff-filter=d", ["b/"])).toEqual(["b/new.txt"]);
+  });
+
+  it("reads a path limit as a path, so one missing from the working tree lists nothing", () => {
+    expect(namesSince(repo.git, "main", "--diff-filter=d", ["c/"])).toEqual([]);
   });
 
   it("throws when git can't diff against the base", () => {

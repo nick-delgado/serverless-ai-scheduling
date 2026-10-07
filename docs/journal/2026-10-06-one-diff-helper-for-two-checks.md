@@ -17,7 +17,7 @@ An agent built it. `scripts/coverage-changed.ts`, where `scriptIo`, `DEFAULT_BAS
 
 ## Why we chose what we chose
 
-- **`--` always, not only with paths.** `git diff … <base>...HEAD --` with no paths lists every path, so the helper passes the separator unconditionally instead of branching on an empty list.
+- **`--` always, not only with paths.** `git diff … <base>...HEAD --` with no paths lists every path, so the helper passes the separator unconditionally instead of branching on an empty list. It also means git never reads a base or a path limit as the other. The review of `5d07e7f` noted that this changes git's wording inside `pr-evidence`'s exit-2 message for an unknown base (exit code and the script's own prefix unchanged); Nick kept it (`5d07e7f/SPEC-1` (a)).
 - **The base rule is shared by the two PR checks only.** `coverage-changed.ts`'s own `main` (`COVERAGE_BASE`) stays unchanged, as the issue's owned paths say, and `dup-changed.ts` (`DUP_BASE`) isn't this issue's file. Both could call `baseRef` in a later change.
 - **The test-setup clone stays** (`journal-links.test.ts` ↔ `pr-evidence.test.ts`, the `describe("main")` setup): sharing it would edit test bodies the issue keeps "unmodified, apart from imports" (A-2, confirmed by Nick).
 - **The direct tests run against a repository whose `main` moves on after branching**, so a two-dot diff lists a file the merge-base diff doesn't. Without that, `...` → `..` would survive.
@@ -29,7 +29,7 @@ An agent built it. `scripts/coverage-changed.ts`, where `scriptIo`, `DEFAULT_BAS
 
 ## Evidence
 
-- `npm run mutate` with 16 edits (the helper's flags, filter, path limit, `...`, empty-line filter; the base rule's `||`, precedence and default; each script's filter, path, environment variable and base argument; `isEntry` in `main`), run against the three suites: 16 killed, 0 survived. The first run had `isEntry` SURVIVED before its test existed. The table is in the PR's body.
+- `npm run mutate` with 19 edits (the helper's flags, filter, path limit, `--` separator, `...`, empty-line filter; the base rule's `||`, the `??` that keeps an empty `--base`, precedence and default; each script's filter, environment variable and base argument, and journal-links' path; `isEntry` in `main`), run against the three suites: 19 killed, 0 survived. The first run had `isEntry` SURVIVED before its test existed. The review of `5d07e7f` found three breaks with no row: dropping `--` and loosening the `??` on `--base` both survived (no test passed a path missing from the working tree, or an empty `--base`), and journal-links' base argument wasn't broken at all. Two new assertions and three rows cover them. The table is in the PR's body.
 - `npm run dup:changed -- --base f0d019c` before: `journal-links.ts:38-44` ↔ `pr-evidence.ts:70-76` and the test-setup clone. After: the same two, the production one now `journal-links.ts:38-44` ↔ `pr-evidence.ts:71-77`, which is the `main` signature, the `scriptIo(deps)` line and `let base: string;` only; no clone covers the git diff call or the base rule (r1/Q-1 (b)).
 
 ## What's next
