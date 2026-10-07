@@ -2,7 +2,8 @@
  * @sched/contracts: the integration seam every stream codes against (M1-02, #4).
  *
  * - `domain`: stored entities (camelCase, ADR-004)
- * - `content`: provider-neutral conversation content blocks (ADR-010)
+ * - `content`: provider-neutral conversation content blocks (ADR-010), plus `visibleTextsOf` and
+ *   `VISIBLE_TEXT_SEPARATOR`, the one rule for the text a patient sees (#125)
  * - `tools`: model-facing tool inputs/outputs (snake_case) + `toolDefinitionsForModel()`
  * - `trace`: per-turn agent trace (ADR-001)
  * - `stream`: chat stream events + NDJSON helpers (ADR-007)

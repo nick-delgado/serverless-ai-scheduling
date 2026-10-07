@@ -626,11 +626,11 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
 /** Most `BatchWriteItem` calls per batch before `batchWrite` gives up. */
 export const BATCH_WRITE_MAX_CALLS = 8;
 /** `BatchWriteItem`'s limit: requests per call. */
-export const BATCH_WRITE_SIZE = 25;
+const BATCH_WRITE_SIZE = 25;
 
 /** One put or delete in a `BatchWriteItem` call. */
 export type BatchWriteRequest =
-  { PutRequest: { Item: Record<string, unknown> } } | { DeleteRequest: { Key: Record<string, unknown> } };
+  { PutRequest: { Item: Item } } | { DeleteRequest: { Key: Record<string, unknown> } };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 

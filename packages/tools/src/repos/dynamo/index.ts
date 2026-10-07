@@ -4,7 +4,6 @@
  */
 export {
   BATCH_WRITE_MAX_CALLS,
-  BATCH_WRITE_SIZE,
   batchWrite,
   type BatchWriteRequest,
   createDocumentClient,
