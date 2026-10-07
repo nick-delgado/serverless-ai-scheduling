@@ -216,34 +216,36 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       await expectRetryOfStoredMove(result);
     });
 
-    it("a reschedule that reads the new slot after an identical move that was then cancelled answers SLOT_UNAVAILABLE (#207)", async () => {
-      // The slot is held by this appointment, so the appointment is re-read, but it is CANCELLED, not BOOKED
-      // in newSlotId, so the answer isn't the retry.
-      const racing = withRival(async () => {
-        await moveMariaTo(repos, SLOT.leeTue2pm);
-        await cancelMaria();
-      }, "slotRead");
+    /** `SLOT.leeTue2pm`'s sort key, as `withRival` records it. */
+    const LEE_TUE_2PM_SK = "SLOT#2026-10-13T18:00:00Z";
+
+    /**
+     * Move Maria's appointment into `SLOT.leeTue2pm` with `rival` running on the call's read of that slot,
+     * and expect SLOT_UNAVAILABLE after exactly the `GetItem` reads `reads` (sort keys, in order).
+     */
+    async function expectSlotUnavailableOnSlotRead(rival: () => Promise<unknown>, reads: string[]) {
+      const racing = withRival(rival, "slotRead");
       const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
       racing.destroy();
       expect(result).toEqual({ ok: false, reason: "SLOT_UNAVAILABLE" });
-      // The appointment, the slot, then the re-read of the appointment.
-      expect(racing.state.reads).toEqual([
-        `APPT#${APPT.mariaLee}`,
-        "SLOT#2026-10-13T18:00:00Z",
-        `APPT#${APPT.mariaLee}`,
-      ]);
+      expect(racing.state.reads).toEqual(reads);
+    }
+
+    it("a reschedule that reads the new slot after an identical move that was then cancelled answers SLOT_UNAVAILABLE (#207)", async () => {
+      // The slot is held by this appointment, so the appointment is re-read, but it is CANCELLED, not BOOKED
+      // in newSlotId, so the answer isn't the retry. Reads: the appointment, the slot, the appointment again.
+      await expectSlotUnavailableOnSlotRead(async () => {
+        await moveMariaTo(repos, SLOT.leeTue2pm);
+        await cancelMaria();
+      }, [`APPT#${APPT.mariaLee}`, LEE_TUE_2PM_SK, `APPT#${APPT.mariaLee}`]);
     });
 
     it("a reschedule that reads the new slot after another appointment took it answers SLOT_UNAVAILABLE without a re-read", async () => {
-      const racing = withRival(
-        () => repos.appointments.book({ patientId: AISHA, slotId: SLOT.leeTue2pm, reason: "Rash" }),
-        "slotRead",
-      );
-      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
-      racing.destroy();
-      expect(result).toEqual({ ok: false, reason: "SLOT_UNAVAILABLE" });
       // One read of the appointment, one of the slot: a slot held by another appointment isn't re-checked.
-      expect(racing.state.reads).toEqual([`APPT#${APPT.mariaLee}`, "SLOT#2026-10-13T18:00:00Z"]);
+      await expectSlotUnavailableOnSlotRead(
+        () => repos.appointments.book({ patientId: AISHA, slotId: SLOT.leeTue2pm, reason: "Rash" }),
+        [`APPT#${APPT.mariaLee}`, LEE_TUE_2PM_SK],
+      );
       expect(await repos.appointments.get(MARIA, APPT.mariaLee)).toMatchObject({ slotId: SLOT.mariaHeld });
     });
 
