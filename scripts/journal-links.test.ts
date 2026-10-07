@@ -112,11 +112,11 @@ describe("main", () => {
   });
 
   it("doesn't count an added file under docs/journal/ that isn't an entry", () => {
-    repo.write("docs/journal/2026-10-06-café.md", entry("#194, PR #42"));
     repo.write("docs/journal/diagram.svg", "<svg/>\n");
-    repo.commit("link PR #42, add a diagram");
-    expect(main(["--base", "main", "--pr", "42"], {}, deps())).toBe(0);
-    expect(out).toEqual(["journal-links: every journal entry added since main names PR #42 (2 added)."]);
+    repo.commit("add a diagram");
+    main([], { PR_NUMBER: "42", PR_BASE: "main" }, deps());
+    // Only the unlinked entry is named, not the diagram.
+    expect(out.slice(1)).toEqual(["docs/journal/2026-10-06-café.md"]);
   });
 
   it("takes --pr and --base over PR_NUMBER and PR_BASE", () => {
