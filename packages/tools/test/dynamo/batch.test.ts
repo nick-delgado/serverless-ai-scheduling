@@ -62,12 +62,31 @@ describe("batchWrite", () => {
     ]);
   });
 
+  it("restarts the wait and the call cap for each batch", async () => {
+    // Each batch's first call leaves two requests unprocessed; its second call writes them.
+    const { sent, client } = fakeClient((input, call) =>
+      call % 2 === 1 ? { UnprocessedItems: { t1: requestsOf(input).slice(0, 2) } } : {},
+    );
+    const waits: number[] = [];
+    await batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms));
+    expect(sent.map(requestsOf)).toEqual([
+      deletes.slice(0, 25),
+      deletes.slice(0, 2),
+      deletes.slice(25),
+      deletes.slice(25, 27),
+    ]);
+    expect(waits).toEqual([100, 100]);
+  });
+
   it(`gives up on a batch after ${String(BATCH_WRITE_MAX_CALLS)} calls that leave requests unprocessed`, async () => {
-    const { sent, client } = fakeClient((input) => ({ UnprocessedItems: { t1: requestsOf(input) } }));
+    // Three of the first batch's 25 requests stay unprocessed, so the count differs from the batch size.
+    const { sent, client } = fakeClient((input) => ({
+      UnprocessedItems: { t1: requestsOf(input).slice(0, 3) },
+    }));
     const waits: number[] = [];
     await expect(
-      batchWrite(client, "t1", deletes.slice(0, 2), giveUp, async (ms) => void waits.push(ms)),
-    ).rejects.toThrow("2 still unprocessed");
+      batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms)),
+    ).rejects.toThrow(/^3 still unprocessed$/);
     expect(BATCH_WRITE_MAX_CALLS).toBe(8);
     expect(sent).toHaveLength(8);
     expect(waits).toEqual([100, 200, 400, 800, 1600, 3200, 6400, 12800]);
@@ -89,26 +108,41 @@ describe("batchWrite", () => {
 
 describe("writeSeed", () => {
   it("names the items still unprocessed when it gives up", async () => {
+    const realSetTimeout = globalThis.setTimeout;
     vi.useFakeTimers();
-    // A client that never reaches DynamoDB: every BatchWriteItem call answers with all of its puts unprocessed.
+    // A client that never reaches DynamoDB: every BatchWriteItem call answers, after a few real milliseconds
+    // (standing in for I/O the fake clock can't speed up), with the first two of its puts unprocessed.
     const client = new DynamoDBClient({
       region: "us-east-1",
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
     });
     client.middlewareStack.add(
-      () => (args) => {
+      () => async (args) => {
         const input = (args as { input: { RequestItems: Record<string, unknown[]> } }).input;
-        return Promise.resolve({
-          output: { $metadata: {}, UnprocessedItems: input.RequestItems },
+        await new Promise((resolve) => realSetTimeout(resolve, 5));
+        return {
+          output: { $metadata: {}, UnprocessedItems: { t1: (input.RequestItems.t1 ?? []).slice(0, 2) } },
           response: {},
-        });
+        };
       },
       { step: "build", priority: "high" },
     );
-    const done = writeSeed({ tableName: "t1", client, seed: contractSeed() });
-    const outcome = expect(done).rejects.toThrow(/^writeSeed: \d+ items still unprocessed$/);
-    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(30_000);
-    await outcome;
+    let settled = false;
+    const outcome = writeSeed({ tableName: "t1", client, seed: contractSeed() }).then(
+      () => new Error("writeSeed resolved"),
+      (err: unknown) => err,
+    );
+    void outcome.finally(() => (settled = true));
+    // Advance the fake clock until the give-up settles, not a fixed number of times: between checks real time
+    // passes too, so the client's own asynchronous work can finish (bounded by the timeout).
+    await vi.waitFor(
+      async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(settled).toBe(true);
+      },
+      { timeout: 20_000, interval: 10 },
+    );
+    expect(await outcome).toEqual(new Error("writeSeed: 2 items still unprocessed"));
     client.destroy();
   });
 });
