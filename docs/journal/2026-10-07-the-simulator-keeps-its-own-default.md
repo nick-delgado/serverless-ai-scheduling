@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #108, #31 (PR #97), #32, #37, #169, ADR-008, ADR-010
+**Related:** #108, PR #209, #31 (PR #97), #32, #37, #169, ADR-008, ADR-010
 
 ## What happened
 The full review of PR #97 (the patient simulator, #31) noticed seven things in code its review round hadn't touched. None blocked #97; #108 collected them, and Nick settled its three open questions before work started (r1/Q-1 to Q-3). An agent (Claude, as a task worker) built it.
