@@ -29,8 +29,8 @@ An agent built it. `scripts/coverage-changed.ts`, where `scriptIo`, `DEFAULT_BAS
 
 ## Evidence
 
-- Mutation run: EVIDENCE_MUTATE.
-- `npm run dup:changed -- --base f0d019c`: EVIDENCE_DUP.
+- `npm run mutate` with 16 edits (the helper's flags, filter, path limit, `...`, empty-line filter; the base rule's `||`, precedence and default; each script's filter, path, environment variable and base argument; `isEntry` in `main`), run against the three suites: 16 killed, 0 survived. The first run had `isEntry` SURVIVED before its test existed. The table is in the PR's body.
+- `npm run dup:changed -- --base f0d019c` before: `journal-links.ts:38-44` ↔ `pr-evidence.ts:70-76` and the test-setup clone. After: the same two, the production one now `journal-links.ts:38-44` ↔ `pr-evidence.ts:71-77`, which is the `main` signature, the `scriptIo(deps)` line and `let base: string;` only; no clone covers the git diff call or the base rule (r1/Q-1 (b)).
 
 ## What's next
 
