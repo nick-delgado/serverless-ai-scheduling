@@ -11,6 +11,7 @@ import {
 } from "@sched/contracts";
 import { describe, expect, it, vi } from "vitest";
 
+import { fakeTime, until } from "../chat/testUtils";
 import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "./fixtures";
 import { NDJSON_CONTENT_TYPE, ndjsonStream } from "./handlers";
 import { configureMockApi } from "./node";
@@ -190,11 +191,33 @@ describe("POST /api/chat", () => {
     const res = await postChat();
     const headers = performance.now() - sent;
     expect(headers).toBeGreaterThanOrEqual(60);
-    expect(headers).toBeLessThan(180);
     const { events, arrivals, chunks } = await readEvents(res);
     expect(events[0]?.type).toBe("conversation");
     expect(chunks).toBe(events.length);
     expect(defined(arrivals[1]) - sent).toBeGreaterThanOrEqual(240);
+  });
+
+  // The headers' upper bound, without a wall clock a late read can break (#134; the 2026-10-02 journal entry):
+  // under fake time, `latencyMs` is all the time that passes, and the headers must still arrive.
+  it("sends a new conversation's headers after latencyMs, without waiting for firstEventMs", async () => {
+    fakeTime();
+    try {
+      configureMockApi({ latencyMs: 80, firstEventMs: 200, chatReply: "plain" });
+      let headers = false;
+      const res = postChat().then((response) => {
+        headers = true;
+        return response;
+      });
+      await until(() => vi.getTimerCount() > 0); // the handler is sleeping out latencyMs
+      await vi.advanceTimersByTimeAsync(80);
+      await until(() => headers);
+      const reader = defined((await res).body ?? undefined).getReader();
+      const { value } = await reader.read();
+      expect(new TextDecoder().decode(value)).toContain('"type":"conversation"');
+      await reader.cancel();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("waits eventIntervalMs between events after the first", async () => {

@@ -22,6 +22,13 @@ import { LOGIN_ERRORS } from "./LoginPage";
 // Each sign-in runs SRP's 3072-bit math on both sides (~0.2 s alone); allow for a busy CI machine.
 vi.setConfig({ testTimeout: 20_000 });
 
+// The wait for anything that goes through the Cognito mock (real Amplify, real SRP), in the tests that
+// render without a fake `auth`. A loaded runner can spend the 3 s default (src/test/setup.ts) on one
+// sign-in: at a load average near 190, 8-9 of these tests' waits ran out at the old 1 s (PR #133). 10 s is half the
+// test timeout above, so a wait that never succeeds still fails as a missing element, not a timeout.
+// Waits on `fakeAuthService` keep the default; nothing slow sits behind them.
+const COGNITO = { timeout: 10_000 };
+
 beforeEach(() => localStorage.clear());
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,9 +43,9 @@ const usernameField = () => screen.getByLabelText("Username");
 const passwordField = () => screen.getByLabelText("Password");
 const submitButton = () => screen.getByRole("button", { name: /Sign(ing)? in/ });
 
-async function signInThroughForm(username: string, password: string) {
+async function signInThroughForm(username: string, password: string, wait: { timeout?: number } = {}) {
   const user = userEvent.setup();
-  await screen.findByRole("heading", { name: "Sign in" });
+  await screen.findByRole("heading", { name: "Sign in" }, wait);
   await user.type(usernameField(), username);
   await user.type(passwordField(), `${password}{Enter}`);
   return user;
@@ -48,7 +55,7 @@ describe("login form (FR-001)", () => {
   it("labels its fields for password managers and screen readers, in tab order, with no sign-up link", async () => {
     const user = userEvent.setup();
     renderApp("/login");
-    await screen.findByRole("heading", { name: "Sign in" });
+    await screen.findByRole("heading", { name: "Sign in" }, COGNITO);
     expect(usernameField()).toHaveAttribute("autocomplete", "username");
     expect(passwordField()).toHaveAttribute("type", "password");
     expect(passwordField()).toHaveAttribute("autocomplete", "current-password");
@@ -68,24 +75,24 @@ describe("login form (FR-001)", () => {
 
   it("signs in with Enter and lands on the chat, with focus on main", async () => {
     const { router } = renderApp("/login");
-    await signInThroughForm("maria.santos", MOCK_PASSWORD);
-    expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
+    await signInThroughForm("maria.santos", MOCK_PASSWORD, COGNITO);
+    expect(await screen.findByRole("heading", { name: "Chat" }, COGNITO)).toBeVisible();
     expect(router.state.location.pathname).toBe("/chat");
     expect(router.state.historyAction).toBe("REPLACE"); // Back doesn't return to the form
     // Layout moves focus in an effect after the navigation renders, so wait for it.
     await waitFor(() => {
       expect(screen.getByRole("main")).toHaveFocus();
-    });
+    }, COGNITO);
     expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 
   it("signs in from the username field with Enter too", async () => {
     const user = userEvent.setup();
     renderApp("/login");
-    await screen.findByRole("heading", { name: "Sign in" });
+    await screen.findByRole("heading", { name: "Sign in" }, COGNITO);
     await user.type(passwordField(), MOCK_PASSWORD);
     await user.type(usernameField(), "maria.santos{Enter}");
-    expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Chat" }, COGNITO)).toBeVisible();
   });
 
   it.each([
@@ -94,7 +101,7 @@ describe("login form (FR-001)", () => {
   ])("shows the same inline error for %s, tied to both fields", async (_, username, password) => {
     const { router } = renderApp("/login");
     await signInThroughForm(username, password);
-    const alert = await screen.findByText(LOGIN_ERRORS.credentials);
+    const alert = await screen.findByText(LOGIN_ERRORS.credentials, {}, COGNITO);
     expect(alert).toHaveAttribute("role", "alert");
     for (const field of [usernameField(), passwordField()]) {
       expect(field).toHaveAttribute("aria-invalid", "true");
@@ -107,12 +114,12 @@ describe("login form (FR-001)", () => {
   it("selects the password after a failed attempt, so typing replaces it", async () => {
     const user = await (async () => {
       renderApp("/login");
-      return signInThroughForm("maria.santos", "Not-the-password-1");
+      return signInThroughForm("maria.santos", "Not-the-password-1", COGNITO);
     })();
-    await screen.findByText(LOGIN_ERRORS.credentials);
+    await screen.findByText(LOGIN_ERRORS.credentials, {}, COGNITO);
     expect(passwordField()).toHaveFocus();
     await user.keyboard(`${MOCK_PASSWORD}{Enter}`);
-    expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Chat" }, COGNITO)).toBeVisible();
   });
 
   it("clears the error when the next attempt starts", async () => {
@@ -188,14 +195,14 @@ describe("login form (FR-001)", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     configureCognitoMock({ fault: "network" });
     renderApp("/login");
-    await signInThroughForm("maria.santos", MOCK_PASSWORD);
-    expect(await screen.findByText(LOGIN_ERRORS.unavailable)).toHaveAttribute("role", "alert");
+    await signInThroughForm("maria.santos", MOCK_PASSWORD, COGNITO);
+    expect(await screen.findByText(LOGIN_ERRORS.unavailable, {}, COGNITO)).toHaveAttribute("role", "alert");
   });
 
   it("explains when the account needs a step this page doesn't offer", async () => {
     renderApp("/login");
-    await signInThroughForm("new.patient", MOCK_PASSWORD);
-    expect(await screen.findByText(LOGIN_ERRORS.unsupported)).toHaveAttribute("role", "alert");
+    await signInThroughForm("new.patient", MOCK_PASSWORD, COGNITO);
+    expect(await screen.findByText(LOGIN_ERRORS.unsupported, {}, COGNITO)).toHaveAttribute("role", "alert");
   });
 
   it("sends a signed-in patient straight to the chat", async () => {
@@ -221,7 +228,7 @@ describe("session (FR-002, FR-003)", () => {
 
   it("redirects /chat to /login when signed out", async () => {
     const { router } = renderApp("/chat");
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sign in" }, COGNITO)).toBeVisible();
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.historyAction).toBe("REPLACE");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
@@ -229,8 +236,8 @@ describe("session (FR-002, FR-003)", () => {
 
   it("keeps the patient signed in across a reload", async () => {
     const first = renderApp("/login");
-    await signInThroughForm("maria.santos", MOCK_PASSWORD);
-    await screen.findByRole("heading", { name: "Chat" });
+    await signInThroughForm("maria.santos", MOCK_PASSWORD, COGNITO);
+    await screen.findByRole("heading", { name: "Chat" }, COGNITO);
     first.unmount();
 
     // A reload starts the app over: fresh modules, so a fresh auth service that has only what the
@@ -239,26 +246,26 @@ describe("session (FR-002, FR-003)", () => {
     const fresh = await import("../app/routes");
     const router = createMemoryRouter(fresh.appRoutes(), { initialEntries: ["/chat"] });
     render(<RouterProvider router={router} />);
-    expect(await screen.findByRole("heading", { name: "Chat" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Chat" }, COGNITO)).toBeVisible();
     expect(router.state.location.pathname).toBe("/chat");
   });
 
   it("signs out: back to /login, the session is gone, and /chat redirects again", async () => {
     const user = userEvent.setup();
     const { router } = renderApp("/login");
-    await signInThroughForm("maria.santos", MOCK_PASSWORD);
-    await screen.findByRole("heading", { name: "Chat" });
+    await signInThroughForm("maria.santos", MOCK_PASSWORD, COGNITO);
+    await screen.findByRole("heading", { name: "Chat" }, COGNITO);
     await expect(getIdToken()).resolves.toBeTypeOf("string");
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sign in" }, COGNITO)).toBeVisible();
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.historyAction).toBe("REPLACE");
     expect(within(screen.getByRole("banner")).queryByRole("button")).toBeNull();
     await expect(getIdToken()).resolves.toBeUndefined();
 
     await router.navigate("/chat");
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/login"), COGNITO);
     expect(screen.queryByRole("heading", { name: "Chat" })).toBeNull();
   });
 
@@ -319,12 +326,12 @@ describe("session (FR-002, FR-003)", () => {
   it("goes to /login when a silent refresh finds the session revoked", async () => {
     configureCognitoMock({ tokenLifetimeSeconds: 1 });
     const { router } = renderApp("/login");
-    await signInThroughForm("maria.santos", MOCK_PASSWORD);
-    await screen.findByRole("heading", { name: "Chat" });
+    await signInThroughForm("maria.santos", MOCK_PASSWORD, COGNITO);
+    await screen.findByRole("heading", { name: "Chat" }, COGNITO);
 
     expireCognitoSessions();
     await expect(getIdToken()).resolves.toBeUndefined();
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sign in" }, COGNITO)).toBeVisible();
     expect(router.state.location.pathname).toBe("/login");
   });
 
