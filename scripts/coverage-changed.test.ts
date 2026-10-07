@@ -14,12 +14,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import vitestConfig from "../vitest.config";
 
 import {
+  baseRef,
   checkChanged,
   coverageByFile,
   type FileCoverage,
   hintWithoutReason,
   isSourceFile,
   main,
+  namesSince,
   parseAddedLines,
   parseCliArgs,
   SOURCE_GLOBS,
@@ -277,6 +279,56 @@ describe("parseCliArgs", () => {
         cause: expect.objectContaining({ code: expect.stringMatching(/^ERR_PARSE_ARGS_/) }),
       }),
     );
+  });
+});
+
+describe("baseRef", () => {
+  it("takes --base (an empty one too), else a non-empty environment value, else origin/main", () => {
+    expect(baseRef("flag", "env")).toBe("flag");
+    expect(baseRef("", "env")).toBe("");
+    expect(baseRef(undefined, "env")).toBe("env");
+    expect(baseRef(undefined, "")).toBe("origin/main");
+    expect(baseRef(undefined, undefined)).toBe("origin/main");
+  });
+});
+
+describe("namesSince", () => {
+  let repo: TestRepo;
+
+  // The feature branch deletes a/gone.txt and adds a non-ASCII a/café.txt and b/new.txt; main then changes
+  // b/out.txt, which a two-dot diff would list and the merge-base (three-dot) diff doesn't.
+  beforeEach(() => {
+    repo = gitRepo("names-since-");
+    repo.write("a/gone.txt", "gone\n");
+    repo.write("b/out.txt", "out\n");
+    repo.commit("base");
+    repo.git("checkout", "-q", "-b", "feature");
+    repo.git("rm", "-q", "a/gone.txt");
+    repo.write("a/café.txt", "café\n");
+    repo.write("b/new.txt", "new\n");
+    repo.commit("feature");
+    repo.git("checkout", "-q", "main");
+    repo.write("b/out.txt", "changed on main\n");
+    repo.commit("main moves on");
+    repo.git("checkout", "-q", "feature");
+  });
+  afterEach(() => repo.remove());
+
+  it("lists the names the filter selects since the merge base, unquoted, with no empty entry", () => {
+    expect(namesSince(repo.git, "main", "--diff-filter=d")).toEqual(["a/café.txt", "b/new.txt"]);
+    expect(namesSince(repo.git, "main", "--diff-filter=D")).toEqual(["a/gone.txt"]);
+  });
+
+  it("limits the names to the given paths", () => {
+    expect(namesSince(repo.git, "main", "--diff-filter=d", ["b/"])).toEqual(["b/new.txt"]);
+  });
+
+  it("reads a path limit as a path, so one missing from the working tree lists nothing", () => {
+    expect(namesSince(repo.git, "main", "--diff-filter=d", ["c/"])).toEqual([]);
+  });
+
+  it("throws when git can't diff against the base", () => {
+    expect(() => namesSince(repo.git, "nope", "--diff-filter=d")).toThrow();
   });
 });
 

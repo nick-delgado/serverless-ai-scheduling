@@ -19,8 +19,9 @@
 import { parseArgs } from "node:util";
 
 import {
-  DEFAULT_BASE,
+  baseRef,
   isSourceFile,
+  namesSince,
   type ScriptDeps,
   scriptIo,
   SOURCE_GLOBS,
@@ -76,16 +77,14 @@ export function main(
   let base: string;
   try {
     const { values } = parseArgs({ args: [...argv], options: { base: { type: "string" } }, strict: true });
-    base = values.base ?? (vars.PR_BASE || DEFAULT_BASE);
+    base = baseRef(values.base, vars.PR_BASE);
   } catch (err) {
     logError(`usage: pr-evidence [--base <ref>] (${(err as Error).message})`);
     return 2;
   }
   let changed: string[];
   try {
-    changed = git("-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=d", `${base}...HEAD`)
-      .split("\n")
-      .filter((file) => file !== "");
+    changed = namesSince(git, base, "--diff-filter=d");
   } catch (err) {
     logError(`pr-evidence: can't diff against ${base} (fetch the full history): ${(err as Error).message}`);
     return 2;
