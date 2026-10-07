@@ -135,19 +135,24 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         }),
       );
 
+    /** Move Maria's appointment into `SLOT.leeTue2pm` with `rival` racing it, and expect CONFLICT. */
+    async function expectConflictAgainst(rival: () => Promise<unknown>) {
+      const racing = withRival(rival);
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      racing.destroy();
+      expect(racing.state.fired).toBe(true);
+      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
+    }
+
     it("reschedule returns CONFLICT when the appointment is cancelled between its read and its write", async () => {
       // Just before the reschedule transaction is sent, a concurrent writer cancels the appointment.
       // The appointment's condition fails and nothing changes.
-      const racing = withRival(cancelMaria);
-      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
-      expect(racing.state.fired).toBe(true);
-      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
+      await expectConflictAgainst(cancelMaria);
       expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({ status: "OPEN" });
       expect(await repos.slots.get(SLOT.mariaHeld)).toMatchObject({
         status: "BOOKED",
         appointmentId: APPT.mariaLee,
       });
-      racing.destroy();
     });
 
     it("a reschedule that loses the race to an identical move answers the retry, not CONFLICT (#207)", async () => {
@@ -177,28 +182,20 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
     });
 
     it("reschedule returns CONFLICT when a concurrent move took the appointment to another slot", async () => {
-      const racing = withRival(() => moveMariaTo(repos, SLOT.leeTue3pm));
-      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
-      expect(racing.state.fired).toBe(true);
-      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
+      await expectConflictAgainst(() => moveMariaTo(repos, SLOT.leeTue3pm));
       expect(await repos.appointments.get(MARIA, APPT.mariaLee)).toMatchObject({
         status: "BOOKED",
         slotId: SLOT.leeTue3pm,
       });
       expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({ status: "OPEN" });
-      racing.destroy();
     });
 
     it("reschedule returns CONFLICT when a concurrent move into newSlotId was then cancelled", async () => {
       // A raw cancel leaves the slot booked, so this test makes no consistency assertion.
-      const racing = withRival(async () => {
+      await expectConflictAgainst(async () => {
         await moveMariaTo(repos, SLOT.leeTue2pm);
         await cancelMaria();
       });
-      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
-      expect(racing.state.fired).toBe(true);
-      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
-      racing.destroy();
     });
 
     it("retries a transaction cancelled only by TransactionConflict (DynamoDB Local never produces one)", async () => {
