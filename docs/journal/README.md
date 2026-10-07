@@ -68,3 +68,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-07 | [The prompt and the tools now read the clinic calendar from one place, and two of its mutations only fail outside UTC](2026-10-07-one-copy-of-the-clinic-calendar.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [The patient simulator keeps its own default, and a bad simulator setting only breaks the runs that use it](2026-10-07-the-simulator-keeps-its-own-default.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [Three rules that lived in two or three places now live in one](2026-10-07-three-rules-each-written-once.md) | 4. Teaching the agent to schedule |
+| 2026-10-07 | [A reschedule that loses the race to its identical twin now answers already_rescheduled, and on DynamoDB Local it fails all three conditions](2026-10-07-the-losing-twin-move-is-a-retry-too.md) | 4. Teaching the agent to schedule |
