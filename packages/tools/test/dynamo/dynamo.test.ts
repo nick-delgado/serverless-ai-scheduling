@@ -216,6 +216,24 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       await expectRetryOfStoredMove(result);
     });
 
+    it("a reschedule that reads the new slot after an identical move that was then cancelled answers SLOT_UNAVAILABLE (#207)", async () => {
+      // The slot is held by this appointment, so the appointment is re-read, but it is CANCELLED, not BOOKED
+      // in newSlotId, so the answer isn't the retry.
+      const racing = withRival(async () => {
+        await moveMariaTo(repos, SLOT.leeTue2pm);
+        await cancelMaria();
+      }, "slotRead");
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      racing.destroy();
+      expect(result).toEqual({ ok: false, reason: "SLOT_UNAVAILABLE" });
+      // The appointment, the slot, then the re-read of the appointment.
+      expect(racing.state.reads).toEqual([
+        `APPT#${APPT.mariaLee}`,
+        "SLOT#2026-10-13T18:00:00Z",
+        `APPT#${APPT.mariaLee}`,
+      ]);
+    });
+
     it("a reschedule that reads the new slot after another appointment took it answers SLOT_UNAVAILABLE without a re-read", async () => {
       const racing = withRival(
         () => repos.appointments.book({ patientId: AISHA, slotId: SLOT.leeTue2pm, reason: "Rash" }),
