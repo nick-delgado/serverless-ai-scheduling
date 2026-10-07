@@ -4,15 +4,23 @@
  */
 import { join } from "node:path";
 
-import { estimateCostUsd, MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
+import {
+  estimateCostUsd,
+  MODEL_PROFILE_NAMES,
+  MODEL_PROFILES,
+  ScriptedLlmClient,
+  scriptedText,
+} from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
   caseSkipReason,
   CliArgError,
+  DEFAULT_SIMULATOR_PROFILE,
   estimateRunCost,
   EXPECTED_SIMULATED_TURNS,
   exitCodeFor,
+  judgeSetup,
   loadScenarios,
   parseCliArgs,
   resultsBasePath,
@@ -26,6 +34,7 @@ const OUT = "/tmp/evals-results";
 const loaded = loadScenarios();
 const profile = MODEL_PROFILES["gpt-oss-20b"];
 const simProfile = MODEL_PROFILES["haiku-4.5"];
+const simSetting = { name: "haiku-4.5", from: "--simulator-profile" };
 /** No replay file is ever read unless a test passes its own reader. */
 const deps = (readReplay: SimulatorSetupDeps["readReplay"] = () => ({ cases: [] })): SimulatorSetupDeps => ({
   llm: new ScriptedLlmClient(),
@@ -38,7 +47,6 @@ describe("parseCliArgs", () => {
       suite: "smoke",
       mode: "l1",
       profile: MODEL_PROFILES["sonnet-4.6"],
-      simulatorProfile: MODEL_PROFILES["sonnet-4.6"],
       judge: true,
       calibrationDir: "/tmp/calibration",
       trials: 1,
@@ -68,15 +76,16 @@ describe("parseCliArgs", () => {
         "--calibration-dir=/c",
       ],
       OUT,
+      {},
     );
     expect(args).toEqual({
       suite: "full",
       mode: "scenario",
       profile: MODEL_PROFILES["nova-pro"],
-      simulatorProfile: MODEL_PROFILES["haiku-4.5"],
+      simulatorProfile: { name: "haiku-4.5", from: "--simulator-profile" },
       replay: "/r.json",
       judge: false,
-      judgeProfile: "nova-pro",
+      judgeProfile: { name: "nova-pro", from: "--judge-profile" },
       calibrationDir: "/c",
       trials: 3,
       filters: ["book", "safety"],
@@ -103,31 +112,38 @@ describe("parseCliArgs", () => {
     [["--max-cost=abc"], "--max-cost must be a positive number of USD"],
     [["--replay=/r.json"], "--replay needs --mode scenario"],
   ])("rejects %j", (argv, message) => {
-    expect(() => parseCliArgs(argv, OUT)).toThrow(new CliArgError(message));
+    expect(() => parseCliArgs(argv, OUT, {})).toThrow(new CliArgError(message));
   });
 
   it.each([
-    ["--profile=sonet-4.6", /^--profile: Error: Unknown AGENT_MODEL_PROFILE "sonet-4\.6"/],
-    ["--profile=opus-5", /^--profile: Error: AGENT_MODEL_PROFILE "opus-5" .* is not entitled/],
-  ])("rejects %s as a usage error (8c21660/SPEC-1)", (flag, message) => {
-    expect(() => parseCliArgs([flag], OUT)).toThrow(CliArgError);
-    expect(() => parseCliArgs([flag], OUT)).toThrow(message);
+    ["--profile=sonet-4.6", /^--profile: unknown profile "sonet-4\.6"\. Expected one of: sonnet-4\.6, /],
+    ["--profile=opus-5", /^--profile: "opus-5" \(\S+\) is not entitled on this AWS account yet/],
+  ])(
+    "rejects %s as a usage error naming --profile, not AGENT_MODEL_PROFILE (8c21660/SPEC-1, #108)",
+    (flag, message) => {
+      expect(() => parseCliArgs([flag], OUT, {})).toThrow(CliArgError);
+      expect(() => parseCliArgs([flag], OUT, {})).toThrow(message);
+    },
+  );
+
+  it("trims a profile name, as resolveModelProfile does (#108)", () => {
+    expect(parseCliArgs(["--profile= nova-pro "], OUT, {}).profile).toBe(MODEL_PROFILES["nova-pro"]);
   });
 
   it("rejects unknown flags", () => {
-    expect(() => parseCliArgs(["--trails=2"], OUT)).toThrow(CliArgError);
-    expect(() => parseCliArgs(["--suite"], OUT)).toThrow(CliArgError); // a flag without its value
+    expect(() => parseCliArgs(["--trails=2"], OUT, {})).toThrow(CliArgError);
+    expect(() => parseCliArgs(["--suite"], OUT, {})).toThrow(CliArgError); // a flag without its value
   });
 });
 
 describe("selectCases", () => {
   it("takes the mode's pool, the suite, then ids containing any filter", () => {
-    const smokeL1 = selectCases(loaded, parseCliArgs([], OUT));
+    const smokeL1 = selectCases(loaded, parseCliArgs([], OUT, {}));
     expect(smokeL1.length).toBeGreaterThan(0);
     expect(smokeL1.every((c) => c.category === "l1" && c.tags.includes("smoke"))).toBe(true);
     const filtered = selectCases(
       loaded,
-      parseCliArgs(["--suite=full", "--mode=scenario", "--filter=emergency,dst"], OUT),
+      parseCliArgs(["--suite=full", "--mode=scenario", "--filter=emergency,dst"], OUT, {}),
     );
     expect(filtered.length).toBeGreaterThan(0);
     expect(
@@ -136,36 +152,72 @@ describe("selectCases", () => {
   });
 });
 
-describe("parseCliArgs: the simulator's profile (#31)", () => {
+describe("the simulator's profile (#31, #108)", () => {
+  /** The simulator setup's profile for a scenario run with these arguments and environment. */
+  const simulatorProfileFor = (argv: string[], env: Record<string, string>) => {
+    const setup = simulatorSetup(parseCliArgs(["--mode=scenario", ...argv], OUT, env), deps());
+    return setup.kind === "llm" ? setup.profile : undefined;
+  };
+
   it("comes from SIMULATOR_MODEL_PROFILE when the flag is absent, and the flag wins over it", () => {
     const env = { SIMULATOR_MODEL_PROFILE: "nova-2-lite" };
-    expect(parseCliArgs([], OUT, env).simulatorProfile).toBe(MODEL_PROFILES["nova-2-lite"]);
-    expect(parseCliArgs(["--simulator-profile=gpt-oss-120b"], OUT, env).simulatorProfile).toBe(
+    expect(simulatorProfileFor([], env)).toBe(MODEL_PROFILES["nova-2-lite"]);
+    expect(simulatorProfileFor(["--simulator-profile=gpt-oss-120b"], env)).toBe(
       MODEL_PROFILES["gpt-oss-120b"],
     );
   });
 
-  it("is independent of the agent's --profile", () => {
-    expect(parseCliArgs(["--profile=nova-pro"], OUT, {}).simulatorProfile).toBe(MODEL_PROFILES["sonnet-4.6"]);
+  it("is sonnet-4.6 when neither the flag nor SIMULATOR_MODEL_PROFILE sets it, or either is empty (SPEC-2)", () => {
+    expect(DEFAULT_SIMULATOR_PROFILE).toBe("sonnet-4.6");
+    const sonnet = MODEL_PROFILES["sonnet-4.6"];
+    expect(simulatorProfileFor([], {})).toBe(sonnet);
+    expect(simulatorProfileFor([], { SIMULATOR_MODEL_PROFILE: " " })).toBe(sonnet);
+    expect(simulatorProfileFor(["--simulator-profile="], { SIMULATOR_MODEL_PROFILE: "nova-pro" })).toBe(
+      sonnet,
+    );
   });
 
-  it("rejects an unknown or unentitled profile as a usage error", () => {
-    expect(() => parseCliArgs(["--simulator-profile=sonnet-5"], OUT, {})).toThrow(CliArgError);
-    expect(() => parseCliArgs([], OUT, { SIMULATOR_MODEL_PROFILE: "gpt-9" })).toThrow(
-      /^--simulator-profile: .*Unknown .*"gpt-9"/,
+  it("is independent of the agent's --profile", () => {
+    expect(simulatorProfileFor(["--profile=nova-pro"], {})).toBe(MODEL_PROFILES["sonnet-4.6"]);
+  });
+
+  it("a bad value is a usage error of a scenario run, naming the flag or variable that gave it (SMELL-205, r1/Q-3)", () => {
+    expect(() => simulatorProfileFor([], { SIMULATOR_MODEL_PROFILE: "gpt-9" })).toThrow(
+      new CliArgError(
+        `SIMULATOR_MODEL_PROFILE: unknown profile "gpt-9". Expected one of: ${MODEL_PROFILE_NAMES.join(", ")}.`,
+      ),
     );
+    expect(() =>
+      simulatorProfileFor(["--simulator-profile=sonnet-5"], { SIMULATOR_MODEL_PROFILE: "nova-pro" }),
+    ).toThrow(/^--simulator-profile: "sonnet-5" \(\S+\) is not entitled on this AWS account yet/);
+  });
+
+  it.each([
+    ["an L1 run", []],
+    ["a --replay run", ["--mode=scenario", "--replay=/r.json"]],
+    ["the calibration export", ["--export-calibration=/r.json"]],
+    ["--calibrate", ["--calibrate"]],
+  ])("a bad value doesn't stop %s from parsing and setting up (SMELL-205)", (_run, argv) => {
+    for (const [flags, env] of [
+      [[], { SIMULATOR_MODEL_PROFILE: "gpt-9" }],
+      [["--simulator-profile=opus-5"], {}],
+    ] as const) {
+      const args = parseCliArgs([...argv, ...flags], OUT, env);
+      expect(simulatorSetup(args, deps()).kind).not.toBe("llm");
+      expect(() => judgeSetup(args, { llm: new ScriptedLlmClient() })).not.toThrow();
+    }
   });
 });
 
 describe("simulatorSetup (8bea70b/TEST-6)", () => {
   it("L1 mode has no simulator; the estimate assumes the script only", () => {
-    expect(simulatorSetup({ mode: "l1", simulatorProfile: simProfile }, deps())).toEqual({
+    expect(simulatorSetup({ mode: "l1", simulatorProfile: simSetting }, deps())).toEqual({
       kind: "script-only",
     });
   });
 
   it("scenario mode without --replay uses the LLM simulator on the simulator profile", () => {
-    const setup = simulatorSetup({ mode: "scenario", simulatorProfile: simProfile }, deps());
+    const setup = simulatorSetup({ mode: "scenario", simulatorProfile: simSetting }, deps());
     expect(setup).toMatchObject({ kind: "llm", profile: simProfile });
     expect(setup.simulator?.name).toBe("llm:haiku-4.5:sim.v1");
   });
@@ -173,7 +225,7 @@ describe("simulatorSetup (8bea70b/TEST-6)", () => {
   it("builds the LLM simulator on the client it is given, so it shares that client's rate limit (5765869/TEST-201)", async () => {
     const llm = new ScriptedLlmClient([scriptedText("need a derm appt next week")]);
     const setup = simulatorSetup(
-      { mode: "scenario", simulatorProfile: simProfile },
+      { mode: "scenario", simulatorProfile: simSetting },
       { llm, readReplay: () => ({ cases: [] }) },
     );
     const book = scenario("book-derm-next-week-afternoon");
@@ -184,7 +236,7 @@ describe("simulatorSetup (8bea70b/TEST-6)", () => {
   it("--replay reads that file and replays it, with no simulator profile in the estimate", () => {
     const read: string[] = [];
     const setup = simulatorSetup(
-      { mode: "scenario", replay: "run.json", simulatorProfile: simProfile },
+      { mode: "scenario", replay: "run.json", simulatorProfile: simSetting },
       deps((path) => {
         read.push(path);
         return { simulator: "llm:haiku-4.5:sim.v1", cases: [] };
@@ -196,7 +248,7 @@ describe("simulatorSetup (8bea70b/TEST-6)", () => {
   });
 
   it("a replay file that can't be read or isn't a results file is a usage error naming it", () => {
-    const args = { mode: "scenario", replay: "bad.json", simulatorProfile: simProfile } as const;
+    const args = { mode: "scenario", replay: "bad.json", simulatorProfile: simSetting } as const;
     const unreadable = deps(() => {
       throw new Error("ENOENT");
     });
@@ -214,13 +266,13 @@ describe("simulatorSetup (8bea70b/TEST-6)", () => {
 
 describe("estimateRunCost", () => {
   it("scales with trials and leaves out cases that will skip", () => {
-    const l1 = selectCases(loaded, parseCliArgs(["--filter=l1-emergency-911"], OUT));
+    const l1 = selectCases(loaded, parseCliArgs(["--filter=l1-emergency-911"], OUT, {}));
     const one = estimateRunCost(l1, profile, 1);
     expect(one).toBeGreaterThan(0);
     expect(estimateRunCost(l1, profile, 3)).toBeCloseTo(one * 3, 12);
     const unscripted = selectCases(
       loaded,
-      parseCliArgs(["--mode=scenario", "--filter=book-derm-next-week"], OUT),
+      parseCliArgs(["--mode=scenario", "--filter=book-derm-next-week"], OUT, {}),
     );
     expect(unscripted).toHaveLength(1);
     expect(estimateRunCost(unscripted, profile, 1)).toBe(0); // script-only: it needs a simulator, so it won't run
@@ -248,9 +300,9 @@ describe("estimateRunCost", () => {
     });
     const agentCall = estimateCostUsd(profile, usage(4000, 400));
     const simCall = estimateCostUsd(simProfile, usage(1500, 150));
-    const llm = simulatorSetup({ mode: "scenario", simulatorProfile: simProfile }, deps());
+    const llm = simulatorSetup({ mode: "scenario", simulatorProfile: simSetting }, deps());
     const replay = simulatorSetup(
-      { mode: "scenario", replay: "r.json", simulatorProfile: simProfile },
+      { mode: "scenario", replay: "r.json", simulatorProfile: simSetting },
       deps(),
     );
 
