@@ -1,0 +1,17 @@
+id: l1-lookup-past-appointments
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-033]
+notes: >
+  Suggested by PR #66 (#20). Walter's only past visit (COMPLETED, Dr. Brooks) is in September, and
+  get_my_appointments returns upcoming ones unless include_past is true. The check accepts a
+  get_my_appointments call with include_past: true.
+context:
+  - patient: "What appointments did I have last month?"
+expect:
+  action: tool_call
+  tool: get_my_appointments
+  args_subset: { include_past: true }

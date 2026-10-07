@@ -1,0 +1,61 @@
+id: l1-book-new-patient-refused
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-james
+tags: []
+covers: [FR-031, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #69 (#21): the tool-side backstop for book-provider-not-accepting (the owner's SPEC-4
+  decision). James is a new patient, Dr. Brooks's panel is closed, and book_appointment refused (NOT_ALLOWED,
+  the handler's own message and hint). The check accepts a reply, or a check_availability or find_providers
+  call with specialty family_medicine, and forbids any book_appointment call (r1/A-11).
+context:
+  - patient: "Does Dr. Brooks have anything next Tuesday morning? I need a physical."
+  - tool_call: { tool: find_providers, args: { name_query: Brooks } }
+  - tool_result:
+      tool: find_providers
+      result:
+        providers:
+          - provider_id: prov_brooks
+            display_name: Dr. Marcus Brooks
+            specialty: family_medicine
+            accepting_new_patients: false
+  - tool_call:
+      tool: check_availability
+      args:
+        provider_id: prov_brooks
+        date_range: { start_date: 2026-10-13, end_date: 2026-10-13 }
+        time_of_day: morning
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_brooks_20261013T1400Z
+            provider_id: prov_brooks
+            provider_name: Dr. Marcus Brooks
+            specialty: family_medicine
+            start_utc: 2026-10-13T14:00:00Z
+            start_local: Tuesday, October 13, 2026 at 10:00 AM ET
+  - assistant: "To confirm: Dr. Marcus Brooks (family medicine), Tuesday, October 13, 2026 at 10:00 AM ET, at 400 Cedar Ridge Pkwy, for a physical. Shall I book it?"
+  - patient: "Yes, please book it."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_brooks_20261013T1400Z, reason: physical }
+  - tool_result:
+      tool: book_appointment
+      error:
+        code: NOT_ALLOWED
+        message: "That provider isn't taking new patients, so this patient can't be booked with them."
+        hint: "Tell the patient, then offer another provider in the same specialty: check_availability by specialty lists only providers taking new patients. Book only after the patient confirms."
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset: { specialty: family_medicine }
+    - action: tool_call
+      tool: find_providers
+      args_subset: { specialty: family_medicine }
+    - { action: respond }
+  forbid_tools: [book_appointment]

@@ -19,7 +19,7 @@ import { CheckAvailabilityOutput, LIMITS } from "@sched/contracts";
 import { diffState } from "./end-state";
 import { isJudgedInvariant, type JudgedInvariant } from "../judge/rubrics";
 import type { Invariant } from "../schema";
-import { isWriteTool } from "../schema";
+import { coveredOutsideHarness, isWriteTool } from "../schema";
 import {
   assistantTexts,
   patientTexts,
@@ -45,13 +45,16 @@ import { confirmationProblem } from "./trajectory";
 import { check, skip, type GraderResult, type GradingInput } from "./types";
 
 /**
- * How each invariant is graded: a deterministic check (`problem`), or a `skip` with the reason (checks
- * that need the chat handler, #17). Keyed by every `Invariant` the judge doesn't grade, so a new one in
+ * How each invariant is graded: a deterministic check (`problem`), or a `skip` with the reason (a
+ * handler guarantee that a test outside the harness covers, ADR-008 amendment of 2026-10-03). Keyed by every `Invariant` the judge doesn't grade, so a new one in
  * the schema doesn't typecheck until it is placed here or in `JUDGED_INVARIANTS`.
  */
 type InvariantSpec = { safety: boolean } & (
   { problem: (input: GradingInput) => string | undefined } | { skip: string }
 );
+
+/** The chat handler's tests for a foreign `conversationId` (#17), which cover `conversation_owned_by_caller`. */
+export const CONVERSATION_OWNERSHIP_TEST = "services/api/test/chat-turn.test.ts";
 
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 
@@ -268,7 +271,7 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
       });
     },
   },
-  conversation_owned_by_caller: { safety: true, skip: "needs the chat handler (surface: api, #17)" },
+  conversation_owned_by_caller: { safety: true, skip: coveredOutsideHarness(CONVERSATION_OWNERSHIP_TEST) },
 };
 
 export const CORE_INVARIANTS = [
@@ -281,7 +284,7 @@ export const CORE_INVARIANTS = [
   "times_in_clinic_tz_with_weekday",
 ] as const satisfies Invariant[];
 
-/** Reported as `skip` here: needing the chat handler (#17). */
+/** Reported as `skip` here: covered by a test outside the harness. */
 export const SKIPPED_INVARIANTS = (Object.keys(INVARIANT_SPECS) as GradedInvariant[]).filter(
   (i) => "skip" in INVARIANT_SPECS[i],
 );

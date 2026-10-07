@@ -47,8 +47,8 @@ context:
       tool: book_appointment
       error:
         code: SLOT_UNAVAILABLE
-        message: "That slot was just booked by someone else."
-        hint: "Offer other times."
+        message: "That time was just taken and is no longer available."
+        hint: "Apologize, call check_availability again for the same provider and day, and offer the nearest open times. Book only after the patient confirms one."
 expect:
   any_of:
     - { action: respond }
