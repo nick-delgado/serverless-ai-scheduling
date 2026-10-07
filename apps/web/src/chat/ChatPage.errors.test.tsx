@@ -26,6 +26,7 @@ import {
   sendNow,
   typingIndicator as typing,
   until,
+  untilFound,
 } from "./testUtils";
 import { GENERIC_ERROR, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
@@ -39,6 +40,10 @@ const ndjson = (events: ChatStreamEvent[]) =>
   new HttpResponse(events.map(encodeStreamEvent).join(""), {
     headers: { "Content-Type": NDJSON_CONTENT_TYPE },
   });
+
+// The waits on the mock API's I/O use `until`, which has no fixed time limit and can outlast the 5 s
+// default on a loaded runner: give each test room for it (testUtils.ts, #134).
+vi.setConfig({ testTimeout: 20_000 });
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -99,10 +104,11 @@ describe("ChatPage: Retry after a first turn named its conversation (#160)", () 
     nameThen(end);
     const { user, sendMessage } = await renderPage({ sub: SUB });
     await sendMessage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(GENERIC_ERROR);
     await user.click(retryButton() as HTMLElement);
-    await within(log()).findByText(REPLIES.tools.text);
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
+    await until(() => bodies.length === 2);
+    expect(bodies).toHaveLength(2);
     expect(bodies[0]).not.toHaveProperty("conversationId");
     expect(bodies[1]).toEqual({ ...bodies[0], conversationId: NAMED });
   });
@@ -114,10 +120,11 @@ describe("ChatPage: Retry after a first turn named its conversation (#160)", () 
     );
     const { user, sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
     await user.click(retryButton() as HTMLElement);
-    await within(log()).findByText(REPLIES.tools.text);
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
+    await until(() => bodies.length === 2);
+    expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
     expect(bodies[1]).not.toHaveProperty("conversationId");
   });
@@ -132,17 +139,19 @@ describe("ChatPage: Retry (FR-015)", () => {
     });
     const { user, input, sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
 
     configureMockApi({ chatFault: "unavailable" });
     await sendMessage("Book Wednesday");
-    expect(await screen.findByRole("alert")).toHaveTextContent(UNAVAILABLE);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(UNAVAILABLE);
     expect(within(log()).getByText("Book Wednesday")).toBeVisible();
 
     configureMockApi({ chatFault: "none" });
     await user.click(retryButton() as HTMLElement);
-    await waitFor(() => expect(within(log()).getAllByText(REPLIES.tools.text)).toHaveLength(2));
-    await waitFor(() => expect(bodies).toHaveLength(3));
+    await until(() => within(log()).queryAllByText(REPLIES.tools.text).length === 2);
+    expect(within(log()).getAllByText(REPLIES.tools.text)).toHaveLength(2);
+    await until(() => bodies.length === 3);
+    expect(bodies).toHaveLength(3);
     const [, failed, retried] = bodies;
     expect(failed?.conversationId).toBeDefined();
     expect(retried).toEqual(failed);
@@ -159,12 +168,13 @@ describe("ChatPage: Retry (FR-015)", () => {
     const bodies = captureChatBodies();
     const { user, sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
     configureMockApi({ chatFault: "network" });
     await sendMessage("Again");
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
     await user.click(retryButton() as HTMLElement);
-    await waitFor(() => expect(bodies).toHaveLength(3));
+    await until(() => bodies.length === 3);
+    expect(bodies).toHaveLength(3);
     // The mock's done names a fresh conversation for the first turn; both later sends carry it.
     expect(bodies[0]?.conversationId).toBeUndefined();
     expect(bodies[1]?.conversationId).toMatch(/^[0-9a-f-]{36}$/);
@@ -176,18 +186,19 @@ describe("ChatPage: Retry (FR-015)", () => {
     configureMockApi({ chatFault: "network" });
     const { user, sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
     configureMockApi({ chatFault: "none" });
     await user.click(retryButton() as HTMLElement);
-    await within(log()).findByText(REPLIES.tools.text);
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
+    await until(() => bodies.length === 2);
+    expect(bodies).toHaveLength(2);
     expect(bodies[1]).toEqual(bodies[0]);
     expect(bodies[1]).not.toHaveProperty("conversationId");
   });
 
   /** The page shows `message` in an error bubble beside `sent`, with its Retry, and no typing indicator. */
   async function expectRetryBubble(message: string, sent: string) {
-    const alert = await screen.findByRole("alert");
+    const alert = await untilFound(() => screen.queryByRole("alert"));
     expect(alert).toHaveTextContent(message);
     expect(typing()).not.toBeInTheDocument();
     expect(within(log()).getByText(sent)).toBeVisible();
@@ -226,7 +237,7 @@ describe("ChatPage: Retry (FR-015)", () => {
       });
       const { sendMessage } = await renderPage();
       await sendMessage("Hi");
-      await within(log()).findByText(REPLIES.tools.text);
+      await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
       configureMockApi({ chatFault });
       await sendMessage("Book Wednesday");
       await expectRetryBubble(message, "Book Wednesday");
@@ -238,7 +249,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     configureMockApi({ chatFault: "daily_cap" });
     const { sendMessage } = await renderPage();
     await sendMessage("Hi");
-    const alert = await screen.findByRole("alert");
+    const alert = await untilFound(() => screen.queryByRole("alert"));
     expect(alert).toHaveTextContent(CLINIC.phone);
     expect(alert).toHaveTextContent(CLINIC.hours);
     expect(retryButton()).not.toBeInTheDocument();
@@ -258,20 +269,22 @@ describe("ChatPage: Retry (FR-015)", () => {
       const bodies = captureChatBodies();
       const { user, sendMessage } = await renderPage();
       await sendMessage("Hi");
-      await within(log()).findByText(REPLIES.tools.text);
+      await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
 
       // Only the next send fails; the Retry after it reaches the mock API again.
       server.use(http.post("/api/chat", respond, { once: true }));
       await sendMessage("Book Wednesday");
-      const alert = await screen.findByRole("alert");
+      const alert = await untilFound(() => screen.queryByRole("alert"));
       expect(alert).toHaveTextContent(GENERIC_ERROR);
       const bubble = within(log()).getByText(GENERIC_ERROR).closest("li");
       expect(within(bubble as HTMLElement).getByRole("button", { name: "Retry" })).toBeVisible();
       expect(within(log()).getByText("Book Wednesday")).toBeVisible();
 
       await user.click(retryButton() as HTMLElement);
-      await waitFor(() => expect(within(log()).getAllByText(REPLIES.tools.text)).toHaveLength(2));
-      await waitFor(() => expect(bodies).toHaveLength(3));
+      await until(() => within(log()).queryAllByText(REPLIES.tools.text).length === 2);
+      expect(within(log()).getAllByText(REPLIES.tools.text)).toHaveLength(2);
+      await until(() => bodies.length === 3);
+      expect(bodies).toHaveLength(3);
       const [, failed, retried] = bodies;
       expect(failed?.conversationId).toBeDefined();
       expect(retried).toEqual(failed);
@@ -302,7 +315,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     server.use(http.post("/api/chat", respond));
     const { sendMessage } = await renderPage();
     await sendMessage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(GENERIC_ERROR);
     expect(retryButton()).not.toBeInTheDocument();
     expect(within(log()).getByText("Hi")).toBeVisible();
   });
@@ -326,7 +339,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     );
     const { sendMessage } = await renderPage();
     await sendMessage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(event.message);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(event.message);
     expect(retryButton()).not.toBeInTheDocument();
   });
 
@@ -373,7 +386,7 @@ describe("ChatPage: Retry (FR-015)", () => {
       },
     };
     render(<ChatPage api={api} reducedMotion={instant} />);
-    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.upcoming.greeting));
     sendNow("Hi");
     await act(() => failed?.catch(() => undefined));
     expect(screen.getByRole("alert")).toHaveTextContent(message);
@@ -386,7 +399,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     const onUnauthorized = vi.fn();
     const { sendMessage } = await renderPage({ onUnauthorized });
     await sendMessage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(SIGNED_OUT_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(SIGNED_OUT_ERROR);
     expect(retryButton()).not.toBeInTheDocument();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
@@ -411,7 +424,7 @@ describe("ChatPage: Retry (FR-015)", () => {
     const onUnauthorized = vi.fn();
     const { sendMessage } = await renderPage({ onUnauthorized });
     await sendMessage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(SIGNED_OUT_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(SIGNED_OUT_ERROR);
     expect(retryButton()).not.toBeInTheDocument();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
@@ -421,13 +434,14 @@ describe("ChatPage: Retry (FR-015)", () => {
     configureMockApi({ chatFault: "network" });
     const { sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
     configureMockApi({ chatFault: "none" });
     await sendMessage("Hello?");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
     expect(retryButton()).not.toBeInTheDocument();
     expect(within(log()).getByText("Hi")).toBeVisible();
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await until(() => bodies.length === 2);
+    expect(bodies).toHaveLength(2);
     expect(bodies[1]?.clientMessageId).not.toBe(bodies[0]?.clientMessageId);
   });
 
@@ -438,20 +452,24 @@ describe("ChatPage: Retry (FR-015)", () => {
     act(() => {
       result.current.send("Hi");
     });
-    await waitFor(() => expect(result.current.error?.retryable).toBe(true));
+    await until(() => result.current.error?.retryable === true);
+    expect(result.current.error?.retryable).toBe(true);
     configureMockApi({ chatFault: "none" });
     act(() => {
       result.current.retry();
       result.current.retry();
     });
-    await waitFor(() => expect(result.current.messages).toHaveLength(2));
-    await waitFor(() => expect(bodies).toHaveLength(2));
+    await until(() => result.current.messages.length === 2);
+    expect(result.current.messages).toHaveLength(2);
+    await until(() => bodies.length === 2);
+    expect(bodies).toHaveLength(2);
     expect(result.current.responding).toBe(false);
   });
 
   it("does nothing on Retry when there is no error", async () => {
     const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
-    await waitFor(() => expect(result.current.greeting.state).toBe("ready"));
+    await until(() => result.current.greeting.state === "ready");
+    expect(result.current.greeting.state).toBe("ready");
     act(() => result.current.retry());
     // A turn would be under way, or the greeting loading again, as soon as `act` returns.
     expect(result.current.responding).toBe(false);
@@ -462,11 +480,11 @@ describe("ChatPage: Retry (FR-015)", () => {
     configureMockApi({ chatFault: "unavailable" });
     const { user, sendMessage } = await renderPage();
     await sendMessage("Hi");
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
     configureMockApi({ chatFault: "none" });
     const button = retryButton() as HTMLElement;
     button.focus();
     await user.keyboard("{Enter}");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
   });
 });

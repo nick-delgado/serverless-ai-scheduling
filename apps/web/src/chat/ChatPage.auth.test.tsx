@@ -15,10 +15,14 @@ import { fakeAuthService, fakeSub } from "../auth/testing";
 import { REPLIES, RESTORE_CONVERSATION_ID, SESSIONS } from "../mocks/fixtures";
 import { configureMockApi } from "../mocks/node";
 import { LOGIN_SESSION_STORAGE_KEY, readLoginSession, writeLoginSession } from "./loginSession";
-import { log } from "./testUtils";
+import { log, until, untilFound } from "./testUtils";
 
 const MARIA = { username: "maria.santos", sub: fakeSub("maria.santos") };
 const RESTORED_QUESTION = SESSIONS.restore.messages[0]?.text ?? "";
+
+// The waits on the mock API's I/O use `until`, which has no fixed time limit and can outlast the 5 s
+// default on a loaded runner: give each test room for it (testUtils.ts, #134).
+vi.setConfig({ testTimeout: 20_000 });
 
 beforeEach(() => {
   localStorage.clear();
@@ -43,14 +47,14 @@ describe("ChatPage in the app: the login session", () => {
     writeLoginSession({ sub: MARIA.sub, conversationId: RESTORE_CONVERSATION_ID });
     configureMockApi({ session: "restore" });
     renderApp("/chat", fakeAuthService(MARIA));
-    expect(await screen.findByText(RESTORED_QUESTION)).toBeVisible();
+    expect(await untilFound(() => screen.queryByText(RESTORED_QUESTION))).toBeVisible();
   });
 
   it("remembers the conversation a turn starts under the signed-in patient's sub", async () => {
     renderApp("/chat", fakeAuthService(MARIA));
     const input = await screen.findByRole("textbox", { name: "Message" });
     await userEvent.setup().type(input, "Hi{Enter}");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
     expect(readLoginSession()?.sub).toBe(MARIA.sub);
   });
 
@@ -103,7 +107,8 @@ describe("ChatPage in the app: the login session", () => {
     configureMockApi({ sessionFault: "unauthorized" });
     const auth = fakeAuthService(MARIA);
     const router = renderApp("/chat", auth);
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
+    await until(() => router.state.location.pathname === "/login");
+    expect(router.state.location.pathname).toBe("/login");
     expect(auth.signOut).toHaveBeenCalledTimes(1);
   });
 });
