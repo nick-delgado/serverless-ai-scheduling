@@ -39,12 +39,19 @@ describe("batchWrite", () => {
     DeleteRequest: { Key: { PK: `PROVIDER#p${String(i)}`, SK: "PROFILE" } },
   }));
 
+  /** `batchWrite` of `deletes` against `fakeClient(reply)`, recording each wait instead of sleeping. */
+  function writeDeletes(reply: Parameters<typeof fakeClient>[0]) {
+    const { sent, client } = fakeClient(reply);
+    const waits: number[] = [];
+    const done = batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms));
+    return { sent, waits, done };
+  }
+
   it("sends batches of 25 and re-sends only the unprocessed requests after a wait", async () => {
-    const { sent, client } = fakeClient((input, call) =>
+    const { sent, waits, done } = writeDeletes((input, call) =>
       call === 1 ? { UnprocessedItems: { t1: requestsOf(input).slice(3, 5) } } : {},
     );
-    const waits: number[] = [];
-    await batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms));
+    await done;
     expect(sent.map(requestsOf)).toEqual([deletes.slice(0, 25), deletes.slice(3, 5), deletes.slice(25)]);
     expect(waits).toEqual([100]);
   });
@@ -64,11 +71,10 @@ describe("batchWrite", () => {
 
   it("restarts the wait and the call cap for each batch", async () => {
     // Each batch's first call leaves two requests unprocessed; its second call writes them.
-    const { sent, client } = fakeClient((input, call) =>
+    const { sent, waits, done } = writeDeletes((input, call) =>
       call % 2 === 1 ? { UnprocessedItems: { t1: requestsOf(input).slice(0, 2) } } : {},
     );
-    const waits: number[] = [];
-    await batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms));
+    await done;
     expect(sent.map(requestsOf)).toEqual([
       deletes.slice(0, 25),
       deletes.slice(0, 2),
@@ -80,13 +86,10 @@ describe("batchWrite", () => {
 
   it(`gives up on a batch after ${String(BATCH_WRITE_MAX_CALLS)} calls that leave requests unprocessed`, async () => {
     // Three of the first batch's 25 requests stay unprocessed, so the count differs from the batch size.
-    const { sent, client } = fakeClient((input) => ({
+    const { sent, waits, done } = writeDeletes((input) => ({
       UnprocessedItems: { t1: requestsOf(input).slice(0, 3) },
     }));
-    const waits: number[] = [];
-    await expect(
-      batchWrite(client, "t1", deletes, giveUp, async (ms) => void waits.push(ms)),
-    ).rejects.toThrow(/^3 still unprocessed$/);
+    await expect(done).rejects.toThrow(/^3 still unprocessed$/);
     expect(BATCH_WRITE_MAX_CALLS).toBe(8);
     expect(sent).toHaveLength(8);
     expect(waits).toEqual([100, 200, 400, 800, 1600, 3200, 6400, 12800]);
