@@ -496,6 +496,27 @@ export function runRepositoryContract(name: string, makeRepos: MakeRepositories)
         },
       );
 
+      // The status check comes before the same-slot retry answer: a retry into its own slot is not a way
+      // to report a CANCELLED or COMPLETED appointment as rescheduled.
+      it.each([
+        ["CANCELLED", DANIEL, APPT.danielCancelled],
+        ["COMPLETED", WALTER, APPT.walterPast],
+      ] as const)(
+        "fails for a %s appointment moved into the slot it names, and changes nothing",
+        async (_status, patientId, appointmentId) => {
+          const held = await repos.appointments.get(patientId, appointmentId);
+          if (!held) throw new Error(`${appointmentId} is not seeded`);
+          const before = await capture([patientId], [held.slotId]);
+          const result = await repos.appointments.reschedule({
+            patientId,
+            appointmentId,
+            newSlotId: held.slotId,
+          });
+          expect(result).toEqual({ ok: false, reason: "APPOINTMENT_NOT_BOOKED" });
+          expect(await capture([patientId], [held.slotId])).toEqual(before);
+        },
+      );
+
       it("answers a retry into the slot the appointment already holds as success, and changes nothing", async () => {
         const patients = [MARIA];
         const before = await capture(patients, touched);
