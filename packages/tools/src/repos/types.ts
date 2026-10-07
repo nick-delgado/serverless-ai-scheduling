@@ -128,8 +128,6 @@ export type RescheduleFailureReason =
   | "APPOINTMENT_NOT_FOUND"
   /** The appointment is CANCELLED or COMPLETED. */
   | "APPOINTMENT_NOT_BOOKED"
-  /** The appointment is already in `newSlotId` (e.g. a retried call after success). Nothing changed. */
-  | "SAME_SLOT"
   | "SLOT_NOT_FOUND"
   | "SLOT_UNAVAILABLE"
   /**
@@ -139,7 +137,14 @@ export type RescheduleFailureReason =
   | "CONFLICT";
 
 export type RescheduleResult =
-  | { ok: true; appointment: Appointment; previous: Appointment }
+  /** Moved: `appointment` is the new version, `previous` the one before the move. */
+  | { ok: true; alreadyRescheduled: false; appointment: Appointment; previous: Appointment }
+  /**
+   * The appointment was already in `newSlotId` when read (a retried call after success), so nothing was
+   * written. `appointment` is it as stored; there's no `previous`, since the time it had before the
+   * first call is gone (#77, like `book`'s `alreadyBooked`).
+   */
+  | { ok: true; alreadyRescheduled: true; appointment: Appointment }
   | { ok: false; reason: RescheduleFailureReason };
 
 export interface AppointmentRepo {
@@ -168,18 +173,16 @@ export interface AppointmentRepo {
    *
    * Any failure leaves all three items exactly as they were. The new slot may be with another provider or
    * specialty; whether that is allowed is a tool-level decision.
+   *
+   * Idempotent when read: an appointment already in `newSlotId` returns `alreadyRescheduled: true` and
+   * writes nothing. A DynamoDB call that read the appointment before a concurrent move into the same slot
+   * committed still returns CONFLICT (decision r1/Q-2 on #77).
    */
   reschedule(command: RescheduleCommand): Promise<RescheduleResult>;
 }
 
-/**
- * The reschedule failures a tool answers as errors. SAME_SLOT is not one: reschedule_appointment answers a
- * retry into the slot the appointment already holds as a success (`already_rescheduled`, #88).
- */
-export type RescheduleErrorReason = Exclude<RescheduleFailureReason, "SAME_SLOT">;
-
 /** Suggested ToolError code for each repository failure, so every tool maps them the same way. */
-export const TOOL_ERROR_CODE_FOR: Record<BookFailureReason | RescheduleErrorReason, ToolErrorCode> = {
+export const TOOL_ERROR_CODE_FOR: Record<BookFailureReason | RescheduleFailureReason, ToolErrorCode> = {
   SLOT_NOT_FOUND: "NOT_FOUND",
   SLOT_UNAVAILABLE: "SLOT_UNAVAILABLE",
   APPOINTMENT_NOT_FOUND: "NOT_FOUND",

@@ -21,22 +21,10 @@
  *   retry of the same call can succeed;
  * - slot held by anyone else → SLOT_UNAVAILABLE (never says by whom).
  */
-import type { Appointment, AppointmentSummary, Provider } from "@sched/contracts";
-
-import { formatClinicDateTime } from "../clock";
-import { toolFail, toolOk, type ToolHandler } from "../registry";
+import { startsAfter } from "../clock";
+import { toolFail, toolOk, type ToolHandler } from "../handler";
 import { TOOL_ERROR_CODE_FOR } from "../repos/types";
-
-const toAppointmentSummary = (a: Appointment, provider: Provider): AppointmentSummary => ({
-  appointment_id: a.appointmentId,
-  provider_id: a.providerId,
-  provider_name: provider.displayName,
-  specialty: a.specialty,
-  start_utc: a.startUtc,
-  start_local: formatClinicDateTime(a.startUtc),
-  status: a.status,
-  reason: a.reason,
-});
+import { toAppointmentSummary } from "./summaries";
 
 const SLOT_NOT_FOUND = [
   "No open time with that slot_id exists.",
@@ -61,7 +49,7 @@ export const bookAppointment: ToolHandler<"book_appointment"> = async (input, ct
     }
   }
 
-  if (Date.parse(slot.startUtc) <= ctx.clock.now().getTime()) {
+  if (!startsAfter(slot.startUtc, ctx.clock.now())) {
     return toolFail(
       "NOT_ALLOWED",
       "That time has already passed, so it can't be booked.",

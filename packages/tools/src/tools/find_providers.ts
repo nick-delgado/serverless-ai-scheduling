@@ -7,16 +7,10 @@
  *
  * No patient data is read. An empty list is a success, not an error: "nobody matches" is an answer.
  */
-import { LIMITS, type Provider, type ProviderSummary } from "@sched/contracts";
+import { LIMITS } from "@sched/contracts";
 
-import { toolOk, type ToolHandler } from "../registry";
-
-const toProviderSummary = (p: Provider): ProviderSummary => ({
-  provider_id: p.providerId,
-  display_name: p.displayName,
-  specialty: p.specialty,
-  accepting_new_patients: p.acceptingNewPatients,
-});
+import { toolOk, type ToolHandler } from "../handler";
+import { toProviderSummary } from "./summaries";
 
 export const findProviders: ToolHandler<"find_providers"> = async (input, ctx) => {
   const providers = await ctx.repos.providers.list({

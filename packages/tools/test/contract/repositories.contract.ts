@@ -439,8 +439,8 @@ export function runRepositoryContract(name: string, makeRepos: MakeRepositories)
           appointmentId: APPT.mariaLee,
           newSlotId: SLOT.okaforTue4pm,
         });
-        expect(result.ok).toBe(true);
-        if (!result.ok) return;
+        expect(result).toMatchObject({ ok: true, alreadyRescheduled: false });
+        if (!result.ok || result.alreadyRescheduled) return;
         expect(result.previous).toMatchObject({ slotId: SLOT.mariaHeld, startUtc: "2026-10-13T18:30:00Z" });
         expect(Appointment.parse(result.appointment)).toEqual({
           ...result.previous,
@@ -485,7 +485,6 @@ export function runRepositoryContract(name: string, makeRepos: MakeRepositories)
           SLOT.leeTue2pm,
           "APPOINTMENT_NOT_BOOKED",
         ],
-        ["it's already in that slot", MARIA, APPT.mariaLee, SLOT.mariaHeld, "SAME_SLOT"],
       ] as const)(
         "fails when %s, and changes nothing",
         async (_label, patientId, appointmentId, newSlotId, reason) => {
@@ -496,6 +495,44 @@ export function runRepositoryContract(name: string, makeRepos: MakeRepositories)
           expect(await capture(patients, [...touched, SLOT.danielCancelled])).toEqual(before);
         },
       );
+
+      // The status check comes before the same-slot retry answer: a retry into its own slot is not a way
+      // to report a CANCELLED or COMPLETED appointment as rescheduled.
+      it.each([
+        ["CANCELLED", DANIEL, APPT.danielCancelled],
+        ["COMPLETED", WALTER, APPT.walterPast],
+      ] as const)(
+        "fails for a %s appointment moved into the slot it names, and changes nothing",
+        async (_status, patientId, appointmentId) => {
+          const held = await repos.appointments.get(patientId, appointmentId);
+          if (!held) throw new Error(`${appointmentId} is not seeded`);
+          const before = await capture([patientId], [held.slotId]);
+          const result = await repos.appointments.reschedule({
+            patientId,
+            appointmentId,
+            newSlotId: held.slotId,
+          });
+          expect(result).toEqual({ ok: false, reason: "APPOINTMENT_NOT_BOOKED" });
+          expect(await capture([patientId], [held.slotId])).toEqual(before);
+        },
+      );
+
+      it("answers a retry into the slot the appointment already holds as success, and changes nothing", async () => {
+        const patients = [MARIA];
+        const before = await capture(patients, touched);
+        const result = await repos.appointments.reschedule({
+          patientId: MARIA,
+          appointmentId: APPT.mariaLee,
+          newSlotId: SLOT.mariaHeld,
+        });
+        expect(result).toEqual({
+          ok: true,
+          alreadyRescheduled: true,
+          appointment: await repos.appointments.get(MARIA, APPT.mariaLee),
+        });
+        expect(result.ok && result.appointment).toMatchObject({ slotId: SLOT.mariaHeld, status: "BOOKED" });
+        expect(await capture(patients, touched)).toEqual(before);
+      });
 
       it("two patients racing for the same new slot: exactly one moves, the other is untouched", async () => {
         const before = await capture([WALTER], [SLOT.walterHeld]);

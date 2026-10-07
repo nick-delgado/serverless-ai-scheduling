@@ -9,10 +9,12 @@ import {
   TOOL_REGISTRY,
   type ToolContext,
   type ToolExecutionResult,
+  type ToolExecutorOptions,
 } from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
 import { bookAppointment } from "../../src/tools/book_appointment";
+import { cancelledBrooksVisit } from "./established";
 
 const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
 const WALTER = FIXTURE_PATIENT_IDS["pat-walter"];
@@ -28,6 +30,7 @@ const MARIAS_SLOT = "slot_lee_20261013T1830Z"; // Maria's BOOKED "Mole check"
 const UNKNOWN_SLOT = "slot_lee_20261010T1400Z"; // well-formed, but a Saturday: no such slot
 const MARIA_APPT = "appt_01JBX7Q2M3N4P5R6S7T8V9W0XY"; // holds MARIAS_SLOT, Tue Oct 13, 2:30 PM EDT (18:30Z)
 const BROOKS_SLOT = "slot_brooks_20261006T1400Z"; // Tue Oct 6, 10:00 AM EDT; Dr. Brooks isn't taking new patients
+const BROOKS_LATER_SLOT = "slot_brooks_20261014T1300Z"; // Wed Oct 14, 9:00 AM EDT
 
 const outputOf = (r: ToolExecutionResult): ToolOutput<"book_appointment"> => {
   if (!r.ok) throw new Error(`expected success, got ${JSON.stringify(r.error)}`);
@@ -49,8 +52,12 @@ describe("book_appointment", () => {
     repos,
   });
   // Through the executor, so the strict contracts schemas the model faces apply to input and output.
-  const run = (patientId: string, input: unknown): Promise<ToolExecutionResult> =>
-    createToolExecutor({ book_appointment: bookAppointment }, contextFor(patientId)).execute({
+  const run = (
+    patientId: string,
+    input: unknown,
+    options: ToolExecutorOptions = {},
+  ): Promise<ToolExecutionResult> =>
+    createToolExecutor({ book_appointment: bookAppointment }, contextFor(patientId), options).execute({
       id: "toolu_test",
       name: "book_appointment",
       input,
@@ -204,6 +211,35 @@ describe("book_appointment", () => {
     expect(repos.snapshot()).toEqual(before);
   });
 
+  it("books a patient whose only visit with a provider not taking new patients is BOOKED", async () => {
+    // James has no history with Dr. Brooks. Book one future visit with him directly through the repo (the
+    // tool rule doesn't apply to setup); that BOOKED visit alone makes him an existing patient.
+    const setup = await repos.appointments.book({
+      patientId: JAMES,
+      slotId: BROOKS_LATER_SLOT,
+      reason: "Check-up",
+    });
+    expect(setup.ok).toBe(true);
+    const out = outputOf(await run(JAMES, { slot_id: BROOKS_SLOT, reason: "Follow-up" }));
+    expect(out).toMatchObject({ already_booked: false, appointment: { provider_id: "prov_brooks" } });
+    expect(await slotStatus(BROOKS_SLOT)).toBe("BOOKED");
+  });
+
+  it("refuses a patient whose only visit with a provider not taking new patients is CANCELLED", async () => {
+    // A test-local seed (decision r1/Q-3): James's only Brooks appointment was cancelled, so he is still new.
+    const fixture = buildClinicFixture();
+    repos = createInMemoryRepositories({
+      seed: { ...fixture, appointments: [...fixture.appointments, cancelledBrooksVisit(JAMES)] },
+      clock,
+      ids: sequentialIds(),
+    });
+    const before = repos.snapshot();
+    const error = errorOf(await run(JAMES, { slot_id: BROOKS_SLOT, reason: "General check-up" }));
+    expect(error.code).toBe("NOT_ALLOWED");
+    expect(error.message).toMatch(/new patients/);
+    expect(repos.snapshot()).toEqual(before);
+  });
+
   it("books an existing patient with a provider not taking new patients", async () => {
     // Walter's fixture history has a COMPLETED annual physical with Dr. Brooks.
     const out = outputOf(await run(WALTER, { slot_id: BROOKS_SLOT, reason: "Follow-up" }));
@@ -215,7 +251,15 @@ describe("book_appointment", () => {
   it("reports INTERNAL, writing nothing, when the slot's provider record is missing", async () => {
     vi.spyOn(repos.providers, "get").mockResolvedValue(null);
     const before = repos.snapshot();
-    expect(errorOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" })).code).toBe("INTERNAL");
+    const causes: unknown[] = [];
+    const result = await run(
+      AISHA,
+      { slot_id: OPEN_SLOT, reason: "Skin check" },
+      { onInternalError: (error) => causes.push(error) },
+    );
+    expect(errorOf(result).code).toBe("INTERNAL");
+    // The handler's own guard, not a TypeError from reading a null provider.
+    expect(String(causes[0])).toMatch(/Slot slot_lee_20261006T1400Z references unknown provider prov_lee/);
     expect(repos.snapshot()).toEqual(before);
   });
 

@@ -64,6 +64,15 @@ export class FrozenClock implements Clock {
   }
 }
 
+/**
+ * The bookable rule, shared by the tools so it can't drift between them (#77): a slot or appointment
+ * that starts strictly after `now` hasn't started; one that starts at `now` already has. `now` is the
+ * caller's single `ctx.clock.now()` read, so every comparison in one tool call uses the same instant.
+ */
+export function startsAfter(startUtc: string, now: Date): boolean {
+  return Date.parse(startUtc) > now.getTime();
+}
+
 // ---------------------------------------------------------------------------------------------
 // Clinic time (wall clock in a named IANA zone)
 // ---------------------------------------------------------------------------------------------
