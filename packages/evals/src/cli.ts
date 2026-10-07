@@ -8,8 +8,8 @@
  * with 429 backoff, a budget guard stops the run at `--max-cost`, and the estimated cost is printed
  * before the first call. Results: `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}`
  * (git-ignored), and a copy outside every checkout (#195), in
- * `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/<checkout directory name>/` (default
- * `~/.local/state/…`; `EVAL_RESULTS_COPY_DIR` replaces the directory above `<checkout directory name>`;
+ * `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/<checkout directory name>/` (`~/.local/state/…`
+ * when `XDG_STATE_HOME` isn't an absolute path; `EVAL_RESULTS_COPY_DIR` replaces the directory above `<checkout directory name>`;
  * see `results-copy.ts`). The last line prints both `.json` paths; a `--dry-run` writes neither.
  *
  * Scenario mode drives unscripted turns with the LLM patient simulator (#31) on `--simulator-profile`
