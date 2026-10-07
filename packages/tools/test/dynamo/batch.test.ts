@@ -3,14 +3,17 @@
  * returns unprocessed items, so `dynamo.test.ts` can't reach the retry path. Runs without DynamoDB Local.
  * Moved from `scripts/seed-data.test.ts`'s `deleteRows` cases, with the same waits.
  */
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import type { BatchWriteCommandInput, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BATCH_WRITE_MAX_CALLS,
   batchWrite,
   type BatchWriteRequest,
+  writeSeed,
 } from "../../src/repos/dynamo/repositories";
+import { contractSeed } from "../contract/scenario";
 
 /** A client whose `send` records each command's input and answers with `reply(input, call)`. */
 function fakeClient(reply: (input: BatchWriteCommandInput, call: number) => unknown) {
@@ -42,11 +45,11 @@ describe("batchWrite", () => {
     expect(waits).toEqual([100]);
   });
 
-  it("re-sends unprocessed puts and deletes alike, and nothing for another table", async () => {
+  it("re-sends unprocessed puts and deletes alike, and nothing for another table or of another kind", async () => {
     const put: BatchWriteRequest = { PutRequest: { Item: { PK: "x", SK: "y", n: 1 } } };
     const del: BatchWriteRequest = { DeleteRequest: { Key: { PK: "a", SK: "b" } } };
     const { sent, client } = fakeClient((input, call) =>
-      call === 1 ? { UnprocessedItems: { t1: requestsOf(input), t2: [put] } } : {},
+      call === 1 ? { UnprocessedItems: { t1: [...requestsOf(input), {}], t2: [put] } } : {},
     );
     await batchWrite(client, "t1", [put, del], giveUp, async () => undefined);
     expect(sent.map(requestsOf)).toEqual([
@@ -65,4 +68,47 @@ describe("batchWrite", () => {
     expect(sent).toHaveLength(8);
     expect(waits).toEqual([100, 200, 400, 800, 1600, 3200, 6400, 12800]);
   });
+
+  it("waits with a real timer when no wait is given", async () => {
+    vi.useFakeTimers();
+    const { sent, client } = fakeClient((input, call) =>
+      call === 1 ? { UnprocessedItems: { t1: requestsOf(input) } } : {},
+    );
+    const done = batchWrite(client, "t1", deletes.slice(0, 1), giveUp);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(sent).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await done;
+    expect(sent).toHaveLength(2);
+  });
+});
+
+describe("writeSeed", () => {
+  it("names the items still unprocessed when it gives up", async () => {
+    vi.useFakeTimers();
+    // A client that never reaches DynamoDB: every BatchWriteItem call answers with all of its puts unprocessed.
+    const client = new DynamoDBClient({
+      region: "us-east-1",
+      credentials: { accessKeyId: "test", secretAccessKey: "test" },
+    });
+    client.middlewareStack.add(
+      () => (args) => {
+        const input = (args as { input: { RequestItems: Record<string, unknown[]> } }).input;
+        return Promise.resolve({
+          output: { $metadata: {}, UnprocessedItems: input.RequestItems },
+          response: {},
+        });
+      },
+      { step: "build", priority: "high" },
+    );
+    const done = writeSeed({ tableName: "t1", client, seed: contractSeed() });
+    const outcome = expect(done).rejects.toThrow(/^writeSeed: \d+ items still unprocessed$/);
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(30_000);
+    await outcome;
+    client.destroy();
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
