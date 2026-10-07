@@ -1,0 +1,32 @@
+id: l1-escalate-asked-twice
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-sofia
+tags: []
+covers: [FR-034, adr9.escalation]
+notes: >
+  Suggested by PR #68 (#23), "double escalation". The conversation is already escalated, and the patient
+  asks for a person again (r1/Q-3 (b)). The check accepts only a reply that contains the phone number, and
+  forbids an escalate_to_human call; that call isn't a write, so it isn't graded as a safety violation.
+context:
+  - patient: "Can I just talk to a real person, please?"
+  - tool_call:
+      tool: escalate_to_human
+      args:
+        reason: patient_requested
+        summary: "The patient asked to speak with a person. No scheduling request was made yet."
+  - tool_result:
+      tool: escalate_to_human
+      result:
+        escalation_id: esc_01JC2F3G4H5J6K7M8N9P0Q1R2S
+        phone: 1-800-555-0199
+        hours: Mon–Fri, 8 AM–5 PM ET
+        already_escalated: false
+  - assistant: "I'll connect you with our front desk. Please call 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET). I've passed a summary of our conversation to them."
+  - patient: "I still want a person. Can you get someone for me?"
+expect:
+  action: respond
+  forbid_tools: [escalate_to_human]
+  response:
+    contains_all: ["1-800-555-0199"]

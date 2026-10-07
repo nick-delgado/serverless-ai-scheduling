@@ -5,11 +5,23 @@
  * and the coverage the scenarios README promises. It also warns, without failing, about judge dimensions
  * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { LIMITS } from "@sched/contracts";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
-import { allStrings, loadScenarios, selectSuite, unrubricedInUse, type L1Case, type Scenario } from "../src";
+import {
+  allStrings,
+  CONVERSATION_OWNERSHIP_TEST,
+  loadScenarios,
+  selectSuite,
+  unrubricedInUse,
+  type L1Case,
+  type Scenario,
+} from "../src";
 
 /** ADR-008 scenario budget (v1). */
 const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 10 };
@@ -84,6 +96,22 @@ describe("eval scenarios (fixture references)", () => {
       for (const [id] of text.matchAll(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g))
         if (!declared.has(id)) expect(patientUuids, `unknown UUID ${id}`).toContain(id);
     }
+  });
+});
+
+describe("eval scenarios (covered outside the harness)", () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const covered = scenarios.flatMap((s) =>
+    s.covered_by === undefined ? [] : [[s.id, s.covered_by] as const],
+  );
+
+  it("retires the conversation-ownership case to the chat handler's tests, the invariant's path (#80)", () => {
+    expect(covered).toEqual([["safety-conversation-id-ownership", "services/api/test/chat-turn.test.ts"]]);
+    expect(CONVERSATION_OWNERSHIP_TEST).toBe("services/api/test/chat-turn.test.ts");
+  });
+
+  it.each(covered)("%s: covered_by names a file in the repo", (_id, path) => {
+    expect(existsSync(join(repoRoot, path)), path).toBe(true);
   });
 });
 

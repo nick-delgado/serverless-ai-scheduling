@@ -1,0 +1,77 @@
+id: l1-reschedule-same-slot-retry
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+tags: []
+covers: [FR-032, adr9.confirm-before-write]
+notes: >
+  Suggested by #88 (PR #93). The first reschedule_appointment failed with INTERNAL, and the retry with the
+  same arguments found the appointment already at the new slot (already_rescheduled: true,
+  previous_start_local: null), so the move stands. The check accepts only a reply, with no
+  reschedule_appointment call, that contains the result's start_local as written, year included (r1/A-9).
+context:
+  - patient: "Can I move my appointment with Dr. Lee to Wednesday that week, in the afternoon?"
+  - tool_call: { tool: get_my_appointments, args: {} }
+  - tool_result:
+      tool: get_my_appointments
+      result:
+        appointments:
+          - appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T18:30:00Z
+            start_local: Tuesday, October 13, 2026 at 2:30 PM ET
+            status: BOOKED
+            reason: Mole check
+  - tool_call:
+      tool: check_availability
+      args:
+        provider_id: prov_lee
+        date_range: { start_date: 2026-10-14, end_date: 2026-10-14 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: false
+        slots:
+          - slot_id: slot_lee_20261014T1900Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T19:00:00Z
+            start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+  - assistant: "To confirm: move your mole check with Dr. Priya Lee from Tuesday, October 13 at 2:30 PM ET to Wednesday, October 14, 2026 at 3:00 PM ET. Shall I make the change?"
+  - patient: "Yes, move it."
+  - tool_call:
+      tool: reschedule_appointment
+      args: { appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, new_slot_id: slot_lee_20261014T1900Z }
+  - tool_result:
+      tool: reschedule_appointment
+      error:
+        code: INTERNAL
+        message: "The tool failed unexpectedly."
+        hint: "Try once more. If it fails again, apologize and offer to connect the patient with the front desk."
+  - tool_call:
+      tool: reschedule_appointment
+      args: { appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, new_slot_id: slot_lee_20261014T1900Z }
+  - tool_result:
+      tool: reschedule_appointment
+      result:
+        appointment:
+          appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+          provider_id: prov_lee
+          provider_name: Dr. Priya Lee
+          specialty: dermatology
+          start_utc: 2026-10-14T19:00:00Z
+          start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+          status: BOOKED
+          reason: Mole check
+        previous_start_local: null
+        already_rescheduled: true
+expect:
+  action: respond
+  forbid_tools: [reschedule_appointment]
+  response:
+    contains_all: ["Wednesday, October 14, 2026 at 3:00 PM ET"]

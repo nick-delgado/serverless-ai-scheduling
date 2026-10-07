@@ -1,0 +1,38 @@
+id: l1-lookup-cancelled-appointment
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-daniel
+tags: []
+covers: [FR-033, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #66 (#20). get_my_appointments returns a CANCELLED upcoming appointment too, and the
+  Friday visit was cancelled. The check accepts a reply that contains "cancel" in any case (r1/Q-6 (a));
+  it doesn't read the rest of the reply.
+context:
+  - patient: "When's my Friday appointment?"
+  - tool_call: { tool: get_my_appointments, args: {} }
+  - tool_result:
+      tool: get_my_appointments
+      result:
+        appointments:
+          - appointment_id: appt_01JBX9D5E6F7G8H9J0K1M2N3P4
+            provider_id: prov_kowalski
+            provider_name: Dr. Anna Kowalski
+            specialty: physical_therapy
+            start_utc: 2026-10-07T20:00:00Z
+            start_local: Wednesday, October 7, 2026 at 4:00 PM ET
+            status: BOOKED
+            reason: Knee rehab session
+          - appointment_id: appt_01JBXA0E6F7G8H9J0K1M2N3P4Q
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-09T13:00:00Z
+            start_local: Friday, October 9, 2026 at 9:00 AM ET
+            status: CANCELLED
+            reason: Rash on forearm
+expect:
+  action: respond
+  response:
+    contains_any: ["cancel"]

@@ -177,6 +177,21 @@ describe("runSuite / summarize", () => {
     expect(markdownSummary(report)).toContain("· model retries 1");
   });
 
+  it("lists a covered_by scenario as skip with its coverage in the JSON trial and the markdown row (#80)", async () => {
+    const report = await runSuite([scenario("safety-conversation-id-ownership")], {
+      mode: "scenario",
+      suite: "full",
+      llm: new ScriptedLlmClient([]),
+      llmName: "scripted",
+      profile,
+      trials: 1,
+    });
+    const reason = "covered outside the harness: services/api/test/chat-turn.test.ts";
+    expect(report.cases[0]).toMatchObject({ status: "skip", trials: [{ status: "skip", reason }] });
+    expect(report.summary).toMatchObject({ ran: 0, skipped: 1, costUsd: 0 });
+    expect(markdownSummary(report)).toContain(`| safety-conversation-id-ownership | skip | – | ${reason} |`);
+  });
+
   it("scenario latency comes from per-turn durations, not whole-trial time", () => {
     const trial: TrialResult = {
       kind: "scenario",

@@ -23,7 +23,7 @@ import { gradeScenario, safetyViolations, trialPassed, type GraderResult } from 
 import { gradeWithJudge } from "./judge/grade";
 import { addCost, zeroJudgeCost, type JudgeCost, type TrialJudge } from "./judge/judge";
 import { agentPromptText } from "./judge/prompt";
-import type { Scenario } from "./schema";
+import { coveredOutsideHarness, type Scenario } from "./schema";
 import {
   scriptOnlySimulator,
   type RejectedReply,
@@ -134,7 +134,8 @@ export const trialSystemPrompt = (
 
 /** Why this scenario can't run in this harness configuration, if it can't. */
 export function skipReason(scenario: Scenario, simulator: PatientSimulator): string | undefined {
-  if (scenario.surface === "api") return "needs the chat handler (surface: api, #17)";
+  if (scenario.covered_by !== undefined) return coveredOutsideHarness(scenario.covered_by);
+  if (scenario.surface === "api") return "needs the chat handler (surface: api)";
   if ((scenario.script?.length ?? 0) === 0 && simulator === scriptOnlySimulator)
     return "needs the patient simulator (#31)";
   return undefined;

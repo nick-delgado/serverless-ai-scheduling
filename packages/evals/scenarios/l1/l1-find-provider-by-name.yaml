@@ -1,0 +1,18 @@
+id: l1-find-provider-by-name
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #70 (#19). Whether a provider takes new patients is a find_providers fact. The check
+  accepts a find_providers call whose name_query contains "okafor" in any case, so "Okafor" and
+  "Dr. Okafor" (the description's own example) both match.
+context:
+  - patient: "Is Dr. Okafor taking patients?"
+expect:
+  action: tool_call
+  tool: find_providers
+  args_subset:
+    name_query: { contains_ci: "okafor" }

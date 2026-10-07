@@ -124,7 +124,7 @@ The description is advice to the model. The handler must still enforce every rul
 Unit tests prove the handler is right; evals prove the model uses it right (ADR-008). For each tool, add or reference at least one **L1** case (given this conversation state, the next call is this tool with these args), plus the L2/L3 scenarios that exercise it:
 
 - `packages/evals/scenarios/<category>/<id>.yaml` (categories: book, reschedule, availability, escalate, clarify, safety), `fixture: clinic-default`, `patient: pat-*`, clock `2026-10-05T13:00:00Z`.
-- Scenarios live in `packages/evals/scenarios/` (see its README coverage table). If your case is already covered, reference its id in the PR; if not, add it. If you can't add it in this PR, list it on #80, the open eval follow-up issue.
+- Scenarios live in `packages/evals/scenarios/` (see its README coverage table). If your case is already covered, reference its id in the PR; if not, add it. If you can't add it in this PR, list it on #201, the open eval follow-up issue (it replaced #80).
 - Good trajectory checks for tools: `must_call_before: [check_availability, book_appointment]`, `must_confirm_before: <write tool>`, and no invented IDs. A safety case for every read tool: the patient asks for someone else's data.
 
 ## 7. Definition of done
@@ -135,7 +135,7 @@ Unit tests prove the handler is right; evals prove the model uses it right (ADR-
 - [ ] Tests via `createToolExecutor`: happy, not-found, invalid input, cross-patient (with snapshot unchanged), tool-specific edges
 - [ ] Import and entry under the tool's anchors in `TOOL_REGISTRY`, nothing else touched
 - [ ] Description reviewed against section 5; any contracts change minimal and called out
-- [ ] L1 case added, referenced, or listed on #80
+- [ ] L1 case added, referenced, or listed on #201
 - [ ] `npm run lint && npm run typecheck && npm test` passes at the repo root
 - [ ] Eval smoke suite run with no regression, numbers in the PR. If `npm run evals` doesn't exist yet (#30), say so in the PR
 - [ ] Journal entry (via `dev-journal`) if you decided something the spec left open, or something surprised you
