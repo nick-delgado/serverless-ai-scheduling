@@ -7,13 +7,14 @@
  */
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import type { SlotId } from "@sched/contracts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { FrozenClock } from "../../src/clock";
 import { createDocumentClient, createDynamoRepositories, writeSeed } from "../../src/repos/dynamo";
 import { keys } from "../../src/repos/dynamo/items";
 import { sequentialIds } from "../../src/repos/ids";
-import type { Repositories } from "../../src/repos/types";
+import type { RescheduleResult, Repositories } from "../../src/repos/types";
 import { runRepositoryContract } from "../contract/repositories.contract";
 import { AISHA, APPT, CONV_A, MARIA, NOW, SLOT, WALTER, contractSeed, message } from "../contract/scenario";
 import { dynamoLocalAvailable, localClient, tableFactory } from "./local";
@@ -86,27 +87,28 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       expect(await raw(keys.slot("prov_lee", "2026-10-13T19:00:00Z"))).not.toHaveProperty("GSI1PK");
     });
 
-    it("reschedule returns CONFLICT when the appointment changes between its read and its write", async () => {
-      // A second client stands in for a concurrent writer: just before the reschedule transaction is
-      // sent, it cancels the appointment. The appointment's condition fails and nothing changes.
+    /**
+     * Repositories on a second client whose first `TransactWriteItems` runs `rival` just before it is
+     * sent, standing in for a concurrent writer that commits between this call's read and its write.
+     * `rival` writes through the test's own `repos` or `doc`, whose client has no middleware. `codes`
+     * records the cancellation codes if that transaction is cancelled.
+     */
+    function withRival(rival: () => Promise<unknown>) {
       const racing = localClient();
-      const rival = createDocumentClient(localClient());
-      let fired = false;
+      const state: { fired: boolean; codes: (string | undefined)[] | null } = { fired: false, codes: null };
       racing.middlewareStack.add(
         (next, context) => async (args) => {
-          if (context.commandName === "TransactWriteItemsCommand" && !fired) {
-            fired = true;
-            await rival.send(
-              new UpdateCommand({
-                TableName: tableName,
-                Key: keys.appointment(MARIA, APPT.mariaLee),
-                UpdateExpression: "SET #s = :c",
-                ExpressionAttributeNames: { "#s": "status" },
-                ExpressionAttributeValues: { ":c": "CANCELLED" },
-              }),
-            );
+          if (context.commandName !== "TransactWriteItemsCommand" || state.fired) return next(args);
+          state.fired = true;
+          await rival();
+          try {
+            return await next(args);
+          } catch (err) {
+            if (err instanceof TransactionCanceledException) {
+              state.codes = (err.CancellationReasons ?? []).map((r) => r.Code);
+            }
+            throw err;
           }
-          return next(args);
         },
         { step: "initialize" },
       );
@@ -116,12 +118,29 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         clock: new FrozenClock(NOW),
         ids: sequentialIds(),
       });
-      const result = await racingRepos.appointments.reschedule({
-        patientId: MARIA,
-        appointmentId: APPT.mariaLee,
-        newSlotId: SLOT.leeTue2pm,
-      });
-      expect(fired).toBe(true);
+      return { repos: racingRepos, state, destroy: () => racing.destroy() };
+    }
+
+    const moveMariaTo = (r: Repositories, newSlotId: SlotId) =>
+      r.appointments.reschedule({ patientId: MARIA, appointmentId: APPT.mariaLee, newSlotId });
+
+    const cancelMaria = () =>
+      doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: keys.appointment(MARIA, APPT.mariaLee),
+          UpdateExpression: "SET #s = :c",
+          ExpressionAttributeNames: { "#s": "status" },
+          ExpressionAttributeValues: { ":c": "CANCELLED" },
+        }),
+      );
+
+    it("reschedule returns CONFLICT when the appointment is cancelled between its read and its write", async () => {
+      // Just before the reschedule transaction is sent, a concurrent writer cancels the appointment.
+      // The appointment's condition fails and nothing changes.
+      const racing = withRival(cancelMaria);
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      expect(racing.state.fired).toBe(true);
       expect(result).toEqual({ ok: false, reason: "CONFLICT" });
       expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({ status: "OPEN" });
       expect(await repos.slots.get(SLOT.mariaHeld)).toMatchObject({
@@ -129,7 +148,57 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         appointmentId: APPT.mariaLee,
       });
       racing.destroy();
-      rival.destroy();
+    });
+
+    it("a reschedule that loses the race to an identical move answers the retry, not CONFLICT (#207)", async () => {
+      // The rival makes the same move after this call read the appointment, so this call's transaction
+      // fails all three conditions. The re-read finds the appointment BOOKED in newSlotId.
+      let rivalResult: RescheduleResult | undefined;
+      const racing = withRival(async () => {
+        rivalResult = await moveMariaTo(repos, SLOT.leeTue2pm);
+      });
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      // On DynamoDB Local all three conditions fail, so the appointment's code is the one inspected.
+      const failed = "ConditionalCheckFailed";
+      expect(racing.state.codes).toEqual([failed, failed, failed]);
+      expect(rivalResult).toMatchObject({ ok: true, alreadyRescheduled: false });
+      expect(result).toMatchObject({
+        ok: true,
+        alreadyRescheduled: true,
+        appointment: { appointmentId: APPT.mariaLee, status: "BOOKED", slotId: SLOT.leeTue2pm },
+      });
+      expect(result).not.toHaveProperty("previous");
+      expect(await repos.slots.get(SLOT.mariaHeld)).toMatchObject({ status: "OPEN" });
+      expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({
+        status: "BOOKED",
+        appointmentId: APPT.mariaLee,
+      });
+      racing.destroy();
+    });
+
+    it("reschedule returns CONFLICT when a concurrent move took the appointment to another slot", async () => {
+      const racing = withRival(() => moveMariaTo(repos, SLOT.leeTue3pm));
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      expect(racing.state.fired).toBe(true);
+      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
+      expect(await repos.appointments.get(MARIA, APPT.mariaLee)).toMatchObject({
+        status: "BOOKED",
+        slotId: SLOT.leeTue3pm,
+      });
+      expect(await repos.slots.get(SLOT.leeTue2pm)).toMatchObject({ status: "OPEN" });
+      racing.destroy();
+    });
+
+    it("reschedule returns CONFLICT when a concurrent move into newSlotId was then cancelled", async () => {
+      // A raw cancel leaves the slot booked, so this test makes no consistency assertion.
+      const racing = withRival(async () => {
+        await moveMariaTo(repos, SLOT.leeTue2pm);
+        await cancelMaria();
+      });
+      const result = await moveMariaTo(racing.repos, SLOT.leeTue2pm);
+      expect(racing.state.fired).toBe(true);
+      expect(result).toEqual({ ok: false, reason: "CONFLICT" });
+      racing.destroy();
     });
 
     it("retries a transaction cancelled only by TransactionConflict (DynamoDB Local never produces one)", async () => {

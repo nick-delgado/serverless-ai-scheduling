@@ -14,7 +14,7 @@
  *      decision, #88). It's answered before any clock rule: once the new time has started, "can't be
  *      moved" would tell the patient they lost an appointment they hold (PR #67 review, STD-3). The repo's
  *      own retry answer (`alreadyRescheduled`, #77), for a concurrent retry that read the appointment after
- *      the first move, gets the same answer; one that read it before still ends in CONFLICT → INTERNAL.
+ *      the first move or (#207) lost the race to it in DynamoDB, gets the same answer.
  *   3. Clock rules (tool-level, need ctx.clock): an appointment that has already started can't be moved,
  *      and the new slot must start after now.
  *   4. The new slot must be in the same specialty (owner decision, PR #67 review SPEC-2): a different kind

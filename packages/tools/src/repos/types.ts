@@ -140,8 +140,9 @@ export type RescheduleResult =
   /** Moved: `appointment` is the new version, `previous` the one before the move. */
   | { ok: true; alreadyRescheduled: false; appointment: Appointment; previous: Appointment }
   /**
-   * The appointment was already in `newSlotId` when read (a retried call after success), so nothing was
-   * written. `appointment` is it as stored; there's no `previous`, since the time it had before the
+   * The appointment was already in `newSlotId` (a retried call after success), when read or, in DynamoDB,
+   * when re-read after a concurrent identical move won the race (#207), so nothing was written.
+   * `appointment` is it as stored; there's no `previous`, since the time it had before the
    * first call is gone (#77, like `book`'s `alreadyBooked`).
    */
   | { ok: true; alreadyRescheduled: true; appointment: Appointment }
@@ -176,7 +177,8 @@ export interface AppointmentRepo {
    *
    * Idempotent when read: an appointment already in `newSlotId` returns `alreadyRescheduled: true` and
    * writes nothing. A DynamoDB call that read the appointment before a concurrent move into the same slot
-   * committed still returns CONFLICT (decision r1/Q-2 on #77).
+   * committed re-reads it when its transaction is cancelled on the appointment, and gives the same answer
+   * if it is BOOKED in `newSlotId`; otherwise CONFLICT (#207).
    */
   reschedule(command: RescheduleCommand): Promise<RescheduleResult>;
 }

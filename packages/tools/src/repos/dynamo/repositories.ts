@@ -436,8 +436,15 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
           } catch (err) {
             const codes = cancellationCodes(err);
             if (!codes) throw err;
-            // The appointment moved or changed status since we read it: the caller's view is stale.
-            if (codes[2] === CONDITION_FAILED) return { ok: false, reason: "CONFLICT" };
+            if (codes[2] === CONDITION_FAILED) {
+              // The appointment moved or changed status since we read it. Re-read: an identical
+              // concurrent move that committed first leaves it BOOKED in newSlotId, which is this
+              // call's retry (#207). Anything else means the caller's view is stale. Never RETRY.
+              const current = await getItem(apptKey, appointmentFrom);
+              return current && current.status === "BOOKED" && current.slotId === newSlotId
+                ? { ok: true, alreadyRescheduled: true, appointment: current }
+                : { ok: false, reason: "CONFLICT" };
+            }
             if (codes[1] === CONDITION_FAILED) return { ok: false, reason: "SLOT_UNAVAILABLE" };
             if (codes[0] === CONDITION_FAILED) {
               throw new Error(

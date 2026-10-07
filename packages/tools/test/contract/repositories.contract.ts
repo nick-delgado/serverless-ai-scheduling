@@ -582,6 +582,21 @@ export function runRepositoryContract(name: string, makeRepos: MakeRepositories)
         expect(slots.find((s) => s?.status === "BOOKED")?.slotId).toBe(appt?.slotId);
         await expectConsistent([SLOT.mariaHeld, ...targets]);
       });
+
+      it("two identical parallel reschedules: one moves, the other answers the retry (#207)", async () => {
+        const move = { patientId: MARIA, appointmentId: APPT.mariaLee, newSlotId: SLOT.leeTue2pm };
+        const results = await Promise.all([
+          repos.appointments.reschedule(move),
+          repos.appointments.reschedule(move),
+        ]);
+        expect(results.every((r) => r.ok)).toBe(true);
+        expect(results.filter((r) => r.ok && !r.alreadyRescheduled)).toHaveLength(1);
+        expect(await repos.appointments.get(MARIA, APPT.mariaLee)).toMatchObject({
+          status: "BOOKED",
+          slotId: SLOT.leeTue2pm,
+        });
+        await expectConsistent([SLOT.mariaHeld, SLOT.leeTue2pm]);
+      });
     });
 
     // -----------------------------------------------------------------------------------------
