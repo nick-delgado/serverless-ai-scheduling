@@ -9,6 +9,7 @@ import {
   TOOL_REGISTRY,
   type ToolContext,
   type ToolExecutionResult,
+  type ToolExecutorOptions,
 } from "../../src/registry";
 import { createInMemoryRepositories, type InMemoryRepositories } from "../../src/repos/in-memory";
 import { sequentialIds } from "../../src/repos/ids";
@@ -50,8 +51,12 @@ describe("get_my_appointments", () => {
     repos,
   });
   // Through the executor, so the strict input schema and output validation the model faces apply.
-  const run = (patientId: string, input: unknown = {}): Promise<ToolExecutionResult> =>
-    createToolExecutor({ get_my_appointments: getMyAppointments }, contextFor(patientId)).execute({
+  const run = (
+    patientId: string,
+    input: unknown = {},
+    options: ToolExecutorOptions = {},
+  ): Promise<ToolExecutionResult> =>
+    createToolExecutor({ get_my_appointments: getMyAppointments }, contextFor(patientId), options).execute({
       id: "toolu_test",
       name: "get_my_appointments",
       input,
@@ -147,10 +152,7 @@ describe("get_my_appointments", () => {
   it("reports INTERNAL rather than inventing a name when an appointment's provider record is missing", async () => {
     vi.spyOn(repos.providers, "get").mockResolvedValue(null);
     const causes: unknown[] = [];
-    const executor = createToolExecutor({ get_my_appointments: getMyAppointments }, contextFor(MARIA), {
-      onInternalError: (error) => causes.push(error),
-    });
-    const result = await executor.execute({ id: "toolu_test", name: "get_my_appointments", input: {} });
+    const result = await run(MARIA, {}, { onInternalError: (error) => causes.push(error) });
     expect(errorOf(result).code).toBe("INTERNAL");
     // The handler's own guard, not a TypeError from reading a null provider.
     expect(String(causes[0])).toMatch(/Appointment references unknown provider prov_lee/);

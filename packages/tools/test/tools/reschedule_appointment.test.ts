@@ -375,38 +375,30 @@ describe("reschedule_appointment", () => {
       expect(repos.snapshot()).toEqual(before);
     });
 
-    it("INTERNAL when the appointment already at the requested slot names a missing provider", async () => {
+    it.each([
+      [
+        "INTERNAL when the appointment already at the requested slot names a missing provider",
+        MARIA_SLOT,
+        /Appointment appt_01JBX7Q2M3N4P5R6S7T8V9W0XY references unknown provider prov_lee/,
+      ],
+      [
+        "INTERNAL for a slot whose provider is missing, before anything is written",
+        LEE_NOV_2_10AM_EST,
+        /Slot slot_lee_20261102T1500Z references unknown provider prov_lee/,
+      ],
+    ] as const)("%s", async (_name, newSlotId, guardMessage) => {
       const stubbed: Repositories = {
         ...repos,
         providers: { ...repos.providers, get: () => Promise.resolve(null) },
       };
       const before = repos.snapshot();
       const causes: unknown[] = [];
-      const result = await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: MARIA_SLOT }, stubbed, {
+      const result = await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: newSlotId }, stubbed, {
         onInternalError: (error) => causes.push(error),
       });
       expect(errorOf(result).code).toBe("INTERNAL");
       // The handler's own guard, not a TypeError from reading a null provider.
-      expect(String(causes[0])).toMatch(/references unknown provider prov_lee/);
-      expect(repos.snapshot()).toEqual(before);
-    });
-
-    it("INTERNAL for a slot whose provider is missing, before anything is written", async () => {
-      const stubbed: Repositories = {
-        ...repos,
-        providers: { ...repos.providers, get: () => Promise.resolve(null) },
-      };
-      const before = repos.snapshot();
-      const causes: unknown[] = [];
-      const result = await run(
-        MARIA,
-        { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST },
-        stubbed,
-        { onInternalError: (error) => causes.push(error) },
-      );
-      expect(errorOf(result).code).toBe("INTERNAL");
-      // The handler's own guard, not a TypeError from reading a null provider.
-      expect(String(causes[0])).toMatch(/Slot slot_lee_20261102T1500Z references unknown provider prov_lee/);
+      expect(String(causes[0])).toMatch(guardMessage);
       expect(repos.snapshot()).toEqual(before);
     });
   });
