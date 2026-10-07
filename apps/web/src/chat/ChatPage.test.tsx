@@ -321,7 +321,7 @@ describe("ChatPage: a turn", () => {
   it("announces a reply that repeats the previous announcement", async () => {
     serveEvents([delta("Sure."), done]);
     const { user, input, log } = renderChat();
-    await within(log).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log).queryByText(SESSIONS.upcoming.greeting));
     const announcements = recordAnnouncements();
     await user.type(input, "One{Enter}");
     await until(() => within(log).queryAllByText("Sure.").length === 1);

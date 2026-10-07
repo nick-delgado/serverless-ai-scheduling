@@ -96,9 +96,10 @@ describe("ChatPage in the app: the login session", () => {
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText("Username"), MARIA.username);
     await user.type(screen.getByLabelText("Password"), "synthetic-pass{Enter}");
-    await within(await screen.findByRole("list", { name: "Conversation" })).findByText(
-      SESSIONS.restore.greeting,
-    );
+    await untilFound(() => {
+      const conversation = screen.queryByRole("list", { name: "Conversation" });
+      return conversation && within(conversation).queryByText(SESSIONS.restore.greeting);
+    });
     expect(stored()).toBeNull();
     expect(screen.queryByText(RESTORED_QUESTION)).not.toBeInTheDocument();
   });

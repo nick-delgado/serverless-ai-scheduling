@@ -100,7 +100,7 @@ describe("login form (FR-001)", () => {
     ["an unknown user", "nobody.here", MOCK_PASSWORD],
   ])("shows the same inline error for %s, tied to both fields", async (_, username, password) => {
     const { router } = renderApp("/login");
-    await signInThroughForm(username, password);
+    await signInThroughForm(username, password, COGNITO);
     const alert = await screen.findByText(LOGIN_ERRORS.credentials, {}, COGNITO);
     expect(alert).toHaveAttribute("role", "alert");
     for (const field of [usernameField(), passwordField()]) {
