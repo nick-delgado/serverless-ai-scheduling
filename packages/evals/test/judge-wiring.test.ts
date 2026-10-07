@@ -275,7 +275,7 @@ describe("CLI judge setup", () => {
     const env = { JUDGE_MODEL_PROFILE: "nope" };
     expect(judgeSetup(parse([], env), { llm })).toEqual({ kind: "off" });
     expect(() => judgeSetup(parse(["--mode=scenario"], env), { llm })).toThrow(
-      /^JUDGE_MODEL_PROFILE: unknown profile "nope"\./,
+      /^Unknown JUDGE_MODEL_PROFILE "nope"\./,
     );
   });
 
@@ -284,7 +284,7 @@ describe("CLI judge setup", () => {
       judgeSetup(parse(["--mode=scenario", "--judge-profile=opus-5"], { JUDGE_MODEL_PROFILE: "nova-pro" }), {
         llm,
       }),
-    ).toThrow(/^--judge-profile: "opus-5" \(\S+\) is not entitled on this AWS account yet/);
+    ).toThrow(/^--judge-profile "opus-5" \(\S+\) is not entitled on this AWS account yet/);
   });
 
   it.each([

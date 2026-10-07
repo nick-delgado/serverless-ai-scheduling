@@ -116,8 +116,8 @@ describe("parseCliArgs", () => {
   });
 
   it.each([
-    ["--profile=sonet-4.6", /^--profile: unknown profile "sonet-4\.6"\. Expected one of: sonnet-4\.6, /],
-    ["--profile=opus-5", /^--profile: "opus-5" \(\S+\) is not entitled on this AWS account yet/],
+    ["--profile=sonet-4.6", /^Unknown --profile "sonet-4\.6"\. Expected one of: sonnet-4\.6, /],
+    ["--profile=opus-5", /^--profile "opus-5" \(\S+\) is not entitled on this AWS account yet/],
   ])(
     "rejects %s as a usage error naming --profile, not AGENT_MODEL_PROFILE (8c21660/SPEC-1, #108)",
     (flag, message) => {
@@ -184,12 +184,12 @@ describe("the simulator's profile (#31, #108)", () => {
   it("a bad value is a usage error of a scenario run, naming the flag or variable that gave it (SMELL-205, r1/Q-3)", () => {
     expect(() => simulatorProfileFor([], { SIMULATOR_MODEL_PROFILE: "gpt-9" })).toThrow(
       new CliArgError(
-        `SIMULATOR_MODEL_PROFILE: unknown profile "gpt-9". Expected one of: ${MODEL_PROFILE_NAMES.join(", ")}.`,
+        `Unknown SIMULATOR_MODEL_PROFILE "gpt-9". Expected one of: ${MODEL_PROFILE_NAMES.join(", ")}.`,
       ),
     );
     expect(() =>
       simulatorProfileFor(["--simulator-profile=sonnet-5"], { SIMULATOR_MODEL_PROFILE: "nova-pro" }),
-    ).toThrow(/^--simulator-profile: "sonnet-5" \(\S+\) is not entitled on this AWS account yet/);
+    ).toThrow(/^--simulator-profile "sonnet-5" \(\S+\) is not entitled on this AWS account yet/);
   });
 
   it.each([

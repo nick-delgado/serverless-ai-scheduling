@@ -13,11 +13,11 @@ import type { z } from "zod";
 import {
   DEFAULT_MODEL_PROFILE,
   estimateCostUsd,
-  isModelProfileName,
-  MODEL_PROFILE_NAMES,
-  MODEL_PROFILES,
+  MODEL_PROFILE_ENV,
+  resolveModelProfile,
   type LlmClient,
   type ModelProfile,
+  type ModelProfileName,
 } from "@sched/agent";
 
 import {
@@ -102,22 +102,18 @@ const isOneOf = <T extends string>(list: readonly T[], value: string): value is 
   (list as readonly string[]).includes(value);
 
 /**
- * A profile setting, resolved: an unknown or unentitled name is a usage error (exit 2), not a failed
- * eval, naming the flag or variable that gave it, never `AGENT_MODEL_PROFILE` (#108, r1/Q-3). An empty
- * name means the development default, as in `resolveModelProfile`.
+ * A profile setting, resolved by `@sched/agent`'s `resolveModelProfile`, the one place that checks names
+ * and entitlement. An empty or whitespace-only name means `fallback`. An unknown or unentitled name is a
+ * usage error (exit 2), not a failed eval, and its message names the flag or variable that gave it in
+ * place of `AGENT_MODEL_PROFILE` (#108, r1/Q-3, b4d4dab/SPEC-2).
  */
-function resolveProfile({ name, from }: ProfileSetting): ModelProfile {
-  const key = name.trim() || DEFAULT_MODEL_PROFILE;
-  if (!isModelProfileName(key))
-    throw new CliArgError(
-      `${from}: unknown profile "${key}". Expected one of: ${MODEL_PROFILE_NAMES.join(", ")}.`,
-    );
-  const profile = MODEL_PROFILES[key];
-  if (!profile.entitled)
-    throw new CliArgError(
-      `${from}: "${key}" (${profile.modelId}) is not entitled on this AWS account yet (ADR-010).`,
-    );
-  return profile;
+function resolveProfile({ name, from }: ProfileSetting, fallback: ModelProfileName): ModelProfile {
+  try {
+    return resolveModelProfile(name.trim() || fallback);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new CliArgError(message.replace(MODEL_PROFILE_ENV, from));
+  }
 }
 
 /** The flag's value, else the environment variable's, with where it came from; neither is `undefined`. */
@@ -190,7 +186,7 @@ export function parseCliArgs(
   return {
     suite,
     mode,
-    profile: resolveProfile({ name: values.profile ?? "", from: "--profile" }),
+    profile: resolveProfile({ name: values.profile ?? "", from: "--profile" }, DEFAULT_MODEL_PROFILE),
     ...(simulatorProfile === undefined ? {} : { simulatorProfile }),
     ...(values.replay === undefined ? {} : { replay: values.replay }),
     judge: !values["no-judge"],
@@ -259,11 +255,9 @@ export function simulatorSetup(
 ): SimulatorSetup {
   if (args.mode !== "scenario") return { kind: "script-only" };
   if (args.replay === undefined) {
-    const setting = args.simulatorProfile;
     const profile = resolveProfile(
-      setting !== undefined && setting.name.trim() !== ""
-        ? setting
-        : { name: DEFAULT_SIMULATOR_PROFILE, from: SIMULATOR_PROFILE_ENV },
+      args.simulatorProfile ?? { name: "", from: SIMULATOR_PROFILE_ENV },
+      DEFAULT_SIMULATOR_PROFILE,
     );
     return { kind: "llm", profile, simulator: new LlmPatientSimulator({ llm: deps.llm, profile }) };
   }
@@ -289,8 +283,10 @@ export function judgeSetup(
   const judges =
     args.calibration === undefined ? args.mode === "scenario" : args.calibration.action === "agreement";
   if (!judges || !args.judge) return { kind: "off" };
+  // An empty judge setting still means the development default, not the judge's (A-4's quirk, kept).
   const profile = resolveProfile(
     args.judgeProfile ?? { name: DEFAULT_JUDGE_PROFILE, from: "--judge-profile" },
+    DEFAULT_MODEL_PROFILE,
   );
   return { kind: "llm", profile, judge: new LlmJudge({ llm: deps.llm, profile }) };
 }
