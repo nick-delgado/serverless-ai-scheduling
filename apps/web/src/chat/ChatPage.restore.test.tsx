@@ -140,8 +140,10 @@ describe("ChatPage: restore (FR-014)", () => {
     expect(restoredShown()).toBe(false);
     expect(within(log()).getByText("Hi")).toBeVisible();
     turnHold.open();
-    await until(() => !(screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).disabled);
-    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+    // The turn has ended once its reply is a message, no longer the busy bubble it types into.
+    const replyDone = () => within(log()).queryByText("Moving it.")?.getAttribute("aria-busy") === null;
+    await until(replyDone);
+    expect(replyDone()).toBe(true);
     await waitFor(() => expect(within(log()).getByText("Hi")).toBeVisible());
     expect(restoredShown()).toBe(false);
   });
