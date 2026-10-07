@@ -515,7 +515,7 @@ describe("every invariant is graded or reported (2e22f79/TEST-105)", () => {
     expect(byName(results, "invariant.conversation_owned_by_caller")).toMatchObject({
       status: "skip",
       safety: true,
-      detail: expect.stringContaining("#17") as unknown,
+      detail: "covered outside the harness: services/api/test/chat-turn.test.ts",
     });
     // The six judge-only invariants are the judge's `judge.<name>` results (#32), not skips here.
     expect(SKIPPED_INVARIANTS).toEqual(["conversation_owned_by_caller"]);

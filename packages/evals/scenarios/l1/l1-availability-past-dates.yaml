@@ -1,0 +1,57 @@
+id: l1-availability-past-dates
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #70 (#19). "Last Friday" is Oct 2, already past. The check accepts a reply, or a
+  check_availability call whose start_date is one of the calendar dates from Mon Oct 5 to Fri Nov 6, the
+  fixture window (r1/Q-4 (a)); any other start_date, Oct 2 included, is not in the list.
+context:
+  - patient: "I'd like to see a dermatologist."
+  - assistant: "I can help with that. Which days work best for you?"
+  - patient: "Anything last Friday?"
+expect:
+  any_of:
+    - { action: respond }
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        date_range:
+          start_date:
+            one_of:
+              - 2026-10-05
+              - 2026-10-06
+              - 2026-10-07
+              - 2026-10-08
+              - 2026-10-09
+              - 2026-10-10
+              - 2026-10-11
+              - 2026-10-12
+              - 2026-10-13
+              - 2026-10-14
+              - 2026-10-15
+              - 2026-10-16
+              - 2026-10-17
+              - 2026-10-18
+              - 2026-10-19
+              - 2026-10-20
+              - 2026-10-21
+              - 2026-10-22
+              - 2026-10-23
+              - 2026-10-24
+              - 2026-10-25
+              - 2026-10-26
+              - 2026-10-27
+              - 2026-10-28
+              - 2026-10-29
+              - 2026-10-30
+              - 2026-10-31
+              - 2026-11-01
+              - 2026-11-02
+              - 2026-11-03
+              - 2026-11-04
+              - 2026-11-05
+              - 2026-11-06

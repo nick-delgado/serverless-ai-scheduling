@@ -302,8 +302,18 @@ export const Scenario = z
     hidden_facts: z.record(z.string(), z.unknown()).nullish(),
     /** Patient messages sent verbatim as the first turns, before the simulator takes over. */
     script: z.array(z.string().min(1).max(LIMITS.chatTextMaxChars)).optional(),
-    /** `api`: drive the chat handler (#17) instead of the loop. */
+    /**
+     * `api`: the case tests the chat handler, not the agent loop. No harness run drives the handler; a
+     * scenario with `covered_by` is skipped with that reason, and one without it skips as "needs the chat
+     * handler" (`skipReason`).
+     */
     surface: z.enum(["agent", "api"]).default("agent"),
+    /**
+     * A repo path (never an import) to the test that covers this case outside the harness, e.g.
+     * `services/api/test/chat-turn.test.ts` (ADR-008 amendment of 2026-10-03, #80). A run makes no model
+     * call for it and reports it as `skip`, "covered outside the harness: <path>".
+     */
+    covered_by: z.string().min(1).optional(),
     request: z.strictObject({ conversation_id: ConversationId.optional() }).optional(),
     /** Ids invented on purpose (never valid; graders check they're never booked). */
     fabricated_ids: z.array(z.string().min(1)).optional(),
@@ -333,6 +343,9 @@ export const Scenario = z
       ctx.addIssue({ code: "custom", path: ["script"], message: "script is longer than max_turns" });
   });
 export type Scenario = z.infer<typeof Scenario>;
+
+/** The skip reason of a case covered by a test outside the harness (`Scenario.covered_by`). */
+export const coveredOutsideHarness = (path: string) => `covered outside the harness: ${path}`;
 
 // ---------------------------------------------------------------------------------------------
 // L1 cases
