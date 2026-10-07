@@ -21,7 +21,7 @@ What changed, by Nick's readiness answers on the issue:
 
 ## Why we chose what we chose
 
-The issue's decisions settled most of it. Three choices were left to the agent:
+The issue's decisions settled most of it. Three were left to the agent, and Nick settled a fourth:
 
 - **A 20 s test timeout in each converted file** (`vi.setConfig({ testTimeout: 20_000 })`, as `LoginPage.test.tsx` already had), on top of the shorter announce loop. `ChatPage.voice.test.tsx` and `mocks/handlers.test.ts` also wait with `until` but weren't converted, and keep the 5 s default. Before, the announce test's slowest run took 5.2 s. "#160: when the stream is cut after it", a two-turn test, hit the 5 s timeout in 5 of 18 runs. `until` has no time cap, so a slow wait now ends at the test timeout rather than at `findBy*`'s 3 s. The other option was to change the suite-wide timeout in `src/test/setup.ts`, which A-3 ruled out. The PR's review asked whether the announce test's file should drop it, since r1/Q-4 had chosen a shorter loop over a longer timeout; Nick kept 20 s in every converted file, `ChatPage.test.tsx` included (decision `306785f/SPEC-3`).
 - **`untilFound` rather than a pair of lines per wait.** `expect(await untilFound(() => screen.queryByRole("alert")))` keeps each test's query and assertion as they were. Writing `await until(() => … !== null)` followed by a `getBy*` would repeat every query twice. For a `waitFor` on a count or a flag, the agent wrote `await until(<condition>)` and kept the original `expect` after it. That `expect` only restates the condition: a failed wait throws `until: the condition never held` first, so the failure doesn't name what was expected.
