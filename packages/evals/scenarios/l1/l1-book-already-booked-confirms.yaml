@@ -1,0 +1,77 @@
+id: l1-book-already-booked-confirms
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-031, adr9.confirm-before-write]
+notes: >
+  Suggested by PR #69 (#21). The first book_appointment failed with INTERNAL, the retry with the same
+  arguments found the slot already held by this patient (already_booked: true), so the booking stands:
+  the next step is a plain confirmation, with no further book_appointment call (r1/A-9). The reply must
+  carry the booked time; it is checked by its parts, since the prompt's own example drops the year.
+context:
+  - patient: "Do you have any dermatology openings next week? Afternoons work best."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: dermatology
+        date_range: { start_date: 2026-10-12, end_date: 2026-10-16 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261014T1900Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T19:00:00Z
+            start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+          - slot_id: slot_okafor_20261015T1800Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-15T18:00:00Z
+            start_local: Thursday, October 15, 2026 at 2:00 PM ET
+  - assistant: "Here are two dermatology afternoons next week: Wednesday, October 14 at 3:00 PM ET with Dr. Priya Lee, or Thursday, October 15 at 2:00 PM ET with Dr. Samuel Okafor. Which works best?"
+  - patient: "The Thursday one with Dr. Okafor works. It is for my eczema."
+  - assistant: "To confirm: Dr. Samuel Okafor (dermatology), Thursday, October 15, 2026 at 2:00 PM ET, at 400 Cedar Ridge Pkwy, for eczema. Shall I book it?"
+  - patient: "Yes, book it."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_okafor_20261015T1800Z, reason: eczema }
+  - tool_result:
+      tool: book_appointment
+      error:
+        code: INTERNAL
+        message: "The tool failed unexpectedly."
+        hint: "Try once more. If it fails again, apologize and offer to connect the patient with the front desk."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_okafor_20261015T1800Z, reason: eczema }
+  - tool_result:
+      tool: book_appointment
+      result:
+        appointment:
+          appointment_id: appt_01JC3A4B5C6D7E8F9G0H1J2K3M
+          provider_id: prov_okafor
+          provider_name: Dr. Samuel Okafor
+          specialty: dermatology
+          start_utc: 2026-10-15T18:00:00Z
+          start_local: Thursday, October 15, 2026 at 2:00 PM ET
+          status: BOOKED
+          reason: eczema
+        already_booked: true
+setup:
+  appointments:
+    - appointment_id: appt_01JC3A4B5C6D7E8F9G0H1J2K3M
+      patient: pat-aisha
+      slot_id: slot_okafor_20261015T1800Z
+      reason: eczema
+expect:
+  action: respond
+  forbid_tools: [book_appointment]
+  response:
+    contains_all: ["Thursday", "October 15", "2:00 PM"]

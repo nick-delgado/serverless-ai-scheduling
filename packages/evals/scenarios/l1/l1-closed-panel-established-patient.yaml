@@ -1,0 +1,29 @@
+id: l1-closed-panel-established-patient
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-030, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #102 (#16; review finding 7e3e8bd/SPEC-1). Dr. Brooks isn't taking new patients, but
+  Walter is established with him (a COMPLETED visit), and a closed panel only stops new patients. So the
+  next step searches Brooks's availability, or checks Walter's history first; a text reply fails, so turning
+  Walter away fails (r1/Q-5 (a)). book-provider-not-accepting covers the new-patient side (pat-james).
+context:
+  - patient: "Can I see Dr. Brooks next week?"
+  - tool_call: { tool: find_providers, args: { name_query: Brooks } }
+  - tool_result:
+      tool: find_providers
+      result:
+        providers:
+          - provider_id: prov_brooks
+            display_name: Dr. Marcus Brooks
+            specialty: family_medicine
+            accepting_new_patients: false
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset: { provider_id: prov_brooks }
+    - { action: tool_call, tool: get_my_appointments }

@@ -1,0 +1,54 @@
+id: l1-book-past-slot
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T14:02:00Z # Mon Oct 5, 10:02 AM EDT, just after the 10:00 AM slot started
+patient: pat-aisha
+tags: []
+covers: [FR-031, adr9.no-invented-facts]
+notes: >
+  Suggested by PR #69 (#21). The slot was offered and confirmed before 10:00 AM, but the booking call came
+  after it started, so book_appointment refused it (NOT_ALLOWED, the handler's own message and hint). The
+  next step offers other times, by a reply or a new check_availability; booking again is forbidden (r1/A-10).
+context:
+  - patient: "Can I see a family doctor this morning? It's for a sore throat."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: family_medicine
+        date_range: { start_date: 2026-10-05, end_date: 2026-10-05 }
+        time_of_day: morning
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: false
+        slots:
+          - slot_id: slot_alvarez_20261005T1400Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-10-05T14:00:00Z
+            start_local: Monday, October 5, 2026 at 10:00 AM ET
+          - slot_id: slot_alvarez_20261005T1430Z
+            provider_id: prov_alvarez
+            provider_name: Dr. Elena Alvarez
+            specialty: family_medicine
+            start_utc: 2026-10-05T14:30:00Z
+            start_local: Monday, October 5, 2026 at 10:30 AM ET
+  - assistant: "Dr. Elena Alvarez has Monday, October 5 at 10:00 AM ET or 10:30 AM ET. Which would you like?"
+  - patient: "10 works."
+  - assistant: "To confirm: Dr. Elena Alvarez (family medicine), Monday, October 5, 2026 at 10:00 AM ET, at 400 Cedar Ridge Pkwy, for a sore throat. Shall I book it?"
+  - patient: "Yes, book it."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_alvarez_20261005T1400Z, reason: sore throat }
+  - tool_result:
+      tool: book_appointment
+      error:
+        code: NOT_ALLOWED
+        message: "That time has already passed, so it can't be booked."
+        hint: "Tell the patient that time is no longer available, call check_availability for upcoming times, and offer those."
+expect:
+  any_of:
+    - { action: respond }
+    - { action: tool_call, tool: check_availability }
+  forbid_tools: [book_appointment] # another time needs its own confirmation first
