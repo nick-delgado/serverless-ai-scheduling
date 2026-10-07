@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** issue #206, issue #134 / PR #205, the [2026-10-06](2026-10-06-the-web-tests-wait-by-hops-not-seconds.md) and [2026-10-04](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) entries
+**Related:** issue #206, PR #214, issue #134 / PR #205, the [2026-10-06](2026-10-06-the-web-tests-wait-by-hops-not-seconds.md) and [2026-10-04](2026-10-04-the-scroll-test-ran-out-of-findbytext.md) entries
 
 ## What happened
 
