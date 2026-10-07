@@ -19,6 +19,7 @@ import {
   serveEvents,
   typingIndicator as typing,
   until,
+  untilFound,
 } from "./testUtils";
 import { FALLBACK_GREETING, GENERIC_ERROR } from "./useChat";
 
@@ -85,6 +86,10 @@ function recordAnnouncements() {
   };
 }
 
+// The waits on the mock API's I/O use `until`, which has no fixed time limit and can outlast the 5 s
+// default on a loaded runner: give each test room for it (testUtils.ts, #134).
+vi.setConfig({ testTimeout: 20_000 });
+
 afterEach(() => {
   server.events.removeAllListeners();
   vi.useRealTimers();
@@ -95,7 +100,7 @@ describe("ChatPage: greeting", () => {
     const { log } = renderChat();
     expect(screen.getByTestId("announcer")).toBeEmptyDOMElement();
     expect(typing()).toBeInTheDocument();
-    expect(await within(log).findByText(SESSIONS.upcoming.greeting)).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText(SESSIONS.upcoming.greeting))).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
     expect(screen.getByTestId("announcer")).toHaveTextContent(SESSIONS.upcoming.greeting);
   });
@@ -108,14 +113,14 @@ describe("ChatPage: greeting", () => {
         <ChatPage reducedMotion={instant} />
       </ChatApiContext>,
     );
-    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.upcoming.greeting));
     expect(seen).toEqual(["synthetic-id-token"]);
   });
 
   it("falls back to a generic greeting when the session call fails", async () => {
     configureMockApi({ sessionFault: "internal" });
     const { log } = renderChat();
-    expect(await within(log).findByText(FALLBACK_GREETING)).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText(FALLBACK_GREETING))).toBeVisible();
     expect(screen.getByTestId("announcer")).toHaveTextContent(FALLBACK_GREETING);
   });
 });
@@ -136,7 +141,8 @@ describe("ChatPage: composer (FR-011)", () => {
     await user.type(input, "  Any openings?  {Enter}");
     expect(within(log).getByText("Any openings?")).toBeVisible();
     expect(input).toHaveValue("");
-    await waitFor(() => expect(bodies).toHaveLength(1));
+    await until(() => bodies.length === 1);
+    expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ text: "Any openings?" });
   });
 
@@ -154,7 +160,8 @@ describe("ChatPage: composer (FR-011)", () => {
     ).toHaveTextContent("You: Line one\nLine two", {
       normalizeWhitespace: false,
     });
-    await waitFor(() => expect(bodies).toEqual([expect.objectContaining({ text: "Line one\nLine two" })]));
+    await until(() => bodies.length === 1);
+    expect(bodies).toEqual([expect.objectContaining({ text: "Line one\nLine two" })]);
   });
 
   it("doesn't send on Enter while an IME composition is in progress", async () => {
@@ -200,7 +207,7 @@ describe("ChatPage: composer (FR-011)", () => {
     await user.keyboard("{Enter}");
     expect(input).toHaveValue("Second");
     hold.open();
-    expect(await within(log).findByText("Sure.")).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText("Sure."))).toBeVisible();
     expect(sendButton).toBeEnabled();
     expect(bodies).toHaveLength(1);
   });
@@ -222,23 +229,23 @@ describe("ChatPage: a turn", () => {
       },
     );
     const { log } = renderChat();
-    await within(log).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log).queryByText(SESSIONS.upcoming.greeting));
     sendNow("Any openings?");
     // From send, before any response: the real API sends no headers until its first event.
     expect(typing()).toBeInTheDocument();
 
     // A status event: a chip, still typing.
     statusSent.open();
-    expect(await screen.findByText(TOOL_STATUS_LABELS.check_availability)).toBeVisible();
+    expect(await untilFound(() => screen.queryByText(TOOL_STATUS_LABELS.check_availability))).toBeVisible();
     expect(typing()).toBeInTheDocument();
 
     // The first text_delta ends the indicator; the chip stays for the rest of the turn.
     textSent.open();
-    expect(await within(log).findByText(/^Dr\. Lee/)).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText(/^Dr\. Lee/))).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
 
     // When the turn completes, the chips go.
-    expect(await within(log).findByText("Dr. Lee is free.")).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText("Dr. Lee is free."))).toBeVisible();
     expect(screen.queryByText(TOOL_STATUS_LABELS.check_availability)).not.toBeInTheDocument();
   });
 
@@ -281,7 +288,7 @@ describe("ChatPage: a turn", () => {
     configureMockApi({ chatReply: "reset" });
     const { user, input, log } = renderChat();
     await user.type(input, "Hi{Enter}");
-    expect(await within(log).findByText(REPLIES.reset.text)).toBeVisible();
+    expect(await untilFound(() => within(log).queryByText(REPLIES.reset.text))).toBeVisible();
     expect(log).not.toHaveTextContent("I'm not able to");
   });
 
@@ -289,15 +296,22 @@ describe("ChatPage: a turn", () => {
     serveChunks([[{ type: "text_delta", text: REPLIES.plain.text }, done]]);
     await renderAtFakeTime(() => false);
     const announcements = recordAnnouncements();
+    const conversation = log();
+    const lastBubble = () => conversation.lastElementChild?.textContent ?? "";
 
     sendNow("Hi");
     await until(() => typing() === null);
-    // One tick per act(), so each partial render reaches the DOM (one long act commits only the end).
+    // One 16 ms tick per act(), so each partial render reaches the DOM (one long act commits only the
+    // end). Tick until the bubble shows the whole reply (at most 300 ticks), then 1 s more, so a late
+    // second announcement still lands in the recording: about 160 acts (94 + 63 locally) instead of a
+    // fixed 300, which a loaded runner couldn't fit in the 5 s test timeout (#134).
     const bubbles = new Set<string>();
-    for (let tick = 0; tick < 300; tick += 1) {
+    const tick = async () => {
       await act(() => vi.advanceTimersByTimeAsync(16));
-      bubbles.add(screen.getByRole("list", { name: "Conversation" }).lastElementChild?.textContent ?? "");
-    }
+      bubbles.add(lastBubble());
+    };
+    for (let ticks = 0; ticks < 300 && lastBubble() !== REPLIES.plain.text; ticks += 1) await tick();
+    for (let ticks = 0; ticks < 1000 / 16; ticks += 1) await tick();
     const announced = announcements.stop();
     expect(bubbles.size).toBeGreaterThan(10); // the reply was typed out in steps meanwhile
     expect(screen.queryByText(REPLIES.plain.text, { selector: "li" })).toBeVisible();
@@ -307,12 +321,14 @@ describe("ChatPage: a turn", () => {
   it("announces a reply that repeats the previous announcement", async () => {
     serveEvents([delta("Sure."), done]);
     const { user, input, log } = renderChat();
-    await within(log).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log).queryByText(SESSIONS.upcoming.greeting));
     const announcements = recordAnnouncements();
     await user.type(input, "One{Enter}");
-    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(1));
+    await until(() => within(log).queryAllByText("Sure.").length === 1);
+    expect(within(log).getAllByText("Sure.")).toHaveLength(1);
     await user.type(input, "Two{Enter}");
-    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(2));
+    await until(() => within(log).queryAllByText("Sure.").length === 2);
+    expect(within(log).getAllByText("Sure.")).toHaveLength(2);
     expect(announcements.stop()).toEqual(["Sure.", "Sure."]);
   });
 
@@ -321,9 +337,11 @@ describe("ChatPage: a turn", () => {
     const bodies = captureChatBodies();
     const { user, input, log } = renderChat();
     await user.type(input, "One{Enter}");
-    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(1));
+    await until(() => within(log).queryAllByText("Sure.").length === 1);
+    expect(within(log).getAllByText("Sure.")).toHaveLength(1);
     await user.type(input, "Two{Enter}");
-    await waitFor(() => expect(within(log).getAllByText("Sure.")).toHaveLength(2));
+    await until(() => within(log).queryAllByText("Sure.").length === 2);
+    expect(within(log).getAllByText("Sure.")).toHaveLength(2);
     const [first, second] = bodies as { conversationId?: string; clientMessageId: string }[];
     expect(first?.conversationId).toBeUndefined();
     expect(second?.conversationId).toBe(done.conversationId);
@@ -337,7 +355,7 @@ describe("ChatPage: a turn", () => {
       api: createChatApi({ getToken: () => Promise.resolve("synthetic-id-token") }),
     });
     await user.type(input, "Hi{Enter}");
-    await within(log).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log).queryByText(REPLIES.tools.text));
     expect(seen).toEqual(["synthetic-id-token", "synthetic-id-token"]);
   });
 
@@ -348,7 +366,7 @@ describe("ChatPage: a turn", () => {
     configureMockApi({ chatFault });
     const { user, input, sendButton, log } = renderChat();
     await user.type(input, "Hi{Enter}");
-    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(message);
     expect(typing()).not.toBeInTheDocument();
     expect(within(log).getByText("Hi")).toBeVisible();
     await user.type(input, "again");
@@ -374,18 +392,17 @@ describe("ChatPage: turn details", () => {
     );
     await renderPage();
     await sendFromPage("Hi");
-    const chips = await screen.findByRole("list", { name: "What the assistant is doing" });
-    await waitFor(() =>
-      expect(
-        within(chips)
-          .getAllByRole("listitem")
-          .map((li) => li.textContent),
-      ).toEqual(["Checking A…", "Checking B…", "Checking A…"]),
-    );
+    const chips = await untilFound(() => screen.queryByRole("list", { name: "What the assistant is doing" }));
+    await until(() => within(chips).queryAllByRole("listitem").length === 3);
+    expect(
+      within(chips)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual(["Checking A…", "Checking B…", "Checking A…"]);
     const items = within(chips).getAllByRole("listitem");
     expect(items.map((li) => li.classList.contains("chip--current"))).toEqual([false, false, true]);
     hold.open();
-    await within(log()).findByText("Done.");
+    await untilFound(() => within(log()).queryByText("Done."));
   });
 
   it("shows the typing indicator again when a text_reset drops every character, and no empty bubble", async () => {
@@ -395,11 +412,12 @@ describe("ChatPage: turn details", () => {
     });
     await renderPage();
     await sendFromPage("Hi");
-    await waitFor(() => expect(typing()).toBeInTheDocument());
+    await until(() => typing() !== null);
+    expect(typing()).toBeInTheDocument();
     // greeting + the patient's message; the reset bubble is gone rather than left empty
     expect(within(log()).getAllByRole("listitem")).toHaveLength(2);
     hold.open();
-    expect(await within(log()).findByText("Sure.")).toBeVisible();
+    expect(await untilFound(() => within(log()).queryByText("Sure."))).toBeVisible();
     expect(typing()).not.toBeInTheDocument();
   });
 
@@ -408,10 +426,10 @@ describe("ChatPage: turn details", () => {
     serveEvents([delta("Part one. "), delta("Part two."), done], { 1: hold.promise });
     await renderPage();
     await sendFromPage("Hi");
-    const bubble = await within(log()).findByText("Part one.");
+    const bubble = await untilFound(() => within(log()).queryByText("Part one."));
     expect(bubble).toHaveAttribute("aria-busy", "true");
     hold.open();
-    const final = await within(log()).findByText("Part one. Part two.");
+    const final = await untilFound(() => within(log()).queryByText("Part one. Part two."));
     expect(final).not.toHaveAttribute("aria-busy");
   });
 
@@ -428,7 +446,7 @@ describe("ChatPage: turn details", () => {
       },
     };
     render(<ChatPage api={api} reducedMotion={instant} />);
-    await within(log()).findByText(SESSIONS.upcoming.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.upcoming.greeting));
     await sendFromPage("Hi");
     expect(await within(log()).findByText("All set.")).toBeVisible();
     await act(() => failed?.catch(() => undefined));
@@ -466,11 +484,11 @@ describe("ChatPage: turn details", () => {
     configureMockApi({ chatFault: "network" });
     await renderPage();
     await sendFromPage("Hi");
-    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(GENERIC_ERROR);
     configureMockApi({ chatFault: "none" });
     await sendFromPage("Again");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
   });
 
   it("stops the request and the typing when the page unmounts", async () => {

@@ -4,7 +4,7 @@
  * comes back; anything else starts the chat empty, and the next turn starts a new conversation.
  */
 import { type SessionResponse } from "@sched/contracts";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { StrictMode } from "react";
@@ -24,12 +24,18 @@ import {
   retryButton,
   serveEvents,
   typingIndicator as typing,
+  until,
+  untilFound,
 } from "./testUtils";
 import { FALLBACK_GREETING, SESSION_ERROR, SIGNED_OUT_ERROR } from "./useChat";
 
 const SUB = "sub-maria.santos";
 const OTHER_CONVERSATION = "7d4c2b1a-9e8f-4a6b-8c5d-3e2f1a0b9c8d";
 const [RESTORED_QUESTION, RESTORED_ANSWER] = SESSIONS.restore.messages.map((message) => message.text);
+
+// The waits on the mock API's I/O use `until`, which has no fixed time limit and can outlast the 5 s
+// default on a loaded runner: give each test room for it (testUtils.ts, #134).
+vi.setConfig({ testTimeout: 20_000 });
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -52,7 +58,7 @@ describe("ChatPage: restore (FR-014)", () => {
     configureMockApi({ session: "restore" });
     const bodies = captureChatBodies();
     const { sendMessage } = renderPage({ sub: SUB });
-    await within(log()).findByText(SESSIONS.restore.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
     expect(
       within(log())
         .getAllByRole("listitem")
@@ -61,8 +67,9 @@ describe("ChatPage: restore (FR-014)", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     await sendMessage("Yes, move it");
-    await within(log()).findByText(REPLIES.tools.text);
-    await waitFor(() => expect(bodies).toHaveLength(1));
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
+    await until(() => bodies.length === 1);
+    expect(bodies).toHaveLength(1);
     expect(bodies[0]?.conversationId).toBe(RESTORE_CONVERSATION_ID);
     expect(readLoginSession()).toEqual({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
   });
@@ -86,13 +93,14 @@ describe("ChatPage: restore (FR-014)", () => {
       configureMockApi({ session: "restore" });
       const bodies = captureChatBodies();
       const { sendMessage } = renderPage({ sub });
-      await within(log()).findByText(SESSIONS.restore.greeting);
+      await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
       expect(restoredShown()).toBe(false);
       expect(within(log()).getAllByRole("listitem")).toHaveLength(1);
 
       await sendMessage("Hi");
-      await within(log()).findByText(REPLIES.tools.text);
-      await waitFor(() => expect(bodies).toHaveLength(1));
+      await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
+      await until(() => bodies.length === 1);
+      expect(bodies).toHaveLength(1);
       expect(bodies[0]).not.toHaveProperty("conversationId");
       const remembered = readLoginSession();
       expect(remembered?.sub).toBe(SUB);
@@ -105,10 +113,10 @@ describe("ChatPage: restore (FR-014)", () => {
     writeLoginSession({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
     configureMockApi({ session: "restore" });
     const { sendMessage } = renderPage();
-    await within(log()).findByText(SESSIONS.restore.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
     expect(restoredShown()).toBe(false);
     await sendMessage("Hi");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
     expect(readLoginSession()).toEqual({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
   });
 
@@ -126,13 +134,16 @@ describe("ChatPage: restore (FR-014)", () => {
     serveEvents([{ type: "text_delta", text: "Moving it." }, doneEvent()], { 1: turnHold.promise });
     const { sendMessage } = renderPage({ sub: SUB });
     await sendMessage("Hi");
-    await within(log()).findByText("Moving it.");
+    await untilFound(() => within(log()).queryByText("Moving it."));
     sessionHold.open();
-    await within(log()).findByText(SESSIONS.restore.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
     expect(restoredShown()).toBe(false);
     expect(within(log()).getByText("Hi")).toBeVisible();
     turnHold.open();
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    // The turn has ended once its reply is a message, no longer the busy bubble it types into.
+    const replyDone = () => within(log()).queryByText("Moving it.")?.getAttribute("aria-busy") === null;
+    await until(replyDone);
+    expect(replyDone()).toBe(true);
     await waitFor(() => expect(within(log()).getByText("Hi")).toBeVisible());
     expect(restoredShown()).toBe(false);
   });
@@ -149,7 +160,7 @@ describe("ChatPage: restore (FR-014)", () => {
     const { rerender } = render(<ChatPage reducedMotion={instant} />);
     rerender(<ChatPage reducedMotion={instant} sub={SUB} />);
     hold.open();
-    await within(log()).findByText(SESSIONS.restore.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
     expect(restoredShown()).toBe(true);
   });
 });
@@ -165,7 +176,7 @@ describe("ChatPage: a failed session call", () => {
   ])("shows %s as an error with Retry, under the fallback greeting", async (_, inject) => {
     inject();
     renderPage({ sub: SUB });
-    expect(await screen.findByRole("alert")).toHaveTextContent(SESSION_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(SESSION_ERROR);
     expect(within(log()).getByText(FALLBACK_GREETING)).toBeVisible();
     expect(retryButton()).toBeVisible();
   });
@@ -174,7 +185,7 @@ describe("ChatPage: a failed session call", () => {
     writeLoginSession({ sub: SUB, conversationId: RESTORE_CONVERSATION_ID });
     configureMockApi({ sessionFault: "internal" });
     const { user, input } = renderPage({ sub: SUB });
-    await screen.findByRole("alert");
+    await untilFound(() => screen.queryByRole("alert"));
 
     const hold = gate();
     server.use(
@@ -190,7 +201,7 @@ describe("ChatPage: a failed session call", () => {
     await waitFor(() => expect(input).toHaveFocus());
 
     hold.open();
-    await within(log()).findByText(SESSIONS.restore.greeting);
+    await untilFound(() => within(log()).queryByText(SESSIONS.restore.greeting));
     expect(restoredShown()).toBe(true);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -199,7 +210,7 @@ describe("ChatPage: a failed session call", () => {
     configureMockApi({ sessionFault: "unauthorized" });
     const onUnauthorized = vi.fn();
     renderPage({ sub: SUB, onUnauthorized });
-    expect(await screen.findByRole("alert")).toHaveTextContent(SIGNED_OUT_ERROR);
+    expect(await untilFound(() => screen.queryByRole("alert"))).toHaveTextContent(SIGNED_OUT_ERROR);
     expect(retryButton()).not.toBeInTheDocument();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
@@ -218,9 +229,9 @@ describe("ChatPage: a failed session call", () => {
     const onUnauthorized = vi.fn();
     const { sendMessage } = renderPage({ sub: SUB, onUnauthorized });
     await sendMessage("Hi");
-    await within(log()).findByText(REPLIES.tools.text);
+    await untilFound(() => within(log()).queryByText(REPLIES.tools.text));
     hold.open();
-    await within(log()).findByText(FALLBACK_GREETING);
+    await untilFound(() => within(log()).queryByText(FALLBACK_GREETING));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
@@ -228,13 +239,19 @@ describe("ChatPage: a failed session call", () => {
   it("ignores the aborted first call of a strict-mode remount", async () => {
     const real = createChatApi();
     let calls = 0;
+    const rejected = gate();
     const api: ChatApi = {
       getSession(signal) {
         calls += 1;
         if (calls === 1) {
           // Rejects (as a 401) only after the second call has answered.
           return new Promise<SessionResponse>((_, reject) =>
-            signal?.addEventListener("abort", () => setTimeout(() => reject(new ChatHttpError(401)), 30)),
+            signal?.addEventListener("abort", () =>
+              setTimeout(() => {
+                reject(new ChatHttpError(401));
+                rejected.open();
+              }, 30),
+            ),
           );
         }
         return real.getSession(signal);
@@ -247,8 +264,10 @@ describe("ChatPage: a failed session call", () => {
         <ChatPage api={api} reducedMotion={instant} sub={SUB} onUnauthorized={onUnauthorized} />
       </StrictMode>,
     );
-    await within(log()).findByText(SESSIONS.upcoming.greeting);
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await untilFound(() => within(log()).queryByText(SESSIONS.upcoming.greeting));
+    // Wait for the aborted call's rejection itself rather than sleeping past it (#134). The page's handler
+    // was attached to that promise before the gate's, so it has run once the gate opens.
+    await act(() => rejected.promise);
     expect(calls).toBe(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(onUnauthorized).not.toHaveBeenCalled();

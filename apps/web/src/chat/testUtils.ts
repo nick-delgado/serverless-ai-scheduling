@@ -6,11 +6,18 @@
  *
  * fetch and MSW move a response along with real `setImmediate` hops and microtasks, a number of them
  * that varies by runner. So a test never advances fake time *hoping* the stream has been read: it
- * waits for a DOM condition with `until`, which runs real hops while fake time stands still.
+ * waits for a DOM condition with `until`, which runs real hops while fake time stands still. Every wait
+ * on the mock API's I/O uses `until` (or `untilFound`), not `findBy*`/`waitFor` (#134): those give up
+ * after a fixed time, which a loaded runner can spend before the response gets through, while `until`
+ * gives up only after both a number of hops and a time floor have passed. The files #134 converted
+ * (`ChatPage.test.tsx`, `ChatPage.errors`, `.restore` and `.auth`, `useChat.test.tsx`) and
+ * `testUtils.test.ts` raise their test timeout (`vi.setConfig({ testTimeout: 20_000 })`), since a loaded
+ * runner's hops can outlast the 5 s default; `ChatPage.voice.test.tsx` and `mocks/handlers.test.ts`
+ * also wait with `until` and keep the default.
  */
 import { type ChatRequest, type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, getConfig, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { vi } from "vitest";
 
@@ -22,13 +29,30 @@ export function fakeTime(): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
 }
 
-/** Run real I/O hops, without advancing fake time, until `condition` holds (at most 500 hops). */
+/** The fewest real I/O hops `until` runs before it gives up. */
+export const UNTIL_MIN_HOPS = 500;
+
+/**
+ * Run real I/O hops, without advancing fake time, until `condition` holds. It gives up only once it has
+ * run `UNTIL_MIN_HOPS` hops *and* `asyncUtilTimeout` ms of real time have passed (#134; the value
+ * src/test/setup.ts gives `findBy*`, measured with `performance.now()`, which `fakeTime()` leaves real):
+ * a quiet runner gets the time floor, and a loaded one, whose hops are slow, the hop floor.
+ */
 export async function until(condition: () => boolean): Promise<void> {
-  for (let hop = 0; hop < 500; hop += 1) {
+  const started = performance.now();
+  const minMs = getConfig().asyncUtilTimeout;
+  for (let hop = 0; hop < UNTIL_MIN_HOPS || performance.now() - started < minMs; hop += 1) {
     if (condition()) return;
     await act(() => new Promise<void>((resolve) => setImmediate(resolve)));
   }
   throw new Error("until: the condition never held");
+}
+
+/** Wait with `until` until `query` finds something, and return it: a `findBy*` without a fixed timeout. */
+export async function untilFound<T>(query: () => T | null): Promise<T> {
+  let found = null as T | null;
+  await until(() => (found = query()) !== null);
+  return found as T;
 }
 
 /** Type into the composer and press Enter, synchronously (user-event stalls under fake timers). */

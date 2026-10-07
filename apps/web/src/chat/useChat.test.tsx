@@ -12,6 +12,7 @@ import { ChatProtocolError, ChatStreamEndedError } from "./streamClient";
 import {
   doneEvent,
   fakeTime,
+  gate,
   instant,
   log,
   sendNow,
@@ -19,11 +20,16 @@ import {
   serveEvents,
   typingIndicator as typing,
   until,
+  untilFound,
 } from "./testUtils";
 import { FALLBACK_GREETING, GENERIC_ERROR, prefersReducedMotion, SIGNED_OUT_ERROR, useChat } from "./useChat";
 
 const done = doneEvent({ messageId: "msg_000042" });
 const delta = (text: string): ChatStreamEvent => ({ type: "text_delta", text });
+
+// The waits on the mock API's I/O use `until`, which has no fixed time limit and can outlast the 5 s
+// default on a loaded runner: give each test room for it (testUtils.ts, #134).
+vi.setConfig({ testTimeout: 20_000 });
 
 afterEach(() => {
   vi.useRealTimers();
@@ -45,7 +51,8 @@ describe("useChat", () => {
     });
     expect([first, second]).toEqual([true, false]);
     expect(result.current.messages.map((m) => m.text)).toEqual(["One"]);
-    await waitFor(() => expect(result.current.responding).toBe(false));
+    await until(() => !result.current.responding);
+    expect(result.current.responding).toBe(false);
   });
 
   it("keys the reply with the messageId from done", async () => {
@@ -54,13 +61,15 @@ describe("useChat", () => {
     act(() => {
       result.current.send("Hi");
     });
-    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    await until(() => result.current.messages.length === 2);
+    expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[1]).toEqual({ id: "msg_000042", role: "assistant", text: "Hello." });
   });
 
   it("keeps a greeting the aborted first call of a strict-mode remount would overwrite", async () => {
     let calls = 0;
     const signals: (AbortSignal | undefined)[] = [];
+    const rejected = gate();
     const api: ChatApi = {
       getSession(signal) {
         calls += 1;
@@ -68,7 +77,12 @@ describe("useChat", () => {
         if (calls === 1) {
           // Rejects only after the second call has resolved.
           return new Promise<SessionResponse>((_, reject) =>
-            signal?.addEventListener("abort", () => setTimeout(() => reject(new Error("aborted")), 30)),
+            signal?.addEventListener("abort", () =>
+              setTimeout(() => {
+                reject(new Error("aborted"));
+                rejected.open();
+              }, 30),
+            ),
           );
         }
         return Promise.resolve(SESSIONS.no_upcoming);
@@ -80,8 +94,10 @@ describe("useChat", () => {
         <ChatPage api={api} reducedMotion={instant} />
       </StrictMode>,
     );
-    expect(await within(log()).findByText(SESSIONS.no_upcoming.greeting)).toBeVisible();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(await untilFound(() => within(log()).queryByText(SESSIONS.no_upcoming.greeting))).toBeVisible();
+    // Wait for the aborted call's rejection itself rather than sleeping past it (#134). The page's handler
+    // was attached to that promise before the gate's, so it has run once the gate opens.
+    await act(() => rejected.promise);
     expect(calls).toBe(2);
     expect(signals.map((signal) => signal?.aborted)).toEqual([true, false]);
     expect(within(log()).queryByText(FALLBACK_GREETING)).not.toBeInTheDocument();
