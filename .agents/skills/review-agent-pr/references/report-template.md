@@ -46,7 +46,7 @@ The verdict is still yours to write, from the verdict table below and the comput
 - Tests, linters and builds were not run by this review; CI status is reported as found.
 - Line citations: <the summary line from check-citations.sh>
 - Harness version: <`metadata.harness-version` from the frontmatter of the review-agent-pr SKILL.md that ran>
-- Cost: <the subagents' tokens and time, from the `cost=` lines in progress.txt, or "not reported by this runtime">
+- Cost: added by the assembly script after these lines: a table of each subagent's phase, model, effort, tokens and time, and the hidden run record. Do not write it here.
 - Spec moves and related issues: <the two summary lines from spec-moves.sh, and the count from related-issues.sh>
 - <Anything that did not complete: a reviewer that failed, a phase skipped, and why.>
 ```

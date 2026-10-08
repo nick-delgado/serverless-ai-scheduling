@@ -278,15 +278,90 @@ readiness_state() {
     END { print (s == "" ? "none" : s) }' "$run/spec-moves.md"
 }
 
-# The cost of the run, from the cost lines the orchestrator appends to progress.txt
-# ("cost=<phase>:<who>:<tokens>:<seconds>", where the runtime reports them).
+# What ran, from progress.txt: one line per subagent, as
+#   agent phase=<k> name=<name> model=<model> effort=<effort> tokens=<n> seconds=<n>
+# (older runs wrote "cost=<phase>:<name>:<tokens>:<seconds>"; both are read), printed as
+# "phase<TAB>name<TAB>model<TAB>effort<TAB>tokens<TAB>seconds", "?" for anything unreported.
+agents_tsv() {
+  [ -f "$run/progress.txt" ] || return 0
+  awk '
+    /^agent / {
+      ph = "?"; nm = "?"; md = "?"; ef = "?"; tk = "?"; sc = "?"
+      for (i = 2; i <= NF; i++) {
+        k = $i; v = $i; sub(/=.*/, "", k); sub(/^[^=]*=/, "", v)
+        if (k == "phase") ph = v; else if (k == "name") nm = v; else if (k == "model") md = v
+        else if (k == "effort") ef = v; else if (k == "tokens") tk = v; else if (k == "seconds") sc = v
+      }
+      print ph "\t" nm "\t" md "\t" ef "\t" tk "\t" sc; next
+    }
+    /^cost=/ { l = $0; sub(/^cost=/, "", l); split(l, c, ":"); print c[1] "\t" c[2] "\t?\t?\t" c[3] "\t" c[4] }
+  ' "$run/progress.txt"
+}
+
+# One "key=value" of the orchestrator line ("orchestrator tool=... model=... effort=..."),
+# or of a top-level "key=value" line such as "label=...".
+progress_value() {
+  [ -f "$run/progress.txt" ] || { echo "?"; return; }
+  awk -v want="$1" '
+    /^orchestrator / { for (i = 2; i <= NF; i++) { k = $i; v = $i; sub(/=.*/, "", k); sub(/^[^=]*=/, "", v); if (k == want) found = v } }
+    index($0, want "=") == 1 { found = substr($0, length(want) + 2) }
+    END { print (found == "" ? "?" : found) }' "$run/progress.txt"
+}
+
+# The cost of the run, for the process data line: totals and the split by phase.
 cost_state() {
-  grep '^cost=' "$run/progress.txt" 2>/dev/null | awk -F: '
-    { n++; if ($3 ~ /^[0-9]+$/) tok += $3; else tu = 1; if ($4 ~ /^[0-9]+$/) sec += $4; else su = 1 }
+  agents_tsv | awk -F'\t' '
+    { n++; if ($5 ~ /^[0-9]+$/) { tok += $5; pt[$1] += $5 } else tu = 1; if ($6 ~ /^[0-9]+$/) sec += $6; else su = 1
+      if (!($1 in seen)) { seen[$1] = 1; order[++np] = $1 } }
     END {
       if (n == 0) { print "not reported"; exit }
-      printf "%s tokens, %s min in %d subagents\n", (tu ? "≥" : "") tok, (su ? "≥" : "") int(sec / 60 + 0.5), n
+      printf "%s tokens, %s min in %d subagents", (tu ? "≥" : "") tok, (su ? "≥" : "") int(sec / 60 + 0.5), n
+      # By phase, so a batch can see which phase a cost change came from.
+      printf " (by phase:"
+      for (i = 1; i <= np; i++) printf "%s %s %dk", (i > 1 ? "," : ""), order[i], int(pt[order[i]] / 1000 + 0.5)
+      printf ")\n"
     }' | grep . || echo "not reported"
+}
+
+# The run record: what ran, on which model and effort, and what it cost. Written to
+# run.json, and carried in the report as one hidden line so every round's cost reaches
+# GitHub (the process comment is skipped on clean rounds; the report never is).
+run_json() {
+  local round version
+  if [ -s "$run/previous/report.md" ]; then round="re-review"; else round="first"; fi
+  version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
+  agents_tsv | awk -F'\t' -v pr="${pr_number:-}" -v sha="$report_sha" -v round="$round" \
+    -v mode="$(progress_value mode)" -v version="$version" -v label="$(progress_value label)" \
+    -v tool="$(progress_value tool)" -v model="$(progress_value model)" -v effort="$(progress_value effort)" '
+    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/--/, "-\\u002d", s); return s }
+    function num(s) { return (s ~ /^[0-9]+$/) ? s : "null" }
+    {
+      a = a (n++ ? "," : "") sprintf("{\"phase\":\"%s\",\"name\":\"%s\",\"model\":\"%s\",\"effort\":\"%s\",\"tokens\":%s,\"seconds\":%s}", esc($1), esc($2), esc($3), esc($4), num($5), num($6))
+      if ($5 ~ /^[0-9]+$/) tok += $5; else unrep++
+      if ($6 ~ /^[0-9]+$/) sec += $6
+    }
+    END {
+      printf "{\"pr\":%s,\"commit\":\"%s\",\"round\":\"%s\",\"mode\":\"%s\",\"harness_version\":\"%s\",\"label\":\"%s\",", (pr == "" ? "null" : pr), sha, round, esc(mode), esc(version), esc(label)
+      printf "\"orchestrator\":{\"tool\":\"%s\",\"model\":\"%s\",\"effort\":\"%s\"},", esc(tool), esc(model), esc(effort)
+      printf "\"agents\":[%s],\"total_tokens\":%d,\"total_seconds\":%d,\"agents_unreported\":%d}\n", a, tok, sec, unrep
+    }'
+}
+
+# The cost table for the report's run metadata.
+cost_table() {
+  local rows
+  rows="$(agents_tsv)"
+  if [ -z "$rows" ]; then
+    echo "- Cost: not reported by this runtime"
+    return
+  fi
+  echo
+  echo "| Phase | Subagent | Model | Effort | Tokens | Time |"
+  echo "|---|---|---|---|---|---|"
+  printf '%s\n' "$rows" | awk -F'\t' '
+    { t = ($6 ~ /^[0-9]+$/) ? sprintf("%dm%02ds", $6 / 60, $6 % 60) : "?"; printf "| %s | %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5, t
+      if ($5 ~ /^[0-9]+$/) tok += $5; else u = 1; if ($6 ~ /^[0-9]+$/) sec += $6 }
+    END { printf "| | **Total** | | | %s%d | %dm%02ds |\n", (u ? "≥" : ""), tok, sec / 60, sec % 60 }'
 }
 
 # findings.json: one JSON object per line per confirmed finding, for improve-agent-process to
@@ -298,10 +373,11 @@ write_findings_json() {
   version="$(sed -n 's/^  harness-version: "\(.*\)"$/\1/p' "$(dirname "$0")/../SKILL.md" | head -n 1)"
   lines="$({ grep -o '"additions":[0-9]*' "$run/pr.json" | head -n 1; grep -o '"deletions":[0-9]*' "$run/pr.json" | head -n 1; } 2>/dev/null | cut -d: -f2 | awk '{ s += $1 } END { print s + 0 }')"
   {
-    h2 "$rootcause" "Cause summary" 2>/dev/null | awk -F'|' '{ gsub(/\\\|/, "\034") } /^\| *[A-Z]+-[0-9]/ {
+    # No root-cause.md when phase 6 was skipped (no findings above nit): no classes, no causes.
+    [ -s "$rootcause" ] && h2 "$rootcause" "Cause summary" | awk -F'|' '{ gsub(/\\\|/, "\034") } /^\| *[A-Z]+-[0-9]/ {
       id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id); sub(/[ (].*/, "", id)
       cls = $4; gsub(/[ \t`]/, "", cls); cause = $5; gsub(/`/, "", cause); gsub(/^[ \t]+|[ \t]+$/, "", cause); gsub(/\034/, "|", cause)
-      print "CLASS\t" id "\t" cls "\t" cause }'
+      print "CLASS\t" id "\t" cls "\t" cause }' || true
     h2 "$verified" "Confirmed findings" | sed 's/^/BODY\t/'
   } | awk -F'\t' -v pr="${pr_number:-}" -v sha="$report_sha" -v round="$round" -v version="$version" -v lines="${lines:-0}" -v readiness="$readiness" '
     function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/\t/, " ", s); return s }
@@ -438,6 +514,9 @@ build_report() {
 
   printf '\n<details>\n<summary>Run metadata</summary>\n\n'
   trim < "$run/report-meta.md"
+  cost_table
+  echo
+  echo "<!-- agent-pr-review:run $(run_json) -->"
   printf '\n</details>\n'
 }
 
@@ -500,9 +579,11 @@ case "$mode" in
     esac
 
     whole="$run/report.md"
-    build_report > "$whole"
     pr_number="$(grep -o '"number":[0-9]*' "$run/pr.json" 2>/dev/null | head -n 1 | cut -d: -f2)"
+    build_report > "$whole"
     write_findings_json "$run/findings.json"
+    run_json > "$run/run.json"
+    echo "wrote $run/run.json"
     echo "wrote $run/findings.json ($(wc -l < "$run/findings.json" | tr -d ' ') findings)"
     rm -f "$run"/report-[0-9][0-9].md
 

@@ -41,6 +41,12 @@ replies. Then ask for the apply step, which writes your answers into the issue's
 - **Options:** (one per line)
   - (a) <option>: <what it means for the code and for users>. Scope: within the issue | adds <...>
   - (b) <option>: <...>. Scope: <...>. Owned paths: + `<path>`
+- **Edges:** <how the choice settles the cases at its edges, whichever apply: boundary
+  inputs (empty, the exact limit, just past it); every point where two concurrent calls can
+  interleave and one can lose; a case where an edit and an assumption both apply, and which
+  wins; the artifact that counts as evidence (a file, a log, a test name), named; whether a
+  list is complete or a minimum. Or "none: <why>". The apply step copies this line into the
+  issue beside the answer.>
 - **Recommendation:** (<letter>), because <reason, citing a source the owner can check>.
   No conditions here: if the recommended choice holds only under a condition, write the
   condition into that option's own text. The apply step records the chosen option's text,

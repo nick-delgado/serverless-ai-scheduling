@@ -47,7 +47,9 @@ check_file() {
   for spec in "$run"/spec/*.md; do
     [ -f "$spec" ] || continue
     rel="spec/$(basename "$spec")"
+    # wc -l does not count a last line without a newline; accept either count.
     lines="$(awk 'END { print NR }' "$spec")"
+    wcl="$(wc -l < "$spec" | tr -d ' ')"
     row="$(awk '/^### Sources read/ { on = 1; next } on && /^#/ { exit } on' "$file" | grep -F "$rel" | head -n 1 || true)"
     if [ -z "$row" ]; then
       [ "$reviewer" = "spec-alignment" ] && problems="$problems
@@ -59,7 +61,7 @@ check_file() {
     if [ -z "$to" ]; then
       problems="$problems
   $rel under Sources read does not say how far it was read: \"(read to line <n> of $lines)\""
-    elif [ "$of" != "$lines" ] || [ "$to" != "$lines" ]; then
+    elif { [ "$of" != "$lines" ] && [ "$of" != "$wcl" ]; } || { [ "$to" != "$lines" ] && [ "$to" != "$wcl" ]; }; then
       problems="$problems
   $rel was read to line $to of ${of}, but it has $lines lines: read the rest from the file itself, in line ranges"
     fi

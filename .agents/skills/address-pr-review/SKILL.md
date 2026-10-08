@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.06.3"
+  harness-version: "2026.10.08.1"
 ---
 
 # Address a PR review
@@ -221,7 +221,8 @@ decision to be recorded (a journal entry, an ADR, a changelog line, a comment in
 record it there too, as part of implementing it.
 
 A decision implemented in code is a behaviour change like any other: give it a test that
-fails without it.
+fails without it, and one for each branch or condition the chosen option introduces (a
+fallback, an exception, a limit), not only its main path.
 
 ### 5. Bring the branch up to date with its base
 

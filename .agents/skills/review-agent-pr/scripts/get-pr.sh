@@ -43,19 +43,39 @@ gh api --paginate "repos/{owner}/{repo}/pulls/${pr}/commits" \
 
 gh api "repos/{owner}/{repo}/pulls/${pr}" -H "Accept: application/vnd.github.diff" > "$run/diff.patch"
 
-# A check can run more than once on the same commit: a cancelled run replaced by a newer one,
-# a manual re-run, or the same workflow for two events. Drop a cancelled or skipped run when
-# a later run of the same check exists; keep every other run, so a real failure in one of
-# two parallel runs is never hidden. Commit statuses are already the latest per context.
+# A check can run more than once on the same commit: a workflow re-triggered for the same
+# event (a PR description edit, a re-run), a cancelled run replaced by a newer one, or one
+# workflow run for two events (push and pull_request). Runs of the same check, workflow and
+# event are one result: the latest run that finished decides (the latest of all if none
+# finished). Runs for different events are all kept, so a failure in one is never hidden.
+# Without the Actions lookup (refused, or a non-Actions check), a cancelled or skipped run
+# is dropped only when a later run of the same check exists. Commit statuses are already the
+# latest per context.
+gh api "repos/{owner}/{repo}/actions/runs?head_sha=${head_sha}&per_page=100" \
+  --jq '.workflow_runs[] | "\(.check_suite_id)\t\(.workflow_id):\(.event)"' > "$run/.ci-suites" 2>/dev/null || : > "$run/.ci-suites"
 {
   gh api --paginate "repos/{owner}/{repo}/commits/${head_sha}/check-runs" \
-    --jq '.check_runs[] | "\(.name)\t\(.started_at // "")\t\(.id)\tcheck\t\(.name)\t\(.status)\t\(.conclusion // "-")\t\(.html_url)"' |
+    --jq '.check_runs[] | "\(.name)\t\(.started_at // "")\t\(.id)\t\(.check_suite.id)\tcheck\t\(.name)\t\(.status)\t\(.conclusion // "-")\t\(.html_url)"' |
     sort -t "$(printf '\t')" -k1,1 -k2,2 -k3,3n |
-    awk -F'\t' '{ row[NR] = $4 "\t" $5 "\t" $6 "\t" $7 "\t" $8; name[NR] = $1; concl[NR] = $7; lastrow[$1] = NR }
-      END { for (i = 1; i <= NR; i++) if (!(concl[i] ~ /^(cancelled|skipped)$/ && lastrow[name[i]] > i)) print row[i] }'
+    awk -F'\t' -v suites="$run/.ci-suites" '
+      BEGIN { while ((getline l < suites) > 0) { split(l, s, "\t"); wf[s[1]] = s[2] } }
+      {
+        key = ($4 in wf) ? $1 SUBSEP wf[$4] : $1 SUBSEP "suite " $4
+        row[NR] = $5 "\t" $6 "\t" $7 "\t" $8 "\t" $9; name[NR] = $1; concl[NR] = $8; k[NR] = key
+        if (!(key in first)) { first[key] = NR; keys[++nk] = key }
+        last[key] = NR
+        if ($8 !~ /^(cancelled|skipped)$/) done[key] = NR
+      }
+      END {
+        # One result per check, workflow and event.
+        for (i = 1; i <= nk; i++) { key = keys[i]; pick = (key in done) ? done[key] : last[key]; keep[pick] = 1; lastname[name[pick]] = pick > lastname[name[pick]] ? pick : lastname[name[pick]] }
+        # Without workflow information: drop a cancelled or skipped run that a later run of the same check replaced.
+        for (i = 1; i <= NR; i++) if (keep[i] && !(concl[i] ~ /^(cancelled|skipped)$/ && lastname[name[i]] > i)) print row[i]
+      }'
   gh api "repos/{owner}/{repo}/commits/${head_sha}/status" \
     --jq '.statuses[] | "status\t\(.context)\t\(.state)\t-\t\(.target_url // "")"'
 } > "$run/ci.txt"
+rm -f "$run/.ci-suites"
 
 # GitHub works out mergeability in the background; ask again for a few seconds if it is
 # not known yet. States: clean, unstable (checks failing), blocked (protection rules),

@@ -15,7 +15,8 @@ Finding prefix: `TEST`. Categories: `untested-behaviour`, `hollow-test`,
 
 From the diff, list each new or changed behaviour: a function's result, a branch, an error
 path, an endpoint, a UI state, a migration. If spec material exists in `<RUN_DIR>/spec/`,
-add each acceptance criterion.
+add each acceptance criterion: you work from the spec, so read the task's own spec files
+(directly under `<RUN_DIR>/spec/`) to their end.
 
 ### 2. Map each behaviour to a test
 

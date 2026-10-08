@@ -40,7 +40,11 @@ resource: a review that asks twenty questions is not read.
    scope label, and your own recommendation, citing why. Each option's text must stand on
    its own, conditions included: the apply step records the chosen option, not your
    recommendation. An option that needs a path outside the owned paths says
-   "Owned paths: + `path`". Prefer the option that stays within the issue. Order questions
+   "Owned paths: + `path`". Prefer the option that stays within the issue. Write the
+   question's "Edges" line: work through boundary inputs, every point where concurrent calls
+   can interleave, cases where an edit and an assumption both apply, the artifact that
+   counts as evidence, and whether each list is complete or a minimum, and settle each that
+   applies. Questions that escaped earlier readiness reviews were mostly these edges. Order questions
    by consequence; keep at most seven; turn the rest into assumptions marked "(would have
    asked)".
 6. **Write each assumption** with every line it makes stale, from the scout's list, one per
