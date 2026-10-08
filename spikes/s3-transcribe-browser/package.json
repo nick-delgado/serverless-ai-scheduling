@@ -1,0 +1,23 @@
+{
+  "name": "@sched/spike-s3-transcribe-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike S-3 (#10): browser AudioWorklet PCM -> Amazon Transcribe Streaming over WebSocket with Identity Pool credentials; stop->final latency and browser behaviour. Local-only; never deployed. Informs ADR-006.",
+  "scripts": {
+    "config": "tsx config.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "bundle-size": "vite build && tsx bundle-size.ts",
+    "summarize": "tsx summarize.ts",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-transcribe": "^3.1147.0",
+    "@aws-sdk/client-transcribe-streaming": "^3.1147.0",
+    "aws-amplify": "^6.22.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0"
+  }
+}

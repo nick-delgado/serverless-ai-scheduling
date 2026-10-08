@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>S-3 Transcribe spike</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ok: #1a7f37;
+        --bad: #cf222e;
+        --muted: #6e7781;
+        --line: #d0d7de;
+        --accent: #0969da;
+      }
+      body {
+        font:
+          16px/1.4 system-ui,
+          -apple-system,
+          sans-serif;
+        margin: 0 auto;
+        max-width: 760px;
+        padding: 12px 16px 64px;
+      }
+      h1 {
+        font-size: 1.2rem;
+        margin: 0.4rem 0;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 1.2rem 0 0.4rem;
+        border-bottom: 1px solid var(--line);
+      }
+      section {
+        margin-bottom: 0.6rem;
+      }
+      button,
+      select,
+      input {
+        font: inherit;
+        padding: 6px 10px;
+        margin: 2px 0;
+      }
+      button.big {
+        font-size: 1.3rem;
+        padding: 14px 22px;
+        min-width: 9rem;
+      }
+      #send {
+        background: var(--accent);
+        color: white;
+        border: 0;
+        border-radius: 6px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .bad {
+        color: var(--bad);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      #script {
+        font-size: 1.35rem;
+        line-height: 1.5;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      #timer {
+        font:
+          600 1.6rem ui-monospace,
+          monospace;
+      }
+      #level {
+        width: 120px;
+        height: 10px;
+      }
+      #partial {
+        min-height: 2.5em;
+        font-style: italic;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 3px 6px;
+        text-align: left;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.85rem;
+      }
+      label {
+        display: block;
+        margin: 4px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Spike S-3: browser → Amazon Transcribe Streaming (#10)</h1>
+    <p class="muted">Local-only measurement page. Never deployed. Synthetic scripts only.</p>
+
+    <h2>1. Environment</h2>
+    <section id="env"></section>
+    <label
+      >Browser being measured
+      <select id="browser">
+        <option value="ios-safari">iOS Safari</option>
+        <option value="android-chrome">Android Chrome</option>
+        <option value="chrome-desktop">Chrome (desktop)</option>
+        <option value="safari-macos">Safari (macOS)</option>
+        <option value="firefox">Firefox (best effort)</option>
+        <option value="edge">Edge (best effort)</option>
+      </select>
+    </label>
+
+    <h2>2. Sign in (demo patient on dev)</h2>
+    <section>
+      <div class="row">
+        <input id="username" autocomplete="off" autocapitalize="none" value="maria.santos" />
+        <input id="password" type="password" autocomplete="off" placeholder="password" />
+        <button id="signin">Sign in</button>
+        <button id="signout">Sign out</button>
+      </div>
+      <div id="auth-status" class="muted"></div>
+      <div class="row">
+        <button id="scope">Check role scope</button>
+        <button id="probe">Probe 16 kHz AudioContext</button>
+      </div>
+      <pre id="scope-result"></pre>
+    </section>
+
+    <h2>3. Run</h2>
+    <section>
+      <div class="row">
+        <label
+          >Length
+          <select id="length">
+            <option value="5s">~5 s</option>
+            <option value="20s">~20 s</option>
+            <option value="60s">~60 s (runs into auto-send)</option>
+          </select>
+        </label>
+        <label
+          >Variant
+          <select id="variant">
+            <option value="main">main (no stabilization)</option>
+            <option value="stabilized">stabilization on</option>
+          </select>
+        </label>
+        <label
+          >Deliberate check
+          <select id="check">
+            <option value="none">none</option>
+            <option value="lock-screen">lock screen mid-recording</option>
+            <option value="tab-switch">switch tab mid-recording</option>
+            <option value="reload">reload mid-recording</option>
+          </select>
+        </label>
+      </div>
+      <div id="script"></div>
+      <div class="row" style="margin-top: 10px">
+        <button id="start" class="big">Start</button>
+        <button id="send" class="big" disabled>Send</button>
+        <button id="cancel" disabled>Cancel</button>
+        <span id="timer">0:00</span>
+        <meter id="level" min="0" max="0.3" value="0"></meter>
+      </div>
+      <div id="run-status" class="muted"></div>
+      <div id="partial"></div>
+      <pre id="last"></pre>
+    </section>
+
+    <h2>4. Progress</h2>
+    <section id="progress"></section>
+
+    <h2>5. Behaviour checklist (r1/Q-5)</h2>
+    <section id="checklist"></section>
+
+    <h2>6. Export</h2>
+    <section>
+      <div class="row">
+        <button id="save">Save results to the Mac</button>
+        <button id="download">Download JSON</button>
+        <button id="clear">Clear this browser's runs</button>
+      </div>
+      <div id="export-status" class="muted"></div>
+    </section>
+
+    <h2>Runs</h2>
+    <section id="runs"></section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
