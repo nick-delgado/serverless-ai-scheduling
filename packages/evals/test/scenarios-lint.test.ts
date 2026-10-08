@@ -2,20 +2,23 @@
  * Scenario lint (#33, replaced by the real schema in #30). Structure is the loader's job: every file must
  * parse and satisfy the Zod schema (`src/schema.ts`), id = file name, category = folder. On top of that,
  * this checks what a schema can't: ids that exist in the `clinic-default` fixture, the ADR-008 budget,
- * and the coverage the scenarios README promises. It also warns, without failing, about judge dimensions
+ * the coverage the scenarios README promises, and that an L1 case whose context ends with a successful
+ * write result expects the reply to quote that result's `start_local` in full (#216, decision #202
+ * `779e407/SPEC-1`). It also warns, without failing, about judge dimensions
  * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LIMITS } from "@sched/contracts";
+import { LIMITS, TOOLS } from "@sched/contracts";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
   allStrings,
   CONVERSATION_OWNERSHIP_TEST,
+  isWriteTool,
   loadScenarios,
   selectSuite,
   unrubricedInUse,
@@ -147,6 +150,34 @@ describe("eval scenarios (coverage)", () => {
   it("includes scenarios after the Nov 1 DST change", () => {
     expect(scenarios.filter((s) => s.tags.includes("dst")).length).toBeGreaterThanOrEqual(2);
   });
+});
+
+describe("eval scenarios (write confirmations)", () => {
+  /**
+   * L1 cases whose context ends with a successful `book_appointment` or `reschedule_appointment` result,
+   * so the model's next reply is the write confirmation (#216 r1/Q-1 (b)), each with that result's
+   * `appointment.start_local` (the schema has already checked the result against the tool's contract).
+   */
+  const confirmations = l1.flatMap((c) => {
+    const last = c.context.at(-1);
+    if (last === undefined || !("tool_result" in last) || !("result" in last.tool_result)) return [];
+    const { tool, result } = last.tool_result;
+    if (!isWriteTool(tool)) return [];
+    return [[c.id, c, TOOLS[tool].output.parse(result).appointment.start_local] as const];
+  });
+
+  it("selects the cases whose context ends with a successful write result", () => {
+    expect(confirmations.map(([id]) => id)).toEqual(
+      expect.arrayContaining(["l1-book-already-booked-confirms", "l1-reschedule-same-slot-retry"]),
+    );
+  });
+
+  it.each(confirmations)(
+    "%s: the reply must quote the write result's start_local in full (#202 779e407/SPEC-1)",
+    (_id, c, startLocal) => {
+      expect(c.expect.response?.contains_all ?? []).toContain(startLocal);
+    },
+  );
 });
 
 describe("eval scenarios (judge rubrics)", () => {
