@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #41, ADR-003 ([2026-10-08 amendment](../adr/0003-iac-layout.md#amendment-2026-10-08-ci-roles-through-github-oidc-41)), #34, #40, #157
+**Related:** #41, PR #224, ADR-003 ([2026-10-08 amendment](../adr/0003-iac-layout.md#amendment-2026-10-08-ci-roles-through-github-oidc-41)), #34, #40, #157
 
 ## What happened
 
