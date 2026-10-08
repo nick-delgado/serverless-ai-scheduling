@@ -39,6 +39,11 @@ export function resetMockApi(): void {
  * This dispatcher gives every request a client of its own (from the `undici` package), closed as soon
  * as its request is dispatched: it finishes that request, then closes its connection and takes no
  * other, so no request shares a connection with another. Nothing is retried.
+ *
+ * Why not undici's `new Agent({ pipelining: 0 })`, which turns keep-alive off: it passes node.test.ts
+ * too (on Node 24.21.0 and 26.9.0, run once by hand in PR #214's review round), so no test shows that
+ * it falls short; we kept this class on untested reasoning, that a pool shared per origin may still
+ * reopen a connection for an aborted request, which a client closed after its one request cannot.
  */
 class ConnectionPerRequest extends Dispatcher {
   override dispatch(options: Dispatcher.DispatchOptions, handler: Dispatcher.DispatchHandler): boolean {
