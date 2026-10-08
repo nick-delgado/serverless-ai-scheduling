@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #10 (spike S-3), #29, ADR-006, PRD FR-020–FR-023, NFR-002, NFR-006
+**Related:** #10 (spike S-3), PR #225, #29, ADR-006, PRD FR-020–FR-023, NFR-002, NFR-006
 
 ## What happened
 
