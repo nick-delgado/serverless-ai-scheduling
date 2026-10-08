@@ -14,15 +14,18 @@ Process batch 8 (`improve-agent-process`, after waves A and B) found the same ca
 
 ## Why we chose what we chose
 
-Nick settled the open questions before work started (decision lines in #216). The choices the agent made inside them:
+Nick settled the open questions before work started (decision lines in #216). Two of the test's design points came from #216's readiness review, as assumptions Nick confirmed:
 
-- **The selection test uses `expect.arrayContaining`** with the two known ids (A-1), so a selection bug fails a named test rather than leaving an empty `it.each`, and a case #201 adds is checked without editing the test.
-- **The result is read through the tool's contract** (`TOOLS[tool].output.parse(result).appointment.start_local`) rather than a cast. The schema has already validated the result, so the parse can't fail on a selected case, and both write outputs share the `appointment` field.
+- **The selection test uses `expect.arrayContaining`** with the two known ids (A-1), so a case #201 adds is checked without editing the test. Dropping one of the two known cases from the selection fails the named test; a selection that picks up extra cases is not tested, because no case on `main` has a write result followed by another item (Nick's decision `0667fde/TEST-1` (a) on PR #217).
 - **The lint matches exact strings** (A-2), so an entry that only contains `start_local` inside a longer string fails, although the grader's case-insensitive substring match would accept it. One mutation shows it.
+
+The one choice the spec left open, which the agent made:
+
+- **The result is read through the tool's contract** (`TOOLS[tool].output.parse(result).appointment.start_local`) rather than a cast. The schema has already validated the result, so the parse can't fail on a selected case, and both write outputs share the `appointment` field.
 
 ## What surprised us
 
-- **The obvious selection mutation was an ERROR, not a KILLED row.** Inverting the write-tool filter (`if (isWriteTool(tool))`) sent non-write results into `TOOLS[tool].output.parse`, which threw while Vitest collected the tests, so `npm run mutate` reported a failed run with no failing test. The agent replaced it with a mutation that narrows the selection to `book_appointment` only, which the selection test catches.
+- **The obvious selection mutation was an ERROR, not a KILLED row.** Inverting the write-tool filter (`if (isWriteTool(tool))`) sent non-write results through `TOOLS[tool].output.parse`, which passed them (the loader had already validated them), and the `.appointment.start_local` read then threw (`TypeError: Cannot read properties of undefined (reading 'start_local')`) while Vitest collected the tests, so `npm run mutate` reported a failed run with no failing test. The agent replaced it with a mutation that narrows the selection to `book_appointment` only, which the selection test catches.
 - **Nothing else in the instructions named the template's sections in a way the change made false.** The agent searched the repository (excluding `.agents/` and the journal) for the section names and `pull_request_template`; the hits in `task-workflow` and `dev-journal` still read true (A-7).
 
 ## Evidence
