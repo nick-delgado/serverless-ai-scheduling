@@ -70,3 +70,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-07 | [Three rules that lived in two or three places now live in one](2026-10-07-three-rules-each-written-once.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [A reschedule that loses the race to its identical twin now answers already_rescheduled, and on DynamoDB Local it fails all three conditions](2026-10-07-the-losing-twin-move-is-a-retry-too.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [The scroll test's closed socket was a connection MSW handed to the real network](2026-10-07-the-closed-socket-was-a-passthrough.md) | 4. Teaching the agent to schedule |
+| 2026-10-08 | [An owner decision now wins over an agent's own reading, and a lint holds write confirmations to the full date](2026-10-08-owner-decisions-win-over-an-agents-reading.md) | 5. What the evals showed |
