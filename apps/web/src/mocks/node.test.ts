@@ -1,18 +1,11 @@
 // These tests open a real TCP server and watch Undici's sockets, so they need Node's own modules.
 /// <reference types="node" />
 /**
- * The test transport (#206): how the web tests' `fetch` reaches the mock API (`connectionPerRequest`,
- * node.ts).
- *
- * Node's `fetch` is Undici, and MSW answers it at the socket level, so Undici's pool holds the mock's
- * connections. A connection the client reads from but hasn't written to within a `setImmediate` looks
- * to MSW's interceptor like a protocol where the server speaks first, so it passes the connection
- * through to the real network. Node 26's bundled Undici (8.10.2) reopens the connection of a request
- * aborted mid-response and writes nothing to it, and the pool sends a later request over it. When that
- * real connection fails (refused, in the web tests, where nothing listens at the page's origin), the
- * request fails with it. The second test forces that with a real server that resets its connection;
- * on Node 24 (Undici 7) the reopened connection is destroyed before any request uses it, so that test
- * passes there with or without the fix, and the first test is the one that checks the fix there.
+ * The test transport (#206): how the web tests' `fetch` reaches the mock API (`connectionPerRequest`;
+ * node.ts's header says why the mock's connections can fail). The second test forces that failure with
+ * a real server that resets its connection. On Node 24 (Undici 7) the reopened connection is destroyed
+ * before any request uses it, so that test passes there with or without the fix, and the first test is
+ * the one that checks the fix there.
  */
 import { subscribe, unsubscribe } from "node:diagnostics_channel";
 import { createServer, type Socket } from "node:net";
@@ -20,10 +13,15 @@ import { createServer, type Socket } from "node:net";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { gate } from "../chat/testUtils";
+import { createChatApi } from "../chat/api";
+import { gate, until } from "../chat/testUtils";
 import { server } from "./node";
 
-/** Run real `setImmediate` hops until `condition` holds or `maxHops` have passed. */
+/**
+ * Run real `setImmediate` hops until `condition` holds or `maxHops` have passed, without failing. It is
+ * for a fixed pause and for waits that may never hold (with the fix, nothing reconnects); a wait that
+ * must hold uses `until`.
+ */
 async function hopsUntil(condition: () => boolean, maxHops: number): Promise<void> {
   for (let hop = 0; hop < maxHops && !condition(); hop += 1) {
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -87,22 +85,20 @@ function recordRequestSockets(): object[] {
 describe("the test transport (#206)", () => {
   it("sends each mock API request over a connection of its own", async () => {
     const sockets = recordRequestSockets();
-    const session = await fetch("/api/session", { method: "POST" });
-    await session.text();
+    const api = createChatApi();
+    await api.getSession();
     // A few hops let the session's connection go back to Undici's pool, as the page's render does
     // before it sends; a pool would then send the chat over it.
     await hopsUntil(() => false, 20);
-    const chat = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientMessageId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", text: "Hi" }),
-    });
-    await chat.text();
+    await api.sendChat(
+      { clientMessageId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", text: "Hi" },
+      () => undefined,
+    );
     expect(sockets).toHaveLength(2);
     expect(sockets[1]).not.toBe(sockets[0]);
   });
 
-  it("keeps a request on the mock when the connection Undici reopened after an aborted request fails", async () => {
+  it("keeps a request on the mock when the connection Undici reopened after an aborted request fails (forces the failure on Node 26's Undici 8.10)", async () => {
     const real = await startRealServer();
     const reachedHandler = gate();
     const answer = gate();
@@ -159,10 +155,9 @@ describe("the test transport (#206)", () => {
 
   it("closes each connection once its response has ended", async () => {
     const sockets = recordRequestSockets();
-    const session = await fetch("/api/session", { method: "POST" });
-    await session.text();
+    await createChatApi().getSession();
     const socket = sockets[0] as { destroyed: boolean } | undefined;
-    await hopsUntil(() => socket?.destroyed === true, 200);
+    await until(() => socket?.destroyed === true);
     expect(socket?.destroyed).toBe(true);
   });
 });

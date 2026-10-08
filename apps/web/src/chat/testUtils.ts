@@ -12,8 +12,8 @@
  * gives up only after both a number of hops and a time floor have passed. The files #134 converted
  * (`ChatPage.test.tsx`, `ChatPage.errors`, `.restore` and `.auth`, `useChat.test.tsx`) and
  * `testUtils.test.ts` raise their test timeout (`vi.setConfig({ testTimeout: 20_000 })`), since a loaded
- * runner's hops can outlast the 5 s default; `ChatPage.voice.test.tsx` and `mocks/handlers.test.ts`
- * also wait with `until` and keep the default.
+ * runner's hops can outlast the 5 s default; `ChatPage.voice.test.tsx`, `mocks/handlers.test.ts` and
+ * `mocks/node.test.ts` also wait with `until` and keep the default.
  */
 import { type ChatRequest, type ChatStreamEvent, encodeStreamEvent } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
