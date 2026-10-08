@@ -100,7 +100,7 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       l = line; gsub(/\\\|/, "\034", l); split(l, c, "|")
       aid = trim(c[2]); atext[aid] = trim(c[3]); gsub(/\034/, "|", atext[aid]); aorder[++na] = aid
       st = trim(c[5]); gsub(/\034/, "|", st); gsub(/ *<br *\/?> */, "; ", st)
-      if (tolower(st) !~ /^(nothing|none|n\/a|-|—)?\.?$/) stale[aid] = st
+      if (tolower(st) !~ /^(nothing|none|n\/a|-|—)?([ .:;(]|$)/) stale[aid] = st
       if (atext[aid] ~ /\(verify first\)|\(would have asked\)/) aflag[aid] = 1
       if (atext[aid] ~ /replaces r[0-9]+\/[QAE]-[0-9]+/) { r = atext[aid]; match(r, /replaces r[0-9]+\/[QAE]-[0-9]+/); supersedes[aid] = substr(r, RSTART + 9, RLENGTH - 9) }
       next
@@ -143,8 +143,17 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       text = a; chosen = ""
       if (a ~ /^\(?[a-z]\)?([ ,.]|$)/) { l = a; gsub(/[()]/, "", l); l = substr(l, 1, 1); if ((q, l) in opt) { text = "(" l ") " opt[q, l]; chosen = l } }
       # An option that widens the owned paths.
+      # Every path in "Owned paths: + `a`, `b` and `c`": the list ends at the first text that
+      # is not a path or a separator, so a backticked word in a following note is not taken.
       t = text
-      while (match(t, /\+ `[^`]+`/)) { path = substr(t, RSTART + 3, RLENGTH - 4); addpath[++npath] = path; t = substr(t, RSTART + RLENGTH) }
+      while ((p = index(t, "Owned paths: +")) > 0) {
+        t = substr(t, p + length("Owned paths: +"))
+        while (match(t, /^([ ,]|and |\+)*`[^`]+`/)) {
+          seg = substr(t, 1, RLENGTH); t = substr(t, RLENGTH + 1)
+          match(seg, /`[^`]+`$/); path = substr(seg, RSTART + 1, RLENGTH - 2)
+          if (!(path in seenpath)) { seenpath[path] = 1; addpath[++npath] = path }
+        }
+      }
       link = (q in url) ? " ([answer](" url[q] "))" : " (accept all" ((("ALL" in url) ? ", [answer](" url["ALL"] ")" : "")) ")"
       entries = entries "- **r" k "/" q "** (settled against `" spec "`): " qtext[q] " → " text link "\n"
       if (edges[q] != "" && tolower(edges[q]) !~ /^none/) entries = entries "  - edges: " edges[q] "\n"
@@ -183,14 +192,15 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
         if (p && L[j] ~ /[^ \t]/) last = j
       }
       if (p) {
+        for (j = p + 1; j <= last; j++) for (z = 1; z <= npath; z++) if (index(L[j], "`" addpath[z] "`")) listed[z] = 1
         nb2 = ""
         for (j = 1; j <= m; j++) {
           nb2 = nb2 (j > 1 ? "\n" : "") L[j]
-          if (j == last) for (z = 1; z <= npath; z++) nb2 = nb2 "\n- `" addpath[z] "`"
+          if (j == last) for (z = 1; z <= npath; z++) if (!listed[z]) nb2 = nb2 "\n- `" addpath[z] "`"
         }
         done = 1
       }
-      if (done) { b = nb2; for (z = 1; z <= npath; z++) log_applied = log_applied "- owned path added: `" addpath[z] "`\n" }
+      if (done) { b = nb2; for (z = 1; z <= npath; z++) log_applied = log_applied "- owned path " (listed[z] ? "already listed" : "added") ": `" addpath[z] "`\n" }
       else log_skipped = log_skipped "- owned paths to add, but the description has no Owned paths section: " npath " path(s)\n"
     }
 

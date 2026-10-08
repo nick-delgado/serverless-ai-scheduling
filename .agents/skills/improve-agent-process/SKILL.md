@@ -2,7 +2,7 @@
 name: improve-agent-process
 description: Turn the findings of several agent PR reviews into one batched pull request that improves the project's agent setup. Reads the tracking issue where the review-agent-pr skill logs why agents produced each finding, counts which causes recur across reviews, selects the proposed changes to docs, skills, prompts, tests and CI checks that are worth making, checks them against the current code, and opens a single PR after the user approves the selection. Also measures whether earlier changes, the project's and the review harness's, worked, and checks the reviewer's own quality. Use when asked to improve, update or fix the agent process, instructions or skills from review findings, to act on the agent process tracking issue, or to log a process incident that happened outside a PR.
 metadata:
-  harness-version: "2026.10.08.1"
+  harness-version: "2026.10.08.2"
 ---
 
 # Improve the agent process from review findings
