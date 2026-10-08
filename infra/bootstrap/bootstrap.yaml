@@ -2,7 +2,9 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   sched-bootstrap — one-time, admin-deployed foundation for the AI scheduling assistant.
   Creates the CloudFormation execution role (and the permissions boundary every
-  workload role must carry), the SAM artifact bucket, and a monthly budget alarm.
+  workload role must carry), the SAM artifact bucket, a monthly budget alarm and a
+  Bedrock budget alarm, and GitHub's OIDC provider with one short-lived role per
+  CI workflow (deploy, eval gate, E2E).
   See docs/runbooks/aws-setup.md and docs/adr/0003-iac-layout.md.
 
 Parameters:
@@ -15,6 +17,17 @@ Parameters:
     Type: String
     AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
     Description: Email address that receives budget alerts.
+  BedrockBudgetLimitUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Monthly Amazon Bedrock budget (USD), mostly the CI eval gate; alerts at 80% actual and 100% forecast.
+  BedrockBudgetServices:
+    Type: CommaDelimitedList
+    Default: Amazon Bedrock
+    Description: >-
+      The Cost Explorer service names the Bedrock budget counts. Check them in Cost Explorer (group by Service)
+      after the first eval runs: model charges may appear under other names (runbook, "CI credentials").
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -147,12 +160,18 @@ Resources:
                   - iam:UpdateAssumeRolePolicy
                   - iam:PassRole
                 Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-*
+              # The CI roles below are sched-* roles too, so ManageWorkloadRoles would otherwise let a stack
+              # rewrite their trust (UpdateAssumeRolePolicy) or delete them.
               - Sid: ProtectBootstrapIdentities
                 Effect: Deny
                 Action: iam:*
                 Resource:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-cfn-exec
                   - !Ref WorkloadPermissionsBoundary
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-deploy
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-evals
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-e2e
+                  - !Ref GitHubOidcProvider
               - Sid: NoBoundaryRemoval
                 Effect: Deny
                 Action: iam:DeleteRolePermissionsBoundary
@@ -234,6 +253,319 @@ Resources:
             - SubscriptionType: EMAIL
               Address: !Ref BudgetAlertEmail
 
+  # Amazon Bedrock spend, which the CI eval gate (#34) adds on every PR that changes the agent. The gate keeps
+  # its own --max-cost per run; this alert catches the sum.
+  BedrockBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: sched-bedrock-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BedrockBudgetLimitUsd
+          Unit: USD
+        CostFilters:
+          Service: !Ref BedrockBudgetServices
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+  # ---------------------------------------------------------------------------
+  # CI credentials (#41): GitHub's OIDC provider and one role per workflow, each with its own grants, so no
+  # workflow gets the union of the three. The roles carry no permissions boundary: the deploy and E2E roles
+  # need iam:PassRole on sched-cfn-exec, which the boundary denies (sched-cfn-exec has none either).
+  # ProtectBootstrapIdentities (above) keeps sched-cfn-exec, and so every stack, off them.
+  #
+  # Trust: every subject uses the repository's immutable form (owner and repository IDs) with the subject
+  # customization the runbook sets (claim keys repo, context, job_workflow_ref), so a renamed or recreated
+  # repository can't match. The exact strings are confirmed from each workflow's first run (runbook, "CI
+  # credentials (GitHub OIDC)"); scripts/bootstrap-template.test.ts pins them.
+  # ---------------------------------------------------------------------------
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  # .github/workflows/deploy.yml: workflow_dispatch from main, in the `dev` GitHub Environment, deploys dev
+  # with scripts/deploy.sh and scripts/deploy-web.sh (r1/Q-1, r1/A-4).
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sched-github-deploy
+      Description: GitHub Actions deploy workflow (deploy.yml, dev environment, main) deploys dev.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:environment:dev:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/deploy.yml@refs/heads/main"
+      Policies:
+        # Copied from infra/bootstrap/sched-deployer-policy.json (the statements the two scripts use), narrowed
+        # to dev and without DeleteStack, drift, debugging, seeding, Bedrock or SES. Keep in sync with it.
+        - PolicyName: sched-github-deploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Identity
+                Effect: Allow
+                Action: sts:GetCallerIdentity
+                Resource: "*"
+              - Sid: CloudFormationReadAndValidate
+                Effect: Allow
+                Action:
+                  - cloudformation:ValidateTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:ListStacks
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ListExports
+                Resource: "*"
+              - Sid: CloudFormationDriveDevStacks
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ListChangeSets
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:ListStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:TagResource
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/sched-dev-*/*
+              - Sid: SamTransform
+                Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+              - Sid: PassOnlyTheCfnExecutionRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CfnExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+              - Sid: ArtifactAndDevSiteBuckets
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub ${ArtifactBucket.Arn}/*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*/*
+              # Distribution IDs are random, so this is every distribution in the account; invalidation only.
+              - Sid: SpaInvalidation
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                Resource: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+              - Sid: SsmBootstrapAndDevParameters
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/bootstrap/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/dev/*
+
+  # .github/workflows/evals.yml (#34): the CI eval gate on same-repository pull requests. Only the pull request
+  # number is wildcarded (r1/A-5). Bedrock only, on the development-default profile and the default judge:
+  # sonnet-4.6 (agent, simulator, refusal fallback) and haiku-4.5 (judge). If #37 changes the default, this
+  # role needs a bootstrap change.
+  GitHubEvalsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sched-github-evals
+      Description: GitHub Actions CI eval gate (evals.yml, pull requests) calls Bedrock on the eval profiles.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:pull_request:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/evals.yml@refs/pull/*/merge"
+      Policies:
+        - PolicyName: sched-github-evals
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Copied from infra/stacks/api.yaml (InvokeAgentModels, the sonnet-4.6 and haiku-4.5 lines). The US
+              # cross-region inference profiles route to the foundation model in several US regions, hence `*`.
+              - Sid: InvokeEvalModels
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+
+  # .github/workflows/e2e.yml (#40): on-demand E2E against the `e2e` env, in the `e2e` GitHub Environment,
+  # whose deployment-branch rule decides which branches may run it (r1/Q-2 (b)); so the ref after
+  # `e2e.yml@refs/heads/` is the one wildcard. Full e2e lifecycle without DeleteStack: deploy, publish the
+  # SPA, reseed (seed-users.ts, seed-data.ts, --reset included). Nothing on dev.
+  GitHubE2eRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sched-github-e2e
+      Description: GitHub Actions E2E workflow (e2e.yml, e2e environment) deploys, seeds and tests the e2e env.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:environment:e2e:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/e2e.yml@refs/heads/*"
+      Policies:
+        # Copied from infra/bootstrap/sched-deployer-policy.json, narrowed to e2e. Keep in sync with it.
+        - PolicyName: sched-github-e2e
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Identity
+                Effect: Allow
+                Action: sts:GetCallerIdentity
+                Resource: "*"
+              - Sid: CloudFormationReadAndValidate
+                Effect: Allow
+                Action:
+                  - cloudformation:ValidateTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:ListStacks
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ListExports
+                Resource: "*"
+              - Sid: CloudFormationDriveE2eStacks
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ListChangeSets
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:ListStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:TagResource
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/sched-e2e-*/*
+              - Sid: SamTransform
+                Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+              - Sid: PassOnlyTheCfnExecutionRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CfnExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+              - Sid: ArtifactAndE2eSiteBuckets
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub ${ArtifactBucket.Arn}/*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-e2e-web-*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-e2e-web-*/*
+              - Sid: SpaInvalidation
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                Resource: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+              - Sid: SsmBootstrapAndE2eParameters
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/bootstrap/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/e2e/*
+              # SeedAndEvalData, narrowed to e2e tables (seed-data.ts, including --reset).
+              - Sid: SeedE2eData
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:BatchGetItem
+                Resource:
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*/index/*
+              # The calls scripts/seed-users.ts makes. User pool ARNs carry a random ID, so the pool is chosen by the
+              # `env` tag that scripts/deploy.sh puts on the stack (verify first: that the auth stack's pool carries
+              # it and that Cognito evaluates it for these calls; #40's first run shows it).
+              - Sid: SeedE2eUsers
+                Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminGetUser
+                Resource: !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/env: e2e
+
   # ---------------------------------------------------------------------------
   # Discovery parameters for the workload stacks and scripts
   # ---------------------------------------------------------------------------
@@ -268,3 +600,14 @@ Outputs:
   ArtifactBucketName:
     Description: S3 bucket for SAM/CloudFormation artifacts (--s3-bucket).
     Value: !Ref ArtifactBucket
+  # Copied by hand into GitHub secrets (runbook, "CI credentials (GitHub OIDC)"); a workflow can't read SSM
+  # before it has credentials, so these are not SSM parameters.
+  GitHubDeployRoleArn:
+    Description: The `dev` environment secret AWS_DEPLOY_ROLE_ARN (deploy.yml).
+    Value: !GetAtt GitHubDeployRole.Arn
+  GitHubEvalsRoleArn:
+    Description: The repository secret AWS_EVAL_ROLE_ARN (the CI eval gate, #34).
+    Value: !GetAtt GitHubEvalsRole.Arn
+  GitHubE2eRoleArn:
+    Description: The `e2e` environment secret AWS_E2E_ROLE_ARN (the E2E workflow, #40).
+    Value: !GetAtt GitHubE2eRole.Arn
