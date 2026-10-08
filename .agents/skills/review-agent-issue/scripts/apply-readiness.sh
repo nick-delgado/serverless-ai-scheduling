@@ -22,7 +22,11 @@
 #   found verbatim, exactly once, or it is not applied.
 # - An option chosen with "Owned paths: + `path`" adds each path to the Owned paths section.
 # - The "Decisions and clarifications" section is created or extended; an entry that a later
-#   round replaces is marked "superseded", never deleted.
+#   round replaces is marked "superseded", never deleted. Each question's entry keeps the
+#   options not chosen; each assumption keeps the lines it makes stale; the round's Reuse
+#   pointers are carried over, since the coding agent reads the description, not the review.
+# - Inside a fenced block (an edit's Before or After text) nothing is structure: a "##"
+#   heading there is text to apply, not the end of the edit.
 
 set -euo pipefail
 
@@ -59,12 +63,26 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
   sed 's/^/BODY\t/' "$body"
 } | awk -F'\t' -v k="$k" -v out_body="$run/issue-body.new.md" -v out_log="$run/applied.md" '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-  function strip_ticks(s) { gsub(/`/, "", s); return s }
+  function staled(x) { return (x in stale) ? " (makes stale: " stale[x] ")" : "" }
 
   $1 == "ANS" { ans[$2] = $3; url[$2] = $4; next }
 
   $1 == "ROUND" {
     line = substr($0, 7)
+    # Fenced blocks: their lines are text, never structure.
+    if (fence != "") {
+      if (index(line, fence) == 1 && line ~ /^(`+|~+)[ \t]*$/) { fence = ""; next }
+      if (mode == "e" && part == "before") before[eid] = before[eid] (hasb[eid]++ ? "\n" : "") line
+      else if (mode == "e" && part == "after") after[eid] = after[eid] (hasa[eid]++ ? "\n" : "") line
+      next
+    }
+    if (match(line, /^(```+|~~~+)/)) { fence = substr(line, 1, RLENGTH); next }
+    # The Reuse pointers: the bullet and its indented continuation lines.
+    if (inreuse) {
+      if (line ~ /^[ \t]+[^ \t]/) { reuse = reuse "\n" line; next }
+      inreuse = 0
+    }
+    if (line ~ /^- \*\*Reuse:\*\*/) { reuse = line; sub(/^- \*\*Reuse:\*\* */, "", reuse); inreuse = 1; next }
     if (line ~ /^Round: / && match(line, /Spec commit: [0-9a-f]+/)) spec = substr(line, RSTART + 13, 7)
     if (line ~ /^\*\*Check these first:\*\*/) {
       s = line; sub(/^\*\*Check these first:\*\* */, "", s); gsub(/[ `]/, "", s)
@@ -73,11 +91,16 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
     if (line ~ /^#### Q-[0-9]+:/) { cur = line; sub(/^#### /, "", cur); qid = cur; sub(/:.*/, "", qid); qtext[qid] = trim(substr(cur, length(qid) + 2)); qorder[++nq] = qid; mode = "q"; next }
     if (line ~ /^#### E-[0-9]+:/) { cur = line; sub(/^#### /, "", cur); eid = cur; sub(/:.*/, "", eid); etitle[eid] = trim(substr(cur, length(eid) + 2)); eorder[++ne] = eid; mode = "e"; part = ""; next }
     if (line ~ /^#{2,4} /) { mode = ""; next }
-    if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); next }
+    if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); letters[qid] = letters[qid] letter; next }
+    if (mode == "q" && line ~ /^- \*\*Edges:\*\* /) { l = line; sub(/^- \*\*Edges:\*\* */, "", l); edges[qid] = l; inedges = qid; next }
+    if (mode == "q" && inedges != "" && line ~ /^[ \t]+[^ \t-]/) { edges[inedges] = edges[inedges] " " trim(line); next }
+    inedges = ""
     if (mode == "q" && line ~ /^- \*\*Recommendation:\*\* \([a-z]\)/) { l = line; sub(/^- \*\*Recommendation:\*\* \(/, "", l); rec[qid] = substr(l, 1, 1); next }
     if (line ~ /^\| A-[0-9]+ \|/) {
       l = line; gsub(/\\\|/, "\034", l); split(l, c, "|")
       aid = trim(c[2]); atext[aid] = trim(c[3]); gsub(/\034/, "|", atext[aid]); aorder[++na] = aid
+      st = trim(c[5]); gsub(/\034/, "|", st); gsub(/ *<br *\/?> */, "; ", st)
+      if (tolower(st) !~ /^(nothing|none|n\/a|-|—)?\.?$/) stale[aid] = st
       if (atext[aid] ~ /\(verify first\)|\(would have asked\)/) aflag[aid] = 1
       if (atext[aid] ~ /replaces r[0-9]+\/[QAE]-[0-9]+/) { r = atext[aid]; match(r, /replaces r[0-9]+\/[QAE]-[0-9]+/); supersedes[aid] = substr(r, RSTART + 9, RLENGTH - 9) }
       next
@@ -85,8 +108,6 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
     if (mode == "e") {
       if (line ~ /^Before:/) { part = "before"; next }
       if (line ~ /^After:/) { part = "after"; next }
-      if (line ~ /^```/) { inblock[eid, part] = !inblock[eid, part]; next }
-      if (part != "" && inblock[eid, part]) { if (part == "before") before[eid] = before[eid] (hasb[eid]++ ? "\n" : "") line; else after[eid] = after[eid] (hasa[eid]++ ? "\n" : "") line }
     }
     next
   }
@@ -119,13 +140,16 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       if (q in ans) { a = ans[q]; how = "answered" }
       else if (all && rec[q] != "") { a = "(" rec[q] ")"; how = "accepted the recommendation" }
       else { log_open = log_open "- " q ": " qtext[q] "\n"; open++; continue }
-      text = a
-      if (a ~ /^\(?[a-z]\)?([ ,.]|$)/) { l = a; gsub(/[()]/, "", l); l = substr(l, 1, 1); if ((q, l) in opt) text = "(" l ") " opt[q, l] }
+      text = a; chosen = ""
+      if (a ~ /^\(?[a-z]\)?([ ,.]|$)/) { l = a; gsub(/[()]/, "", l); l = substr(l, 1, 1); if ((q, l) in opt) { text = "(" l ") " opt[q, l]; chosen = l } }
       # An option that widens the owned paths.
       t = text
       while (match(t, /\+ `[^`]+`/)) { path = substr(t, RSTART + 3, RLENGTH - 4); addpath[++npath] = path; t = substr(t, RSTART + RLENGTH) }
       link = (q in url) ? " ([answer](" url[q] "))" : " (accept all" ((("ALL" in url) ? ", [answer](" url["ALL"] ")" : "")) ")"
       entries = entries "- **r" k "/" q "** (settled against `" spec "`): " qtext[q] " → " text link "\n"
+      if (edges[q] != "" && tolower(edges[q]) !~ /^none/) entries = entries "  - edges: " edges[q] "\n"
+      # The options not chosen, so the agent and the reviewer know what was ruled out.
+      for (z = 1; z <= length(letters[q]); z++) { l = substr(letters[q], z, 1); if (l != chosen) entries = entries "  - not chosen: (" l ") " opt[q, l] "\n" }
       log_applied = log_applied "- " q ": " how ", " text "\n"
     }
 
@@ -136,17 +160,19 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       needs = aflag[x] || (x in checkfirst)
       if (x in ans) {
         a = ans[x]
-        if (tolower(a) ~ /^(ok|confirm|confirmed|yes|agree)/) assumed = assumed "  - " x ": " atext[x] " (confirmed" ((x in url) ? ", [answer](" url[x] ")" : "") ")\n"
-        else entries = entries "- **r" k "/" x "** (settled against `" spec "`): " atext[x] " → corrected: " a ((x in url) ? " ([answer](" url[x] "))" : "") "\n"
+        if (tolower(a) ~ /^(ok|confirm|confirmed|yes|agree)/) assumed = assumed "  - " x ": " atext[x] staled(x) " (confirmed" ((x in url) ? ", [answer](" url[x] ")" : "") ")\n"
+        else entries = entries "- **r" k "/" x "** (settled against `" spec "`): " atext[x] " → corrected: " a ((x in url) ? " ([answer](" url[x] "))" : "") staled(x) "\n"
       } else if (needs) {
         log_open = log_open "- " x ": " atext[x] " (needs an explicit answer)\n"; open++
         continue
       } else {
-        assumed = assumed "  - " x ": " atext[x] "\n"
+        assumed = assumed "  - " x ": " atext[x] staled(x) "\n"
       }
       if (x in supersedes) { sup[supersedes[x]] = "r" k "/" x }
     }
     if (assumed != "") entries = entries "- **r" k ", assumed** (as of `" spec "`):\n" assumed
+    # Reuse pointers from the review: guidance for the agent, not an owner decision.
+    if (trim(reuse) != "" && tolower(trim(reuse)) !~ /^none/) entries = entries "- **r" k ", reuse** (from the readiness review, as of `" spec "`): " reuse "\n"
 
     # Owned paths.
     if (npath > 0) {

@@ -2,7 +2,7 @@
 name: improve-agent-process
 description: Turn the findings of several agent PR reviews into one batched pull request that improves the project's agent setup. Reads the tracking issue where the review-agent-pr skill logs why agents produced each finding, counts which causes recur across reviews, selects the proposed changes to docs, skills, prompts, tests and CI checks that are worth making, checks them against the current code, and opens a single PR after the user approves the selection. Also measures whether earlier changes, the project's and the review harness's, worked, and checks the reviewer's own quality. Use when asked to improve, update or fix the agent process, instructions or skills from review findings, to act on the agent process tracking issue, or to log a process incident that happened outside a PR.
 metadata:
-  harness-version: "2026.10.06.3"
+  harness-version: "2026.10.08.1"
 ---
 
 # Improve the agent process from review findings
@@ -101,13 +101,26 @@ carefully.
    not the agent's first attempt. Leave findings of class `spec-moved` out of every
    count: the spec changed under the work, which is not the agent's doing. Count them
    separately, as how often the spec moves under work.
-4. **Give a verdict:**
+4. **Give a verdict**, from the rate that fits the target class (the "Counted per" column
+   of the tracked classes): **per PR** for classes that come from what every PR carries
+   whatever its size (the spec, the description, journal entries: `spec-guess`,
+   `spec-open`, `spec-deviation`, `claim-beyond-evidence`, `scope-drift`,
+   `stale-restatement`), **per 1,000 changed lines** for classes that grow with the code
+   (the rest). Then check it in this order:
    - `too early`: fewer than four PRs on the "after" side;
+   - `unclear: reviewer changed`: a harness change marked "expected: up" for this class
+     (`harness-changes.md`) landed between the two sides; compare only reviews on one side
+     of it, or wait;
+   - `unclear: within chance`: the after side's count differs from what the before rate
+     predicts for it (before rate × after's PRs, or × after's lines) by less than the square
+     root of the two counts added together. With few findings, a rise or fall of a couple
+     is noise;
    - `worked`: the rate fell by half or more;
    - `failed`: the rate fell by less than a third, or rose;
-   - `unclear`: anything between.
-   Say what else changed over the same span and could explain the result: other changes
-   with the same target, and reviewer changes (the harness version on each data line).
+   - `unclear`: anything between, or the other rate moved the opposite way.
+   Show both rates and the predicted count, so the user can check. Say what else changed
+   over the same span and could explain the result: other changes with the same target,
+   and reviewer changes (the harness version on each data line).
 5. **Apply the verdicts in step 7 (Select):**
    - A `failed` change made of words (instruction text, template wording, a skill's
      prose): no more words for that target. Propose a mechanical guardrail (a test, lint
@@ -129,8 +142,12 @@ Also count, over first reviews:
   should have asked. Read the issue's readiness comment for each and note whether it was
   an assumption the owner accepted, a point it never raised, or a question answered
   differently.
-- **Cost:** tokens and minutes per review (the data line's `Cost:`), by harness version,
-  where reported.
+- **Cost:** from the `run:` records in the log (one per review round, re-checks included;
+  for older rounds, the data line's `Cost:`): tokens and minutes per round, per PR (all its
+  rounds), by phase, by harness version, and by model and effort where recorded. Say which
+  phase moved before attributing a change in cost to a harness change. Compare models only
+  between runs of the same harness version, and treat runs with a `label` (comparison
+  runs) apart from the usual ones.
 
 Show the measurement tables to the user in step 9 and record them in step 11.
 
@@ -314,8 +331,8 @@ Incidents considered: <links, or "none">
 (`review-agent-pr/references/failure-classes.md`), and add, merge or split classes only
 with the user's agreement, noting the change here so counts stay comparable>
 
-| Class | A finding belongs here when |
-|---|---|
+| Class | A finding belongs here when | Counted per |
+|---|---|---|
 
 Decisions written into the project by this batch: <PR and finding for each, or "none">
 Decisions waiting for the owner: <list, or "none">

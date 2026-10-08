@@ -53,11 +53,12 @@ case "$stage" in
       for s in "$run"/spec/*.md; do
         [ -f "$s" ] || continue
         rel="spec/$(basename "$s")"; lines="$(awk 'END { print NR }' "$s")"
+        wcl="$(wc -l < "$s" | tr -d ' ')"   # wc -l misses a last line without a newline
         row="$(awk '/^## Sources read/ { on = 1; next } on && /^## / { exit } on' "$run/analysis/spec.md" | grep -F "$rel" | head -n 1 || true)"
         to="$(printf '%s' "$row" | sed -n 's/.*read to line \([0-9][0-9]*\) of \([0-9][0-9]*\).*/\1 \2/p')"
         if [ -z "$to" ]; then
           problem "spec.md: list $rel under Sources read as \"(read to line $lines of $lines)\", after reading it to its end"
-        elif [ "$to" != "$lines $lines" ]; then
+        elif ! { { [ "${to% *}" = "$lines" ] || [ "${to% *}" = "$wcl" ]; } && { [ "${to#* }" = "$lines" ] || [ "${to#* }" = "$wcl" ]; }; }; then
           problem "spec.md: $rel was read to line ${to% *} of ${to#* }, but it has $lines lines: read the rest from the file itself, in line ranges"
         fi
       done
@@ -76,7 +77,10 @@ case "$stage" in
     grep -q '^\*\*Relied on:\*\*' "$f" || problem "readiness.md: no 'Relied on:' list"
     grep -q '^\*\*Check these first:\*\*' "$f" || problem "readiness.md: no 'Check these first:' line (the riskiest assumptions, or 'none')"
     awk -v k="$k" '
-      /^#### Q-[0-9]+:/ { if (q != "") check(); q = $2; sub(/:$/, "", q); opts = 0; rec = 0; reply = 0; next }
+      fence != "" { if (index($0, fence) == 1 && $0 ~ /^(`+|~+)[ \t]*$/) fence = ""; next }
+      match($0, /^(```+|~~~+)/) { fence = substr($0, 1, RLENGTH); next }
+      /^#### Q-[0-9]+:/ { if (q != "") check(); q = $2; sub(/:$/, "", q); opts = 0; rec = 0; reply = 0; edges = 0; next }
+      q != "" && /^- \*\*Edges:\*\* [^ <]/ { edges = 1 }
       /^#{2,4} / { if (q != "") check(); q = "" }
       q != "" && /^[ ]+- \([a-z]\) / { opts++; if ($0 !~ /Scope: /) print q ": option without a Scope label" }
       q != "" && /^- \*\*Recommendation:\*\* \([a-z]\)/ { rec = 1 }
@@ -84,6 +88,7 @@ case "$stage" in
       function check() {
         if (opts < 2) print q ": fewer than two options"
         if (!rec) print q ": no Recommendation naming an option"
+        if (!edges) print q ": no Edges line (boundary inputs, concurrent calls, edit-and-assumption cases, evidence, lists; or \"none: <why>\")"
         if (!reply) print q ": no Reply line (`Decision r" k "/" q ": ...`)"
       }
       END { if (q != "") check() }
@@ -106,12 +111,16 @@ case "$stage" in
     # Each edit's Before text must be in the description as it is now.
     if [ -f "$run/issue-body.md" ]; then
       awk '
+        fence != "" {
+          if (index($0, fence) == 1 && $0 ~ /^(`+|~+)[ \t]*$/) { fence = ""; if (e != "" && part == "b") { print "EDIT\t" e; part = "" } ; next }
+          if (e != "" && part == "b") print "LINE\t" e "\t" $0
+          next
+        }
+        match($0, /^(```+|~~~+)/) { fence = substr($0, 1, RLENGTH); next }
         /^#### E-[0-9]+:/ { e = $2; sub(/:$/, "", e); part = ""; next }
         /^#{2,4} / { e = "" }
         e != "" && /^Before:/ { part = "b"; next }
         e != "" && /^After:/ { part = "" ; next }
-        e != "" && part == "b" && /^```/ { inb = !inb; if (!inb) { print "EDIT\t" e; part = "" } ; next }
-        e != "" && part == "b" && inb { print "LINE\t" e "\t" $0 }
       ' "$f" > "$run/.validate-e"
       awk -F'\t' -v bodyfile="$run/issue-body.md" '
         BEGIN { while ((getline l < bodyfile) > 0) body = body (nb++ ? "\n" : "") l }

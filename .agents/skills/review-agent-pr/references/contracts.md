@@ -20,7 +20,8 @@ field names below, and the scripts that check them.
 | `spec-moves.md`, `spec-moves.patch` | `spec-moves.sh` | orchestrator (manifest), verifier, `assemble-report.sh` | Readiness state of the PR's issues; direction-document changes on the base branch since the work began and since readiness |
 | `related-issues.md` | `related-issues.sh` | verifier | Open issues naming files the PR changes or linked from its issues, with their criteria, owned paths and decisions |
 | `report.md`, `report-NN.md`, `process.md`, `findings.json` | `assemble-report.sh` | `post-report.sh`, `post-process-findings.sh`, `improve-agent-process` | The report (in comment-sized parts), the process findings (data line: round, changed lines, work began, harness version, readiness, cost), one JSON object per confirmed finding (with `failure_class`, `spec_moved`, `readiness`) |
-| `progress.txt` | the orchestrator | the orchestrator, on resume; `assemble-report.sh` (cost lines) | PR, head, mode, harness version, finished phases, `cost=<phase>:<subagent>:<tokens>:<seconds>` lines, what was posted |
+| `progress.txt` | the orchestrator | the orchestrator, on resume; `assemble-report.sh` (run lines) | PR, head, mode, harness version, an optional `label=`, the `orchestrator tool= model= effort=` line, one `agent phase= name= model= effort= tokens= seconds=` line per subagent (`?` when unknown; older `cost=` lines still read), finished phases, what was posted |
+| `run.json` | `assemble-report.sh` | `improve-agent-process` (through the report's hidden run line) | One object per run: PR, commit, round, mode, harness version, label, orchestrator, each subagent's phase, name, model, effort, tokens and seconds, totals |
 
 ## Written by people or agents, and checked
 
@@ -37,7 +38,7 @@ field names below, and the scripts that check them.
 
 | Comment | Writer | First line | Check |
 |---|---|---|---|
-| Review report (one per run, possibly in parts) | `post-report.sh` | `<!-- agent-pr-review:report sha=<commit> run=<id> part=<k>/<n> -->` | `post-report.sh` |
+| Review report (one per run, possibly in parts) | `post-report.sh` | `<!-- agent-pr-review:report sha=<commit> run=<id> part=<k>/<n> -->`; its run metadata ends with `<!-- agent-pr-review:run <run.json> -->` | `post-report.sh` |
 | Process findings (one per round, on the tracking issue) | `post-process-findings.sh` | `<!-- agent-pr-review:process pr=<n> sha=<commit> -->`, then a data line | `post-process-findings.sh` |
 | Fixing agent's response | `address-pr-review` | `<!-- agent-pr-review:response review=<commit> head=<commit> -->` | its `post-response.sh` |
 | Owner decision | the owner | `Decision <commit>/<ID>: <answer>` lines | `get-decisions.sh` |

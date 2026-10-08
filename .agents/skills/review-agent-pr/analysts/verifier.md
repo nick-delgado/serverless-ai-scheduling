@@ -15,6 +15,10 @@ afresh.
 
 ## Method
 
+You work from the spec: read the task's own spec files (directly under `<RUN_DIR>/spec/`)
+to their end before you settle anything. Search `<RUN_DIR>/spec/background/` where a
+finding or the spec points to it.
+
 For each finding, in every findings file:
 
 1. **Does the evidence exist?** Open the cited location in `<RUN_DIR>/worktree`. The quoted
@@ -121,8 +125,12 @@ Then, across all files:
       unnecessary? Then make them consistent and say so in each. Rewrite what falls short.
     - **Done when:** present and checkable, with a check for each condition or case when the
       fix has several.
+    - **Numbers that must agree:** a fix or option that sets or changes a number (a limit, a
+      timeout, a wait, a retry count, a size) names the other numbers it has to agree with
+      (the code's own timeout, a test's wait, a documented limit) and says how they relate.
     - **Options:** two to four real alternatives, each with its consequence and its scope
-      label (within the issue, or what it adds beyond it). Add the one the reviewer missed,
+      label (within the issue, or what it adds beyond it). An option that adds a branch (a
+      fallback, an exception) names the test that branch needs. Add the one the reviewer missed,
       including "keep as is" when the code as written is a defensible choice and "open a
       follow-up issue" when an option adds scope, and drop the ones nobody would take.
     - **Recommendation:** make your own judgement, from the spec, the direction documents

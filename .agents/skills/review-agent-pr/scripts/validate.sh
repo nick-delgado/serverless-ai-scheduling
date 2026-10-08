@@ -46,8 +46,13 @@ h2() {
 # the default list.
 tracked_classes() {
   local listed
-  listed="$(awk '/^## 8\./ { on = 1; next } on && /^## / { exit } on' "$run/manifest.md" 2>/dev/null |
-    grep -oE '`[a-z][a-z-]*`' | tr -d '`' | sort -u || true)"
+  # Names in backticks anywhere, a table's first column, or a list item's first word.
+  listed="$(awk '/^## 8\./ { on = 1; next } on && /^## / { exit } on' "$run/manifest.md" 2>/dev/null | awk '
+    { line = $0
+      while (match(line, /`[a-z][a-z-]*`/)) { print substr(line, RSTART + 1, RLENGTH - 2); line = substr(line, RSTART + RLENGTH) } }
+    /^\|/ { split($0, c, "|"); x = c[2]; gsub(/[ \t`*]/, "", x); if (x ~ /^[a-z][a-z-]*$/) print x }
+    /^[ ]*[-*] / { x = $0; sub(/^[ ]*[-*] +/, "", x); gsub(/[`*]/, "", x); sub(/[ :,(].*/, "", x); if (x ~ /^[a-z][a-z-]*$/) print x }
+  ' | sort -u || true)"
   if [ -n "$listed" ]; then
     printf '%s\n' "$listed"
   else
@@ -125,6 +130,8 @@ case "$stage" in
     h2 "$f" "Minor findings table" | awk -F'|' '
       { gsub(/\\\|/, "\034") }
       /^\|/ { n++; if (n <= 2) next
+        id = $2; gsub(/^[ \t]+|[ \t]+$/, "", id)
+        if (id == "" || id ~ /^None\.?$/) next   # "None." written as a row rather than a line
         a = $4; gsub(/`/, "", a); gsub(/^[ \t]+|[ \t]+$/, "", a)
         if (a !~ /^(fix now|for the owner|noticed)$/) print "minor table row \"" $2 "\": Action must be fix now, for the owner or noticed (got \"" a "\")"
       }' > "$run/.validate-minor" || true

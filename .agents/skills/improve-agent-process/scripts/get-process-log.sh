@@ -61,6 +61,7 @@ for pr in $prs; do
       /^Confirmed findings after verification: / { print "  " $0 }
       /^By action: / { print "  " $0 }
       /\| *withdrawn *\|/ { print "  withdrawn: " $0 }
+      /^<!-- agent-pr-review:run \{/ { r = $0; sub(/^<!-- agent-pr-review:run /, "", r); sub(/ -->$/, "", r); print "  run: " r }
     ' || true
 done
 
