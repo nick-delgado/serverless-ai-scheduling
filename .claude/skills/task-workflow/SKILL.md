@@ -63,7 +63,7 @@ Worktrees let several agents build and test at the same time without stepping on
 
 ## 4. Read before you write
 
-1. **The issue body.** The goal, acceptance criteria, **owned paths**, dependencies, and verification commands form the contract for this task.
+1. **The issue body.** The goal, acceptance criteria, **owned paths**, dependencies, and verification commands form the contract for this task. An item under "Decisions and clarifications", or an owner decision on the PR (`Decision <commit>/<ID>: ...`), is Nick's answer: build it exactly as written, even when nearby code, an example or a check seems to disagree, and raise any doubt under the PR's "Departs from or questions an owner decision" rather than choosing your own reading.
 2. **`CLAUDE.md`.** Especially the architecture rules:
    - patient ID only from the JWT;
    - atomic bookings;
