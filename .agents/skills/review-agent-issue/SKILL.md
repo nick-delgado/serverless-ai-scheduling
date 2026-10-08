@@ -2,7 +2,7 @@
 name: review-agent-issue
 description: Readiness review of a GitHub issue before an AI coding agent starts it, and a refresh when the spec may have moved since. Fresh subagents read the issue, the project's specs and decisions, and the code, then post one comment on the issue with the questions the owner should settle first (with options and a recommendation), the assumptions the agent will otherwise follow, exact suggested edits to the issue, and reuse pointers, dependencies and risks. After the owner answers on the issue, an apply step writes the answers and accepted edits into the issue's description. Advisory. Use when asked to check, review or prepare an issue, story or task before work starts, or to apply the answers to a readiness review.
 metadata:
-  harness-version: "2026.10.08.1"
+  harness-version: "2026.10.08.2"
 ---
 
 # Readiness review of an issue
