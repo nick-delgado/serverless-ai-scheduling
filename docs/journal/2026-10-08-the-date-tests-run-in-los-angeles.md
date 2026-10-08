@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #210, PR #208 (#114)
+**Related:** #210, PR #220, PR #208 (#114)
 
 ## What happened
 
