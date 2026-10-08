@@ -129,14 +129,33 @@ npx tsx spikes/s3-transcribe-browser/summarize.ts     # writes results/summary-<
 
 Tell the agent the results are in `results/`, with anything you noticed that the page couldn't record (how each phone took the certificate, the permission prompts, the mic indicators).
 
+## Results (2026-10-08)
+
+Summary: [`results/summary-2026-10-08.md`](results/summary-2026-10-08.md). Notes, the export repair and the behaviour findings: [`results/notes-2026-10-08.md`](results/notes-2026-10-08.md). Raw exports: `results/raw-<browser>-<timestamp>.json`. Conclusions: [ADR-006](../../docs/adr/0006-voice-transcription.md) Validation.
+
+- **Main runs:** 80 on the four measured browsers, 20 each, with no failed stream.
+- **Stop→final p95:** 156 to 276 ms. **Send→stream end p95:** 197 to 382 ms. NFR-002 allows 2 s.
+- **Firefox:** 6 best-effort runs, all fine. **Edge:** not run.
+
+## Results files
+
+An export is the page's JSON, redacted in the browser and again by the dev server's endpoint. `summarize.ts` refuses a file that doesn't parse and names it.
+
+The first exports (2026-10-08) were damaged by the old account-ID pattern `\b\d{12}\b`, which also matched 12-digit `performance.now()` fractions. They were repaired by dropping each damaged `.<account>` fraction, which loses only sub-millisecond digits. The details are in the notes. `src/redact.ts` now leaves digits after a decimal point alone, and `npm run check -w spikes/s3-transcribe-browser` (`redact.check.ts`) checks that.
+
 ## Bundle size (r1/A-3)
 
 ```bash
 npm run bundle-size -w spikes/s3-transcribe-browser
 ```
 
-## Findings so far (before the device runs)
+On 2026-10-08:
 
+- **The import adds:** 171,429 B minified / 58,753 B gzip (167.4 / 57.4 KiB), in five chunks.
+- **The entry chunk already holds:** `aws-amplify` and the page, 146.5 KiB minified / 44.6 KiB gzip.
+- **The worklet:** 1.2 KiB.
+
+## Findings from the pre-flight (before the device runs)
 From the agent's checks on 2026-10-08 (headless Chrome 154 on the Mac, synthetic `say` audio; not measurements):
 
 - The demo patient signs in on `dev` and gets Identity Pool credentials (r1/A-8). `ListTranscriptionJobs` with them is refused with `AccessDeniedException`.

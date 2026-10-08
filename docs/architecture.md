@@ -67,11 +67,11 @@ On page load the SPA sends `POST /api/session` (empty body, ID token). SessionFn
 
 ## Voice input
 
-*(Planned: ADR-006 is Proposed until spike S-3, #10.)*
+*(Planned: ADR-006 was accepted after spike S-3, #10; the voice UI ships with #29.)*
 
 1. Mic tap → permission prompt (first time) → recording overlay with a timer.
 2. The AudioWorklet converts the mic audio to 16 kHz PCM and streams ~100 ms chunks to Transcribe over WebSocket, using Identity Pool credentials that can do nothing else.
-3. On Send: the stream is closed, a "Transcribing…" spinner shows while final results arrive, and the transcript is posted as the patient's message. From there it follows the chat-turn path above.
+3. On Send: the audio ends with an empty AudioEvent, a "Transcribing…" spinner shows until Transcribe ends the stream with the final results, and the transcript is posted as the patient's message. From there it follows the chat-turn path above.
 
 ## Where the code lives
 

@@ -18,7 +18,10 @@ export function redact(text: string, known: readonly string[] = []): string {
       .replace(/\b[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]{6,}\b/g, "<user-pool-id>")
       .replace(/assumed-role\/[^/\s]+\/[^\s"]+/g, "assumed-role/<role>/<session>")
       .replace(/\b(ASIA|AKIA)[A-Z0-9]{12,}\b/g, "<access-key-id>")
-      .replace(/\b\d{12}\b/g, "<account>")
+      // Account IDs: a run of exactly 12 digits that isn't part of a number. "(?<![\d.])" keeps the
+      // fractional digits of a performance.now() value ("6744.399999999674") out of it: #10's first
+      // exports lost their JSON validity to the old \b\d{12}\b.
+      .replace(/(?<![\d.])\d{12}(?!\d)/g, "<account>")
       .replace(/\b(?:10\.\d{1,3}|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/g, "<lan-ip>")
   );
 }

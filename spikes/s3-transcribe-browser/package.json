@@ -10,6 +10,7 @@
     "build": "vite build",
     "bundle-size": "vite build && tsx bundle-size.ts",
     "summarize": "tsx summarize.ts",
+    "check": "tsx redact.check.ts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
