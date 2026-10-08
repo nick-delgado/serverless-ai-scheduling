@@ -1,4 +1,4 @@
-# 2026-10-08 — The date tests now run in Los Angeles, because neither UTC nor the clinic's zone can see every date bug
+# 2026-10-08 — The date tests now run in Los Angeles, because UTC and the clinic's zone each hid a date bug we knew of
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
