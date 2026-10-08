@@ -44,7 +44,7 @@ So the cause lies in third-party code: as far as the reproduction shows, the int
   - No other web test failed in any round.
 - `fetch` rejections with `SocketError: closed`: before 1 (the scroll test), after 0.
 - `ChatPage.test.tsx` 36 times in parallel: before 7 out of 36, then 12 out of 36, all the scroll test, each with a socket destroyed from `#onRealSocketError`. After: 36 out of 36 passed, with no `SocketError` and no passed-through socket (load average 49 at the end).
-- Mutation run: `npm run mutate -- edits.json --markdown -- npx vitest run apps/web/src/mocks/node.test.ts` on Node 26. All 3 edits were killed: removing `setGlobalDispatcher(connectionPerRequest)`, reusing one client per origin, and dropping `client.close()`. After the review round's test changes, the same run again killed all 3, and a second run, `-- npx vitest run apps/web/src/chat/ChatPage.errors.test.tsx`, killed both edits that put `createChatApi()` back inside the render callback of the two `.errors` tests. Both tables are in the PR.
+- Mutation run: `npm run mutate -- edits.json --markdown -- npx vitest run apps/web/src/mocks/node.test.ts` on Node 26. All 3 edits were killed: removing `setGlobalDispatcher(connectionPerRequest)`, reusing one client per origin, and dropping `client.close()`. After the review round's test changes, the same run again killed all 3, and a second run, `-- npx vitest run apps/web/src/chat/ChatPage.errors.test.tsx`, killed both edits that put `createChatApi()` back inside the render callback of the two `.errors` tests. A third, on `node.test.ts`, killed an `until` that returns without waiting, so the close test's new `until` wait is load-bearing. The tables are in the PR.
 
 ## What's next
 
