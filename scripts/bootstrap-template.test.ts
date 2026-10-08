@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+// jscpd:ignore-start -- the template reader and block slicer copy scripts/web-template.test.ts's on purpose: #157 owns
+// the shared helper and absorbs this fourth copy (r1/Q-4 on #41).
 const template = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "bootstrap", "bootstrap.yaml"),
   "utf8",
@@ -37,6 +39,7 @@ function block(header: RegExp, within: string[] = lines): string[] {
   const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
   return within.slice(start, end === -1 ? undefined : end);
 }
+// jscpd:ignore-end
 
 /** The `key: value` entries directly under a block's header line, values unquoted. */
 function entries(lines: string[]): Record<string, string> {
