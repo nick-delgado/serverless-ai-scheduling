@@ -448,7 +448,9 @@ describe("ChatPage: Retry (FR-015)", () => {
   it("runs one retry when Retry is called twice before re-rendering", async () => {
     const bodies = captureChatBodies();
     configureMockApi({ chatFault: "network" });
-    const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
+    // One api for every render (#206): a new one reruns the session effect, which then loops.
+    const api = createChatApi();
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant }));
     act(() => {
       result.current.send("Hi");
     });
@@ -467,7 +469,9 @@ describe("ChatPage: Retry (FR-015)", () => {
   });
 
   it("does nothing on Retry when there is no error", async () => {
-    const { result } = renderHook(() => useChat(createChatApi(), { reducedMotion: instant }));
+    // One api for every render (#206): a new one reruns the session effect, which then loops.
+    const api = createChatApi();
+    const { result } = renderHook(() => useChat(api, { reducedMotion: instant }));
     await until(() => result.current.greeting.state === "ready");
     expect(result.current.greeting.state).toBe("ready");
     act(() => result.current.retry());

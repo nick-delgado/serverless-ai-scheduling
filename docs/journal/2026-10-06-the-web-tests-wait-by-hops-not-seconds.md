@@ -58,5 +58,5 @@ Load: three rounds of six `npx vitest run` from the repo root, no coverage, 8 co
 
 ## What's next
 
-- Issue #206: find out why undici closes the mock's socket under load, and fix it in the mock transport.
+- Issue #206: find out why undici closes the mock's socket under load, and fix it in the mock transport. Done: [2026-10-07](2026-10-07-the-closed-socket-was-a-passthrough.md).
 - `src/auth/session.test.ts` (outside #134's paths) and `src/app/routes.test.tsx` (inside the owned glob, listed rather than fixed per r1/Q-3) have the same fixed-time waits for real I/O.
