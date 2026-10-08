@@ -71,3 +71,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-07 | [A reschedule that loses the race to its identical twin now answers already_rescheduled, and on DynamoDB Local it fails all three conditions](2026-10-07-the-losing-twin-move-is-a-retry-too.md) | 4. Teaching the agent to schedule |
 | 2026-10-07 | [The scroll test's closed socket was a connection MSW handed to the real network](2026-10-07-the-closed-socket-was-a-passthrough.md) | 4. Teaching the agent to schedule |
 | 2026-10-08 | [An owner decision now wins over an agent's own reading, and a lint holds write confirmations to the full date](2026-10-08-owner-decisions-win-over-an-agents-reading.md) | 5. What the evals showed |
+| 2026-10-08 | [The date tests now run in Los Angeles, because neither UTC nor the clinic's zone can see every date bug](2026-10-08-the-date-tests-run-in-los-angeles.md) | 4. Teaching the agent to schedule |
