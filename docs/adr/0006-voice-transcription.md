@@ -50,7 +50,7 @@ UX mapping:
 ## Consequences
 
 - There's no `/transcribe` Lambda, which means less backend code and cost.
-- The browser SDK adds bundle weight, so we lazy-load it only when the mic is first used. In the spike's `vite build`, the dynamic `import("@aws-sdk/client-transcribe-streaming")` adds **167.4 KiB minified / 57.4 KiB gzip**, in five chunks. The entry chunk already holds `aws-amplify`: 146.5 KiB minified / 44.6 KiB gzip with the spike page. No Node shims (`Buffer`, `global`) were needed under Vite 8.
+- The browser SDK adds bundle weight, so we lazy-load it only when the mic is first used. In the spike's `vite build`, the dynamic `import("@aws-sdk/client-transcribe-streaming")` adds **167.4 KiB minified / 57.4 KiB gzip**, in five chunks. The entry chunk already holds `aws-amplify`: 146.7 KiB minified / 44.7 KiB gzip with the spike page. No Node shims (`Buffer`, `global`) were needed under Vite 8.
 - Browser quirks the spike found on real devices, which #29 must handle:
   - Every browser's native `AudioContext` ran at 48 kHz, so the worklet downsamples.
   - Safari (macOS and iOS) and Firefox create the context suspended when it's created after an `await` in the tap handler; `resume()` starts it.

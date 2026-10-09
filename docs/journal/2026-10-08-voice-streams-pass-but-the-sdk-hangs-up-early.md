@@ -52,7 +52,7 @@ By the rule Nick set (r1/Q-2: at most one failed stream per browser), ADR-006 is
   - Chrome (desktop): 20/20, 235 ms, 366 ms.
   - Safari (macOS): 20/20, 156 ms, 197 ms.
   - Firefox: 6/6, 164 ms, 192 ms.
-- Bundle size: the lazy Transcribe import adds 167.4 KiB minified / 57.4 KiB gzip, next to a 146.5 / 44.6 KiB entry chunk that holds `aws-amplify` (`npm run bundle-size -w spikes/s3-transcribe-browser`).
+- Bundle size: the lazy Transcribe import adds 167.4 KiB minified / 57.4 KiB gzip, next to a 146.7 / 44.7 KiB entry chunk that holds `aws-amplify` (`npm run bundle-size -w spikes/s3-transcribe-browser`).
 - Role scoping: `ListTranscriptionJobs` was refused with `AccessDeniedException` on all five browsers.
 - Redaction check: `npm run mutate` with the old pattern restored is KILLED by `redact.check.ts` ("redaction changed a number").
 

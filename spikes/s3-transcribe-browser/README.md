@@ -148,10 +148,10 @@ The first exports (2026-10-08) were damaged by the old account-ID pattern `\b\d{
 npm run bundle-size -w spikes/s3-transcribe-browser
 ```
 
-On 2026-10-08:
+On 2026-10-08, and re-run on 2026-10-09 after the review fixes (the import is unchanged; the entry chunk grew 0.2 KiB):
 
 - **The import adds:** 171,429 B minified / 58,753 B gzip (167.4 / 57.4 KiB), in five chunks.
-- **The entry chunk already holds:** `aws-amplify` and the page, 146.5 KiB minified / 44.6 KiB gzip.
+- **The entry chunk already holds:** `aws-amplify` and the page, 146.7 KiB minified / 44.7 KiB gzip.
 - **The worklet:** 1.2 KiB.
 
 ## Findings from the pre-flight (before the device runs)
