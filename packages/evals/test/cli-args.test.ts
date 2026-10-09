@@ -20,6 +20,8 @@ import {
   estimateRunCost,
   EXPECTED_SIMULATED_TURNS,
   exitCodeFor,
+  SCENARIO_ESTIMATE,
+  scenarioAgentCallUsd,
   judgeSetup,
   loadScenarios,
   parseCliArgs,
@@ -49,6 +51,8 @@ describe("parseCliArgs", () => {
       profile: MODEL_PROFILES["sonnet-4.6"],
       judge: true,
       calibrationDir: "/tmp/calibration",
+      baselineDir: "/tmp/baselines",
+      ids: [],
       trials: 1,
       filters: [],
       maxCostUsd: 1,
@@ -74,6 +78,7 @@ describe("parseCliArgs", () => {
         "--judge-profile=nova-pro",
         "--no-judge",
         "--calibration-dir=/c",
+        "--ids= a-case , b-case",
       ],
       OUT,
       {},
@@ -87,6 +92,8 @@ describe("parseCliArgs", () => {
       judge: false,
       judgeProfile: { name: "nova-pro", from: "--judge-profile" },
       calibrationDir: "/c",
+      baselineDir: "/tmp/baselines",
+      ids: ["a-case", "b-case"],
       trials: 3,
       filters: ["book", "safety"],
       maxCostUsd: 0.5,
@@ -101,6 +108,41 @@ describe("parseCliArgs", () => {
       from: "/r.json",
     });
     expect(parseCliArgs(["--calibrate"], OUT, {}).calibration).toEqual({ action: "agreement" });
+  });
+
+  it("reads the results-file steps with their two files (#34)", () => {
+    expect(parseCliArgs(["--exit-report", "/a.json", "/b.json"], OUT, {}).resultsStep).toEqual({
+      action: "exit",
+      files: ["/a.json", "/b.json"],
+    });
+    expect(parseCliArgs(["/a.json", "--update-baseline", "/b.json"], OUT, {}).resultsStep).toEqual({
+      action: "baseline",
+      files: ["/a.json", "/b.json"],
+    });
+    expect(parseCliArgs([], OUT, {}).resultsStep).toBeUndefined();
+  });
+
+  it.each([
+    [["--exit-report", "/a.json"], "--exit-report takes two results files: <l1.json> <scenario.json>"],
+    [
+      ["--update-baseline", "/a", "/b", "/c"],
+      "--update-baseline takes two results files: <l1.json> <scenario.json>",
+    ],
+    [["/a.json"], "unexpected argument /a.json"],
+    [
+      ["--exit-report", "--update-baseline", "/a", "/b"],
+      "--exit-report and --update-baseline are separate steps; pass one",
+    ],
+    [
+      ["--calibrate", "--exit-report", "/a", "/b"],
+      "--calibrate and --exit-report are separate steps; pass one",
+    ],
+    [
+      ["--export-calibration=/r.json", "--calibrate"],
+      "--export-calibration and --calibrate are separate steps; pass one",
+    ],
+  ])("rejects the steps' arguments %j (#34)", (argv, message) => {
+    expect(() => parseCliArgs(argv, OUT, {})).toThrow(new CliArgError(message));
   });
 
   it.each([
@@ -149,6 +191,29 @@ describe("selectCases", () => {
     expect(
       filtered.every((c) => c.category !== "l1" && (c.id.includes("emergency") || c.id.includes("dst"))),
     ).toBe(true);
+  });
+
+  it("--ids selects exactly those IDs, not every ID containing one (r1/A-4)", () => {
+    // `--filter=l1-emergency-911` would match a longer ID too; `--ids` matches whole IDs only.
+    const ids = selectCases(
+      loaded,
+      parseCliArgs(["--ids=l1-escalate-explicit-request,l1-emergency-911"], OUT, {}),
+    );
+    expect(ids.map((c) => c.id)).toEqual(["l1-emergency-911", "l1-escalate-explicit-request"]);
+    const scenarioIds = selectCases(
+      loaded,
+      parseCliArgs(["--mode=scenario", "--ids=book-derm-next-week-afternoon"], OUT, {}),
+    );
+    expect(scenarioIds.map((c) => c.id)).toEqual(["book-derm-next-week-afternoon"]);
+  });
+
+  it("--ids naming no case of the mode's suite is a usage error", () => {
+    expect(() => selectCases(loaded, parseCliArgs(["--ids=l1-crisis-98"], OUT, {}))).toThrow(
+      new CliArgError("--ids: no l1 case in the smoke suite has the ID l1-crisis-98"),
+    );
+    expect(() =>
+      selectCases(loaded, parseCliArgs(["--mode=scenario", "--ids=l1-crisis-988"], OUT, {})),
+    ).toThrow(CliArgError);
   });
 });
 
@@ -278,17 +343,42 @@ describe("estimateRunCost", () => {
     expect(estimateRunCost(unscripted, profile, 1)).toBe(0); // script-only: it needs a simulator, so it won't run
   });
 
-  it("a scripted scenario costs 3 calls per scripted turn per trial (2e22f79/TEST-301)", () => {
+  it("a scripted scenario costs 1.5 agent calls per scripted turn per trial (2e22f79/TEST-301, #34)", () => {
     const s = scenario("safety-emergency-chest-pain-911"); // one scripted turn
     const call = estimateCostUsd(profile, {
-      inputTokens: 4000,
-      outputTokens: 400,
+      inputTokens: SCENARIO_ESTIMATE.agentCall.promptTokens, // gpt-oss caches nothing
+      outputTokens: SCENARIO_ESTIMATE.agentCall.outputTokens,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
-    expect(estimateRunCost([s], profile, 1)).toBeCloseTo(3 * call, 12);
+    expect(scenarioAgentCallUsd(profile)).toBeCloseTo(call, 12);
+    expect(estimateRunCost([s], profile, 1)).toBeCloseTo(1.5 * call, 12);
     const twoTurns = { ...s, script: [...(s.script ?? []), "ok, calling now"] };
-    expect(estimateRunCost([twoTurns], profile, 2)).toBeCloseTo(3 * call * 2 * 2, 12);
+    expect(estimateRunCost([twoTurns], profile, 2)).toBeCloseTo(1.5 * call * 2 * 2, 12);
+  });
+
+  it("on a profile that caches messages, an agent call reads its prompt from the cache but what it writes (#34)", () => {
+    const sonnet = MODEL_PROFILES["sonnet-4.6"];
+    const { promptTokens, cacheWriteTokens, outputTokens } = SCENARIO_ESTIMATE.agentCall;
+    expect(scenarioAgentCallUsd(sonnet)).toBeCloseTo(
+      estimateCostUsd(sonnet, {
+        inputTokens: 0,
+        outputTokens,
+        cacheReadTokens: promptTokens - cacheWriteTokens,
+        cacheWriteTokens,
+      }),
+      12,
+    );
+  });
+
+  it("L1 on a profile with a system cache point writes the prefix once per run, then reads it (#34)", () => {
+    const sonnet = MODEL_PROFILES["sonnet-4.6"];
+    const one = estimateRunCost([l1Case("l1-crisis-988")], sonnet, 1);
+    const three = estimateRunCost([l1Case("l1-crisis-988")], sonnet, 3);
+    const twoCases = estimateRunCost([l1Case("l1-crisis-988"), l1Case("l1-crisis-988")], sonnet, 1);
+    // Later calls read the prefix at a tenth of the input price, where the first wrote it at 1.25x.
+    expect(three - one).toBeLessThan(one);
+    expect(twoCases - one).toBeCloseTo((three - one) / 2, 12);
   });
 
   describe("with a simulator (#31)", () => {
@@ -298,30 +388,33 @@ describe("estimateRunCost", () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     });
-    const agentCall = estimateCostUsd(profile, usage(4000, 400));
-    const simCall = estimateCostUsd(simProfile, usage(1500, 150));
+    const agentCall = 1.5 * scenarioAgentCallUsd(profile);
+    const simCall = estimateCostUsd(simProfile, usage(1000, 20));
     const llm = simulatorSetup({ mode: "scenario", simulatorProfile: simSetting }, deps());
     const replay = simulatorSetup(
       { mode: "scenario", replay: "r.json", simulatorProfile: simSetting },
       deps(),
     );
 
-    it("an unscripted scenario runs the expected simulated turns, each with one simulator call", () => {
+    it("an unscripted scenario runs the expected simulated turns, each with one simulator call, plus its stop", () => {
       const s = scenario("book-derm-next-week-afternoon"); // max_turns 12, no script
       const turns = EXPECTED_SIMULATED_TURNS;
       expect(s.max_turns).toBeGreaterThan(turns);
-      expect(estimateRunCost([s], profile, 2, llm)).toBeCloseTo((3 * agentCall + simCall) * turns * 2, 12);
+      expect(estimateRunCost([s], profile, 2, llm)).toBeCloseTo(
+        (agentCall * turns + simCall * (turns + 1)) * 2,
+        12,
+      );
     });
 
     it("turns are capped by max_turns, and scripted turns cost no simulator call", () => {
       const s = scenario("safety-emergency-chest-pain-911"); // max_turns 4, one scripted turn
       expect(s.max_turns).toBeLessThan(1 + EXPECTED_SIMULATED_TURNS);
-      expect(estimateRunCost([s], profile, 1, llm)).toBeCloseTo(3 * agentCall * 4 + simCall * 3, 12);
+      expect(estimateRunCost([s], profile, 1, llm)).toBeCloseTo(agentCall * 4 + simCall * 4, 12);
     });
 
     it("a replay calls no simulator model; a covered_by scenario still skips, whatever its surface", () => {
       const s = scenario("safety-emergency-chest-pain-911");
-      expect(estimateRunCost([s], profile, 1, replay)).toBeCloseTo(3 * agentCall * 4, 12);
+      expect(estimateRunCost([s], profile, 1, replay)).toBeCloseTo(agentCall * 4, 12);
       expect(estimateRunCost([scenario("safety-conversation-id-ownership")], profile, 1, llm)).toBe(0);
       const agentSurface = { ...s, covered_by: "services/api/test/chat-turn.test.ts" };
       expect(estimateRunCost([agentSurface], profile, 1, llm)).toBe(0);

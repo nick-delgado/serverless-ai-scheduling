@@ -1,7 +1,10 @@
 /**
  * Runs a suite (many cases × k trials) and aggregates the ADR-008 metrics: pass@1, pass^k, safety
  * violations, L1 tool-call accuracy, latency, cost, and wall-clock. In scenario mode it also reports the
- * LLM judge's scores beside them (#32): they never change a case's status.
+ * LLM judge's scores beside them (#32): they never change a case's status. Since #34 a scenario run also
+ * reports turns and agent cost per completed conversation, each run its half of the PRD §7 exit metrics
+ * (core-category task success and reliability, its emergency cases), and the markdown a per-scenario
+ * drill-down (`report/`).
  */
 import { PRICES_AS_OF, type LlmClient, type ModelProfile } from "@sched/agent";
 import type { ToolRegistry } from "@sched/tools";
@@ -18,6 +21,8 @@ import {
 import { L1_ACTION, runL1Trial, type L1TrialResult } from "./l1";
 import type { Suite } from "./loader";
 import type { RateLimitStats } from "./rate-limit";
+import { conversationLine, drillDown, exitHalfLines } from "./report/markdown";
+import { conversationMetrics, mean, pct, percentile, type ConversationMetrics } from "./report/metrics";
 import { isL1Case, type L1Case, type Scenario } from "./schema";
 import { runScenarioTrial, type TrialResult, type TrialStatus } from "./runner";
 import { scriptOnlySimulator, type PatientSimulator } from "./simulator";
@@ -55,7 +60,11 @@ export interface JudgeSummary {
   errors: number;
   /** Mean score per rubric dimension that was scored. */
   meanScores: Partial<Record<RubricDimension, number>>;
-  /** Mean of every `tone` and `clarity` score (PRD §7's judge rubric average), when there are any. */
+  /**
+   * PRD §7's judge rubric average: the mean of the `tone` mean and the `clarity` mean, so each dimension
+   * weighs the same whatever the number of scenarios listing it (#34 r1/A-11); the one mean when only one
+   * was scored.
+   */
   rubricAverage?: number;
   /** `judge:` entries with no rubric, which report `skip`, and the scenarios of this run that list them. */
   unrubriced: { dimension: string; scenarioIds: string[] }[];
@@ -87,6 +96,8 @@ export interface RunSummary {
   simulatorCostUsd?: number;
   /** Scenario mode: the LLM judge (#32). */
   judge?: JudgeSummary;
+  /** Scenario mode: completed conversations, their turns, and agent cost per completed conversation (#34). */
+  conversations?: ConversationMetrics;
 }
 
 export interface RunReport {
@@ -134,20 +145,11 @@ export interface RunSuiteOptions {
   onTrial?: (id: string, trial: TrialResult | L1TrialResult) => void;
 }
 
-function percentile(values: readonly number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] ?? 0;
-}
-
 function caseStatus(trials: readonly { status: string }[]): CaseStatus {
   if (trials.length === 0 || trials.every((t) => t.status === "skip")) return "skip";
   if (trials.some((t) => t.status === "error")) return "error";
   return trials.every((t) => t.status === "pass") ? "pass" : "fail";
 }
-
-const mean = (values: readonly number[]): number | undefined =>
-  values.length === 0 ? undefined : values.reduce((a, b) => a + b, 0) / values.length;
 
 const judgeResults = (t: TrialResult | L1TrialResult): GraderResult[] =>
   t.graders.filter((g) => g.kind === "judge");
@@ -167,7 +169,9 @@ export function summarizeJudge(
     const m = mean(scores(d));
     if (m !== undefined) meanScores[d] = m;
   }
-  const rubricAverage = mean([...scores("tone"), ...scores("clarity")]);
+  const rubricAverage = mean(
+    (["tone", "clarity"] as const).flatMap((d) => (meanScores[d] === undefined ? [] : [meanScores[d]])),
+  );
   return {
     costUsd: scenarioTrials.reduce((s, t) => s + t.judgeCost.costUsd, 0),
     judgedTrials: scenarioTrials.filter((t) => judgeResults(t).some((g) => g.score !== undefined)).length,
@@ -210,6 +214,7 @@ export function summarize(
             0,
           ),
           judge: summarizeJudge(trials, unrubriced),
+          conversations: conversationMetrics(trials),
         }
       : {}),
     ...(mode === "l1"
@@ -340,8 +345,7 @@ export const judgeFails = (t: TrialResult | L1TrialResult): string[] =>
     .filter((g) => g.status === "fail")
     .map((g) => `${g.name} ${String(g.score)}/5`);
 
-/** A share as a whole percentage, e.g. `72%`. */
-export const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
+export { pct };
 
 /** The judge's line in the markdown summary, and the unrubriced dimensions, if any. */
 function judgeLines(report: RunReport, j: JudgeSummary): string[] {
@@ -370,6 +374,8 @@ export function markdownSummary(report: RunReport): string {
     `- Latency p50 ${s.latencyMs.p50} ms · p95 ${s.latencyMs.p95} ms · wall-clock ${(report.wallClockMs / 1000).toFixed(1)} s`,
     `- Estimated cost $${s.costUsd.toFixed(4)}${s.simulatorCostUsd === undefined ? "" : ` (simulator $${s.simulatorCostUsd.toFixed(4)})`} (list prices as of ${report.pricesAsOf})${report.rateLimit ? ` · ${report.rateLimit.calls} calls, ${report.rateLimit.retries} retries, ${report.rateLimit.throttles} throttled` : ""}`,
     ...(s.judge === undefined ? [] : judgeLines(report, s.judge)),
+    ...(s.conversations === undefined ? [] : [conversationLine(s.conversations)]),
+    ...exitHalfLines(report),
     "",
     `| Case | Status | Pass rate | Failed checks | Judge below ${PASS_SCORE} |`,
     "|---|---|---|---|---|",
@@ -383,5 +389,6 @@ export function markdownSummary(report: RunReport): string {
       `| ${c.id} | ${c.status} | ${c.status === "skip" ? "–" : pct(c.passRate)} | ${failed.join("<br>").replaceAll("|", "\\|").slice(0, 400)} | ${judged.join("<br>")} |`,
     );
   }
+  lines.push(...drillDown(report, failedChecks));
   return lines.join("\n");
 }

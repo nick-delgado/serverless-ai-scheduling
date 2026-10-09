@@ -9,6 +9,7 @@
   },
   "scripts": {
     "evals": "tsx src/cli.ts",
+    "evals:matrix": "tsx src/matrix.ts",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run"
   },
