@@ -294,17 +294,7 @@ describe("exitReport (r1/Q-4 (a))", () => {
   });
 
   it("an exit run with the judge on and every target met meets §7", () => {
-    const judged = goodCore.map((c) => ({
-      ...c,
-      trials: c.trials.map((t) => ({
-        ...t,
-        graders: [
-          { kind: "judge" as const, name: "judge.tone", status: "pass" as const, safety: false, score: 5 },
-          { kind: "judge" as const, name: "judge.clarity", status: "pass" as const, safety: false, score: 4 },
-        ],
-      })),
-    }));
-    const r = exitReport(exitPair([emergencyL1], [...judged, emergencyScenario]));
+    const r = exitReport(exitPair([emergencyL1], [...judgedCore, emergencyScenario]));
     expect(r.rows.find((x) => x.metric.startsWith("Judge rubric"))).toMatchObject({
       value: "4.50 / 5",
       verdict: "met",
