@@ -12,7 +12,7 @@ When it isn't clear which one a change is, ask the owner.
 | ADR | Title | Status |
 |---|---|---|
 | [001](0001-agent-runtime.md) | Agent runtime: our own tool-use loop in Lambda | Accepted (amended 2026-10-03) |
-| [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Client decision superseded by ADR-010; model-selection method stands |
+| [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Client decision superseded by ADR-010; model-selection method stands; amended 2026-10-09 |
 | [003](0003-iac-layout.md) | Infrastructure as code: SAM, one template per stack | Accepted (amended 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-08) |
 | [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03) |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted (amended 2026-10-03) |
