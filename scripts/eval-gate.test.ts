@@ -3,6 +3,8 @@
  * without credentials (r1/Q-2 (a)), the re-run merge (r1/A-4), each fail rule of the verdict, exactly the allowed
  * regressions, and `main` against a throwaway git repository and in-memory results files.
  */
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -196,6 +198,13 @@ describe("gateVerdict (FR-041)", () => {
     );
     expect(md).toContain("| sc-1 | pass | fail | **regression** |");
     expect(md).toContain("| l1-1 | pass | pass |  |");
+    // A case new since the baseline shows – for its baseline status; another model is a warning.
+    const fresh = fakeReport("l1", [...passing("l1", 4), { id: "l1-new", trials: [{ status: "pass" }] }], {
+      modelId: "other-model",
+    });
+    const md2 = verdictMarkdown(gateVerdict(baseline, { ...clean(), l1: { first: fresh } }), "b.json");
+    expect(md2).toContain("| l1-new | – | pass | new since the baseline; not counted |");
+    expect(md2).toContain("- Warning: model ID other-model, baseline us.anthropic.claude-sonnet-4-6");
     expect(verdictMarkdown(gateVerdict(baseline, clean()), "b.json")).toContain(
       "## Eval gate: passed\n\nNo safety violation",
     );
@@ -327,11 +336,13 @@ describe("main", () => {
       expect(summary).toContain("<summary>Eval run: scenario</summary>");
     });
 
-    it("verdict passes once the re-run passes", () => {
+    it("verdict passes once the re-run passes, and leaves out a run with no markdown", () => {
       put("l1-rerun", fakeReport("l1", [{ id: "l1-2", trials: [{ status: "pass" }] }]));
+      store.delete("/r/scenario/run.md");
       expect(main(["verdict", "--results", dir, "--baseline", "/b.json"], envFiles, deps())).toBe(0);
       expect(out[0]).toContain("## Eval gate: passed");
       expect(appended.get("/gh/summary")).toContain("<summary>Eval run: l1-rerun</summary>");
+      expect(appended.get("/gh/summary")).not.toContain("<summary>Eval run: scenario</summary>");
     });
 
     it("verdict can't decide without a mode's results, or with a bad baseline: exit 2", () => {
@@ -351,6 +362,42 @@ describe("main", () => {
       expect(main(["verdict", "--results", dir], {}, deps())).toBe(2);
       expect(main(["nonsense"], {}, deps())).toBe(2);
       expect(main(["plan", "--bogus"], {}, deps())).toBe(2);
+    });
+  });
+
+  describe("on real files (the default readers and writers)", () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), "eval-gate-files-"));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it("errored reads the directory and file; plan appends to the GITHUB_OUTPUT file", () => {
+      mkdirSync(join(dir, "l1"));
+      writeFileSync(
+        join(dir, "l1", "run.json"),
+        JSON.stringify(run("l1", "l1", { "l1-3": [{ status: "error" }] })),
+      );
+      expect(main(["errored", join(dir, "l1")], {}, logsTo(out, errors))).toBe(0);
+      expect(out).toEqual(["l1-3"]);
+      expect(main(["errored", join(dir, "none")], {}, logsTo(out, errors))).toBe(2);
+
+      const repo = gitRepo("eval-gate-plan-");
+      try {
+        repo.write("docs/a.md", "a\n");
+        repo.commit("base");
+        const output = join(dir, "output");
+        expect(
+          main(
+            ["plan", "--base", "HEAD"],
+            { GITHUB_OUTPUT: output },
+            { cwd: repo.dir, ...logsTo(out, errors) },
+          ),
+        ).toBe(0);
+        expect(readFileSync(output, "utf8")).toBe("run=false\n");
+      } finally {
+        repo.remove();
+      }
     });
   });
 });

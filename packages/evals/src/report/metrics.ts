@@ -21,7 +21,8 @@ export const mean = (values: readonly number[]): number | undefined =>
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] ?? 0;
+  // In range: the index is between 0 and length - 1.
+  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] as number;
 }
 
 /**
@@ -35,7 +36,7 @@ export const agentCostUsd = (t: TrialResult | L1TrialResult): number =>
 export const COMPLETED_STOP_REASONS: readonly SimulatorStopReason[] = ["goal_achieved", "escalated"];
 
 /** A completed conversation: a scenario trial that ran and ended `goal_achieved` or `escalated` (r1/Q-5). */
-export const isCompleted = (t: TrialResult | L1TrialResult): boolean =>
+export const isCompleted = (t: TrialResult | L1TrialResult): t is TrialResult =>
   t.kind === "scenario" &&
   t.status !== "error" &&
   t.status !== "skip" &&
@@ -61,7 +62,7 @@ export interface ConversationMetrics {
 export function conversationMetrics(trials: readonly (TrialResult | L1TrialResult)[]): ConversationMetrics {
   const ran = trials.filter((t) => t.kind === "scenario" && t.status !== "skip");
   const completed = ran.filter(isCompleted);
-  const turns = completed.map((t) => (t.kind === "scenario" ? t.turns : 0));
+  const turns = completed.map((t) => t.turns);
   const agent = ran.reduce((s, t) => s + agentCostUsd(t), 0);
   const turnsMean = mean(turns);
   return {

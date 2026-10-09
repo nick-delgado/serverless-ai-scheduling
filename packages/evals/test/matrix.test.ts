@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CliArgError,
+  exitReport,
   estimateRunCost,
   interimSystemPrompt,
   loadScenarios,
@@ -26,6 +27,7 @@ import {
   matrixMarkdown,
   matrixSetup,
   parseMatrixArgs,
+  rowValue,
   runMatrix,
   type MatrixCell,
 } from "../src/matrix";
@@ -84,7 +86,8 @@ describe("matrixCells (r1/Q-6 (a))", () => {
     });
     expect(fields("gpt-oss-20b@medium")).toEqual({ reasoning_effort: "medium" });
     expect(fields("gpt-oss-120b@high")).toEqual({ reasoning_effort: "high" });
-    // Sonnet's switch keeps the rest of `output_config`.
+    // Sonnet's switch keeps the rest of `output_config`, and adds one where there's none.
+    expect(EFFORT_SWITCHES["sonnet-4.6"]?.apply({}, "high")).toEqual({ output_config: { effort: "high" } });
     expect(
       EFFORT_SWITCHES["sonnet-4.6"]?.apply({ output_config: { effort: "medium", keep: 1 } }, "low"),
     ).toEqual({
@@ -245,8 +248,11 @@ describe("runMatrix", () => {
     // Each run's guard gets what is left of the matrix budget: the judge counts too.
     expect(calls.map(([, , b]) => Number(b.toFixed(4)))).toEqual([1, 0.8, 0.55, 0.35]);
     expect(results[0]).toMatchObject({ cell: "haiku-4.5", costUsd: 0.45, p95Ms: 900, wallClockMs: 120_000 });
-    expect(results[0]?.agentCostPerCompletedUsd).toBeCloseTo(0.2 / 15, 12);
-    expect(results[0]?.exit?.notExitRun).toEqual([]);
+    const [first] = results;
+    expect(first !== undefined && !("notRun" in first) ? first.exit.notExitRun : undefined).toEqual([]);
+    expect(first !== undefined && !("notRun" in first) ? rowValue(first.exit, "Agent cost") : "").toBe(
+      "$0.0133",
+    );
   });
 
   it("once the budget is spent, the remaining cells don't run", async () => {
@@ -254,7 +260,10 @@ describe("runMatrix", () => {
       log: () => undefined,
       run: (_c, mode) => Promise.resolve(runOf(mode, 0.2)),
     });
-    expect(results.map((r) => r.notRun)).toEqual([undefined, "the matrix budget ($0.3) ran out"]);
+    expect(results.map((r) => ("notRun" in r ? r.notRun : undefined))).toEqual([
+      undefined,
+      "the matrix budget ($0.3) ran out",
+    ]);
     const md = matrixMarkdown(results, { suite: "full", trials: 3 });
     expect(md).toContain("# Model matrix: full suite, 3 trial(s) per case");
     expect(md).toContain(
@@ -294,5 +303,37 @@ describe("cellRunOptions", () => {
 
   it("a cell's report and its results files carry the cell's name", () => {
     expect(asCellReport(runOf("l1", 0.1), cell("gpt-oss-20b@high")).profile).toBe("gpt-oss-20b@high");
+  });
+});
+
+describe("matrixMarkdown's verdict column", () => {
+  const judged = (r: RunReport): RunReport => ({
+    ...r,
+    summary: {
+      ...r.summary,
+      judge: { ...(r.summary.judge ?? summarizeJudge([], [])), rubricAverage: 4.5 },
+    },
+  });
+  const figures = { costUsd: 1, p95Ms: 900, wallClockMs: 60_000 };
+
+  it("says yes for an exit run that meets §7, and not an exit run for a smoke pair", () => {
+    const met = exitReport([runOf("l1", 0.2), judged(runOf("scenario", 0.2))]);
+    const smoke = exitReport([
+      { ...runOf("l1", 0.2), suite: "smoke" },
+      judged({ ...runOf("scenario", 0.2), suite: "smoke" }),
+    ]);
+    const md = matrixMarkdown(
+      [
+        { cell: "a", exit: met, ...figures },
+        { cell: "b", exit: smoke, ...figures },
+      ],
+      { suite: "full", trials: 3 },
+    );
+    expect(md).toMatch(/^\| a \| .* \| 4\.50 \/ 5 \| .* \| yes \| \$1\.00 \|$/m);
+    expect(md).toMatch(/^\| b \| .* \| not an exit run \| \$1\.00 \|$/m);
+  });
+
+  it("rowValue is n/a for a metric the table doesn't have", () => {
+    expect(rowValue(exitReport([runOf("l1", 0.1), runOf("scenario", 0.1)]), "No such metric")).toBe("n/a");
   });
 });

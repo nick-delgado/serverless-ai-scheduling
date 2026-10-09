@@ -213,7 +213,7 @@ export function parseCliArgs(
   if (steps.length > 1) throw new CliArgError(`${steps.join(" and ")} are separate steps; pass one`);
   const resultsAction = values["exit-report"] ? "exit" : values["update-baseline"] ? "baseline" : undefined;
   if (resultsAction === undefined && positionals.length > 0)
-    throw new CliArgError(`unexpected argument ${positionals[0] ?? ""}`);
+    throw new CliArgError(`unexpected argument(s): ${positionals.join(" ")}`);
   const [first, second] = positionals;
   if (
     resultsAction !== undefined &&
@@ -699,8 +699,7 @@ export function exitReportStep(
 ): ExitReport {
   const reports = readResultsPair(args.files, deps);
   const report = asUsage(() => exitReport(reports));
-  const scenario = reports.find((r) => r.mode === "scenario") ?? reports[0];
-  const base = join(args.out, `${fileStamp(scenario.startedAt)}-exit-${report.profile}`);
+  const base = join(args.out, `${fileStamp(report.startedAt)}-exit-${report.profile}`);
   const md = exitMarkdown(report);
   deps.writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
   deps.writeFile(`${base}.md`, `${md}\n`);

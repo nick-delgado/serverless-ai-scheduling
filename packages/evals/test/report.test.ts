@@ -101,6 +101,13 @@ const coreAndSafety: FakeCase[] = [
     category: "escalate",
     trials: [{ status: "skip", reason: "covered outside the harness: x" }],
   },
+  {
+    id: "skip-b",
+    category: "escalate",
+    trials: [],
+    reason: "budget guard ($1 reached) after 0 of 3 trial(s)",
+  },
+  { id: "skip-c", category: "escalate", trials: [{ status: "skip" }] },
 ];
 
 describe("exitHalf", () => {
@@ -126,7 +133,11 @@ describe("exitHalf", () => {
   });
 
   it("lists skipped cases with their reasons, and the emergency cases", () => {
-    expect(h.skipped).toEqual([{ id: "skip-a", reason: "covered outside the harness: x" }]);
+    expect(h.skipped).toEqual([
+      { id: "skip-a", reason: "covered outside the harness: x" },
+      { id: "skip-b", reason: "budget guard ($1 reached) after 0 of 3 trial(s)" },
+      { id: "skip-c", reason: "skipped" },
+    ]);
     expect(h.emergency).toEqual({ ids: ["safety-a"], passedEvery: ["safety-a"] });
     expect(emergencyMet(h)).toBe(true);
   });
@@ -350,6 +361,53 @@ describe("exitReport (r1/Q-4 (a))", () => {
   });
 });
 
+describe("exitReport's other verdicts", () => {
+  it("no simulator recorded is a failed precondition", () => {
+    const [scenario, l1] = exitPair([emergencyL1], [...goodCore, emergencyScenario]);
+    const { simulator: _simulator, ...noSimulator } = scenario;
+    expect(exitReport([l1, noSimulator]).notExitRun).toEqual([
+      "scenario: simulator is none, not the LLM simulator on sonnet-4.6",
+    ]);
+  });
+
+  it("a low judge average, a dear conversation, and none completed are not met or n/a", () => {
+    const low = judgedCore.map((c) => ({
+      ...c,
+      trials: c.trials.map((t) => ({
+        ...t,
+        costUsd: 1,
+        simulatorCostUsd: 0,
+        graders: (t.graders ?? []).map((g) => ({ ...g, score: 3 })),
+      })),
+    }));
+    const r = exitReport(exitPair([emergencyL1], [...low, emergencyScenario]));
+    expect(r.rows.find((x) => x.metric.startsWith("Judge rubric"))).toMatchObject({
+      value: "3.00 / 5",
+      verdict: "not met",
+    });
+    expect(r.rows.find((x) => x.metric.startsWith("Agent cost"))).toMatchObject({ verdict: "not met" });
+    const gaveUp = goodCore.map((c) => ({
+      ...c,
+      trials: c.trials.map((t) => ({ ...t, stoppedBecause: "gave_up" })),
+    }));
+    expect(
+      exitReport(exitPair([emergencyL1], gaveUp)).rows.find((x) => x.metric.startsWith("Agent cost")),
+    ).toMatchObject({
+      value: "n/a",
+      verdict: "n/a",
+    });
+  });
+
+  it("an L1 report without tool-call accuracy shows n/a", () => {
+    const [scenario, l1] = exitPair([emergencyL1], [...goodCore, emergencyScenario]);
+    const { toolCallAccuracy: _accuracy, ...summary } = l1.summary;
+    expect(exitReport([{ ...l1, summary }, scenario]).rows.at(-1)).toMatchObject({
+      value: "n/a",
+      verdict: "diagnostic",
+    });
+  });
+});
+
 describe("summarizeJudge's rubric average (r1/A-11)", () => {
   const judged = (dimension: string, score: number) =>
     scenarioTrial({
@@ -400,6 +458,13 @@ describe("markdownSummary (#34)", () => {
         tags: ["emergency"],
         trials: [{ status: "fail", stoppedBecause: "gave_up", turns: 2, reason: "a | b" }],
       },
+      {
+        id: "book-cut",
+        category: "book",
+        trials: [],
+        budgetStopped: true,
+        reason: "budget guard ($1 reached) after 0 of 1 trial(s)",
+      },
     ]);
     const md = markdownSummary(report);
     expect(md).toContain(
@@ -412,6 +477,8 @@ describe("markdownSummary (#34)", () => {
     expect(md).toContain("## Per-scenario drill-down\n\n### book-a (book, pass)");
     expect(md).toContain("| 1 | pass | goal_achieved | 3 | $0.0400 |  |  |");
     expect(md).toContain("| 1 | fail | gave_up | 2 | $0.0000 | a \\| b |  |");
+    expect(md).toContain("### book-cut (book, skip)\n\n| Trial |");
+    expect(md).toContain("|---|---|---|---|---|---|---|\n\nbudget guard ($1 reached) after 0 of 1 trial(s)");
   });
 
   it("an L1 run shows its emergency cases and no drill-down", () => {

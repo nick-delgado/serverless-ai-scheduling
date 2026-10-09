@@ -244,8 +244,10 @@ function readRunDir(
 ): RunReport | undefined {
   const files = deps.listJson(dir);
   if (files === undefined) return undefined;
-  if (files.length !== 1) throw new Error(`${dir} holds ${files.length} results files, not one`);
-  const path = join(dir, files[0] ?? "");
+  const [file] = files;
+  if (files.length !== 1 || file === undefined)
+    throw new Error(`${dir} holds ${files.length} results files, not one`);
+  const path = join(dir, file);
   return parseRunReport(JSON.parse(deps.readText(path)), path);
 }
 

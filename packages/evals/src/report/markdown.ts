@@ -57,12 +57,10 @@ export function drillDown(report: RunReport, failedChecks: FailedChecks): string
       "| Trial | Status | Stopped because | Turns | Agent cost | Failed checks | Judge scores |",
       "|---|---|---|---|---|---|---|",
     );
-    for (const t of c.trials) {
-      if (t.kind !== "scenario") continue;
+    for (const t of c.trials.filter((x): x is TrialResult => x.kind === "scenario"))
       lines.push(
         `| ${t.trial} | ${t.status} | ${t.stoppedBecause ?? "–"} | ${t.turns} | ${usd(agentCostUsd(t))} | ${cell(failedChecks(t).join("; "))} | ${judgeScores(t)} |`,
       );
-    }
     if (c.reason !== undefined) lines.push("", `${c.reason}`);
   }
   return lines;

@@ -35,6 +35,8 @@ export interface ExitRow {
 
 export interface ExitReport {
   profile: string;
+  /** The scenario run's start, which stamps the exit report's files. */
+  startedAt: string;
   promptVersion: string;
   /** Empty for an exit run. */
   notExitRun: string[];
@@ -158,6 +160,7 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
   ];
   return {
     profile: scenario.profile,
+    startedAt: scenario.startedAt,
     promptVersion: scenario.promptVersion,
     notExitRun: exitPreconditionFailures(l1, scenario),
     rows,

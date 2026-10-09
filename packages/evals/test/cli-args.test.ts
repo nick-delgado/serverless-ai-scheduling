@@ -128,7 +128,7 @@ describe("parseCliArgs", () => {
       ["--update-baseline", "/a", "/b", "/c"],
       "--update-baseline takes two results files: <l1.json> <scenario.json>",
     ],
-    [["/a.json"], "unexpected argument /a.json"],
+    [["/a.json", "/b.json"], "unexpected argument(s): /a.json /b.json"],
     [
       ["--exit-report", "--update-baseline", "/a", "/b"],
       "--exit-report and --update-baseline are separate steps; pass one",

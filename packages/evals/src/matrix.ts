@@ -50,7 +50,6 @@ import { rateLimited } from "./rate-limit";
 import { exitMarkdown, exitMet, exitReport, type ExitReport } from "./report/exit";
 import { prepareResultsCopyDir, resultsCopyDir, resultsWrittenLine, writeRunResults } from "./results-copy";
 import { markdownSummary, runSuite } from "./suite";
-import { conversationMetrics } from "./report/metrics";
 import type { L1Case, Scenario } from "./schema";
 import type { Mode, RunReport, RunSuiteOptions } from "./suite";
 import { errorReason } from "./util";
@@ -186,6 +185,7 @@ export interface MatrixSetup {
 
 /** The matrix's simulator and judge on `llm`, at their defaults (PRD §7: simulator `sonnet-4.6`). */
 export const matrixSetup = (llm: LlmClient): MatrixSetup => ({
+  /* v8 ignore next -- a matrix run never replays, so simulatorSetup never calls readReplay */
   simulator: simulatorSetup({ mode: "scenario" }, { llm, readReplay: () => undefined }),
   judging: judgeSetup({ mode: "scenario", judge: true }, { llm }),
 });
@@ -228,19 +228,18 @@ export async function confirmMatrix(
   return /^y(es)?$/i.test(answer.trim());
 }
 
-/** One cell's outcome. */
-export interface CellResult {
-  cell: string;
-  /** Why the cell didn't run (the matrix budget ran out), when it didn't. */
-  notRun?: string;
-  exit?: ExitReport;
-  /** Agent, simulator and judge, both runs. */
-  costUsd: number;
-  agentCostPerCompletedUsd?: number;
-  /** The scenario run's p95 turn latency, ms. */
-  p95Ms?: number;
-  wallClockMs: number;
-}
+/** One cell's outcome: its exit table and run figures, or why it didn't run (the matrix budget ran out). */
+export type CellResult =
+  | { cell: string; notRun: string }
+  | {
+      cell: string;
+      exit: ExitReport;
+      /** Agent, simulator and judge, both runs. */
+      costUsd: number;
+      /** The scenario run's p95 turn latency, ms. */
+      p95Ms: number;
+      wallClockMs: number;
+    };
 
 /** What `runMatrix` needs from outside: one run of a cell in a mode, with a budget, and a log. */
 export interface MatrixDeps {
@@ -268,8 +267,6 @@ export async function runMatrix(
       results.push({
         cell: cell.name,
         notRun: `the matrix budget ($${maxCostUsd}) ran out`,
-        costUsd: 0,
-        wallClockMs: 0,
       });
       continue;
     }
@@ -278,14 +275,10 @@ export async function runMatrix(
     spent += runSpendUsd(l1);
     const scenario = await deps.run(cell, "scenario", Math.max(maxCostUsd - spent, Number.EPSILON));
     spent += runSpendUsd(scenario);
-    const perCompleted = conversationMetrics(
-      scenario.cases.flatMap((c) => c.trials),
-    ).agentCostPerCompletedUsd;
     results.push({
       cell: cell.name,
       exit: exitReport([l1, scenario]),
       costUsd: runSpendUsd(l1) + runSpendUsd(scenario),
-      ...(perCompleted === undefined ? {} : { agentCostPerCompletedUsd: perCompleted }),
       p95Ms: scenario.summary.latencyMs.p95,
       wallClockMs: l1.wallClockMs + scenario.wallClockMs,
     });
@@ -293,7 +286,8 @@ export async function runMatrix(
   return results;
 }
 
-const rowValue = (exit: ExitReport, prefix: string): string =>
+/** The value of the exit table's headline row whose metric starts with `prefix`; n/a when there's none. */
+export const rowValue = (exit: ExitReport, prefix: string): string =>
   exit.rows.find((r) => r.sub !== true && r.metric.startsWith(prefix))?.value ?? "n/a";
 
 /** The comparison table (r1/A-8): one row per cell. */
@@ -310,13 +304,14 @@ export function matrixMarkdown(
     "|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const r of results) {
-    if (r.exit === undefined) {
-      lines.push(`| ${r.cell} | not run: ${r.notRun ?? ""} | | | | | | | | | |`);
+    if ("notRun" in r) {
+      lines.push(`| ${r.cell} | not run: ${r.notRun} | | | | | | | | | |`);
       continue;
     }
     const e = r.exit;
+    const meets = exitMet(e) ? "yes" : e.notExitRun.length > 0 ? "not an exit run" : "no";
     lines.push(
-      `| ${r.cell} | ${rowValue(e, "Task success")} | ${rowValue(e, "Reliability")} | ${rowValue(e, "Safety")} | ${rowValue(e, "Emergency")} | ${rowValue(e, "Judge rubric")} | ${r.agentCostPerCompletedUsd === undefined ? "n/a" : `$${r.agentCostPerCompletedUsd.toFixed(4)}`} | ${r.p95Ms ?? 0} ms | ${(r.wallClockMs / 60000).toFixed(1)} min | ${exitMet(e) ? "yes" : e.notExitRun.length > 0 ? "not an exit run" : "no"} | $${r.costUsd.toFixed(2)} |`,
+      `| ${r.cell} | ${rowValue(e, "Task success")} | ${rowValue(e, "Reliability")} | ${rowValue(e, "Safety")} | ${rowValue(e, "Emergency")} | ${rowValue(e, "Judge rubric")} | ${rowValue(e, "Agent cost")} | ${r.p95Ms} ms | ${(r.wallClockMs / 60000).toFixed(1)} min | ${meets} | $${r.costUsd.toFixed(2)} |`,
     );
   }
   return lines.join("\n");
@@ -423,7 +418,7 @@ async function main(): Promise<void> {
   const stamp = fileStamp(new Date().toISOString());
   mkdirSync(args.out, { recursive: true });
   for (const r of results)
-    if (r.exit !== undefined)
+    if (!("notRun" in r))
       writeFileSync(join(args.out, `${stamp}-exit-${r.cell}.md`), `${exitMarkdown(r.exit)}\n`);
   const md = matrixMarkdown(results, args);
   writeFileSync(join(args.out, `${stamp}-matrix.json`), `${JSON.stringify(results, null, 2)}\n`);
