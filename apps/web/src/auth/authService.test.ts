@@ -238,3 +238,101 @@ describe("session lifetime", () => {
     expect(listener).toHaveBeenCalled();
   });
 });
+
+/**
+ * The Identity Pool (S6-02, #29): voice's `getAwsCredentials` exchanges the ID token through Cognito
+ * Identity, which this file stands in for; `getIdToken` never needs it (r1/Q-1 (a)).
+ */
+describe("Identity Pool credentials", () => {
+  const IDENTITY_ENDPOINT = "https://cognito-identity.us-east-1.amazonaws.com/";
+  const IDENTITY_POOL_ID = "us-east-1:00000000-0000-4000-8000-000000000029";
+  const LOGIN_KEY = `cognito-idp.us-east-1.amazonaws.com/${MOCK_COGNITO_CONFIG.userPoolId}`;
+
+  interface IdentityCall {
+    operation: string;
+    body: { IdentityPoolId?: string; Logins?: Record<string, string> };
+  }
+
+  /** Cognito Identity: working (synthetic credentials) or failing with a 500; records each call. */
+  function identityPool(mode: "ok" | "fail"): IdentityCall[] {
+    const calls: IdentityCall[] = [];
+    server.use(
+      http.post(IDENTITY_ENDPOINT, async ({ request }) => {
+        const operation =
+          request.headers.get("x-amz-target")?.replace("AWSCognitoIdentityService.", "") ?? "";
+        calls.push({ operation, body: (await request.json()) as IdentityCall["body"] });
+        if (mode === "fail") {
+          return HttpResponse.json(
+            { __type: "InternalErrorException", message: "Identity is unavailable." },
+            { status: 500, headers: { "x-amzn-errortype": "InternalErrorException:" } },
+          );
+        }
+        const IdentityId = "us-east-1:11111111-1111-4111-8111-111111111111";
+        if (operation === "GetId") return HttpResponse.json({ IdentityId });
+        return HttpResponse.json({
+          IdentityId,
+          Credentials: {
+            AccessKeyId: "ASIAMOCKMOCKMOCKMOCK",
+            SecretKey: "mock-secret",
+            SessionToken: "mock-session-token",
+            Expiration: Math.floor(Date.now() / 1000) + 3600,
+          },
+        });
+      }),
+    );
+    return calls;
+  }
+
+  const withIdentityPool = () =>
+    createAmplifyAuthService(() => ({ ...MOCK_COGNITO_CONFIG, identityPoolId: IDENTITY_POOL_ID }));
+
+  afterEach(async () => {
+    // Amplify keeps the credentials it fetched in memory, across services; sign out to drop them.
+    await withIdentityPool().signOut();
+  });
+
+  it("exchanges the signed-in patient's ID token, under the user pool's login key", async () => {
+    const calls = identityPool("ok");
+    const service = withIdentityPool();
+    await service.signIn("maria.santos", MOCK_PASSWORD);
+    await expect(service.getAwsCredentials()).resolves.toMatchObject({
+      accessKeyId: "ASIAMOCKMOCKMOCKMOCK",
+      secretAccessKey: "mock-secret",
+      sessionToken: "mock-session-token",
+    });
+    const getId = calls.find((call) => call.operation === "GetId");
+    expect(getId?.body.IdentityPoolId).toBe(IDENTITY_POOL_ID);
+    expect(Object.keys(getId?.body.Logins ?? {})).toEqual([LOGIN_KEY]);
+    expect(claims(getId?.body.Logins?.[LOGIN_KEY])).toMatchObject({ token_use: "id" });
+  });
+
+  it("keeps getIdToken working when Cognito Identity fails; only the credentials reject", async () => {
+    const calls = identityPool("fail");
+    const service = withIdentityPool();
+    await service.signIn("maria.santos", MOCK_PASSWORD);
+    expect(claims(await service.getIdToken())).toMatchObject({ token_use: "id" });
+    await expect(service.getAwsCredentials()).rejects.toThrow();
+    expect(calls.length).toBeGreaterThan(0);
+    expect(claims(await service.getIdToken())).toMatchObject({ token_use: "id" });
+  });
+
+  it("is undefined, with no call to Cognito Identity, when the build has no Identity Pool", async () => {
+    const calls = identityPool("ok");
+    await auth.signIn("maria.santos", MOCK_PASSWORD);
+    await expect(auth.getAwsCredentials()).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it("is undefined when signed out (no guest access)", async () => {
+    const calls = identityPool("ok");
+    await expect(withIdentityPool().getAwsCredentials()).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it("is undefined when sign-in isn't configured", async () => {
+    const unconfigured = createAmplifyAuthService(() => {
+      throw new Error("Sign-in is not configured");
+    });
+    await expect(unconfigured.getAwsCredentials()).resolves.toBeUndefined();
+  });
+});

@@ -1,13 +1,20 @@
 /** Test helpers for components that use auth: a controllable `AuthService`. */
 import { vi } from "vitest";
 
-import type { AuthService, AuthUser, SignInResult } from "./authService";
+import type { AuthService, AuthUser, AwsCredentials, SignInResult } from "./authService";
 
 export interface FakeAuthService extends AuthService {
   /** Fire the service's change event, as Amplify's Hub does after a failed refresh. */
   emitChange(): void;
   user: AuthUser | undefined;
 }
+
+/** Synthetic Identity Pool credentials the fake returns while signed in (not a real key). */
+export const FAKE_AWS_CREDENTIALS: AwsCredentials = {
+  accessKeyId: "ASIAFAKEFAKEFAKEFAKE",
+  secretAccessKey: "fake-secret-access-key",
+  sessionToken: "fake-session-token",
+};
 
 /** A synthetic `sub` for a username, when a test doesn't give one. */
 export function fakeSub(username: string): string {
@@ -32,6 +39,7 @@ export function fakeAuthService(user?: { username: string; sub?: string }): Fake
       return Promise.resolve();
     }),
     getIdToken: vi.fn(() => Promise.resolve(fake.user ? "fake-id-token" : undefined)),
+    getAwsCredentials: vi.fn(() => Promise.resolve(fake.user ? FAKE_AWS_CREDENTIALS : undefined)),
     onChange: vi.fn((listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

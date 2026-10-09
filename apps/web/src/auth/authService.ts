@@ -8,6 +8,12 @@
  *
  * Failures are reported without saying whether the username exists (FR-001): a wrong password and
  * an unknown user are both `credentials`.
+ *
+ * With an Identity Pool configured (S6-02, #29), voice reads Transcribe-only AWS credentials through
+ * `getAwsCredentials` (`fetchAuthSession`, which exchanges the ID token). The token path stays
+ * independent of it (r1/Q-1 (a)): `getIdToken` reads the token provider alone (`Amplify.getTokens`,
+ * this Amplify version's facade over `Amplify.Auth.getTokens`, the call `fetchAuthSession` makes
+ * first, refresh included), so text chat keeps working when Cognito can't issue AWS credentials.
  */
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession, getCurrentUser, signIn, signOut } from "aws-amplify/auth";
@@ -19,6 +25,14 @@ export interface AuthUser {
   username: string;
   /** The Cognito `sub` (Amplify's `userId`): the chat's login-session rule keys on it (#27). */
   sub: string;
+}
+
+/** Temporary AWS credentials from the Identity Pool, scoped to Transcribe streaming (ADR-005). */
+export interface AwsCredentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+  expiration?: Date;
 }
 
 export type SignInResult =
@@ -45,6 +59,11 @@ export interface AuthService {
    * refreshed. Rejects on transient errors (offline, Cognito unavailable), which a retry can fix.
    */
   getIdToken(): Promise<string | undefined>;
+  /**
+   * The Identity Pool's AWS credentials for the signed-in patient, for voice only; `undefined` when
+   * signed out or no Identity Pool is configured. Rejects when Cognito can't issue them.
+   */
+  getAwsCredentials(): Promise<AwsCredentials | undefined>;
   /** Calls `listener` when the session may have changed elsewhere (a failed refresh, another sign-out). */
   onChange(listener: () => void): () => void;
 }
@@ -69,8 +88,12 @@ export function createAmplifyAuthService(config: () => CognitoConfig): AuthServi
   let configured = false;
   const ensureConfigured = () => {
     if (configured) return;
-    const { userPoolId, userPoolClientId } = config();
-    Amplify.configure({ Auth: { Cognito: { userPoolId, userPoolClientId } } });
+    const { userPoolId, userPoolClientId, identityPoolId } = config();
+    Amplify.configure({
+      Auth: identityPoolId
+        ? { Cognito: { userPoolId, userPoolClientId, identityPoolId, allowGuestAccess: false } }
+        : { Cognito: { userPoolId, userPoolClientId } },
+    });
     configured = true;
   };
 
@@ -118,8 +141,18 @@ export function createAmplifyAuthService(config: () => CognitoConfig): AuthServi
       } catch {
         return undefined;
       }
-      const { tokens } = await fetchAuthSession();
+      const tokens = await Amplify.getTokens({});
       return tokens?.idToken?.toString();
+    },
+
+    async getAwsCredentials() {
+      try {
+        ensureConfigured();
+      } catch {
+        return undefined;
+      }
+      const { credentials } = await fetchAuthSession();
+      return credentials;
     },
 
     onChange(listener) {

@@ -5,7 +5,7 @@
  * to the Cognito mock's pool unless `VITE_MOCK_API=off`. Production builds drop that fallback.
  */
 import { MOCK_COGNITO_CONFIG } from "../mocks/cognitoUsers";
-import { type AuthService, createAmplifyAuthService } from "./authService";
+import { type AuthService, type AwsCredentials, createAmplifyAuthService } from "./authService";
 import { resolveCognitoConfig } from "./config";
 
 let service: AuthService | undefined;
@@ -27,4 +27,12 @@ export function defaultAuthService(): AuthService {
  */
 export function getIdToken(): Promise<string | undefined> {
   return defaultAuthService().getIdToken();
+}
+
+/**
+ * The patient's Identity Pool credentials, for voice only (S6-02, #29); `undefined` when signed out or
+ * the build has no Identity Pool. Rejects when Cognito can't issue them. Text chat never calls this.
+ */
+export function getAwsCredentials(): Promise<AwsCredentials | undefined> {
+  return defaultAuthService().getAwsCredentials();
 }

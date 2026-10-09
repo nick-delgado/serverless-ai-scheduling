@@ -51,4 +51,12 @@ describe("defaultAuthService", () => {
     await defaultAuthService().signIn("maria.santos", MOCK_PASSWORD);
     await expect(getIdToken()).resolves.toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
   });
+
+  it("getAwsCredentials reads the same service: none on the mock, which has no Identity Pool", async () => {
+    const { defaultAuthService, getAwsCredentials } = await import("./session");
+    await defaultAuthService().signIn("maria.santos", MOCK_PASSWORD);
+    const spy = vi.spyOn(defaultAuthService(), "getAwsCredentials");
+    await expect(getAwsCredentials()).resolves.toBeUndefined();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
 });
