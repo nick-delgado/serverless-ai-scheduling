@@ -362,9 +362,11 @@ describe("the page becoming hidden (r2/Q-1 (a))", () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
-  it("after Send (Transcribing…) is not an error", async () => {
+  it("after Send (Transcribing…) is not an error, and the listener is gone", async () => {
     const { session, callbacks, client } = await recording();
+    const remove = vi.spyOn(document, "removeEventListener");
     const stopped = session.stop();
+    expect(remove).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
     setVisibility("hidden");
     client?.result("Thanks.");
     client?.end();

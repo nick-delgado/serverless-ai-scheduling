@@ -136,8 +136,7 @@ class StreamRun {
 
   readonly handlers: MicHandlers = {
     onChunk: (pcm, level) => {
-      if (this.state !== "recording" && this.state !== "stopping") return;
-      this.enqueue(pcm);
+      this.enqueue(pcm); // after Cancel or a failure the input has ended, so nothing reads it
       if (this.state === "recording") this.callbacks.onLevel?.(level);
     },
     onEnded: () => this.fail("mic-ended", "The mic's track ended"),

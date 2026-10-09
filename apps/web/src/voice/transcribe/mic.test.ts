@@ -144,6 +144,7 @@ describe("openMic", () => {
   it("flush() asks the worklet, passes on its last chunk, and resolves when it answers", async () => {
     const h = handlers();
     const mic = await openMic(asContext(fakeContext()), h);
+    vi.useFakeTimers(); // no time passes: only the worklet's answer can resolve it
     const flushed = mic.flush();
     expect(FakeNode.last?.port.postMessage).toHaveBeenCalledWith({ type: "flush" });
     FakeNode.last?.port.onmessage?.({ data: { type: "flushed", pcm: new ArrayBuffer(2), level: 0.1 } });
