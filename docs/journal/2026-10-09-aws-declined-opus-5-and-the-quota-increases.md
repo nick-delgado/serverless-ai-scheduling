@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #227, #49, #37, ADR-002, ADR-008, ADR-010, PRD FR-042
+**Related:** #227, PR #228, #49, #37, ADR-002, ADR-008, ADR-010, PRD FR-042
 
 ## What happened
 
@@ -17,6 +17,7 @@ An agent then corrected every line that still presented either request as pendin
 - **Six entitled profiles stand.** ADR-010 already moved the project to Converse and six entitled profiles (Sonnet 4.6, Haiku 4.5, Nova 2 Lite, Nova Pro, gpt-oss-120b, gpt-oss-20b), and ADR-008's 2026-10-03 amendment already took Opus 5 and Sonnet 5 out of the M3 matrix. The decline changes no code: `opus-5` and `sonnet-5` stay defined in `packages/agent/src/profiles.ts` and throw when resolved, and ADR-010's "Revisit if they become entitled" stays, because entitlement can still change later.
 - **The 10 RPM limiter is the mitigation, not a stopgap.** ADR-008's per-model token bucket at 90% of each profile's `rpm` already paces every live call. The risk table used to pair it with "quota increase requested"; now it stands alone. The cost is wall-clock time on Claude eval runs, not correctness.
 - **#49 leaves the traceability table rather than staying with a "closed" note.** The PRD table keeps closed issues that did their work (#33, #60); #49 never did any, so FR-042's row drops it. The backlog map, which keeps the history of what was planned, marks it closed, not planned.
+- **ADR-002 gets pointers on four lines, not one.** The issue named the "Target models remain… S-1b" line; the throttling note ("probably a quota increase") and interim-path steps 1 and 3 (open a Support case, rerun when entitlement arrives) also read as pending, so each gets an italic pointer to the amendment. The alternative, leaving them because they sit in a dated proposal, would have left the grep showing open requests.
 
 ## What surprised us
 
