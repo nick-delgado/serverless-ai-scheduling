@@ -1,0 +1,43 @@
+# Scratch probe for #41 (SPEC-3 (b)): prints the OIDC token's sub, job_workflow_ref and environment claims
+# only, never the token. No AWS step. This branch is never merged and is deleted after the run.
+name: OIDC sub probe
+
+on:
+  push:
+    branches: [scratch/oidc-sub-probe]
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print the subject claims
+        run: |
+          node --input-type=module -e '
+            const url = `${process.env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+            const { value } = await res.json();
+            const c = JSON.parse(Buffer.from(value.split(".")[1], "base64url"));
+            console.log(`sub: ${c.sub}`);
+            console.log(`job_workflow_ref: ${c.job_workflow_ref}`);
+            console.log(`environment: ${c.environment}`);
+          '
+  with-environment:
+    runs-on: ubuntu-latest
+    environment: oidc-probe
+    steps:
+      - name: Print the subject claims
+        run: |
+          node --input-type=module -e '
+            const url = `${process.env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+            const { value } = await res.json();
+            const c = JSON.parse(Buffer.from(value.split(".")[1], "base64url"));
+            console.log(`sub: ${c.sub}`);
+            console.log(`job_workflow_ref: ${c.job_workflow_ref}`);
+            console.log(`environment: ${c.environment}`);
+          '
