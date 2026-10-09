@@ -1,12 +1,12 @@
 # The CI eval gate (#34, FR-041, ADR-008 amendments 2026-10-03 and 2026-10-09). It runs on every pull request and
 # always reports, so it can be a required check. Every decision is in scripts/eval-gate.ts and its tests; this file
 # only runs the commands:
-# - plan: when the PR changes no gated path (the agent, the tools, packages/contracts/src, the eval harness's src,
-#   scenarios and baselines, or this file), the job passes without calling Bedrock. When one changed but the run has
-#   no credentials (a fork's or Dependabot's PR gets no secrets), it fails closed, naming why.
-# - otherwise the smoke suite in both modes at k=1 on sonnet-4.6 with --max-cost 1 (the simulator on sonnet-4.6, the
-#   judge on haiku-4.5: the eval role allows only those two), one re-run of the errored cases, then the verdict against
-#   packages/evals/baselines/sonnet-4.6.json read from the checked-out merge commit.
+# - plan: when the PR changes no gated path, the job passes without calling Bedrock. The gated paths are
+#   GATED_PREFIXES, GATED_FILES and the contracts rule in scripts/eval-gate.ts. When one changed but the run has no
+#   credentials (a fork's or Dependabot's PR gets no secrets), it fails closed, naming why.
+# - otherwise the smoke suite in both modes (the job's env below: k=1, the profile, the budget per invocation; the
+#   simulator on the same profile and the judge on haiku-4.5, the only two models the eval role allows), one re-run
+#   of the errored cases, then the verdict against the baseline read from the checked-out merge commit.
 # Credentials: the sched-github-evals role through GitHub OIDC (docs/runbooks/aws-setup.md, "CI credentials (GitHub
 # OIDC)"); it trusts only this file at refs/pull/*/merge, so this workflow runs on pull_request only.
 name: Evals
@@ -28,6 +28,11 @@ jobs:
     name: Eval gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # The gate's run settings, each once: every smoke invocation takes SMOKE, and scenario mode adds SCENARIO.
+    env:
+      SMOKE: --suite smoke --trials 1 --profile sonnet-4.6 --max-cost 1
+      SCENARIO: --simulator-profile sonnet-4.6 --judge-profile haiku-4.5
+      BASELINE: packages/evals/baselines/sonnet-4.6.json
     permissions:
       contents: read
       id-token: write
@@ -79,33 +84,32 @@ jobs:
       - name: Smoke suite, L1
         if: steps.plan.outputs.run == 'true'
         run: |
-          npm run evals -- --suite smoke --mode l1 --trials 1 --profile sonnet-4.6 --max-cost 1 --out "$RESULTS/l1" \
-            || [[ $? -eq 1 ]]
+          # shellcheck disable=SC2086 # SMOKE is a list of flags
+          npm run evals -- --mode l1 $SMOKE --out "$RESULTS/l1" || [[ $? -eq 1 ]]
       - name: Smoke suite, scenario
         if: steps.plan.outputs.run == 'true'
         run: |
-          npm run evals -- --suite smoke --mode scenario --trials 1 --profile sonnet-4.6 --max-cost 1 \
-            --simulator-profile sonnet-4.6 --judge-profile haiku-4.5 --out "$RESULTS/scenario" || [[ $? -eq 1 ]]
+          # shellcheck disable=SC2086 # SMOKE and SCENARIO are lists of flags
+          npm run evals -- --mode scenario $SMOKE $SCENARIO --out "$RESULTS/scenario" || [[ $? -eq 1 ]]
       # One re-run of exactly the errored cases (--ids matches whole IDs), in the same mode.
       - name: Re-run errored cases once
         if: steps.plan.outputs.run == 'true'
         run: |
+          # shellcheck disable=SC2086 # SMOKE and SCENARIO are lists of flags
           ids=$(npx tsx scripts/eval-gate.ts errored "$RESULTS/l1")
           if [[ -n "$ids" ]]; then
             echo "Re-running l1: $ids"
-            npm run evals -- --suite smoke --mode l1 --trials 1 --profile sonnet-4.6 --max-cost 1 --ids "$ids" \
-              --out "$RESULTS/l1-rerun" || [[ $? -eq 1 ]]
+            npm run evals -- --mode l1 $SMOKE --ids "$ids" --out "$RESULTS/l1-rerun" || [[ $? -eq 1 ]]
           fi
           ids=$(npx tsx scripts/eval-gate.ts errored "$RESULTS/scenario")
           if [[ -n "$ids" ]]; then
             echo "Re-running scenario: $ids"
-            npm run evals -- --suite smoke --mode scenario --trials 1 --profile sonnet-4.6 --max-cost 1 \
-              --simulator-profile sonnet-4.6 --judge-profile haiku-4.5 --ids "$ids" --out "$RESULTS/scenario-rerun" \
+            npm run evals -- --mode scenario $SMOKE $SCENARIO --ids "$ids" --out "$RESULTS/scenario-rerun" \
               || [[ $? -eq 1 ]]
           fi
       - name: Verdict against the baseline
         if: steps.plan.outputs.run == 'true'
-        run: npx tsx scripts/eval-gate.ts verdict --results "$RESULTS" --baseline packages/evals/baselines/sonnet-4.6.json
+        run: npx tsx scripts/eval-gate.ts verdict --results "$RESULTS" --baseline "$BASELINE"
       - name: Upload the results
         if: always() && steps.plan.outputs.run == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

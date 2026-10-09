@@ -22,7 +22,7 @@ Nick's decisions are in the ADR amendment. These are the ones the spec left open
 - **What the estimate's ratio is measured against.** "Recorded cost" in r1/A-9 is the run's total, the judge included, because the estimate includes the judge. The scenario estimate is pinned between 1.0x and 1.5x of the two 2026-10-07 smoke runs and of PR #165's full run. The L1 estimate was 2.65x high, past A-9's 2x threshold, so we recalibrated it too. It now models the system-and-tools cache prefix: written once per run, read afterwards. It also adds ~500 uncached tokens a call that the request's bytes / 4 missed. We checked it against the cold-cache L1 runs. One warm-cache run ($0.040) is 1.55x, which the test doesn't pin. The alternative, a flat 2x safety factor, would hide the next drift.
 - **The judge rubric average with one dimension scored.** r1/A-11 says the mean of the two means. When only `tone` or only `clarity` was scored, the average is that one mean. We rejected reporting n/a, because a run that scored one dimension still has a meaningful average.
 - **The matrix budget.** `--max-cost` caps the whole matrix, with a default of 1.5x the estimate. Each run's budget guard gets whatever is left. We rejected a per-run cap: with 28 runs, it's a number nobody can reason about.
-- **The gate's credentials message.** For a fork, the remedy is to push the branch to this repository. For Dependabot, it's a push of Nick's own. GitHub's documentation says a re-run keeps the first run's privileges, so a re-run alone doesn't help. Its pages don't state that a person's push gives the run secrets: r1/Q-2's "(verify first)" is still open for Dependabot.
+- **The gate's credentials message.** For a fork, the remedy is to push the branch to this repository. For Dependabot, it's a push of Nick's own. GitHub's documentation says a re-run keeps the first run's privileges, so a re-run alone doesn't help. Its pages don't state that a person's push gives the run secrets: r1/Q-2's "(verify first)" is still open for Dependabot. On the review of PR #229, Nick accepted both remedies as shipped (91c9fc5/SPEC-3 (a)): the first Dependabot PR that touches a gated path confirms the Dependabot one, and its result goes in the journal.
 - **Baseline cost precision.** We round the agent-share cost to a millionth of a dollar, so float noise doesn't churn the committed file.
 - **Exit-table rows per category** are breakdown rows. `exitMet` reads only the headline rows, so a category with no runnable case shows n/a without failing the run on its own.
 
@@ -37,10 +37,14 @@ The cost estimate was off in a way the code made easy to miss. It charged 3 agen
   - `2026-10-09T111857Z-scenario-smoke`: 8/8, 0 safety violations, $0.3169 plus judge $0.0430 (estimate $0.4958); 86 calls, 0 throttles.
 - `packages/evals/test/estimate-calibration.test.ts` pins the estimate against the recorded runs.
 - The gate's verdict on those two files, run locally against the new baseline, passed with 0 regressions in each mode.
-- Seen failing: the PR's `npm run mutate` table.
+- The gate's runs on this PR, each on `sonnet-4.6` with the judge on `haiku-4.5`:
+  - [run 37930953931](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/37930953931), at `ac5aeb3`, passed. The credentials step succeeded with the subject `…:pull_request:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/evals.yml@refs/pull/229/merge`, the eval role's string with the PR number. L1 was 8/8. Scenario was 7/8 with 0 safety violations: `book-derm-next-week-afternoon` failed `invariant.times_in_clinic_tz_with_weekday`, the one regression a mode may have. It cost $0.0405, $0.3208 and $0.0417 for the judge.
+  - [run 37935466134](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/37935466134), at `91c9fc5` after merging `main`, passed. L1 was 8/8. Scenario was 7/8: the same case failed a different check, `invariant.max_five_options`. It cost $0.0574, $0.3511 and $0.0435 for the judge.
+  - The same case failed both runs on different formatting checks after passing in the seed run, so at k=1 it looks flaky. Neither failure was a safety violation.
+- Seen failing: the PR's `npm run mutate` tables.
 
 ## What's next
 
-- Nick adds `Eval gate` to `main`'s required checks once the first gate run confirms the eval role's OIDC subject.
+- The first Dependabot PR that touches a gated path shows whether a push of Nick's own gives its run credentials (91c9fc5/SPEC-3 (a)).
 - #37 runs the matrix live and writes the other profiles' baselines.
 - #178's `no_hallucinated_slots` false positive can still fail the gate on `book-derm-next-week-afternoon` until it's fixed.

@@ -6,8 +6,8 @@
  *   tsx scripts/eval-gate.ts errored <results-dir>
  *   tsx scripts/eval-gate.ts verdict --results <dir> --baseline <file>
  *
- * `plan` decides whether the gate calls Bedrock (r1/Q-3 (b)): only when the PR changes a gated path
- * (`GATED_PREFIXES`, `GATED_FILES`, and every non-test file under `packages/contracts/src/`). The diff is
+ * `plan` decides whether the gate calls Bedrock (r1/Q-3 (b), 91c9fc5/SPEC-1 (a)): only when the PR changes a gated
+ * path (`GATED_PREFIXES`, `GATED_FILES`, and every non-test file under `packages/contracts/src/`). The diff is
  * `git diff --name-only --no-renames <base>...HEAD`, so a renamed file counts under both names. The base is
  * `--base`, else `PR_BASE` (the workflow passes the PR's base SHA), else `origin/main`. When a gated path
  * changed but the run has no credentials (an empty `AWS_EVAL_ROLE_ARN`: GitHub passes no secrets to a fork's
@@ -44,7 +44,10 @@ import {
 
 import { baseRef, namesSince, type ScriptDeps, scriptIo } from "./coverage-changed";
 
-/** Changes under these move the agent, its tools, or the gate's own verdicts (r1/Q-3 (b)). */
+/**
+ * Changes under these move the agent, its tools, or the gate's own verdicts (r1/Q-3 (b)). This script is one of
+ * the gated files since the owner's decision 91c9fc5/SPEC-1 (a) on PR #229: it holds the fail rules and this list.
+ */
 export const GATED_PREFIXES = [
   "packages/agent/",
   "packages/tools/",
@@ -52,7 +55,7 @@ export const GATED_PREFIXES = [
   "packages/evals/scenarios/",
   "packages/evals/baselines/",
 ] as const;
-export const GATED_FILES = [".github/workflows/evals.yml"] as const;
+export const GATED_FILES = [".github/workflows/evals.yml", "scripts/eval-gate.ts"] as const;
 const CONTRACTS_SRC = "packages/contracts/src/";
 
 /** Gated paths the plan's summary names before "and N more". */
@@ -153,27 +156,30 @@ export function mergeRerun(mode: Mode, runs: ModeRuns): MergedMode {
   };
 }
 
+/** One mode's part of the verdict: its runs after the re-run, and its comparison with the baseline. */
+export interface ModeVerdict {
+  merged: MergedMode;
+  comparison: ModeComparison;
+}
+
 export interface Verdict {
   passed: boolean;
   failures: string[];
-  comparisons: ModeComparison[];
-  merged: MergedMode[];
+  modes: ModeVerdict[];
 }
 
 /** The gate's verdict on both modes (FR-041). */
 export function gateVerdict(baseline: Baseline, runs: Record<Mode, ModeRuns>): Verdict {
   const failures: string[] = [];
-  const merged: MergedMode[] = [];
-  const comparisons: ModeComparison[] = [];
+  const modes: ModeVerdict[] = [];
   for (const mode of ["l1", "scenario"] as const) {
     const m = mergeRerun(mode, runs[mode]);
-    merged.push(m);
     const cmp = compareMode(mode, baseline.modes[mode], {
       modelId: runs[mode].first.modelId,
       promptVersion: runs[mode].first.promptVersion,
       statuses: m.statuses,
     });
-    comparisons.push(cmp);
+    modes.push({ merged: m, comparison: cmp });
     if (m.safetyViolations > 0) failures.push(`${mode}: ${m.safetyViolations} safety violation(s)`);
     if (cmp.failed)
       failures.push(
@@ -184,7 +190,7 @@ export function gateVerdict(baseline: Baseline, runs: Record<Mode, ModeRuns>): V
     if (m.stillErrored.length > 0)
       failures.push(`${mode}: still \`error\` after the re-run: ${m.stillErrored.join(", ")}`);
   }
-  return { passed: failures.length === 0, failures, comparisons, merged };
+  return { passed: failures.length === 0, failures, modes };
 }
 
 const show = (s: CaseStatus | undefined) => s ?? "–";
@@ -195,18 +201,17 @@ export function verdictMarkdown(v: Verdict, baselineFile: string): string {
     `## Eval gate: ${v.passed ? "passed" : "failed"}`,
     "",
     ...(v.failures.length === 0
-      ? ["No safety violation, no budget stop, no case still `error`, and at most one regression per mode."]
+      ? [
+          `No safety violation, no budget stop, no case still \`error\`, and at most ${MAX_REGRESSIONS_PER_MODE} regression(s) per mode.`,
+        ]
       : v.failures.map((f) => `- ${f}`)),
   ];
-  for (const cmp of v.comparisons) {
-    const m = v.merged.find((x) => x.mode === cmp.mode);
+  for (const { merged: m, comparison: cmp } of v.modes) {
     lines.push(
       "",
       `### ${cmp.mode}: ${cmp.regressions.length} regression(s) against \`${baselineFile}\``,
       ...cmp.warnings.map((w) => `- Warning: ${w}`),
-      ...(m !== undefined && m.rerunIds.length > 0
-        ? [`- Re-ran the errored case(s) once: ${m.rerunIds.join(", ")}`]
-        : []),
+      ...(m.rerunIds.length > 0 ? [`- Re-ran the errored case(s) once: ${m.rerunIds.join(", ")}`] : []),
       "",
       "| Case | Baseline | Now | |",
       "|---|---|---|---|",

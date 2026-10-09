@@ -79,18 +79,16 @@ To update it, run both smoke modes live, then promote the two results files (no 
 npm run evals -- --update-baseline packages/evals/results/<…-l1-smoke-sonnet-4.6>.json packages/evals/results/<…-scenario-smoke-sonnet-4.6>.json
 ```
 
-It refuses another suite, k≠1, two profiles or a budget-stopped case. Commit the file in the PR that
-changes behaviour, and say why in the PR: the gate reads the baseline from the PR's own merge commit, so a
-PR that lowers it sets its own bar, and reviewers must see that in the diff.
+It refuses another suite, k≠1, two profiles or a budget-stopped case. The gate reads the baseline from the
+PR's own merge commit, so a PR that changes it sets its own bar, visibly in its diff.
 
 ## 5. The CI eval gate (`Eval gate`)
 
 `.github/workflows/evals.yml` runs on every PR; `scripts/eval-gate.ts` makes every decision.
 
-1. **plan:** if the PR changes none of `packages/agent/**`, `packages/tools/**`, the non-test files under
-   `packages/contracts/src/`, `packages/evals/src/**`, `packages/evals/scenarios/**`,
-   `packages/evals/baselines/**` or `.github/workflows/evals.yml`, it passes without calling Bedrock. A
-   gated change on a run without `AWS_EVAL_ROLE_ARN` (a fork's or Dependabot's PR) fails closed.
+1. **plan:** if the PR changes no gated path, it passes without calling Bedrock. The gated paths are
+   `GATED_PREFIXES`, `GATED_FILES` and the contracts rule in `scripts/eval-gate.ts`. A gated change on a run
+   without `AWS_EVAL_ROLE_ARN` (a fork's or Dependabot's PR) fails closed.
 2. It prints the OIDC subject, assumes `sched-github-evals` (Bedrock on `sonnet-4.6` and `haiku-4.5` only),
    and runs both smoke modes at k=1 on `sonnet-4.6` with `--max-cost 1` each.
 3. It re-runs exactly the errored cases once (`--ids`).

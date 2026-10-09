@@ -212,8 +212,8 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
 }
 
 /**
- * What a script's `main` takes besides its options (shared with pr-evidence.ts and dup-changed.ts, #184, and
- * journal-links.ts, #194).
+ * What a script's `main` takes besides its options (shared with pr-evidence.ts and dup-changed.ts, #184,
+ * journal-links.ts, #194, and eval-gate.ts, #34).
  */
 export interface ScriptDeps {
   /** Directory git runs in; defaults to the process's working directory. */
@@ -276,7 +276,7 @@ export const addedSince = (git: Git, base: string): Map<string, AddedLine[]> =>
 /**
  * The ref a script diffs against: its `--base` value, else `env` (the script's environment variable, such as
  * `PR_BASE`) when it's non-empty, else `DEFAULT_BASE`. An empty value counts as unset, as CI passes one on push runs.
- * pr-evidence.ts and journal-links.ts share it (#199).
+ * pr-evidence.ts, journal-links.ts and eval-gate.ts share it (#199, #34).
  */
 export const baseRef = (flag: string | undefined, env: string | undefined): string =>
   flag ?? (env || DEFAULT_BASE);
@@ -285,7 +285,7 @@ export const baseRef = (flag: string | undefined, env: string | undefined): stri
  * The names `git diff --name-only <filter> <base>...HEAD -- <paths>` lists, non-ASCII ones unquoted, empty lines
  * dropped: the files changed since the merge base, as `filter` (a `--diff-filter=` flag) selects, limited to `paths`
  * (none: every path). Git limits rename detection to `paths` too. It throws when git fails (no merge base, unknown
- * ref); each caller says why and exits. pr-evidence.ts and journal-links.ts share it (#199).
+ * ref); each caller says why and exits. pr-evidence.ts, journal-links.ts and eval-gate.ts share it (#199, #34).
  */
 export const namesSince = (git: Git, base: string, filter: string, paths: readonly string[] = []): string[] =>
   git("-c", "core.quotePath=false", "diff", "--name-only", filter, `${base}...HEAD`, "--", ...paths)

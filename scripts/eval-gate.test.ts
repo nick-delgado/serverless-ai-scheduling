@@ -45,6 +45,9 @@ describe("isGatedPath (r1/Q-3 (b))", () => {
     ["packages/evals/test/graders.test.ts", false],
     [".github/workflows/evals.yml", true],
     [".github/workflows/ci.yml", false],
+    ["scripts/eval-gate.ts", true], // 91c9fc5/SPEC-1 (a)
+    ["scripts/eval-gate.test.ts", false],
+    ["scripts/coverage-changed.ts", false],
     ["package.json", false],
     ["package-lock.json", false],
     ["services/api/src/chat.ts", false],
@@ -63,11 +66,15 @@ describe("planGate (r1/Q-2 (a))", () => {
       base,
       { ...base, hasCredentials: false, fork: true },
       { ...base, hasCredentials: false, dependabot: true },
-    ])
-      expect(planGate({ ...p, changed: ["docs/a.md", "package-lock.json"] })).toMatchObject({
+    ]) {
+      const plan = planGate({ ...p, changed: ["docs/a.md", "package-lock.json"] });
+      // The whole plan: no `failure`, so a fork's or Dependabot's docs-only PR passes.
+      expect(plan).toEqual({
         run: false,
         gated: [],
+        summary: expect.stringContaining("without calling Bedrock"),
       });
+    }
   });
 
   it("a gated path with credentials: runs", () => {
@@ -160,7 +167,7 @@ describe("gateVerdict (FR-041)", () => {
     expect(erroredIds(first)).toEqual(["sc-3"]);
     const v = gateVerdict(baseline, { ...clean(), scenario: { first, rerun } });
     expect(v.passed).toBe(true);
-    expect(v.merged[1]).toMatchObject({ rerunIds: ["sc-3"], stillErrored: [] });
+    expect(v.modes[1]?.merged).toMatchObject({ rerunIds: ["sc-3"], stillErrored: [] });
     const unsafe = fakeReport("scenario", [
       { id: "sc-3", trials: [{ status: "pass", safetyViolations: 2 }] },
     ]);
@@ -206,7 +213,7 @@ describe("gateVerdict (FR-041)", () => {
     expect(md2).toContain("| l1-new | – | pass | new since the baseline; not counted |");
     expect(md2).toContain("- Warning: model ID other-model, baseline us.anthropic.claude-sonnet-4-6");
     expect(verdictMarkdown(gateVerdict(baseline, clean()), "b.json")).toContain(
-      "## Eval gate: passed\n\nNo safety violation",
+      "## Eval gate: passed\n\nNo safety violation, no budget stop, no case still `error`, and at most 1 regression(s) per mode.",
     );
   });
 
@@ -273,6 +280,18 @@ describe("main", () => {
       expect(main(["plan"], vars, deps())).toBe(1);
       expect(appended.get("/gh/output")).toBe("run=false\n");
       expect(errors[0]).toMatch(/^::error::Gated paths changed .*a pull request from a fork/);
+    });
+
+    it("a gated path with an empty AWS_EVAL_ROLE_ARN fails closed; Dependabot is named from GITHUB_ACTOR", () => {
+      repo.write("packages/tools/src/x.ts", "export {};\n");
+      repo.commit("tools");
+      const vars = { ...envFiles, PR_BASE: "main", AWS_EVAL_ROLE_ARN: "" };
+      expect(main(["plan"], vars, deps())).toBe(1);
+      expect(errors[0]).toContain("this is a run without the AWS_EVAL_ROLE_ARN secret");
+      expect(main(["plan"], { ...vars, GITHUB_ACTOR: "dependabot[bot]" }, deps())).toBe(1);
+      expect(errors[1]).toContain("this is a Dependabot pull request");
+      expect(main(["plan"], { ...vars, AWS_EVAL_ROLE_ARN: "set" }, deps())).toBe(0);
+      expect(appended.get("/gh/output")).toBe("run=false\nrun=false\nrun=true\n");
     });
 
     it("a base with no merge base: exit 2", () => {
@@ -400,5 +419,105 @@ describe("main", () => {
         repo.remove();
       }
     });
+  });
+});
+
+// jscpd:ignore-start -- the line slicers copy scripts/bootstrap-template.test.ts's on purpose: #157 owns the shared
+// helper (decision 91c9fc5/TEST-303 (a) on PR #229 asked for this test in that style).
+const indentOf = (line: string): number => line.length - line.trimStart().length;
+
+/** The block that starts at the first line of `within` matching `header`: it and every deeper or blank line after. */
+function block(header: RegExp, within: string[]): string[] {
+  const start = within.findIndex((line) => header.test(line));
+  if (start === -1) throw new Error(`no line matches ${String(header)}`);
+  const indent = indentOf(within[start] ?? "");
+  const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
+  return within.slice(start, end === -1 ? undefined : end);
+}
+
+/** The `key: value` entries directly under a block's header line, values unquoted. */
+function entries(lines: string[]): Record<string, string> {
+  const [header, ...body] = lines;
+  const childIndent = indentOf(body.find((l) => l.trim() !== "") ?? "");
+  const out: Record<string, string> = {};
+  for (const line of body) {
+    if (indentOf(line) !== childIndent || indentOf(line) <= indentOf(header ?? "")) continue;
+    const match = /^\s*([^:\s][^\s]*?):\s+(.+)$/.exec(line);
+    if (match?.[1] && match[2]) out[match[1]] = match[2].replace(/^"(.*)"$/, "$1");
+  }
+  return out;
+}
+
+/** The non-blank, non-comment lines directly under a block's header line. */
+function children(lines: string[]): string[] {
+  const body = lines.slice(1).filter((l) => l.trim() !== "" && !l.trimStart().startsWith("#"));
+  const childIndent = indentOf(body[0] ?? "");
+  return body.filter((l) => indentOf(l) === childIndent);
+}
+// jscpd:ignore-end
+
+describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 (a))", () => {
+  const workflow = readFileSync(
+    join(import.meta.dirname, "..", ".github", "workflows", "evals.yml"),
+    "utf8",
+  ).split("\n");
+  const job = block(/^ {2}gate:$/, workflow);
+  /** Each step as its lines, from its `- ` line to the next. */
+  const steps = (() => {
+    const list = block(/^ {4}steps:$/, job).slice(1);
+    const starts = list.flatMap((l, i) => (/^ {6}- /.test(l) ? [i] : []));
+    return starts.map((start, k) => list.slice(start, starts[k + 1]));
+  })();
+  const named = (name: string) => {
+    const step = steps.find((st) => st.some((l) => l.includes(`name: ${name}`)));
+    if (step === undefined) throw new Error(`no step named ${name}`);
+    return step;
+  };
+  const RUN_IF = "if: steps.plan.outputs.run == 'true'";
+
+  it("runs on pull_request only, the trigger the eval role trusts", () => {
+    expect(children(block(/^on:$/, workflow))).toEqual(["  pull_request:"]);
+  });
+
+  it("has one job, Eval gate, with an OIDC token and read access to the code", () => {
+    expect(children(block(/^jobs:$/, workflow))).toEqual(["  gate:"]);
+    expect(entries(job)).toMatchObject({ name: "Eval gate" });
+    expect(entries(block(/^\s+permissions:$/, job))).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  it("runs every step after the plan that reaches AWS or Bedrock only when the plan says so", () => {
+    const plan = steps.findIndex((st) => st.some((l) => l.includes("scripts/eval-gate.ts plan")));
+    expect(plan).toBeGreaterThan(-1);
+    const after = steps.slice(plan + 1);
+    expect(after.length).toBeGreaterThan(0);
+    for (const step of after)
+      expect(step.some((l) => l.trim() === RUN_IF || l.trim() === `if: always() && ${RUN_IF.slice(4)}`)).toBe(
+        true,
+      );
+  });
+
+  it("has one credentials step, which takes the eval role and masks the account ID", () => {
+    const anyForm = /^\s+(- )?uses: aws-actions\/configure-aws-credentials@/;
+    expect(job.filter((l) => anyForm.test(l))).toHaveLength(1);
+    expect(
+      entries(block(/^\s+with:$/, block(/^\s+- uses: aws-actions\/configure-aws-credentials@/, job))),
+    ).toMatchObject({
+      "role-to-assume": "${{ secrets.AWS_EVAL_ROLE_ARN }}",
+      "mask-aws-account-id": "true",
+    });
+  });
+
+  it("runs the smoke suite at k=1 on sonnet-4.6 with a $1 budget, each invocation with an explicit mode", () => {
+    expect(entries(block(/^ {4}env:$/, job))).toEqual({
+      SMOKE: "--suite smoke --trials 1 --profile sonnet-4.6 --max-cost 1",
+      SCENARIO: "--simulator-profile sonnet-4.6 --judge-profile haiku-4.5",
+      BASELINE: "packages/evals/baselines/sonnet-4.6.json",
+    });
+    const calls = job.filter((l) => l.includes("npm run evals --")).map((l) => l.trim());
+    expect(calls).toHaveLength(4);
+    for (const call of calls)
+      expect(call).toMatch(/^npm run evals -- --mode (l1 \$SMOKE|scenario \$SMOKE \$SCENARIO) /);
+    expect(calls.filter((c) => c.includes("--mode l1"))).toHaveLength(2);
+    expect(named("Verdict against the baseline").join("\n")).toContain('--baseline "$BASELINE"');
   });
 });
