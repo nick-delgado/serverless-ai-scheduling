@@ -1,0 +1,121 @@
+# The CI eval gate (#34, FR-041, ADR-008 amendments 2026-10-03 and 2026-10-09). It runs on every pull request and
+# always reports, so it can be a required check. Every decision is in scripts/eval-gate.ts and its tests; this file
+# only runs the commands:
+# - plan: when the PR changes no gated path, the job passes without calling Bedrock. The gated paths are
+#   GATED_PREFIXES, GATED_FILES and the contracts rule in scripts/eval-gate.ts. When one changed but the run has no
+#   credentials (a fork's or Dependabot's PR gets no secrets), it fails closed, naming why.
+# - otherwise the smoke suite in both modes (the job's env below: k=1, the profile, the budget per invocation; the
+#   simulator on the same profile and the judge on haiku-4.5, the only two models the eval role allows), one re-run
+#   of the errored cases, then the verdict against the baseline read from the checked-out merge commit.
+# Credentials: the sched-github-evals role through GitHub OIDC (docs/runbooks/aws-setup.md, "CI credentials (GitHub
+# OIDC)"); it trusts only this file at refs/pull/*/merge, so this workflow runs on pull_request only.
+name: Evals
+
+on:
+  pull_request:
+
+# Per PR: a new push cancels the PR's older run, and never another PR's (one group per repository would drop
+# another PR's pending run).
+concurrency:
+  group: evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Eval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The gate's run settings, each once: every smoke invocation takes SMOKE, and scenario mode adds SCENARIO.
+    env:
+      SMOKE: --suite smoke --trials 1 --profile sonnet-4.6 --max-cost 1
+      SCENARIO: --simulator-profile sonnet-4.6 --judge-profile haiku-4.5
+      BASELINE: packages/evals/baselines/sonnet-4.6.json
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # RESULTS holds each run's results; the CLI's second copy goes outside the checkout too (#195).
+      - name: Point the results outside the checkout
+        run: |
+          echo "RESULTS=$RUNNER_TEMP/evals" >> "$GITHUB_ENV"
+          echo "EVAL_RESULTS_COPY_DIR=$RUNNER_TEMP/eval-results-copy" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The path decision diffs the PR against its base.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # The secret reaches the script only through the environment, and only whether it's set is used.
+      - name: Decide whether the gate runs the evals
+        id: plan
+        run: npx tsx scripts/eval-gate.ts plan
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          AWS_EVAL_ROLE_ARN: ${{ secrets.AWS_EVAL_ROLE_ARN }}
+      # Prints the OIDC token's `sub` claim only (never the token), so the role's trust condition can be checked
+      # against what GitHub sends (runbook, "Confirm the subject strings").
+      - name: Show the OIDC subject
+        if: steps.plan.outputs.run == 'true'
+        continue-on-error: true
+        run: |
+          node --input-type=module -e '
+            const url = `${process.env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+            const { value } = await res.json();
+            console.log(`OIDC sub: ${JSON.parse(Buffer.from(value.split(".")[1], "base64url")).sub}`);
+          '
+      # mask-aws-account-id: the account ID shows as *** in every later log line.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: steps.plan.outputs.run == 'true'
+        with:
+          role-to-assume: ${{ secrets.AWS_EVAL_ROLE_ARN }}
+          role-session-name: eval-gate-${{ github.run_id }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+      # The CLI exits 1 on a safety violation or an errored case, and on a crash; it exits 2 on a usage error. Exit 1
+      # goes on, since the verdict reads the results JSON (a crash leaves none, and the verdict then fails); any other
+      # code stops the job here.
+      - name: Smoke suite, L1
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # SMOKE is a list of flags
+          npm run evals -- --mode l1 $SMOKE --out "$RESULTS/l1" || [[ $? -eq 1 ]]
+      - name: Smoke suite, scenario
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # SMOKE and SCENARIO are lists of flags
+          npm run evals -- --mode scenario $SMOKE $SCENARIO --out "$RESULTS/scenario" || [[ $? -eq 1 ]]
+      # One re-run of exactly the errored cases (--ids matches whole IDs), in the same mode.
+      - name: Re-run errored cases once
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # SMOKE and SCENARIO are lists of flags
+          ids=$(npx tsx scripts/eval-gate.ts errored "$RESULTS/l1")
+          if [[ -n "$ids" ]]; then
+            echo "Re-running l1: $ids"
+            npm run evals -- --mode l1 $SMOKE --ids "$ids" --out "$RESULTS/l1-rerun" || [[ $? -eq 1 ]]
+          fi
+          ids=$(npx tsx scripts/eval-gate.ts errored "$RESULTS/scenario")
+          if [[ -n "$ids" ]]; then
+            echo "Re-running scenario: $ids"
+            npm run evals -- --mode scenario $SMOKE $SCENARIO --ids "$ids" --out "$RESULTS/scenario-rerun" \
+              || [[ $? -eq 1 ]]
+          fi
+      - name: Verdict against the baseline
+        if: steps.plan.outputs.run == 'true'
+        run: npx tsx scripts/eval-gate.ts verdict --results "$RESULTS" --baseline "$BASELINE"
+      - name: Upload the results
+        if: always() && steps.plan.outputs.run == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-gate-results
+          path: ${{ runner.temp }}/evals
+          if-no-files-found: ignore
+          retention-days: 30

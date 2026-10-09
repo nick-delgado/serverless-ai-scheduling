@@ -1,8 +1,9 @@
 /**
  * The testable parts of the `npm run evals` CLI (`cli.ts`): argument validation, case selection, the
  * simulator and judge setup, the pre-run cost estimate, the run's options, the results file name, the
- * exit code, the calibration step and its file adapters, and the usage-error mapping. `cli.ts` only
- * calls these with the process, Bedrock and `console`, so these are what the tests cover.
+ * exit code, the calibration step and its file adapters, the exit-report and baseline steps (#34), and the
+ * usage-error mapping. `cli.ts` only calls these with the process, Bedrock and `console`, so these are what
+ * the tests cover.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -36,6 +37,16 @@ import {
   type TrialJudge,
 } from "./judge";
 import { l1Request } from "./l1";
+import {
+  baselineFromReports,
+  baselineJson,
+  baselinePath,
+  exitMarkdown,
+  exitReport,
+  parseRunReport,
+  type Baseline,
+  type ExitReport,
+} from "./report";
 import { selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
 import { skipReason } from "./runner";
 import { errorReason, issueText } from "./util";
@@ -86,6 +97,15 @@ export interface CliArgs {
   calibration?: { action: "export"; from: string } | { action: "agreement" };
   /** Where calibration reads and writes `transcripts.json` and `labels.json` (default `packages/evals/calibration`). */
   calibrationDir: string;
+  /**
+   * A step on saved results files instead of a run (#34), no model calls: `exit` writes the PRD §7 exit
+   * table from one L1 and one scenario results file; `baseline` promotes them to the committed baseline.
+   */
+  resultsStep?: { action: "exit" | "baseline"; files: [string, string] };
+  /** Where `--update-baseline` writes `<profile>.json` (`packages/evals/baselines`). */
+  baselineDir: string;
+  /** `--ids`: run exactly these case IDs (the CI gate's re-run of errored cases, r1/A-4). */
+  ids: string[];
   trials: number;
   filters: string[];
   maxCostUsd: number;
@@ -98,8 +118,29 @@ export class CliArgError extends Error {
   override readonly name = "CliArgError";
 }
 
+/** True when `value` is one of `list`'s strings. */
 const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
   (list as readonly string[]).includes(value);
+
+/** `--suite`'s value, checked. Shared with `matrix.ts`. */
+export function parseSuite(value: string): Suite {
+  if (!isOneOf(SUITES, value)) throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${value}`);
+  return value;
+}
+
+/** `--trials`'s value, checked. Shared with `matrix.ts`. */
+export function parseTrials(value: string): number {
+  const trials = Number(value);
+  if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
+  return trials;
+}
+
+/** `--max-cost`'s value, checked. Shared with `matrix.ts`. */
+export function parseMaxCost(value: string): number {
+  const usd = Number(value);
+  if (!(usd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
+  return usd;
+}
 
 /**
  * A profile setting, resolved by `@sched/agent`'s `resolveModelProfile`, the one place that checks names
@@ -129,6 +170,33 @@ function settingOf(
   return envValue === undefined ? undefined : { name: envValue, from: envName };
 }
 
+/**
+ * The results-file step and its two files, from the step flag and the positionals: none without a step flag
+ * (then any positional is a usage error), and exactly two files with one.
+ */
+function resultsStepOf(
+  action: "exit" | "baseline" | undefined,
+  positionals: readonly string[],
+): CliArgs["resultsStep"] {
+  if (action === undefined) {
+    if (positionals.length > 0) throw new CliArgError(`unexpected argument(s): ${positionals.join(" ")}`);
+    return undefined;
+  }
+  const [first, second, ...rest] = positionals;
+  if (first === undefined || second === undefined || rest.length > 0)
+    throw new CliArgError(
+      `${action === "exit" ? "--exit-report" : "--update-baseline"} takes two results files: <l1.json> <scenario.json>`,
+    );
+  return { action, files: [first, second] };
+}
+
+/** A comma-separated flag value as a list, blanks dropped. Shared with `matrix.ts`. */
+export const splitList = (value: string | undefined): string[] =>
+  value
+    ?.split(",")
+    .map((f) => f.trim())
+    .filter(Boolean) ?? [];
+
 /** Parse and validate `argv` (without the node and script paths). Throws `CliArgError`. */
 export function parseCliArgs(
   argv: readonly string[],
@@ -150,6 +218,9 @@ export function parseCliArgs(
         "export-calibration": { type: "string" },
         calibrate: { type: "boolean", default: false },
         "calibration-dir": { type: "string" },
+        "exit-report": { type: "boolean", default: false },
+        "update-baseline": { type: "boolean", default: false },
+        ids: { type: "string" },
         trials: { type: "string", default: "1" },
         filter: { type: "string" },
         "max-cost": { type: "string", default: "1" },
@@ -157,24 +228,33 @@ export function parseCliArgs(
         out: { type: "string", default: defaultOut },
       },
       strict: true,
+      allowPositionals: true,
     });
   } catch (error) {
     // An unknown flag or a missing value: a usage error (exit 2), not a failed eval.
     throw new CliArgError(errorReason(error));
   }
-  const { values } = parsed;
-  const { suite, mode } = values;
-  if (!isOneOf(SUITES, suite)) throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${suite}`);
+  const { values, positionals } = parsed;
+  const { mode } = values;
+  const suite = parseSuite(values.suite);
   if (!isOneOf(MODES, mode)) throw new CliArgError(`--mode must be ${MODES.join(" or ")}, got ${mode}`);
-  const trials = Number(values.trials);
-  if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
+  const trials = parseTrials(values.trials);
   if (values.replay !== undefined && mode !== "scenario")
     throw new CliArgError("--replay needs --mode scenario");
   const exportFrom = values["export-calibration"];
-  if (exportFrom !== undefined && values.calibrate)
-    throw new CliArgError("--export-calibration and --calibrate are separate steps; pass one");
   if (values.calibrate && values["no-judge"])
     throw new CliArgError("--calibrate needs the judge; drop --no-judge");
+  const steps = [
+    exportFrom === undefined ? [] : ["--export-calibration"],
+    values.calibrate ? ["--calibrate"] : [],
+    values["exit-report"] ? ["--exit-report"] : [],
+    values["update-baseline"] ? ["--update-baseline"] : [],
+  ].flat();
+  if (steps.length > 1) throw new CliArgError(`${steps.join(" and ")} are separate steps; pass one`);
+  const resultsStep = resultsStepOf(
+    values["exit-report"] ? "exit" : values["update-baseline"] ? "baseline" : undefined,
+    positionals,
+  );
   const judgeProfile = settingOf("--judge-profile", values["judge-profile"], JUDGE_PROFILE_ENV, env);
   const simulatorProfile = settingOf(
     "--simulator-profile",
@@ -182,8 +262,7 @@ export function parseCliArgs(
     SIMULATOR_PROFILE_ENV,
     env,
   );
-  const maxCostUsd = Number(values["max-cost"]);
-  if (!(maxCostUsd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
+  const maxCostUsd = parseMaxCost(values["max-cost"]);
   return {
     suite,
     mode,
@@ -198,23 +277,36 @@ export function parseCliArgs(
         ? { calibration: { action: "agreement" as const } }
         : {}),
     calibrationDir: values["calibration-dir"] ?? join(dirname(defaultOut), "calibration"),
+    ...(resultsStep === undefined ? {} : { resultsStep }),
+    baselineDir: join(dirname(defaultOut), "baselines"),
+    ids: splitList(values.ids),
     trials,
-    filters:
-      values.filter
-        ?.split(",")
-        .map((f) => f.trim())
-        .filter(Boolean) ?? [],
+    filters: splitList(values.filter),
     maxCostUsd,
     dryRun: values["dry-run"],
     out: values.out,
   };
 }
 
-/** The cases a run covers: the mode's pool, cut to the suite, then to ids containing any filter. */
-export function selectCases(loaded: LoadedScenarios, args: CliArgs): (Scenario | L1Case)[] {
-  const pool: (Scenario | L1Case)[] = args.mode === "l1" ? loaded.l1 : loaded.scenarios;
-  return selectSuite(pool, args.suite).filter(
-    (c) => args.filters.length === 0 || args.filters.some((f) => c.id.includes(f)),
+/**
+ * The cases a run covers: the mode's pool, cut to the suite, then to ids containing any filter, then to
+ * exactly the `--ids` given. An ID in `--ids` that isn't in the suite's pool for the mode is a usage error.
+ */
+export function selectCases(
+  loaded: LoadedScenarios,
+  args: Pick<CliArgs, "mode" | "suite" | "filters" | "ids">,
+): (Scenario | L1Case)[] {
+  const all: (Scenario | L1Case)[] = args.mode === "l1" ? loaded.l1 : loaded.scenarios;
+  const pool = selectSuite(all, args.suite);
+  const unknown = args.ids.filter((id) => !pool.some((c) => c.id === id));
+  if (unknown.length > 0)
+    throw new CliArgError(
+      `--ids: no ${args.mode} case in the ${args.suite} suite has the ID ${unknown.join(", ")}`,
+    );
+  return pool.filter(
+    (c) =>
+      (args.filters.length === 0 || args.filters.some((f) => c.id.includes(f))) &&
+      (args.ids.length === 0 || args.ids.includes(c.id)),
   );
 }
 
@@ -224,8 +316,35 @@ export const caseSkipReason = (
   simulator: PatientSimulator = scriptOnlySimulator,
 ): string | undefined => (isL1Case(c) ? undefined : skipReason(c, simulator));
 
-/** Simulated patient turns a scenario is expected to take after its script (capped by `max_turns`). */
-export const EXPECTED_SIMULATED_TURNS = 6;
+/**
+ * Simulated patient turns a scenario is expected to take after its script (capped by `max_turns`). The
+ * smoke runs of 2026-10-07 (below) took 1 to 6 turns, 3.4 on average.
+ */
+export const EXPECTED_SIMULATED_TURNS = 4;
+
+/**
+ * The scenario estimate's constants (#34, recalibrated from recorded runs: PR #97 decision 7 found the old
+ * one about 8x high). They come from the `sonnet-4.6` scenario smoke runs of 2026-10-07 at prompt
+ * `system.v1` (`…T140228Z-scenario-smoke-sonnet-4.6.json`, $0.34 with the judge, and
+ * `…T142126Z-scenario-smoke-sonnet-4.6.json`, $0.39): 82 agent calls over 56 turns (1.5 a turn), each
+ * reading ~6.25k cached tokens, writing ~450 and generating ~150; 66 simulator calls of ~950 input and ~20
+ * output tokens, one more per conversation than its simulated turns (the stop). `packages/evals/test/
+ * estimate-calibration.test.ts` pins the estimate between 1.0x and 1.5x of those runs, and of PR #165's full run.
+ */
+export const SCENARIO_ESTIMATE = {
+  agentCallsPerTurn: 1.5,
+  /** One agent call: the prompt it sends (cached, on a profile that caches messages) and what it writes. */
+  agentCall: { promptTokens: 6700, cacheWriteTokens: 450, outputTokens: 160 },
+  simulatorCall: { inputTokens: 1000, outputTokens: 20 },
+} as const;
+
+/**
+ * The L1 estimate's constants (#34), from the five L1 smoke runs of 2026-10-07 (`sonnet-4.6`, `system.v1`,
+ * $0.0567 to $0.0572 with a cold cache): ~105 output tokens a call, and a ~4.8k-token system-and-tools
+ * prefix read from the cache after the first call wrote it. Each call also sent ~500 more uncached input
+ * tokens than its messages' bytes / 4 (the system prompt's part after its cache point, and the framing).
+ */
+export const L1_ESTIMATE = { outputTokens: 150, uncachedOverheadTokens: 500 } as const;
 
 /**
  * The patient side of a run, and what the estimate assumes about it: none beyond the script (L1 mode),
@@ -304,12 +423,33 @@ export const judgeCallEstimateUsd = (profile: ModelProfile): number =>
   callCostUsd(profile, JUDGE_ESTIMATE_TOKENS.input, JUDGE_ESTIMATE_TOKENS.output);
 
 /**
- * Pre-run estimate (USD). L1: one call per trial, input ≈ request bytes / 4, output ≈ 300 tokens.
- * Scenarios: 3 agent calls per patient turn at ~4k input / 400 output tokens. Script-only, the turns
- * are the scripted ones. With a simulator, `min(max_turns, script + EXPECTED_SIMULATED_TURNS)` turns,
- * and an LLM simulator adds one call per simulated turn at ~1.5k input / 150 output tokens on its own
- * profile (a replay calls no model). With the judge on, one judge call per trial of a scenario that lists
- * a rubric dimension, on the judge's profile.
+ * One agent call in a scenario: on a profile that caches messages, the prompt is read from the cache but
+ * for what the call writes to it; on any other, all of it is input.
+ */
+export function scenarioAgentCallUsd(profile: ModelProfile): number {
+  const { promptTokens, cacheWriteTokens, outputTokens } = SCENARIO_ESTIMATE.agentCall;
+  return profile.cachePoints.messages
+    ? estimateCostUsd(profile, {
+        inputTokens: 0,
+        outputTokens,
+        cacheReadTokens: promptTokens - cacheWriteTokens,
+        cacheWriteTokens,
+      })
+    : callCostUsd(profile, promptTokens, outputTokens);
+}
+
+/**
+ * Pre-run estimate (USD), recalibrated in #34 from recorded runs (`SCENARIO_ESTIMATE`).
+ *
+ * L1: one call per trial, input ≈ request bytes / 4, output `L1_ESTIMATE.outputTokens`. On a profile with a
+ * system cache point, the system-and-tools prefix is written once per run and read from the cache after, and
+ * the rest is input with `L1_ESTIMATE.uncachedOverheadTokens` added.
+ *
+ * Scenarios: script-only, the turns are the scripted ones. With a simulator, `min(max_turns, script +
+ * EXPECTED_SIMULATED_TURNS)` turns. Each turn costs `agentCallsPerTurn` agent calls (`scenarioAgentCallUsd`).
+ * An LLM simulator adds one call per simulated turn plus one for its stop, on its own profile (a replay calls
+ * no model). With the judge on, one judge call per trial of a scenario that lists a rubric dimension, on the
+ * judge's profile.
  */
 export function estimateRunCost(
   cases: readonly (Scenario | L1Case)[],
@@ -319,10 +459,25 @@ export function estimateRunCost(
   judge: JudgeSetup = { kind: "off" },
 ): number {
   let estimate = 0;
+  let prefixCached = false;
   for (const c of cases) {
     if (isL1Case(c)) {
       const req = l1Request(c, profile, promptFor(undefined, new Date(c.clock), undefined));
-      estimate += callCostUsd(profile, Math.ceil(JSON.stringify(req).length / 4), 300) * trials;
+      const tokens = Math.ceil(JSON.stringify(req).length / 4);
+      if (!profile.cachePoints.system) {
+        estimate += callCostUsd(profile, tokens, L1_ESTIMATE.outputTokens) * trials;
+        continue;
+      }
+      const prefix = Math.min(tokens, Math.ceil(JSON.stringify({ s: req.system, t: req.tools }).length / 4));
+      const call = (cache: "read" | "write") =>
+        estimateCostUsd(profile, {
+          inputTokens: tokens - prefix + L1_ESTIMATE.uncachedOverheadTokens,
+          outputTokens: L1_ESTIMATE.outputTokens,
+          cacheReadTokens: cache === "read" ? prefix : 0,
+          cacheWriteTokens: cache === "write" ? prefix : 0,
+        });
+      estimate += (prefixCached ? call("read") : call("write")) + call("read") * (trials - 1);
+      prefixCached = true;
       continue;
     }
     // The same check as the CLI's printed skip list.
@@ -330,8 +485,11 @@ export function estimateRunCost(
     const scripted = c.script?.length ?? 0;
     const turns =
       setup.kind === "script-only" ? scripted : Math.min(c.max_turns, scripted + EXPECTED_SIMULATED_TURNS);
-    estimate += callCostUsd(profile, 4000, 400) * 3 * turns * trials;
-    if (setup.kind === "llm") estimate += callCostUsd(setup.profile, 1500, 150) * (turns - scripted) * trials;
+    estimate += scenarioAgentCallUsd(profile) * SCENARIO_ESTIMATE.agentCallsPerTurn * turns * trials;
+    if (setup.kind === "llm") {
+      const { inputTokens, outputTokens } = SCENARIO_ESTIMATE.simulatorCall;
+      estimate += callCostUsd(setup.profile, inputTokens, outputTokens) * (turns - scripted + 1) * trials;
+    }
     if (judge.kind === "llm" && judgedDimensions(c).length > 0)
       estimate += judgeCallEstimateUsd(judge.profile) * trials;
   }
@@ -410,7 +568,9 @@ export async function orUsageErrorAsync<T>(
 
 /**
  * 1 when the run had a safety violation or an errored case, else 0. A budget stop alone exits 0
- * (TEST-105 decision, PR #71): the report counts it, and #34's gate decides what to do with it.
+ * (TEST-105 decision, PR #71): the report counts it. The CI eval gate (`scripts/eval-gate.ts`) doesn't read
+ * this code: it decides from the results JSON, re-running errored cases once and failing on a budget stop
+ * (#34, r1/A-4).
  */
 export const exitCodeFor = (summary: Pick<RunSummary, "safetyViolations" | "errored">): 0 | 1 =>
   summary.safetyViolations > 0 || summary.errored > 0 ? 1 : 0;
@@ -433,13 +593,19 @@ export interface FileWrites {
   writeFile: (path: string, text: string) => void;
 }
 
-/** The real file system, for the calibration step's files and the run's results (`results-copy.ts`). */
+/**
+ * The real file system's writes: for the calibration and results-file steps' files, the run's results
+ * (`results-copy.ts`) and the matrix's exit tables.
+ */
 export const nodeFileWrites: FileWrites = {
   mkdir: (dir) => mkdirSync(dir, { recursive: true }),
   writeFile: (path, text) => writeFileSync(path, text),
 };
 
-/** The calibration step's real files and clock, for `cli.ts`. */
+/**
+ * The CLI's file adapters on the real file system, with the scenarios, a log and the clock: the calibration
+ * step uses all of them, the results-file steps the files and the log.
+ */
 export function fileCalibrationDeps(
   scenarios: readonly Scenario[],
   log: (line: string) => void,
@@ -525,4 +691,95 @@ export async function calibrationStep(
   deps.writeFile(`${base}.md`, `${md}\n`);
   deps.log(`\n${md}\n\nevals: wrote ${base}.json`);
   return report;
+}
+
+/** What the results-file steps need from outside: reading JSON, writing a file, a log. */
+export type ResultsStepDeps = Pick<CalibrationDeps, "readJson" | "writeFile" | "log">;
+
+/** Read and check the step's two results files; a missing or malformed one is a usage error naming it. */
+function readResultsPair(files: readonly [string, string], deps: ResultsStepDeps): [RunReport, RunReport] {
+  const read = (path: string): RunReport => {
+    let value: unknown;
+    try {
+      value = deps.readJson(path);
+    } catch (error) {
+      throw new CliArgError(`${path}: ${errorReason(error)}`);
+    }
+    if (value === undefined) throw new CliArgError(`${path} doesn't exist`);
+    try {
+      return parseRunReport(value, path);
+    } catch (error) {
+      throw new CliArgError(errorReason(error).replace(/^Error: /, ""));
+    }
+  };
+  return [read(files[0]), read(files[1])];
+}
+
+/** Run a report-building function; its `Error` is a usage error (the files don't fit the step). */
+function asUsage<T>(build: () => T): T {
+  try {
+    return build();
+  } catch (error) {
+    throw new CliArgError((error as Error).message);
+  }
+}
+
+/**
+ * `--exit-report <a.json> <b.json>` (#34, r1/Q-4 (a)): the PRD §7 exit table from one L1 and one scenario
+ * results file, told apart by their `mode`, with no model calls. Writes
+ * `<out>/<scenario run's stamp>-exit-<profile>.{json,md}` and logs the markdown.
+ */
+export function exitReportStep(
+  args: Pick<CliArgs, "out"> & { files: [string, string] },
+  deps: ResultsStepDeps,
+): ExitReport {
+  const reports = readResultsPair(args.files, deps);
+  const report = asUsage(() => exitReport(reports));
+  const base = writeExitReport(report, args.out, deps.writeFile);
+  deps.log(`${exitMarkdown(report)}\n\nevals: wrote ${base}.json`);
+  return report;
+}
+
+/**
+ * Write an exit table as `<out>/<scenario run's stamp>-exit-<profile>.{json,md}`; returns the path without the
+ * extension. The `--exit-report` step and the matrix (one per cell) both write through it.
+ */
+export function writeExitReport(
+  report: ExitReport,
+  out: string,
+  writeFile: ResultsStepDeps["writeFile"],
+): string {
+  const base = join(out, `${fileStamp(report.startedAt)}-exit-${report.profile}`);
+  writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
+  writeFile(`${base}.md`, `${exitMarkdown(report)}\n`);
+  return base;
+}
+
+/** Run the command line's results-file step (`--exit-report` or `--update-baseline`) on its two files. */
+export function resultsStep(
+  args: Pick<CliArgs, "out" | "baselineDir"> & { resultsStep: NonNullable<CliArgs["resultsStep"]> },
+  deps: ResultsStepDeps,
+): void {
+  const { action, files } = args.resultsStep;
+  if (action === "exit") exitReportStep({ out: args.out, files }, deps);
+  else updateBaselineStep({ baselineDir: args.baselineDir, files }, deps);
+}
+
+/**
+ * `--update-baseline <a.json> <b.json>` (#34, r1/A-2): promote one L1 and one scenario smoke run at k=1 to
+ * `<baselineDir>/<profile>.json`, with no model calls. It refuses other suites, other trial counts, two
+ * profiles, or a budget-stopped case.
+ */
+export function updateBaselineStep(
+  args: Pick<CliArgs, "baselineDir"> & { files: [string, string] },
+  deps: ResultsStepDeps,
+): Baseline {
+  const baseline = asUsage(() => baselineFromReports(readResultsPair(args.files, deps)));
+  const path = baselinePath(args.baselineDir, baseline.profile);
+  deps.writeFile(path, baselineJson(baseline));
+  const { l1, scenario } = baseline.modes;
+  deps.log(
+    `evals: wrote ${path}: l1 ${l1.passed}/${l1.cases} passed, scenario ${scenario.passed}/${scenario.cases} passed`,
+  );
+  return baseline;
 }

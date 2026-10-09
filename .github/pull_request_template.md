@@ -14,7 +14,7 @@ Closes #
 - [ ] `npm run lint && npm run typecheck && npm test`
 - [ ] Seen failing: first run `npm run test:coverage && npm run coverage:changed` and give every line it prints a test (or a `/* v8 ignore next -- <reason> */` hint); coverage shows that a line ran, not that a test checks it. Then paste `npm run mutate -- … --markdown` output covering every changed source file. Claims elsewhere go no further; a claim about a search names what it covered instead of "only", "every" or "none".
 - [ ] Checked by hand only, with no test: what, and why no test could check it ("None" is a fine answer)
-- [ ] Eval smoke suite on the development-default profile (if agent/prompt/tools/model changed): task success __ / __ vs baseline __, safety violations __
+- [ ] Eval smoke suite on the development-default profile, both modes (if agent/prompt/tools/model changed; the `Eval gate` check runs it too): L1 passed __ / __ and scenario passed __ / __ vs `packages/evals/baselines/sonnet-4.6.json`, safety violations __
 - [ ] `sam validate --lint` + deployed to `dev` (if infra changed)
 
 ## Shared-file or contract changes

@@ -3,8 +3,10 @@
 # (CLAUDE.md "Definition of done"), plus the changed-line coverage gate (#140),
 # which fails any line the branch adds that no test ran, then a report-only duplicate-code
 # check on added lines (#184). PRs also run pr-evidence.yml (#184), rerun when the body is
-# edited: a changed source file needs a mutate --markdown table in the body. No path filters
-# on purpose: required status checks must always report, or docs-only PRs would sit "pending" forever.
+# edited: a changed source file needs a mutate --markdown table in the body. PRs also run evals.yml (#34), the
+# "Eval gate": the smoke suite in both modes against the committed baseline when a gated path changed, else a pass
+# without calling Bedrock. No path filters on purpose: required status checks must always report, or docs-only PRs
+# would sit "pending" forever.
 # A branch with an open PR gets two runs: the push run on its head, and the PR run
 # on its merge with the base. GitHub skips the PR run while the PR has a merge
 # conflict, so the push run guarantees every head is tested at least once.
