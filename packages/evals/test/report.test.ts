@@ -262,8 +262,8 @@ describe("exitReport (r1/Q-4 (a))", () => {
       trials: [{ status: "skip", reason: "covered outside" }],
     };
     const r = exitReport(exitPair([emergencyL1], [...goodCore, emergencyScenario, skipped]));
-    expect(r.rows.find((x) => x.metric.startsWith("  escalate"))).toMatchObject({
-      metric: "  escalate (1 case(s))",
+    expect(r.rows.find((x) => x.metric.startsWith("↳ escalate"))).toMatchObject({
+      metric: "↳ escalate (1 case(s))",
       value: "100%",
     });
     expect(exitMarkdown(r)).toContain(

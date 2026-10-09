@@ -55,6 +55,9 @@ export const GATED_PREFIXES = [
 export const GATED_FILES = [".github/workflows/evals.yml"] as const;
 const CONTRACTS_SRC = "packages/contracts/src/";
 
+/** Gated paths the plan's summary names before "and N more". */
+const MAX_LISTED = 10;
+
 /** True for a path whose change makes the gate run the evals. */
 export function isGatedPath(path: string): boolean {
   if ((GATED_FILES as readonly string[]).includes(path)) return true;
@@ -90,14 +93,18 @@ export function planGate(input: PlanInput): Plan {
       summary:
         "No agent, tools, contracts or eval-harness path changed: the gate passes without calling Bedrock.",
     };
-  const list = gated.map((p) => `\`${p}\``).join(", ");
+  const shown = gated.slice(0, MAX_LISTED).map((p) => `\`${p}\``);
+  const list = `${shown.join(", ")}${gated.length > MAX_LISTED ? ` and ${gated.length - MAX_LISTED} more` : ""}`;
   if (!input.hasCredentials) {
     const who = input.fork
       ? "a pull request from a fork"
       : input.dependabot
         ? "a Dependabot pull request"
         : "a run without the AWS_EVAL_ROLE_ARN secret";
-    const failure = `Gated paths changed (${list}), but this is ${who}, so the run has no AWS credentials and can't evaluate them. Nick gives it credentials (a commit of his own on a branch of this repository), or merges with an admin bypass after a local smoke run recorded in the PR (#34 r1/Q-2 (a)).`;
+    const remedy = input.fork
+      ? "Nick pushes the branch to this repository and opens a PR from it"
+      : "Nick gives the run credentials (a push of his own to the branch; a re-run keeps the first run's privileges)";
+    const failure = `Gated paths changed (${list}), but this is ${who}, so the run has no AWS credentials and can't evaluate them. ${remedy}, or merges with an admin bypass after a local smoke run recorded in the PR (#34 r1/Q-2 (a); docs/runbooks/aws-setup.md, "CI credentials (GitHub OIDC)").`;
     return { run: false, failure, gated, summary: failure };
   }
   return {

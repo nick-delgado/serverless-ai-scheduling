@@ -80,9 +80,15 @@ describe("planGate (r1/Q-2 (a))", () => {
     const fork = planGate({ ...base, changed, hasCredentials: false, fork: true });
     expect(fork.run).toBe(false);
     expect(fork.failure).toContain("this is a pull request from a fork, so the run has no AWS credentials");
-    expect(planGate({ ...base, changed, hasCredentials: false, dependabot: true }).failure).toContain(
-      "this is a Dependabot pull request",
-    );
+    expect(fork.failure).toContain("Nick pushes the branch to this repository");
+    const many = planGate({
+      ...base,
+      changed: Array.from({ length: 12 }, (_, i) => `packages/tools/src/f${i}.ts`),
+    });
+    expect(many.summary).toContain("`packages/tools/src/f9.ts` and 2 more.");
+    const bot = planGate({ ...base, changed, hasCredentials: false, dependabot: true }).failure;
+    expect(bot).toContain("this is a Dependabot pull request");
+    expect(bot).toContain("a push of his own to the branch");
     expect(planGate({ ...base, changed, hasCredentials: false }).failure).toContain(
       "this is a run without the AWS_EVAL_ROLE_ARN secret",
     );

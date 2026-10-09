@@ -103,7 +103,7 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
       ...share(s.taskSuccess, EXIT_TARGETS.taskSuccess),
     },
     ...s.byCategory.map((c): ExitRow => ({
-      metric: `  ${c.category} (${c.cases} case(s))`,
+      metric: `↳ ${c.category} (${c.cases} case(s))`,
       sub: true,
       target: `≥ ${pct(EXIT_TARGETS.taskSuccess)}`,
       ...share(c.taskSuccess, EXIT_TARGETS.taskSuccess),
