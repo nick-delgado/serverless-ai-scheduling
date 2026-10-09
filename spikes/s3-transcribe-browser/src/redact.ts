@@ -1,8 +1,9 @@
 /**
  * Redaction for anything that leaves the page (r1/A-4): results are committed to a public repo, so
- * account IDs, Cognito pool, client and identity IDs, role session names and private LAN addresses
- * are replaced before export. The dev server's results endpoint runs the same function again with
- * the exact IDs from `.env.local` as `known`.
+ * account IDs, Cognito pool and identity IDs, role session names, access keys and private LAN
+ * addresses are replaced by pattern before export. Only an export saved through the dev server's
+ * results endpoint is redacted again with the exact IDs from `.env.local` (the client ID among them)
+ * as `known`; a downloaded export gets the patterns only.
  */
 export function redact(text: string, known: readonly string[] = []): string {
   let out = text;

@@ -11,7 +11,7 @@ Throwaway measurement page that feeds [ADR-006](../../docs/adr/0006-voice-transc
 3. "Probe 16 kHz AudioContext" records whether `new AudioContext({ sampleRate: 16000 })` is honoured and can take the mic (r1/Q-5).
 4. Start: `getUserMedia` → `AudioContext` at the native rate → AudioWorklet (`src/pcm-worklet.ts`, downsampled to 16 kHz s16le, 1600-sample (100 ms) chunks) → `@aws-sdk/client-transcribe-streaming`, loaded with a dynamic `import()` on first use, over the WebSocket (`en-US`, `pcm`, 16000 Hz, no PII redaction, no custom vocabulary; r1/A-2). The stabilization variant adds `EnablePartialResultsStabilization` with stability `high`.
 5. Send (or the 60 s auto-send, FR-021) ends the audio with an empty AudioEvent and waits for the server to end the stream. Timing (r1/A-1), all `performance.now()` from the tap: `stop` at Send; `lastFinal` at the last `IsPartial: false` result; latency = lastFinal − stop. Also Send→stream end, tap→WebSocket open and tap→first result, flagged cold (first stream after a page load) or warm. Credentials are fetched before the tap timestamp.
-6. A run fails (r1/Q-2) when the stream errors, the socket closes before Send or with no final after it, or nothing ends within 10 s of Send (FR-022).
+6. A run fails (r1/Q-2) when the stream errors; the socket closes before Send, or after it without a clean code-1000 close; the stream ends with no final result at all; or the stream doesn't end, or its last final arrives, more than 10 s after Send (FR-022). A run whose finals all arrived before Send is a success, counted as 0 ms of stop→final (Nick's decision on PR #225).
 7. Runs are kept in the browser's local storage per browser label, so a reload loses nothing, and are exported as redacted JSON into `results/`.
 
 | File | What it is |
@@ -45,12 +45,11 @@ Fictional people only (CLAUDE.md rule 6). The page shows the script for the sele
 
 ## Run sheet (Nick)
 
-Everything runs from the repository checkout that has this spike (the `spike/10-transcribe-browser` worktree until it merges). The phones and the Mac must be on the same Wi-Fi. Allow about 25 minutes per measured browser, plus 10 for each browser with the variant. Transcribe Streaming bills per second of audio; about 45 minutes of audio in total should cost around a dollar (the published us-east-1 rate was about $0.024 per minute; not re-checked).
+Everything runs from the repo root (after `npm ci`). The phones and the Mac must be on the same Wi-Fi. Allow about 25 minutes per measured browser, plus 10 for each browser with the variant. Transcribe Streaming bills per second of audio; about 45 minutes of audio in total should cost around a dollar (the published us-east-1 rate was about $0.024 per minute; not re-checked).
 
 ### 0. Once, on the Mac
 
 ```bash
-cd /Users/nick/projects/serverless-ai-scheduling/.worktrees/10-transcribe-spike
 # Pool IDs into the git-ignored spikes/s3-transcribe-browser/.env.local (already written for dev on 2026-10-08):
 AWS_PROFILE=sched-dev AWS_REGION=us-east-1 npm run config -w spikes/s3-transcribe-browser
 ```
@@ -58,7 +57,7 @@ AWS_PROFILE=sched-dev AWS_REGION=us-east-1 npm run config -w spikes/s3-transcrib
 Optional check that the whole path works before you speak (headless Chrome, a synthetic clip as the mic, four short streams; the password is read from the root `.env` and never printed). Start the server as in step 1, then in a second terminal:
 
 ```bash
-npx tsx spikes/s3-transcribe-browser/preflight.ts --env-file /Users/nick/projects/serverless-ai-scheduling/.env
+npx tsx spikes/s3-transcribe-browser/preflight.ts     # add --env-file <file> if the root .env is elsewhere
 ```
 
 It should print `"denied": true`, and `"ok": true` for `coldMain`, `warmMain` and `warmStabilized`. (`endIterable` is expected to fail: see the README's findings below.)
@@ -139,9 +138,9 @@ Summary: [`results/summary-2026-10-08.md`](results/summary-2026-10-08.md). Notes
 
 ## Results files
 
-An export is the page's JSON, redacted in the browser and again by the dev server's endpoint. `summarize.ts` refuses a file that doesn't parse and names it.
+An export is the page's JSON, redacted in the browser. **Save results to the Mac** sends it through the dev server's endpoint, which redacts it again with the exact IDs from `.env.local` and refuses a body that doesn't parse; **Download JSON** skips the endpoint. `summarize.ts` refuses a file that doesn't parse and names it.
 
-The first exports (2026-10-08) were damaged by the old account-ID pattern `\b\d{12}\b`, which also matched 12-digit `performance.now()` fractions. They were repaired by dropping each damaged `.<account>` fraction, which loses only sub-millisecond digits. The details are in the notes. `src/redact.ts` now leaves digits after a decimal point alone, and `npm run check -w spikes/s3-transcribe-browser` (`redact.check.ts`) checks that.
+The first exports (2026-10-08) were damaged by the old account-ID pattern `\b\d{12}\b`, which also matched 12-digit `performance.now()` fractions. Those three didn't parse, so they can't have passed the endpoint and came by Download. They were repaired by dropping each damaged `.<account>` fraction, which loses only sub-millisecond digits, and a search of every committed result for the exact `.env.local` IDs found none. The details are in the notes. `src/redact.ts` now leaves digits after a decimal point alone, and `npm run check -w spikes/s3-transcribe-browser` (`redact.check.ts`) checks that.
 
 ## Bundle size (r1/A-3)
 
