@@ -46,7 +46,8 @@ export function redactor(cfg: SpikeConfig): (s: string) => string {
     s
       .replaceAll(cfg.cloudfrontDomain, "<distribution>.cloudfront.net")
       .replaceAll(apiId, "<rest-api-id>")
-      .replace(/\b\d{12}\b/g, "<account>");
+      // Not inside a number: a fraction such as 6744.399999999674 has 12 digits after the point (#10).
+      .replace(/(?<![\d.])\d{12}(?!\d)/g, "<account>");
 }
 
 /** USER_SRP_AUTH as the test user from spikes/s2-streaming/.env. Resolves with the ID token. */
