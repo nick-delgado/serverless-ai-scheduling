@@ -9,9 +9,11 @@
  *   - each role's sessions last at most an hour (r1/A-3);
  *   - each role, and the OIDC provider, is on `sched-cfn-exec`'s unconditional `ProtectBootstrapIdentities` deny,
  *     so no stack can rewrite a role's trust.
- * It also reads `.github/workflows/deploy.yml` as text: its only trigger is `workflow_dispatch`, its job runs only
- * on `refs/heads/main` in the `dev` environment (which the deploy role's `sub` names) with `id-token: write`, its
- * one credentials step masks the account ID (r1/Q-3 (a)), and it runs the two scripts with `dev` and nothing else.
+ * It also reads `.github/workflows/deploy.yml` as text: its only trigger is `workflow_dispatch`, it has one job, which
+ * runs only on `refs/heads/main` in the `dev` environment (which the deploy role's `sub` names) with
+ * `id-token: write`, its one credentials step (`- uses:` or `uses:` under a `- name:`) masks the account ID
+ * (r1/Q-3 (a)), and no line outside a comment names a script under `scripts/` but the two calls with `dev`, whether
+ * on a `run:` line or inside a `run: |` block.
  * It doesn't check the grants (the PR lists them) or that AWS accepts the subject strings: the format was seen in a
  * probe run's tokens (journal, 2026-10-08), and the first run of each workflow shows the rest (runbook, "CI
  * credentials (GitHub OIDC)").
@@ -167,6 +169,10 @@ describe("deploy workflow (.github/workflows/deploy.yml)", () => {
     expect(children(block(/^on:$/, workflow))).toEqual(["  workflow_dispatch:"]);
   });
 
+  it("has one job, so the checks below cover the whole file", () => {
+    expect(children(block(/^jobs:$/, workflow))).toEqual(["  deploy:"]);
+  });
+
   it("runs only from main, in the dev environment the deploy role's subject names", () => {
     expect(entries(job)).toMatchObject({ if: "github.ref == 'refs/heads/main'", environment: "dev" });
     expect(ROLES.find((r) => r.logicalId === "GitHubDeployRole")?.sub).toContain(":environment:dev:");
@@ -177,8 +183,10 @@ describe("deploy workflow (.github/workflows/deploy.yml)", () => {
   });
 
   it("has one credentials step, which takes the deploy role and masks the account ID", () => {
+    // Any step form: `- uses:` or `uses:` under a `- name:`. The `with:` lookup expects the `- uses:` form.
+    const anyForm = /^\s+(- )?uses: aws-actions\/configure-aws-credentials@/;
+    expect(job.filter((l) => anyForm.test(l))).toHaveLength(1);
     const uses = /^\s+- uses: aws-actions\/configure-aws-credentials@/;
-    expect(job.filter((l) => uses.test(l))).toHaveLength(1);
     expect(entries(block(/^\s+with:$/, block(uses, job)))).toMatchObject({
       "role-to-assume": "${{ secrets.AWS_DEPLOY_ROLE_ARN }}",
       "mask-aws-account-id": "true",
@@ -186,10 +194,11 @@ describe("deploy workflow (.github/workflows/deploy.yml)", () => {
   });
 
   it("deploys dev with the two scripts and runs no other script", () => {
-    const scripts = job.filter((l) => /^\s+(- )?run: .*scripts\//.test(l));
-    expect(scripts.map((l) => l.trim().replace(/^- /, ""))).toEqual([
-      "run: scripts/deploy.sh all dev",
-      "run: scripts/deploy-web.sh dev",
+    // Every non-comment line naming scripts/, so a call inside a `run: |` block counts too.
+    const scripts = job.filter((l) => !l.trimStart().startsWith("#") && l.includes("scripts/"));
+    expect(scripts.map((l) => l.trim().replace(/^(- )?run: /, ""))).toEqual([
+      "scripts/deploy.sh all dev",
+      "scripts/deploy-web.sh dev",
     ]);
   });
 });
