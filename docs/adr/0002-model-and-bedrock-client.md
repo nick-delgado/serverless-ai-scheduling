@@ -2,6 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6).
 - **Date:** 2026-09-28
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -93,7 +94,7 @@ The spike uses a production-sized prefix: a draft system prompt plus all 7 tool 
 - **Tokens and cost:** about 5,366 input and 242 output tokens per turn; about $0.0066 per turn at Anthropic list prices (an estimate; Bedrock billing may differ).
 - **Caching: 0 tokens written or read.** This confirms the 4,096-token minimum cacheable prefix for Haiku 4.5. At our prompt size, Haiku will pay full input price on every call. Opus 5 (512 minimum) and Sonnet 5 (1,024) should cache it.
 
-**Throttling:** after about 15 calls in two minutes, Bedrock returned 429 "Too many requests", even with the SDK's retries. New accounts appear to start with low on-demand quotas. A full eval matrix, thousands of calls, will need pacing (now in the spike: `--pace-ms`, 6 retries) and probably a quota increase. `SchedDeployer` can't read Service Quotas yet; a read-only addition is proposed in `infra/bootstrap/sched-deployer-policy.json`.
+**Throttling:** after about 15 calls in two minutes, Bedrock returned 429 "Too many requests", even with the SDK's retries. New accounts appear to start with low on-demand quotas. A full eval matrix, thousands of calls, will need pacing (now in the spike: `--pace-ms`, 6 retries) and probably a quota increase. `SchedDeployer` can't read Service Quotas yet; a read-only addition is proposed in `infra/bootstrap/sched-deployer-policy.json`. *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): AWS declined the quota increases.)*
 
 **IAM (resolved from the Service Authorization Reference):** `bedrock-mantle:CreateInference` targets `arn:aws:bedrock-mantle:<region>:<account>:project/*` and is narrowed to models with the `bedrock-mantle:Model` condition key. On the runtime path, `bedrock:InvokeModel*` applies to the inference-profile and foundation-model ARNs.
 
@@ -122,13 +123,18 @@ Agreement status across every Anthropic model on the account:
 - Both models meet NFR-001 on this single-tool turn from a laptop. The first streamed text arrives in about 1.2–1.4 s p50, against a target of ≤ 3 s.
 
 **Proposed interim path (awaiting Nick's decision):**
-1. Nick opens an AWS Support case to lift the entitlement restriction for Opus 5 and Sonnet 5. First he checks whether the account is on the Free plan; if so, upgrading to the Paid plan may be the fix.
+1. Nick opens an AWS Support case to lift the entitlement restriction for Opus 5 and Sonnet 5. First he checks whether the account is on the Free plan; if so, upgrading to the Paid plan may be the fix. *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): AWS Support declined.)*
 2. Until then, development and the M1 walking skeleton use **bedrock-runtime + Sonnet 4.6** (`us.anthropic.claude-sonnet-4-6`), with Haiku 4.5 as the second profile. Model choice is config (`AGENT_MODEL_PROFILE`), so nothing structural changes.
-3. When entitlement arrives, rerun this spike for Opus 5 and Sonnet 5 on both backends, then finalize the client and the default model here.
+3. When entitlement arrives, rerun this spike for Opus 5 and Sonnet 5 on both backends, then finalize the client and the default model here. *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): entitlement was declined; S-1b is closed.)*
 
 ### Interim decision (accepted by Nick, 2026-09-28)
 
 - **Client:** `AnthropicBedrock` from `@anthropic-ai/bedrock-sdk` (bedrock-runtime), behind the `LlmClient` interface. Mantle is unavailable to this account.
 - **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
 - **IAM:** `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` on the US inference-profile ARNs plus the underlying foundation-model ARNs in the US regions they route to.
-- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default. *(Superseded by [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123): Opus 5 and Sonnet 5 aren't entitled and are out of the matrix.)*
+- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default. *(Superseded by [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123): Opus 5 and Sonnet 5 aren't entitled and are out of the matrix.)* *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): AWS declined; S-1b (#49) closed as not planned.)*
+
+## Amendment (2026-10-09): AWS declined the entitlement and quota increases (#227)
+
+- AWS Support declined to enable Claude Opus 5 and Sonnet 5 on this account, so follow-up spike S-1b (#49) was closed as not planned on 2026-10-09. The target models are not measured; the six entitled profiles of ADR-010 stand, and the M3 matrix (#37) picks the production profile among them. ADR-010's "Revisit if: Opus 5 or Sonnet 5 become entitled" still holds.
+- AWS also declined the on-demand quota increases for Sonnet 4.6 and Haiku 4.5. Both are still 10 requests/min (checked 2026-10-09). The per-model token bucket at 90% of quota (ADR-008) is the standing mitigation, not a stopgap.
