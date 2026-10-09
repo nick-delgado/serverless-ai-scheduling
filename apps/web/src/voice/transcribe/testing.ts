@@ -7,7 +7,7 @@ import { vi } from "vitest";
 
 import type { AwsCredentials } from "../../auth/authService";
 import type { Mic, MicHandlers } from "./mic";
-import type { StreamClient, StreamClientFactory, StreamInput } from "./streamClient";
+import type { StreamClient, StreamClientFactory, StreamInput, StreamResponse } from "./streamClient";
 
 /** Let pending promise callbacks and zero-delay timers run. */
 export const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -28,7 +28,7 @@ export class FakeStreamClient implements StreamClient {
     readonly credentials: AwsCredentials,
   ) {}
 
-  start = vi.fn((input: StreamInput) => {
+  start = vi.fn((input: StreamInput): Promise<StreamResponse> => {
     this.input = input;
     void this.read(input.AudioStream as AsyncIterable<AudioStream>);
     return Promise.resolve({ TranscriptResultStream: this.responses() });
@@ -87,11 +87,12 @@ export class FakeStreamClient implements StreamClient {
   }
 }
 
-/** A factory that keeps every client it made. */
-export function fakeTranscribe() {
+/** A factory that keeps every client it made; `noResultStream` makes each answer without a result stream. */
+export function fakeTranscribe({ noResultStream = false } = {}) {
   const clients: FakeStreamClient[] = [];
   const factory: StreamClientFactory = (region, credentials) => {
     const client = new FakeStreamClient(region, credentials);
+    if (noResultStream) client.start.mockResolvedValueOnce({});
     clients.push(client);
     return client;
   };

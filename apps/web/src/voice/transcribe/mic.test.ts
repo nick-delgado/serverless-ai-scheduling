@@ -172,6 +172,7 @@ describe("openMic", () => {
   it("close() stops the tracks (the mic indicator goes off), disconnects and closes the context, once", async () => {
     const ctx = fakeContext();
     const mic = await openMic(asContext(ctx), handlers());
+    ctx.close.mockRejectedValueOnce(new Error("InvalidStateError"));
     await Promise.all([mic.close(), mic.close()]);
     expect(track.stop).toHaveBeenCalledTimes(1);
     expect(source.disconnect).toHaveBeenCalled();

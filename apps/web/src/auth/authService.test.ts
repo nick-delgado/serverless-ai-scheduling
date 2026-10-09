@@ -9,6 +9,7 @@ import { cognitoMockStats, configureCognitoMock, expireCognitoSessions } from ".
 import { MOCK_COGNITO_CONFIG, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { server } from "../mocks/node";
 import { type AuthService, createAmplifyAuthService } from "./authService";
+import { FAKE_AWS_CREDENTIALS, fakeAuthService } from "./testing";
 
 // Each sign-in runs SRP's 3072-bit math on both sides (~0.2 s alone); allow for a busy CI machine.
 vi.setConfig({ testTimeout: 20_000 });
@@ -334,5 +335,14 @@ describe("Identity Pool credentials", () => {
       throw new Error("Sign-in is not configured");
     });
     await expect(unconfigured.getAwsCredentials()).resolves.toBeUndefined();
+  });
+});
+
+describe("fakeAuthService (testing.ts)", () => {
+  it("gives synthetic Identity Pool credentials while signed in, none when signed out", async () => {
+    const fake = fakeAuthService({ username: "maria.santos" });
+    await expect(fake.getAwsCredentials()).resolves.toBe(FAKE_AWS_CREDENTIALS);
+    await fake.signOut();
+    await expect(fake.getAwsCredentials()).resolves.toBeUndefined();
   });
 });

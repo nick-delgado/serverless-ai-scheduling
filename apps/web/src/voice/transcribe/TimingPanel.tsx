@@ -12,6 +12,7 @@ import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { getAwsCredentials, resolveIdentityPoolId } from "../../auth";
+import { describeError } from "./mic";
 import { identityPoolRegion } from "./RealTranscriber";
 import { SCRIPTS } from "./scripts";
 import {
@@ -69,8 +70,7 @@ export default function TimingPanel({ store = timingStore, roleCheck }: TimingPa
     setStatus("Checking the role…");
     (roleCheck ?? (() => defaultRoleCheck(store)))().then(
       () => setStatus("Role check recorded."),
-      (error: unknown) =>
-        setStatus(`Role check failed: ${error instanceof Error ? error.message : String(error)}`),
+      (error: unknown) => setStatus(`Role check failed: ${describeError(error)}`),
     );
   };
 

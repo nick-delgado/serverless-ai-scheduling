@@ -14,7 +14,7 @@ const sdk = vi.hoisted(() => {
     }
     send(command: unknown) {
       state.sent.push(command);
-      return state.outcome instanceof Error ? Promise.reject(state.outcome) : Promise.resolve({});
+      return state.outcome === undefined ? Promise.resolve({}) : Promise.reject(state.outcome);
     }
     destroy() {
       state.destroyed += 1;
@@ -62,6 +62,14 @@ describe("checkRoleScope", () => {
     await expect(checkRoleScope("us-east-1", FAKE_AWS_CREDENTIALS, AT)).resolves.toMatchObject({
       denied: false,
       result: expect.stringMatching(/ALLOWED/),
+    });
+  });
+
+  it("names a rejection that isn't an Error", async () => {
+    sdk.state.outcome = "offline";
+    await expect(checkRoleScope("us-east-1", FAKE_AWS_CREDENTIALS, AT)).resolves.toMatchObject({
+      denied: false,
+      result: "unknown error",
     });
   });
 

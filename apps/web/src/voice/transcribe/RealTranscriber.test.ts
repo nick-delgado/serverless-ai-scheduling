@@ -21,8 +21,13 @@ import { fakeMic, fakeTranscribe, settle } from "./testing";
 
 const CTX = { fake: "AudioContext" } as unknown as AudioContext;
 
-function setup(overrides: { credentials?: () => Promise<typeof FAKE_AWS_CREDENTIALS | undefined> } = {}) {
-  const transcribe = fakeTranscribe();
+function setup(
+  overrides: {
+    credentials?: () => Promise<typeof FAKE_AWS_CREDENTIALS | undefined>;
+    noResultStream?: boolean;
+  } = {},
+) {
+  const transcribe = fakeTranscribe({ noResultStream: overrides.noResultStream });
   const mic = fakeMic();
   const log: string[] = [];
   const observer: StreamObserver = {
@@ -79,6 +84,7 @@ describe("RealTranscriber construction", () => {
 
   it("takes its region from the Identity Pool ID's prefix", () => {
     expect(identityPoolRegion("eu-west-2:00000000-0000-4000-8000-000000000000")).toBe("eu-west-2");
+    expect(identityPoolRegion("no-region")).toBe("");
   });
 
   it("loads the SDK adapter lazily, as a factory", async () => {
@@ -205,6 +211,30 @@ describe("stop() (Send, or the 60 s auto-send)", () => {
     await expect(stopped).rejects.toThrow(/LimitExceededException: Too many streams/);
   });
 
+  it("takes the first alternative of each final, skipping events without results", async () => {
+    const { session, client } = await recording();
+    const stopped = session.stop();
+    client?.event({ $unknown: ["SomethingNew", {}] } as unknown as TranscriptResultStream);
+    client?.event({ TranscriptEvent: {} });
+    client?.event({
+      TranscriptEvent: {
+        Transcript: {
+          Results: [{ IsPartial: false, Alternatives: [{ Transcript: "Yes." }, { Transcript: "Yeah." }] }],
+        },
+      },
+    });
+    client?.event({ TranscriptEvent: { Transcript: { Results: [{ IsPartial: false, Alternatives: [] }] } } });
+    client?.end();
+    await expect(stopped).resolves.toBe("Yes.");
+  });
+
+  it("names an exception event that has no message", async () => {
+    const { session, client } = await recording();
+    const stopped = session.stop();
+    client?.event({ InternalFailureException: {} } as unknown as TranscriptResultStream);
+    await expect(stopped).rejects.toThrow(/InternalFailureException: InternalFailureException/);
+  });
+
   it("rejects a second stop()", async () => {
     const { session } = await recording();
     void session.stop();
@@ -239,6 +269,15 @@ describe("cancel()", () => {
     expect(client?.destroy).toHaveBeenCalledTimes(1);
     expect(observer.end).toHaveBeenCalledWith({ status: "cancelled", afterSend: false });
     expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it("discards audio the mic delivers after Cancel", async () => {
+    const { session, client, mic, callbacks } = await recording();
+    session.cancel();
+    mic.chunk(3200, 0.9);
+    await settle();
+    expect(client?.sizes()).toEqual([]);
+    expect(callbacks.onLevel).not.toHaveBeenCalled();
   });
 
   it("before the stream opened: no client is ever made", async () => {
@@ -285,6 +324,12 @@ describe("errors while recording reach the overlay through onError", () => {
     expect(c.client?.destroyed).toBe(true);
     expect(c.observer.end).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", reason }));
     await expect(c.session.stop()).rejects.toMatchObject({ kind: "failed" });
+  });
+
+  it("a response with no result stream ends it before Send: failed", async () => {
+    const c = await recording({ noResultStream: true });
+    expect(c.callbacks.onError).toHaveBeenCalledWith(expect.objectContaining({ kind: "failed" }));
+    expect(c.observer.end).toHaveBeenCalledWith(expect.objectContaining({ reason: "closed-early" }));
   });
 
   it("no AWS credentials (signed out, no Identity Pool): failed", async () => {

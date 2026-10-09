@@ -79,26 +79,28 @@ export const loadStreamClient = (): Promise<StreamClientFactory> =>
 
 /** The region of an Identity Pool ID such as `us-east-1:…` (r1/A-4). */
 export function identityPoolRegion(identityPoolId: string): string {
-  return identityPoolId.split(":")[0] ?? "";
+  return identityPoolId.slice(0, Math.max(0, identityPoolId.indexOf(":")));
 }
 
 export class RealTranscriber implements Transcriber {
   readonly options: RealTranscriberOptions;
+  private readonly deps: Required<Omit<RealTranscriberOptions, "observe">>;
 
   constructor(options: RealTranscriberOptions) {
     this.options = options;
+    this.deps = { loadClient: loadStreamClient, createAudioContext, openMic, ...options };
   }
 
   async start(callbacks: TranscriberCallbacks = {}): Promise<TranscriberSession> {
-    const { options } = this;
+    const { deps } = this;
     // Before the first await (r2/A-2), so Safari ties it to the tap.
-    const ctx = (options.createAudioContext ?? createAudioContext)();
-    const run = new StreamRun(callbacks, options.observe?.());
-    const client = Promise.all([(options.loadClient ?? loadStreamClient)(), options.getCredentials()]);
+    const ctx = deps.createAudioContext();
+    const run = new StreamRun(callbacks, this.options.observe?.());
+    const client = Promise.all([deps.loadClient(), deps.getCredentials()]);
     client.catch(() => undefined); // read by `stream()`; a rejection before then isn't unhandled
 
-    await run.open(() => (options.openMic ?? openMic)(ctx, run.handlers));
-    run.stream(client, options.region);
+    await run.open(() => deps.openMic(ctx, run.handlers));
+    run.stream(client, deps.region);
     return { stop: () => run.stop(), cancel: () => run.cancel() };
   }
 }

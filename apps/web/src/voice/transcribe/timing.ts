@@ -177,15 +177,15 @@ export function classify(
   if (outcome.status === "failed") {
     return { ...base, outcome: "failed", failure: outcome.reason, detail: outcome.detail };
   }
-  if (lastFinal === undefined) {
+  // An ok stream has always been sent; no final at all is a failed stream.
+  if (lastFinal === undefined || send === undefined) {
     return { ...base, outcome: "failed", failure: "no-final", transcript: outcome.transcript };
   }
-  const sentAt = send ?? end; // an ok stream has always been sent
   return {
     ...base,
     outcome: "ok",
-    stopToFinalMs: Math.max(0, lastFinal - sentAt),
-    sendToEndMs: end - sentAt,
+    stopToFinalMs: Math.max(0, lastFinal - send),
+    sendToEndMs: end - send,
     transcript: outcome.transcript,
   };
 }
@@ -228,6 +228,8 @@ export interface BrowserSummary {
   finalBeforeSend: number;
 }
 
+const isNumber = (value: number | undefined): value is number => value !== undefined;
+
 /** AC6's per-browser numbers, over the runs that count. */
 export function summarize(runs: readonly TimingRun[]): BrowserSummary[] {
   return BROWSERS.flatMap((browser) => {
@@ -236,8 +238,8 @@ export function summarize(runs: readonly TimingRun[]): BrowserSummary[] {
     );
     if (counted.length === 0) return [];
     const ok = counted.filter((run) => run.outcome === "ok");
-    const stopToFinalP95 = p95(ok.map((run) => run.stopToFinalMs ?? 0));
-    const sendToEndP95 = p95(ok.map((run) => run.sendToEndMs ?? 0));
+    const stopToFinalP95 = p95(ok.map((run) => run.stopToFinalMs).filter(isNumber));
+    const sendToEndP95 = p95(ok.map((run) => run.sendToEndMs).filter(isNumber));
     return [
       {
         browser,

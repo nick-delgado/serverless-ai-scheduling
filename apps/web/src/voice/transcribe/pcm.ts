@@ -49,7 +49,7 @@ export function toInt16(sample: number): number {
 export function encodeS16le(samples: Int16Array, length: number = samples.length): ArrayBuffer {
   const bytes = new ArrayBuffer(length * 2);
   const view = new DataView(bytes);
-  for (let i = 0; i < length; i += 1) view.setInt16(i * 2, samples[i] ?? 0, true);
+  samples.subarray(0, length).forEach((sample, i) => view.setInt16(i * 2, sample, true));
   return bytes;
 }
 

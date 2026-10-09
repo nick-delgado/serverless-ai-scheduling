@@ -138,6 +138,12 @@ describe("TimingPanel", () => {
   });
 
   it("runs the role check and shows each result", async () => {
+    store.addRoleCheck({
+      at: "0",
+      action: "transcribe:ListTranscriptionJobs",
+      denied: false,
+      result: "ALLOWED",
+    });
     const roleCheck = vi.fn(() => {
       store.addRoleCheck({
         at: "1",
@@ -154,6 +160,7 @@ describe("TimingPanel", () => {
     expect(
       screen.getByText(/transcribe:ListTranscriptionJobs denied \(AccessDeniedException\)/),
     ).toBeInTheDocument();
+    expect(screen.getByText(/transcribe:ListTranscriptionJobs NOT denied \(ALLOWED\)/)).toBeInTheDocument();
   });
 
   it("says why the role check can't run without Identity Pool credentials (the default check)", async () => {
@@ -161,7 +168,9 @@ describe("TimingPanel", () => {
     await open();
     await userEvent.click(screen.getByRole("button", { name: "Role check" }));
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(/Role check failed: No Identity Pool credentials/),
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /Role check failed: Error: No Identity Pool credentials/,
+      ),
     );
     expect(store.snapshot().roleChecks).toEqual([]);
   });
