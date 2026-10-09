@@ -98,7 +98,7 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 ## AWS rules
 
 - Profile: `sched-dev` (IAM Identity Center SSO). Region: `us-east-1`. If credentials are expired, ask Nick to run `aws sso login --profile sched-dev`.
-- **All AWS resources come from CloudFormation/SAM.** The only manual or CLI exceptions are listed in `docs/runbooks/aws-setup.md` (Identity Center, Bedrock model access, SES identity verification click, SPA asset sync + CloudFront invalidation, demo-user seeding).
+- **All AWS resources come from CloudFormation/SAM.** The only manual or CLI exceptions are listed in `docs/runbooks/aws-setup.md` (Identity Center, Bedrock model access, SES identity verification click, SPA asset sync + CloudFront invalidation, demo-user seeding, and the GitHub-side settings and secrets for the CI roles).
 - Stacks are named `sched-<env>-<stack>` (e.g., `sched-dev-data`). Cross-stack values go through SSM parameters under `/sched/<env>/...`. Only touch `sched-*` stacks.
 - Deploys run through the CloudFormation execution role (`--role-arn` from SSM `/sched/bootstrap/cfn-exec-role-arn`, published by the bootstrap stack).
 - **Ask before destructive operations:** deleting a stack, deleting or overwriting table data, or anything touching the bootstrap stack.
