@@ -4,7 +4,8 @@
  * 60 s, so it runs into the page's 60 s auto-send (FR-021). Everyone named here is fictional
  * (CLAUDE.md rule 6): the demo patients and Dr. Priya Lee come from the clinic-default fixture.
  *
- * The README repeats these texts; keep the two copies in sync.
+ * The README repeats these texts, and apps/web/src/voice/transcribe/scripts.ts copies them for #29's
+ * timing panel (its test compares them with this file); keep the three copies in sync.
  */
 
 export type Length = "5s" | "20s" | "60s";

@@ -6,7 +6,7 @@ import { renderHook } from "@testing-library/react";
 import { useContext } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getAwsCredentials } from "../auth";
+import { getAwsCredentials } from "../auth/session";
 import { MockTranscriber } from "./MockTranscriber";
 import { RealTranscriber } from "./transcribe/RealTranscriber";
 import { defaultTranscriber } from "./TranscriberContext";
