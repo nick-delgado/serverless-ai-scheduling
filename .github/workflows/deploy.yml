@@ -1,0 +1,92 @@
+# Deploy dev (#41, M3-06): Nick runs it by hand (workflow_dispatch) from main; nothing deploys automatically
+# (r1/Q-1 (c)). It runs the same two scripts an agent runs, scripts/deploy.sh all dev and then
+# scripts/deploy-web.sh dev, with short-lived credentials from the sched-github-deploy role (GitHub OIDC, no
+# stored keys). The role trusts only this file at refs/heads/main in the `dev` GitHub Environment, so a run from
+# another branch can't assume it; the environment's required reviewer approves each run. Setup, the secrets it
+# reads and the first-run checks: docs/runbooks/aws-setup.md, "CI credentials (GitHub OIDC)".
+# Not a required check: it never runs on pull requests, only when Nick starts it from main.
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+# One deploy at a time; a second run waits instead of cancelling one mid-deploy (and while one runs, only the newest
+# pending run is kept). An agent's own scripts/deploy.sh can still overlap it: CloudFormation then refuses the second
+# update of a stack that is mid-update, and that run is re-run.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy dev
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Before anything else, so a run before setup fails with the runbook section's name. Secret values reach the
+      # shell only through the environment, and are never printed.
+      - name: Check the deploy settings
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          SES_SENDER: ${{ secrets.SES_SENDER }}
+          SES_STAFF_RECIPIENT: ${{ secrets.SES_STAFF_RECIPIENT }}
+        run: |
+          missing=()
+          [[ -n "$AWS_DEPLOY_ROLE_ARN" ]] || missing+=("AWS_DEPLOY_ROLE_ARN (dev environment secret)")
+          [[ -n "$SES_SENDER" ]] || missing+=("SES_SENDER (repository secret)")
+          [[ -n "$SES_STAFF_RECIPIENT" ]] || missing+=("SES_STAFF_RECIPIENT (repository secret)")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            for name in "${missing[@]}"; do echo "::error::not set: ${name}"; done
+            echo "::error::Set them as docs/runbooks/aws-setup.md, \"CI credentials (GitHub OIDC)\", says."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v3
+        with:
+          use-installer: true
+      # Prints the OIDC token's `sub` claim only (never the token), so the role's trust condition can be checked
+      # against what GitHub sends (runbook, "Confirm the subject strings").
+      - name: Show the OIDC subject
+        continue-on-error: true
+        run: |
+          node --input-type=module -e '
+            const url = `${process.env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+            const { value } = await res.json();
+            console.log(`OIDC sub: ${JSON.parse(Buffer.from(value.split(".")[1], "base64url")).sub}`);
+          '
+      # mask-aws-account-id: the account ID shows as *** in every later log line (r1/Q-3 (a)).
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: deploy-dev-${{ github.run_id }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+      # Both scripts default AWS_PROFILE to sched-dev, a profile the runner doesn't have. A config-only profile
+      # (region, no credentials) outside the checkout gives them one that exists, and the AWS CLI and SAM CLI
+      # take the credentials from the environment, where the step above put them (r1/A-1).
+      - name: Point AWS_PROFILE at a config-only profile
+        run: |
+          printf '[profile github-oidc]\nregion = us-east-1\n' > "$RUNNER_TEMP/aws-config"
+          echo "AWS_CONFIG_FILE=$RUNNER_TEMP/aws-config" >> "$GITHUB_ENV"
+          echo "AWS_PROFILE=github-oidc" >> "$GITHUB_ENV"
+      - name: Deploy the stacks
+        run: scripts/deploy.sh all dev
+        env:
+          SES_SENDER: ${{ secrets.SES_SENDER }}
+          SES_STAFF_RECIPIENT: ${{ secrets.SES_STAFF_RECIPIENT }}
+      - name: Publish the SPA
+        run: scripts/deploy-web.sh dev

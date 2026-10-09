@@ -12,7 +12,8 @@
 # Deploys the checkout this script lives in (repo_root below comes from the script's own path), so
 # a worktree deploys its own branch. Every stack is tagged with the git branch and commit it came from.
 #
-# Runs as the SchedDeployer SSO profile (AWS_PROFILE, default sched-dev). CloudFormation itself
+# Runs as the SchedDeployer SSO profile (AWS_PROFILE, default sched-dev), or in .github/workflows/deploy.yml as the
+# sched-github-deploy role, whose credentials come from the environment (#41). CloudFormation itself
 # acts through the sched-cfn-exec role from the bootstrap stack, so the caller only needs to
 # drive CloudFormation, upload artifacts, and pass that one role.
 set -euo pipefail

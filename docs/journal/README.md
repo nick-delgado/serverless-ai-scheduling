@@ -72,3 +72,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-07 | [The scroll test's closed socket was a connection MSW handed to the real network](2026-10-07-the-closed-socket-was-a-passthrough.md) | 4. Teaching the agent to schedule |
 | 2026-10-08 | [An owner decision now wins over an agent's own reading, and a lint holds write confirmations to the full date](2026-10-08-owner-decisions-win-over-an-agents-reading.md) | 5. What the evals showed |
 | 2026-10-08 | [The date tests now run in Los Angeles, because UTC and the clinic's zone each hid a date bug we knew of](2026-10-08-the-date-tests-run-in-los-angeles.md) | 4. Teaching the agent to schedule |
+| 2026-10-08 | [Three CI roles that each trust one workflow file, and a probe that checked their subjects first](2026-10-08-three-ci-roles-trust-one-workflow-each.md) | 5. What the evals showed |

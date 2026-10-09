@@ -18,7 +18,8 @@
 # `no-cache`, so browsers revalidate it and pick up new asset names. The upload order keeps the live
 # site whole: new assets first, then index.html, then stale files are deleted (--delete), then the
 # invalidation. Like deploy.sh it publishes the checkout it lives in, as SchedDeployer (AWS_PROFILE,
-# default sched-dev); no CloudFormation and no exec role are involved. It refuses a dirty working tree.
+# default sched-dev) or, in .github/workflows/deploy.yml, as the sched-github-deploy role (#41); no CloudFormation
+# and no exec role are involved. It refuses a dirty working tree.
 set -euo pipefail
 
 # Keep in sync with scripts/deploy.sh and scripts/teardown.sh.
