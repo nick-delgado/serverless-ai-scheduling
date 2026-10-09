@@ -10,7 +10,7 @@ Since spike S-1 (2026-09-28) the docs had carried two open requests to AWS. One 
 
 AWS declined both. Nick checked on 2026-10-09: Opus 5 and Sonnet 5 are still not available to the account, and Sonnet 4.6 and Haiku 4.5 are both still at 10 requests per minute. Nick closed #49 as not planned the same day.
 
-An agent then corrected every line that still presented either request as pending (#227): the PRD's risk table and FR-042's traceability row, the backlog map's #49 node and rows, and ADR-002, which gets a dated amendment rather than a rewrite.
+An agent then searched the repository for #49, S-1b and "quota increase" (the `git grep` under Evidence) and corrected the lines outside the journal that it found presenting either request as pending (#227): the PRD's risk table, milestone row and FR-042's traceability row, the backlog map's #49 node and rows, and ADR-002, which gets a dated amendment rather than a rewrite. The search doesn't reach one code comment, found in review: `spikes/s1-bedrock-tool-latency/run.ts` still says Opus 5 / Sonnet 5 "await AWS". It was left as written, because #227 changes no code.
 
 ## Why we chose what we chose
 
@@ -26,7 +26,7 @@ How many places one pending request had spread to. "#49" or "S-1b" appeared in n
 ## Evidence
 
 - #49's closing comment: https://github.com/nick-delgado/serverless-ai-scheduling/issues/49#issuecomment-6079731817
-- `git grep -n -E '#49\b|issues/49|quota increase|S-1b'` after #227 shows only corrected lines and journal history.
+- `git grep -n -E '#49([^0-9]|$)|issues/49|quota increase|S-1b' -- ':!docs/journal/'` after #227 prints 16 lines in `docs/PRD.md`, ADR-002 and `docs/backlog.md`, each a corrected line or the amendment itself. (The issue's `#49\b` matches nothing under `-E` on macOS git, where `\b` isn't a word boundary.)
 - Quotas as built: `rpm` in `packages/agent/src/profiles.ts` (Claude profiles 10).
 
 ## What's next
