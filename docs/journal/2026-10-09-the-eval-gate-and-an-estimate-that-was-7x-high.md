@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #34, ADR-008 ([2026-10-09 amendment](../adr/0008-evaluation-strategy.md#amendment-2026-10-09-reports-baselines-the-matrix-and-the-ci-gate-34)), FR-040, FR-041, FR-042, PRD §7, #37, #41, #178
+**Related:** #34, PR #229, ADR-008 ([2026-10-09 amendment](../adr/0008-evaluation-strategy.md#amendment-2026-10-09-reports-baselines-the-matrix-and-the-ci-gate-34)), FR-040, FR-041, FR-042, PRD §7, #37, #41, #178
 
 ## What happened
 
