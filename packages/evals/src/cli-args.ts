@@ -118,8 +118,29 @@ export class CliArgError extends Error {
   override readonly name = "CliArgError";
 }
 
-const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
+/** True when `value` is one of `list`'s strings. Shared with `matrix.ts`. */
+export const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
   (list as readonly string[]).includes(value);
+
+/** `--suite`'s value, checked. Shared with `matrix.ts`. */
+export function parseSuite(value: string): Suite {
+  if (!isOneOf(SUITES, value)) throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${value}`);
+  return value;
+}
+
+/** `--trials`'s value, checked. Shared with `matrix.ts`. */
+export function parseTrials(value: string): number {
+  const trials = Number(value);
+  if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
+  return trials;
+}
+
+/** `--max-cost`'s value, checked. Shared with `matrix.ts`. */
+export function parseMaxCost(value: string): number {
+  const usd = Number(value);
+  if (!(usd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
+  return usd;
+}
 
 /**
  * A profile setting, resolved by `@sched/agent`'s `resolveModelProfile`, the one place that checks names
@@ -149,8 +170,28 @@ function settingOf(
   return envValue === undefined ? undefined : { name: envValue, from: envName };
 }
 
-/** A comma-separated flag value as a list, blanks dropped. */
-const splitList = (value: string | undefined): string[] =>
+/**
+ * The results-file step and its two files, from the step flag and the positionals: none without a step flag
+ * (then any positional is a usage error), and exactly two files with one.
+ */
+function resultsStepOf(
+  action: "exit" | "baseline" | undefined,
+  positionals: readonly string[],
+): CliArgs["resultsStep"] {
+  if (action === undefined) {
+    if (positionals.length > 0) throw new CliArgError(`unexpected argument(s): ${positionals.join(" ")}`);
+    return undefined;
+  }
+  const [first, second, ...rest] = positionals;
+  if (first === undefined || second === undefined || rest.length > 0)
+    throw new CliArgError(
+      `${action === "exit" ? "--exit-report" : "--update-baseline"} takes two results files: <l1.json> <scenario.json>`,
+    );
+  return { action, files: [first, second] };
+}
+
+/** A comma-separated flag value as a list, blanks dropped. Shared with `matrix.ts`. */
+export const splitList = (value: string | undefined): string[] =>
   value
     ?.split(",")
     .map((f) => f.trim())
@@ -194,11 +235,10 @@ export function parseCliArgs(
     throw new CliArgError(errorReason(error));
   }
   const { values, positionals } = parsed;
-  const { suite, mode } = values;
-  if (!isOneOf(SUITES, suite)) throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${suite}`);
+  const { mode } = values;
+  const suite = parseSuite(values.suite);
   if (!isOneOf(MODES, mode)) throw new CliArgError(`--mode must be ${MODES.join(" or ")}, got ${mode}`);
-  const trials = Number(values.trials);
-  if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
+  const trials = parseTrials(values.trials);
   if (values.replay !== undefined && mode !== "scenario")
     throw new CliArgError("--replay needs --mode scenario");
   const exportFrom = values["export-calibration"];
@@ -211,17 +251,10 @@ export function parseCliArgs(
     values["update-baseline"] ? ["--update-baseline"] : [],
   ].flat();
   if (steps.length > 1) throw new CliArgError(`${steps.join(" and ")} are separate steps; pass one`);
-  const resultsAction = values["exit-report"] ? "exit" : values["update-baseline"] ? "baseline" : undefined;
-  if (resultsAction === undefined && positionals.length > 0)
-    throw new CliArgError(`unexpected argument(s): ${positionals.join(" ")}`);
-  const [first, second] = positionals;
-  if (
-    resultsAction !== undefined &&
-    (positionals.length !== 2 || first === undefined || second === undefined)
-  )
-    throw new CliArgError(
-      `${resultsAction === "exit" ? "--exit-report" : "--update-baseline"} takes two results files: <l1.json> <scenario.json>`,
-    );
+  const resultsStep = resultsStepOf(
+    values["exit-report"] ? "exit" : values["update-baseline"] ? "baseline" : undefined,
+    positionals,
+  );
   const judgeProfile = settingOf("--judge-profile", values["judge-profile"], JUDGE_PROFILE_ENV, env);
   const simulatorProfile = settingOf(
     "--simulator-profile",
@@ -229,8 +262,7 @@ export function parseCliArgs(
     SIMULATOR_PROFILE_ENV,
     env,
   );
-  const maxCostUsd = Number(values["max-cost"]);
-  if (!(maxCostUsd > 0)) throw new CliArgError("--max-cost must be a positive number of USD");
+  const maxCostUsd = parseMaxCost(values["max-cost"]);
   return {
     suite,
     mode,
@@ -245,9 +277,7 @@ export function parseCliArgs(
         ? { calibration: { action: "agreement" as const } }
         : {}),
     calibrationDir: values["calibration-dir"] ?? join(dirname(defaultOut), "calibration"),
-    ...(resultsAction === undefined || first === undefined || second === undefined
-      ? {}
-      : { resultsStep: { action: resultsAction, files: [first, second] } }),
+    ...(resultsStep === undefined ? {} : { resultsStep }),
     baselineDir: join(dirname(defaultOut), "baselines"),
     ids: splitList(values.ids),
     trials,
@@ -299,7 +329,7 @@ export const EXPECTED_SIMULATED_TURNS = 4;
  * `…T142126Z-scenario-smoke-sonnet-4.6.json`, $0.39): 82 agent calls over 56 turns (1.5 a turn), each
  * reading ~6.25k cached tokens, writing ~450 and generating ~150; 66 simulator calls of ~950 input and ~20
  * output tokens, one more per conversation than its simulated turns (the stop). `packages/evals/test/
- * cli-args.test.ts` pins the estimate between 1.0x and 1.5x of those runs, and of PR #165's full run.
+ * estimate-calibration.test.ts` pins the estimate between 1.0x and 1.5x of those runs, and of PR #165's full run.
  */
 export const SCENARIO_ESTIMATE = {
   agentCallsPerTurn: 1.5,
@@ -699,12 +729,34 @@ export function exitReportStep(
 ): ExitReport {
   const reports = readResultsPair(args.files, deps);
   const report = asUsage(() => exitReport(reports));
-  const base = join(args.out, `${fileStamp(report.startedAt)}-exit-${report.profile}`);
-  const md = exitMarkdown(report);
-  deps.writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
-  deps.writeFile(`${base}.md`, `${md}\n`);
-  deps.log(`${md}\n\nevals: wrote ${base}.json`);
+  const base = writeExitReport(report, args.out, deps.writeFile);
+  deps.log(`${exitMarkdown(report)}\n\nevals: wrote ${base}.json`);
   return report;
+}
+
+/**
+ * Write an exit table as `<out>/<scenario run's stamp>-exit-<profile>.{json,md}`; returns the path without the
+ * extension. The `--exit-report` step and the matrix (one per cell) both write through it.
+ */
+export function writeExitReport(
+  report: ExitReport,
+  out: string,
+  writeFile: ResultsStepDeps["writeFile"],
+): string {
+  const base = join(out, `${fileStamp(report.startedAt)}-exit-${report.profile}`);
+  writeFile(`${base}.json`, `${JSON.stringify(report, null, 2)}\n`);
+  writeFile(`${base}.md`, `${exitMarkdown(report)}\n`);
+  return base;
+}
+
+/** Run the command line's results-file step (`--exit-report` or `--update-baseline`) on its two files. */
+export function resultsStep(
+  args: Pick<CliArgs, "out" | "baselineDir"> & { resultsStep: NonNullable<CliArgs["resultsStep"]> },
+  deps: ResultsStepDeps,
+): void {
+  const { action, files } = args.resultsStep;
+  if (action === "exit") exitReportStep({ out: args.out, files }, deps);
+  else updateBaselineStep({ baselineDir: args.baselineDir, files }, deps);
 }
 
 /**

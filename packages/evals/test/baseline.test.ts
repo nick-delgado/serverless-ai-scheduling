@@ -13,6 +13,7 @@ import {
   compareMode,
   exitReportStep,
   parseBaseline,
+  resultsStep,
   updateBaselineStep,
   type BaselineMode,
   type ResultsStepDeps,
@@ -101,6 +102,32 @@ describe("the results-file steps (#34)", () => {
     };
     return { d, written, log };
   };
+
+  it("the command line's results step runs --exit-report or --update-baseline on its two files", () => {
+    const exit = deps();
+    resultsStep(
+      {
+        out: "/out",
+        baselineDir: "/b",
+        resultsStep: { action: "exit", files: ["/l1.json", "/scenario.json"] },
+      },
+      exit.d,
+    );
+    expect([...exit.written.keys()]).toEqual([
+      "/out/2026-10-09T120100Z-exit-sonnet-4.6.json",
+      "/out/2026-10-09T120100Z-exit-sonnet-4.6.md",
+    ]);
+    const base = deps();
+    resultsStep(
+      {
+        out: "/out",
+        baselineDir: "/b",
+        resultsStep: { action: "baseline", files: ["/l1.json", "/scenario.json"] },
+      },
+      base.d,
+    );
+    expect([...base.written.keys()]).toEqual(["/b/sonnet-4.6.json"]);
+  });
 
   it("--update-baseline writes <baselineDir>/<profile>.json", () => {
     const { d, written, log } = deps();

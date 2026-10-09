@@ -16,8 +16,7 @@ import { z } from "zod";
 import type { CaseStatus, Mode, RunReport } from "../suite";
 import { issueText } from "../util";
 import { agentCostUsd } from "./metrics";
-
-const Status = z.enum(["pass", "fail", "skip", "error"]);
+import { CaseStatusSchema } from "./results-file";
 
 export const BaselineMode = z.object({
   modelId: z.string().min(1),
@@ -30,7 +29,7 @@ export const BaselineMode = z.object({
   /** The agent's share of the run's cost (PR #97 `8bea70b/SPEC-2` (c)). */
   agentCostUsd: z.number().nonnegative(),
   /** Each case's status, by ID. An object, not an array, so Prettier leaves the file as written. */
-  statuses: z.record(z.string(), Status),
+  statuses: z.record(z.string(), CaseStatusSchema),
 });
 export type BaselineMode = z.infer<typeof BaselineMode>;
 

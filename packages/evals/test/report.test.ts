@@ -114,7 +114,7 @@ describe("exitHalf", () => {
   const report = fakeReport("scenario", coreAndSafety, { trialsPerCase: 3 });
   const h = exitHalf("scenario", 3, report.cases, report.summary.safetyViolations);
 
-  it("task success is the mean pass rate over core cases that ran; an error trial is a failure", () => {
+  it("task success is the mean pass rate over core cases that ran; a case with an errored trial stays in the denominator", () => {
     expect(h.taskSuccess).toBeCloseTo((1 + 2 / 3 + 2 / 3) / 3, 12);
   });
 
@@ -212,14 +212,33 @@ describe("exitReport (r1/Q-4 (a))", () => {
       verdict: "met",
     });
     expect(r.rows.find((x) => x.metric.startsWith("Judge–human"))?.verdict).toBe("measured elsewhere");
+    expect(r.rows.find((x) => x.metric.startsWith("Judge rubric"))?.metric).toBe(
+      "Judge rubric average (tone, clarity), before calibration (#159)",
+    );
+    expect(r.rows.find((x) => x.metric.startsWith("NFR-001"))).toMatchObject({
+      verdict: "measured elsewhere",
+    });
+    expect(exitMarkdown(r)).toContain(
+      "\n\nExit run: full suite, 3 trials per case, both modes, simulator `sonnet-4.6`, no budget stop.\n\n",
+    );
     expect(exitMet(r)).toBe(false); // the judge was off in this fixture: its rubric average is n/a
   });
 
   it("sums safety violations over both modes", () => {
     const l1 = { ...emergencyL1, trials: emergencyL1.trials.map((t) => ({ ...t, safetyViolations: 1 })) };
-    const r = exitReport(exitPair([l1], [...goodCore, emergencyScenario]));
+    const unsafe = {
+      ...emergencyScenario,
+      trials: emergencyScenario.trials.map((t, i) => ({ ...t, safetyViolations: i === 0 ? 2 : 0 })),
+    };
+    const r = exitReport(exitPair([l1], [...goodCore, unsafe]));
     expect(r.rows.find((x) => x.metric.startsWith("Safety"))).toMatchObject({
-      value: "3 (l1 3, scenario 0)",
+      value: "5 (l1 3, scenario 2)",
+      verdict: "not met",
+    });
+    // Scenario-mode violations alone fail the metric too.
+    const scenarioOnly = exitReport(exitPair([emergencyL1], [...goodCore, unsafe]));
+    expect(scenarioOnly.rows.find((x) => x.metric.startsWith("Safety"))).toMatchObject({
+      value: "2 (l1 0, scenario 2)",
       verdict: "not met",
     });
   });
@@ -290,6 +309,18 @@ describe("exitReport (r1/Q-4 (a))", () => {
     });
     expect(exitMarkdown(r)).toContain(
       "| diagnostic |\n\nSkipped in scenario (left out of the denominators):\n- escalate-api: covered outside",
+    );
+  });
+
+  it("cost per completed conversation counts every category's spend, the safety cases' included", () => {
+    const dear = {
+      ...emergencyScenario,
+      trials: emergencyScenario.trials.map((t) => ({ ...t, costUsd: 0.4 })),
+    };
+    const r = exitReport(exitPair([emergencyL1], [...goodCore, dear]));
+    // 15 core trials at $0.06 and 3 safety trials at $0.40 (no simulator), over 15 completed core trials.
+    expect(r.rows.find((x) => x.metric.startsWith("Agent cost"))?.value).toBe(
+      `$${((15 * 0.06 + 3 * 0.4) / 15).toFixed(4)}`,
     );
   });
 
@@ -439,6 +470,12 @@ describe("markdownSummary (#34)", () => {
             turns: 3,
             costUsd: 0.05,
             simulatorCostUsd: 0.01,
+            graders: [
+              { kind: "judge", name: "judge.tone", status: "pass", safety: false, score: 5 },
+              { kind: "judge", name: "judge.clarity", status: "pass", safety: false, score: 4 },
+              { kind: "judge", name: "judge.urgency", status: "skip", safety: false },
+              { kind: "invariant", name: "invariant.score_like", status: "pass", safety: false, score: 3 },
+            ],
           },
         ],
       },
@@ -465,7 +502,7 @@ describe("markdownSummary (#34)", () => {
     );
     expect(md).toContain("- Emergency cases (tagged `emergency`): 0/1 passed every trial (not met)");
     expect(md).toContain("## Per-scenario drill-down\n\n### book-a (book, pass)");
-    expect(md).toContain("| 1 | pass | goal_achieved | 3 | $0.0400 |  |  |");
+    expect(md).toContain("| 1 | pass | goal_achieved | 3 | $0.0400 |  | tone 5, clarity 4 |");
     expect(md).toContain("| 1 | fail | gave_up | 2 | $0.0000 | a \\| b |  |");
     expect(md).toContain("### book-cut (book, skip)\n\n| Trial |");
     expect(md).toContain("|---|---|---|---|---|---|---|\n\nbudget guard ($1 reached) after 0 of 1 trial(s)");
@@ -488,6 +525,26 @@ describe("parseRunReport", () => {
     expect(parseRunReport(JSON.parse(JSON.stringify(report)), "r.json").cases[0]?.id).toBe("l1-a");
     expect(() => parseRunReport({ ...report, mode: "both" }, "r.json")).toThrow(
       /^r\.json isn't an eval results file: mode: /,
+    );
+  });
+
+  it("refuses a file without the summary's passed count, or a scenario trial without its simulator cost", () => {
+    const l1 = JSON.parse(
+      JSON.stringify(fakeReport("l1", [{ id: "l1-a", trials: [{ status: "pass" }] }])),
+    ) as RunReport;
+    const { passed: _passed, ...summary } = l1.summary;
+    expect(() => parseRunReport({ ...l1, summary }, "a.json")).toThrow(
+      /^a\.json isn't an eval results file: summary\.passed: /,
+    );
+    const sc = JSON.parse(
+      JSON.stringify(fakeReport("scenario", [{ id: "s-a", trials: [{ status: "pass" }] }])),
+    ) as RunReport;
+    expect(parseRunReport(sc, "b.json").cases).toHaveLength(1);
+    const [c] = sc.cases;
+    const [t] = c?.trials ?? [];
+    const { simulatorCost: _sim, ...noSim } = t as unknown as Record<string, unknown>;
+    expect(() => parseRunReport({ ...sc, cases: [{ ...c, trials: [noSim] }] }, "b.json")).toThrow(
+      /^b\.json isn't an eval results file: cases\.0\.trials\.0\.simulatorCost: /,
     );
   });
 });

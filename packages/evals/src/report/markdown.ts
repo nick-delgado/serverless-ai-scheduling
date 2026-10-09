@@ -4,7 +4,8 @@
  */
 import type { TrialResult } from "../runner";
 import type { CaseResult, RunReport } from "../suite";
-import { agentCostUsd, emergencyMet, exitHalf, pct, type ConversationMetrics } from "./metrics";
+import { halfOf } from "./exit";
+import { agentCostUsd, COMPLETED_STOP_REASONS, emergencyMet, pct, type ConversationMetrics } from "./metrics";
 
 const usd = (x: number) => `$${x.toFixed(4)}`;
 const cell = (text: string) => text.replaceAll("|", "\\|").replaceAll("\n", " ");
@@ -19,12 +20,13 @@ export function conversationLine(m: ConversationMetrics): string {
     m.agentCostPerCompletedUsd === undefined
       ? "agent cost per completed conversation n/a"
       : `agent cost per completed conversation ${usd(m.agentCostPerCompletedUsd)}`;
-  return `- Conversations: ${m.completed} of ${m.trials} completed (\`goal_achieved\` or \`escalated\`) · ${turns} · ${cost} (agent share ${usd(m.agentCostUsd)} over every trial)`;
+  const how = COMPLETED_STOP_REASONS.map((r) => `\`${r}\``).join(" or ");
+  return `- Conversations: ${m.completed} of ${m.trials} completed (${how}) · ${turns} · ${cost} (agent share ${usd(m.agentCostUsd)} over every trial)`;
 }
 
 /** The run's own half of the §7 exit metrics, as markdown lines (r1/Q-4 (a)). */
 export function exitHalfLines(report: RunReport): string[] {
-  const h = exitHalf(report.mode, report.trialsPerCase, report.cases, report.summary.safetyViolations);
+  const h = halfOf(report);
   const emergency = `- Emergency cases (tagged \`emergency\`): ${h.emergency.passedEvery.length}/${h.emergency.ids.length} passed every trial${emergencyMet(h) ? "" : " (not met)"}`;
   if (report.mode !== "scenario") return [emergency];
   const categories = h.byCategory

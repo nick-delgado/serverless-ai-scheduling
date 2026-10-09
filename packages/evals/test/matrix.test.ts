@@ -11,6 +11,7 @@ import {
   exitReport,
   estimateRunCost,
   interimSystemPrompt,
+  isL1Case,
   loadScenarios,
   summarizeJudge,
   type Mode,
@@ -27,9 +28,12 @@ import {
   matrixMarkdown,
   matrixSetup,
   parseMatrixArgs,
+  defaultMatrixCapUsd,
+  matrixCommand,
   rowValue,
   runMatrix,
   type MatrixCell,
+  type MatrixCommandDeps,
 } from "../src/matrix";
 import { fakeReport } from "./report-helpers";
 
@@ -134,6 +138,7 @@ describe("parseMatrixArgs", () => {
     [["--trials=0"], /^--trials must be a positive integer$/],
     [["--max-cost=0"], /^--max-cost must be a positive number of USD$/],
     [["--bogus"], /bogus/],
+    [["--trials=1.5"], /^--trials must be a positive integer$/],
   ])("rejects %j", (argv, message) => {
     expect(() => parseMatrixArgs(argv, "/out")).toThrow(CliArgError);
     expect(() => parseMatrixArgs(argv, "/out")).toThrow(message);
@@ -142,29 +147,43 @@ describe("parseMatrixArgs", () => {
 
 describe("the estimate", () => {
   const loaded = loadScenarios();
-  const setup = matrixSetup(new ScriptedLlmClient());
+  const llm = new ScriptedLlmClient();
 
-  it("uses the simulator on sonnet-4.6 and the judge on haiku-4.5", () => {
-    expect(setup.simulator.kind === "llm" ? setup.simulator.profile.name : "").toBe("sonnet-4.6");
-    expect(setup.judging.kind === "llm" ? setup.judging.profile.name : "").toBe("haiku-4.5");
+  it("a scenario run has the simulator on sonnet-4.6 and the judge on haiku-4.5; an L1 run neither", () => {
+    const scenario = matrixSetup(llm, "scenario");
+    expect(scenario.simulator.kind === "llm" ? scenario.simulator.profile.name : "").toBe("sonnet-4.6");
+    expect(scenario.judging.kind === "llm" ? scenario.judging.profile.name : "").toBe("haiku-4.5");
+    const l1 = matrixSetup(llm, "l1");
+    expect([l1.simulator.kind, l1.judging.kind]).toEqual(["script-only", "off"]);
   });
 
   it("a cell's estimate is both runs on its profile, the simulator and judge included", () => {
     const c = cell("haiku-4.5");
     const args = { suite: "full" as const, trials: 3 };
-    expect(cellEstimateUsd(c, loaded, args, setup)).toBeCloseTo(
+    const scenario = matrixSetup(llm, "scenario");
+    expect(cellEstimateUsd(c, loaded, args, llm)).toBeCloseTo(
       estimateRunCost(matrixCases(loaded, "l1", "full"), c.profile, 3) +
         estimateRunCost(
           matrixCases(loaded, "scenario", "full"),
           c.profile,
           3,
-          setup.simulator,
-          setup.judging,
+          scenario.simulator,
+          scenario.judging,
         ),
       12,
     );
-    expect(matrixCases(loaded, "l1", "smoke").every((x) => x.tags.includes("smoke"))).toBe(true);
-    expect(matrixCases(loaded, "scenario", "full")).toHaveLength(loaded.scenarios.length);
+  });
+
+  it("each mode's cases are that mode's pool, cut to the suite", () => {
+    const l1 = matrixCases(loaded, "l1", "full");
+    expect(l1).toHaveLength(loaded.l1.length);
+    expect(l1.every(isL1Case)).toBe(true);
+    expect(matrixCases(loaded, "l1", "smoke").every((x) => isL1Case(x) && x.tags.includes("smoke"))).toBe(
+      true,
+    );
+    const scenarios = matrixCases(loaded, "scenario", "full");
+    expect(scenarios).toHaveLength(loaded.scenarios.length);
+    expect(scenarios.some(isL1Case)).toBe(false);
   });
 });
 
@@ -175,7 +194,7 @@ describe("confirmMatrix (r1/A-8)", () => {
     await expect(confirmMatrix({ yes: true }, { isTTY: false, ask: never }, 10)).resolves.toBe(true);
   });
 
-  it("off a terminal without --yes it's a usage error, before any model call", async () => {
+  it("off a terminal without --yes it's a usage error, without asking", async () => {
     await expect(confirmMatrix({ yes: false }, { isTTY: false, ask: never }, 10)).rejects.toThrow(
       CliArgError,
     );
@@ -255,6 +274,18 @@ describe("runMatrix", () => {
     );
   });
 
+  it("an L1 run that spends the whole budget gives the scenario run a budget of 0", async () => {
+    const budgets: number[] = [];
+    await runMatrix([cell("haiku-4.5")], 0.2, {
+      log: () => undefined,
+      run: (_c, mode, budget) => {
+        budgets.push(budget);
+        return Promise.resolve(runOf(mode, 0.3));
+      },
+    });
+    expect(budgets).toEqual([0.2, 0]);
+  });
+
   it("once the budget is spent, the remaining cells don't run", async () => {
     const results = await runMatrix([cell("haiku-4.5"), cell("nova-pro")], 0.3, {
       log: () => undefined,
@@ -275,12 +306,13 @@ describe("runMatrix", () => {
 
 describe("cellRunOptions", () => {
   const llm = new ScriptedLlmClient();
-  const setup = matrixSetup(llm);
   const args = { suite: "full" as const, trials: 3 };
+  const rateLimit = { stats: { calls: 0, retries: 0, throttles: 0 } };
+  const onTrial = () => undefined;
 
-  it("runs the cell's profile; scenario mode adds the simulator and the judge", () => {
+  it("is the CLI's runOptions on the cell's profile; scenario mode adds the simulator and the judge", () => {
     const c = cell("gpt-oss-20b@high");
-    const l1 = cellRunOptions(c, "l1", args, 5, { llm, setup, rateLimit: undefined });
+    const l1 = cellRunOptions(c, "l1", args, 5, { llm, rateLimit, onTrial });
     expect(l1).toMatchObject({
       mode: "l1",
       suite: "full",
@@ -288,21 +320,107 @@ describe("cellRunOptions", () => {
       maxCostUsd: 5,
       profile: c.profile,
       llm,
+      llmName: "converse",
+      rateLimit,
+      onTrial,
     });
     expect(l1.simulator).toBeUndefined();
     expect(l1.judge).toBeUndefined();
-    const sc = cellRunOptions(c, "scenario", args, 5, {
-      llm,
-      setup,
-      rateLimit: { stats: { calls: 0, retries: 0, throttles: 0 } },
-    });
-    expect(sc.simulator).toBe(setup.simulator.simulator);
+    const sc = cellRunOptions(c, "scenario", args, 5, { llm, rateLimit, onTrial });
+    expect(sc.simulator?.name).toBe("llm:sonnet-4.6:sim.v1");
     expect(sc.judge?.profile.name).toBe("haiku-4.5");
-    expect(sc.rateLimit).toBeDefined();
   });
 
   it("a cell's report and its results files carry the cell's name", () => {
     expect(asCellReport(runOf("l1", 0.1), cell("gpt-oss-20b@high")).profile).toBe("gpt-oss-20b@high");
+  });
+});
+
+describe("matrixCommand (r1/A-8)", () => {
+  const two = [cell("haiku-4.5"), cell("nova-pro")];
+  const base = { cells: two, suite: "full" as const, trials: 3, yes: false, dryRun: false };
+  const setup = (answer: string | Error, isTTY = true) => {
+    const events: string[] = [];
+    const deps: MatrixCommandDeps = {
+      log: (line) => events.push(`log ${line}`),
+      isTTY,
+      ask: (q) => {
+        events.push(`ask ${q}`);
+        return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+      },
+      estimate: (c) => (c.name === "haiku-4.5" ? 1.234 : 2.001),
+      run: (c, mode, budget) => {
+        events.push(`run ${c.name} ${mode} ${budget.toFixed(2)}`);
+        return Promise.resolve(runOf(mode, 0.2));
+      },
+    };
+    return { events, deps };
+  };
+
+  it("logs each cell's estimate and the total, asks, and runs only after a yes, within 1.5x the total", async () => {
+    const { events, deps } = setup("y");
+    const results = await matrixCommand(base, deps);
+    expect(events.slice(0, 5)).toEqual([
+      "log evals:matrix: 2 cell(s), full suite, 3 trial(s) per case, both modes:",
+      "log   haiku-4.5            ≈ $1.23",
+      "log   nova-pro             ≈ $2.00",
+      "log Estimated total ≈ $3.23, simulator and judge included (matrix budget $4.86).",
+      "ask Run the matrix at an estimated $3.23? [y/N] ",
+    ]);
+    // 3.235 * 1.5 = 4.8525, rounded up to the cent.
+    expect(events[6]).toBe("run haiku-4.5 l1 4.86");
+    expect(defaultMatrixCapUsd(3.235)).toBe(4.86);
+    expect(results).toHaveLength(2);
+  });
+
+  it("an explicit --max-cost is the budget", async () => {
+    const { events, deps } = setup("y");
+    await matrixCommand({ ...base, maxCostUsd: 2 }, deps);
+    expect(events).toContain(
+      "log Estimated total ≈ $3.23, simulator and judge included (matrix budget $2.00).",
+    );
+    expect(events).toContain("run haiku-4.5 l1 2.00");
+  });
+
+  it("--dry-run stops after the estimate: no question, no run", async () => {
+    const { events, deps } = setup("y");
+    expect(await matrixCommand({ ...base, dryRun: true }, deps)).toBeUndefined();
+    expect(events.filter((e) => !e.startsWith("log "))).toEqual([]);
+  });
+
+  it("a no runs nothing", async () => {
+    const { events, deps } = setup("n");
+    expect(await matrixCommand(base, deps)).toBeUndefined();
+    expect(events.some((e) => e.startsWith("run "))).toBe(false);
+    expect(events.at(-1)).toBe("log evals:matrix: not run.");
+  });
+
+  it("off a terminal without --yes it throws before any run; --yes runs without asking", async () => {
+    const off = setup("y", false);
+    await expect(matrixCommand(base, off.deps)).rejects.toThrow(CliArgError);
+    expect(off.events.some((e) => e.startsWith("run ") || e.startsWith("ask "))).toBe(false);
+    const yes = setup("n", false);
+    await matrixCommand({ ...base, yes: true }, yes.deps);
+    expect(yes.events.some((e) => e.startsWith("ask "))).toBe(false);
+    expect(yes.events.filter((e) => e.startsWith("run "))).toHaveLength(4);
+  });
+
+  it("no run starts before the answer arrives", async () => {
+    const events: string[] = [];
+    let answer: (a: string) => void = () => undefined;
+    const pending = matrixCommand(base, {
+      ...setup("y").deps,
+      ask: () => new Promise<string>((resolve) => (answer = resolve)),
+      run: (c, mode) => {
+        events.push(`run ${c.name} ${mode}`);
+        return Promise.resolve(runOf(mode, 0.2));
+      },
+    });
+    await Promise.resolve();
+    expect(events).toEqual([]);
+    answer("y");
+    await pending;
+    expect(events).toHaveLength(4);
   });
 });
 

@@ -23,7 +23,9 @@ import {
   SCENARIO_ESTIMATE,
   scenarioAgentCallUsd,
   judgeSetup,
+  l1Request,
   loadScenarios,
+  promptFor,
   parseCliArgs,
   resultsBasePath,
   selectCases,
@@ -205,6 +207,14 @@ describe("selectCases", () => {
       parseCliArgs(["--mode=scenario", "--ids=book-derm-next-week-afternoon"], OUT, {}),
     );
     expect(scenarioIds.map((c) => c.id)).toEqual(["book-derm-next-week-afternoon"]);
+    // A smoke ID that contains another: only the exact one is selected.
+    const nested = {
+      ...loaded,
+      l1: [...loaded.l1, { ...l1Case("l1-emergency-911"), id: "l1-emergency-911-followup" }],
+    };
+    expect(selectCases(nested, parseCliArgs(["--ids=l1-emergency-911"], OUT, {})).map((c) => c.id)).toEqual([
+      "l1-emergency-911",
+    ]);
   });
 
   it("--ids naming no case of the mode's suite is a usage error", () => {
@@ -367,6 +377,22 @@ describe("estimateRunCost", () => {
         cacheReadTokens: promptTokens - cacheWriteTokens,
         cacheWriteTokens,
       }),
+      12,
+    );
+  });
+
+  it("L1 on a profile without a system cache point pays every input token, and the output estimate (#34)", () => {
+    const c = l1Case("l1-crisis-988");
+    const req = l1Request(c, profile, promptFor(undefined, new Date(c.clock), undefined));
+    const tokens = Math.ceil(JSON.stringify(req).length / 4);
+    expect(estimateRunCost([c], profile, 2)).toBeCloseTo(
+      2 *
+        estimateCostUsd(profile, {
+          inputTokens: tokens,
+          outputTokens: 150,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        }),
       12,
     );
   });

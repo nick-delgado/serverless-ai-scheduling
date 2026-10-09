@@ -5,14 +5,14 @@
  * - scenario full, PR #165 (`40dbee6`, k=1): $2.16 (agent $1.36, simulator $0.59, judge $0.22);
  * - L1 smoke, five runs on 2026-10-07 (8 cases, k=1): $0.0567 to $0.0572 with a cold cache, $0.0403 warm.
  */
-import { MODEL_PROFILES, type LlmClient } from "@sched/agent";
+import { MODEL_PROFILES, ScriptedLlmClient } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import { estimateRunCost, judgeSetup, loadScenarios, selectSuite, simulatorSetup } from "../src";
 
 const loaded = loadScenarios();
 const sonnet = MODEL_PROFILES["sonnet-4.6"];
-const llm = {} as LlmClient;
+const llm = new ScriptedLlmClient();
 const sim = simulatorSetup({ mode: "scenario" }, { llm, readReplay: () => ({}) });
 const judge = judgeSetup({ mode: "scenario", judge: true }, { llm });
 

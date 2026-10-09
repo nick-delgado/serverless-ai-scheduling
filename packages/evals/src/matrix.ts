@@ -39,15 +39,24 @@ import {
   estimateRunCost,
   fileStamp,
   judgeSetup,
+  nodeFileWrites,
   orUsageError,
   orUsageErrorAsync,
+  parseMaxCost,
+  parseSuite,
+  parseTrials,
+  runOptions,
+  selectCases,
   simulatorSetup,
+  splitList,
+  writeExitReport,
   type JudgeSetup,
+  type RunWiring,
   type SimulatorSetup,
 } from "./cli-args";
-import { loadScenarios, selectSuite, SUITES, type LoadedScenarios, type Suite } from "./loader";
+import { loadScenarios, type LoadedScenarios, type Suite } from "./loader";
 import { rateLimited } from "./rate-limit";
-import { exitMarkdown, exitMet, exitReport, type ExitReport } from "./report/exit";
+import { exitMet, exitReport, type ExitReport } from "./report/exit";
 import { prepareResultsCopyDir, resultsCopyDir, resultsWrittenLine, writeRunResults } from "./results-copy";
 import { markdownSummary, runSuite } from "./suite";
 import type { L1Case, Scenario } from "./schema";
@@ -149,68 +158,57 @@ export function parseMatrixArgs(argv: readonly string[], defaultOut: string): Ma
     throw new CliArgError(errorReason(error));
   }
   const all = matrixCells();
-  const wanted = values.cells
-    ?.split(",")
-    .map((c) => c.trim())
-    .filter(Boolean);
+  const wanted = values.cells === undefined ? undefined : splitList(values.cells);
   const unknown = (wanted ?? []).filter((w) => !all.some((c) => c.name === w));
   if (unknown.length > 0)
     throw new CliArgError(
       `--cells: unknown cell ${unknown.join(", ")}; cells: ${all.map((c) => c.name).join(", ")}`,
     );
-  const { suite } = values;
-  if (!(SUITES as readonly string[]).includes(suite))
-    throw new CliArgError(`--suite must be ${SUITES.join(" or ")}, got ${suite}`);
-  const trials = Number(values.trials);
-  if (!Number.isInteger(trials) || trials < 1) throw new CliArgError("--trials must be a positive integer");
-  const maxCost = values["max-cost"] === undefined ? undefined : Number(values["max-cost"]);
-  if (maxCost !== undefined && !(maxCost > 0))
-    throw new CliArgError("--max-cost must be a positive number of USD");
+  const maxCost = values["max-cost"];
   return {
     cells: wanted === undefined ? all : all.filter((c) => wanted.includes(c.name)),
-    suite: suite as Suite,
-    trials,
-    ...(maxCost === undefined ? {} : { maxCostUsd: maxCost }),
+    suite: parseSuite(values.suite),
+    trials: parseTrials(values.trials),
+    ...(maxCost === undefined ? {} : { maxCostUsd: parseMaxCost(maxCost) }),
     yes: values.yes,
     dryRun: values["dry-run"],
     out: values.out,
   };
 }
 
-/** The patient and judge every cell shares: the simulator on `sonnet-4.6`, the judge on `haiku-4.5`. */
+/** The patient and the judge of a cell's run in one mode. */
 export interface MatrixSetup {
   simulator: SimulatorSetup;
   judging: JudgeSetup;
 }
 
-/** The matrix's simulator and judge on `llm`, at their defaults (PRD §7: simulator `sonnet-4.6`). */
-export const matrixSetup = (llm: LlmClient): MatrixSetup => ({
+/**
+ * A run's patient and judge in `mode`, decided by the CLI's own `simulatorSetup` and `judgeSetup` at their
+ * defaults: in scenario mode the LLM simulator on `sonnet-4.6` (PRD §7) and the judge on `haiku-4.5`; in L1
+ * mode neither.
+ */
+export const matrixSetup = (llm: LlmClient, mode: Mode): MatrixSetup => ({
   /* v8 ignore next -- a matrix run never replays, so simulatorSetup never calls readReplay */
-  simulator: simulatorSetup({ mode: "scenario" }, { llm, readReplay: () => undefined }),
-  judging: judgeSetup({ mode: "scenario", judge: true }, { llm }),
+  simulator: simulatorSetup({ mode }, { llm, readReplay: () => undefined }),
+  judging: judgeSetup({ mode, judge: true }, { llm }),
 });
 
-/** The cases a cell runs in a mode. */
+/** The cases a cell runs in a mode: the CLI's selection, the whole suite. */
 export const matrixCases = (loaded: LoadedScenarios, mode: Mode, suite: Suite): (Scenario | L1Case)[] =>
-  selectSuite<Scenario | L1Case>(mode === "l1" ? loaded.l1 : loaded.scenarios, suite);
+  selectCases(loaded, { mode, suite, filters: [], ids: [] });
 
 /** A cell's estimate: both runs, the simulator and the judge included. */
 export function cellEstimateUsd(
   cell: MatrixCell,
   loaded: LoadedScenarios,
   args: Pick<MatrixArgs, "suite" | "trials">,
-  setup: MatrixSetup,
+  llm: LlmClient,
 ): number {
-  return (
-    estimateRunCost(matrixCases(loaded, "l1", args.suite), cell.profile, args.trials) +
-    estimateRunCost(
-      matrixCases(loaded, "scenario", args.suite),
-      cell.profile,
-      args.trials,
-      setup.simulator,
-      setup.judging,
-    )
-  );
+  return (["l1", "scenario"] as const).reduce((sum, mode) => {
+    const setup = matrixSetup(llm, mode);
+    const cases = matrixCases(loaded, mode, args.suite);
+    return sum + estimateRunCost(cases, cell.profile, args.trials, setup.simulator, setup.judging);
+  }, 0);
 }
 
 /**
@@ -273,7 +271,8 @@ export async function runMatrix(
     deps.log(`matrix: ${cell.name} (${cell.profile.modelId})`);
     const l1 = await deps.run(cell, "l1", left);
     spent += runSpendUsd(l1);
-    const scenario = await deps.run(cell, "scenario", Math.max(maxCostUsd - spent, Number.EPSILON));
+    // What is left, never below 0: a spent budget starts no scenario trial (the guard stops at spend >= cap).
+    const scenario = await deps.run(cell, "scenario", Math.max(maxCostUsd - spent, 0));
     spent += runSpendUsd(scenario);
     results.push({
       cell: cell.name,
@@ -317,30 +316,62 @@ export function matrixMarkdown(
   return lines.join("\n");
 }
 
-/** The `runSuite` options of one cell's run: the cell's profile, the shared simulator and judge. */
+/**
+ * The `runSuite` options of one cell's run: the CLI's `runOptions` on the cell's profile, with the mode's
+ * patient and judge from `matrixSetup`.
+ */
 export function cellRunOptions(
   cell: MatrixCell,
   mode: Mode,
   args: Pick<MatrixArgs, "suite" | "trials">,
   maxCostUsd: number,
-  wiring: { llm: LlmClient; setup: MatrixSetup; rateLimit: RunSuiteOptions["rateLimit"] },
+  wiring: Pick<RunWiring, "llm" | "rateLimit" | "onTrial">,
 ): RunSuiteOptions {
-  const { simulator } = wiring.setup.simulator;
-  const { judging } = wiring.setup;
-  return {
-    mode,
-    suite: args.suite,
-    llm: wiring.llm,
-    llmName: "converse",
-    profile: cell.profile,
-    trials: args.trials,
-    maxCostUsd,
-    ...(wiring.rateLimit === undefined ? {} : { rateLimit: wiring.rateLimit }),
-    ...(mode === "scenario" && simulator !== undefined ? { simulator } : {}),
-    ...(mode === "scenario" && judging.kind === "llm"
-      ? { judge: { judge: judging.judge, profile: judging.profile } }
-      : {}),
-  };
+  const { simulator, judging } = matrixSetup(wiring.llm, mode);
+  return runOptions(
+    { mode, suite: args.suite, trials: args.trials, profile: cell.profile, maxCostUsd },
+    { ...wiring, setup: simulator, judging },
+  );
+}
+
+/** The matrix's default budget: 1.5x the estimate, rounded up to the cent. */
+export const defaultMatrixCapUsd = (estimateUsd: number): number => Math.ceil(estimateUsd * 1.5 * 100) / 100;
+
+/** What `matrixCommand` needs from outside: the log, the terminal, each cell's estimate, and one run. */
+export interface MatrixCommandDeps extends MatrixDeps {
+  isTTY: boolean;
+  ask: (question: string) => Promise<string>;
+  estimate: (cell: MatrixCell) => number;
+}
+
+/**
+ * The command before and around the runs (r1/A-8): log each cell's estimate and the total with the budget
+ * (`--max-cost`, else `defaultMatrixCapUsd`), stop there on `--dry-run`, then ask (`confirmMatrix`), and only
+ * after a yes run the cells. Returns the results, or `undefined` when nothing ran.
+ */
+export async function matrixCommand(
+  args: Pick<MatrixArgs, "cells" | "suite" | "trials" | "maxCostUsd" | "yes" | "dryRun">,
+  deps: MatrixCommandDeps,
+): Promise<CellResult[] | undefined> {
+  deps.log(
+    `evals:matrix: ${args.cells.length} cell(s), ${args.suite} suite, ${args.trials} trial(s) per case, both modes:`,
+  );
+  let total = 0;
+  for (const cell of args.cells) {
+    const estimate = deps.estimate(cell);
+    total += estimate;
+    deps.log(`  ${cell.name.padEnd(20)} ≈ $${estimate.toFixed(2)}`);
+  }
+  const cap = args.maxCostUsd ?? defaultMatrixCapUsd(total);
+  deps.log(
+    `Estimated total ≈ $${total.toFixed(2)}, simulator and judge included (matrix budget $${cap.toFixed(2)}).`,
+  );
+  if (args.dryRun) return undefined;
+  if (!(await confirmMatrix(args, deps, total))) {
+    deps.log("evals:matrix: not run.");
+    return undefined;
+  }
+  return runMatrix(args.cells, cap, deps);
 }
 
 /** A cell's report carries the cell's name as its profile, so its results files and tables name the cell. */
@@ -349,7 +380,7 @@ export const asCellReport = (report: RunReport, cell: MatrixCell): RunReport => 
   profile: cell.name,
 });
 
-/* v8 ignore start -- the process entry point: it runs only as a script under tsx, never in tests. Its parts are this file's tested functions (arguments, cells, estimates, the confirmation, the run loop, the run options, the table); what stays here is wiring: the client, the console, the files and the progress lines. */
+/* v8 ignore start -- the process entry point: it runs only as a script under tsx, never in tests. Its parts are tested functions (the arguments, matrixCommand's estimate, budget, dry-run stop, confirmation and run loop, the run options, the exit writer, the table); what stays here is wiring: the client, the terminal, the files and the progress lines. */
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 const CHECKOUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -365,61 +396,42 @@ async function main(): Promise<void> {
     onRetry: ({ modelId, attempt, delayMs, error }) =>
       console.log(`  retry ${attempt} on ${modelId} in ${delayMs} ms (${errorReason(error)})`),
   });
-  const setup = matrixSetup(llm);
-  let total = 0;
-  console.log(
-    `evals:matrix: ${args.cells.length} cell(s), ${args.suite} suite, ${args.trials} trial(s) per case, both modes:`,
-  );
-  for (const cell of args.cells) {
-    const estimate = cellEstimateUsd(cell, loaded, args, setup);
-    total += estimate;
-    console.log(`  ${cell.name.padEnd(20)} ≈ $${estimate.toFixed(2)}`);
-  }
-  const cap = args.maxCostUsd ?? Math.ceil(total * 1.5 * 100) / 100;
-  console.log(
-    `Estimated total ≈ $${total.toFixed(2)}, simulator and judge included (matrix budget $${cap.toFixed(2)}).`,
-  );
   const copyDir = orUsageError(
     () => resultsCopyDir({ env: process.env, home: homedir(), checkout: CHECKOUT }),
     fail,
   );
-  if (args.dryRun) return;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const go = await orUsageErrorAsync(
-    () => confirmMatrix(args, { isTTY: process.stdin.isTTY, ask: (q) => rl.question(q) }, total),
+  const ask = async (question: string): Promise<string> => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      return await rl.question(question);
+    } finally {
+      rl.close();
+    }
+  };
+  const results = await orUsageErrorAsync(
+    () =>
+      matrixCommand(args, {
+        log: console.log,
+        isTTY: process.stdin.isTTY,
+        ask,
+        estimate: (cell) => cellEstimateUsd(cell, loaded, args, llm),
+        run: async (cell, mode, budget) => {
+          prepareResultsCopyDir(copyDir, args);
+          const onTrial: RunWiring["onTrial"] = (id, t) =>
+            console.log(`  ${t.status.padEnd(5)} ${mode} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}`);
+          const options = cellRunOptions(cell, mode, args, budget, { llm, rateLimit: llm, onTrial });
+          const report = asCellReport(await runSuite(matrixCases(loaded, mode, args.suite), options), cell);
+          const written = writeRunResults(report, markdownSummary(report), { out: args.out, copyDir });
+          console.log(resultsWrittenLine(written, console.error));
+          return report;
+        },
+      }),
     fail,
-  ).finally(() => rl.close());
-  if (!go) {
-    console.log("evals:matrix: not run.");
-    return;
-  }
-  orUsageError(() => prepareResultsCopyDir(copyDir, args), fail);
-  const results = await runMatrix(args.cells, cap, {
-    log: console.log,
-    run: async (cell, mode, budget) => {
-      const cases = matrixCases(loaded, mode, args.suite);
-      const report = asCellReport(
-        await runSuite(cases, {
-          ...cellRunOptions(cell, mode, args, budget, { llm, setup, rateLimit: llm }),
-          onTrial: (id, t) =>
-            console.log(`  ${t.status.padEnd(5)} ${mode} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}`),
-        }),
-        cell,
-      );
-      console.log(
-        resultsWrittenLine(
-          writeRunResults(report, markdownSummary(report), { out: args.out, copyDir }),
-          console.error,
-        ),
-      );
-      return report;
-    },
-  });
+  );
+  if (results === undefined) return;
   const stamp = fileStamp(new Date().toISOString());
   mkdirSync(args.out, { recursive: true });
-  for (const r of results)
-    if (!("notRun" in r))
-      writeFileSync(join(args.out, `${stamp}-exit-${r.cell}.md`), `${exitMarkdown(r.exit)}\n`);
+  for (const r of results) if (!("notRun" in r)) writeExitReport(r.exit, args.out, nodeFileWrites.writeFile);
   const md = matrixMarkdown(results, args);
   writeFileSync(join(args.out, `${stamp}-matrix.json`), `${JSON.stringify(results, null, 2)}\n`);
   writeFileSync(join(args.out, `${stamp}-matrix.md`), `${md}\n`);

@@ -145,7 +145,8 @@ export interface RunSuiteOptions {
   onTrial?: (id: string, trial: TrialResult | L1TrialResult) => void;
 }
 
-function caseStatus(trials: readonly { status: string }[]): CaseStatus {
+/** A case's status from its trials: skip when none ran, error over fail, pass only when every trial passed. */
+export function caseStatus(trials: readonly { status: string }[]): CaseStatus {
   if (trials.length === 0 || trials.every((t) => t.status === "skip")) return "skip";
   if (trials.some((t) => t.status === "error")) return "error";
   return trials.every((t) => t.status === "pass") ? "pass" : "fail";

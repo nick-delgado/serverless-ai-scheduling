@@ -47,7 +47,6 @@ import {
   caseSkipReason,
   estimateRunCost,
   exitCodeFor,
-  exitReportStep,
   fileCalibrationDeps,
   judgeSetup,
   orUsageError,
@@ -56,7 +55,7 @@ import {
   runOptions,
   selectCases,
   simulatorSetup,
-  updateBaselineStep,
+  resultsStep,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
@@ -80,10 +79,8 @@ async function main(): Promise<void> {
   const { mode, suite, trials, maxCostUsd, profile } = args;
   const loaded = loadScenarios();
   if (args.resultsStep !== undefined) {
-    const files = fileCalibrationDeps(loaded.scenarios, console.log);
-    const { action, files: paths } = args.resultsStep;
-    if (action === "exit") orUsageError(() => exitReportStep({ out: args.out, files: paths }, files), fail);
-    else orUsageError(() => updateBaselineStep({ baselineDir: args.baselineDir, files: paths }, files), fail);
+    const step = { ...args, resultsStep: args.resultsStep };
+    orUsageError(() => resultsStep(step, fileCalibrationDeps(loaded.scenarios, console.log)), fail);
     return;
   }
 

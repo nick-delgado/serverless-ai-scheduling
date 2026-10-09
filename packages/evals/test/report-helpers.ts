@@ -5,7 +5,7 @@
 import type { GraderResult } from "../src/graders";
 import type { L1TrialResult } from "../src/l1";
 import type { TrialResult, TrialStatus } from "../src/runner";
-import { summarize, type CaseResult, type Mode, type RunReport } from "../src/suite";
+import { caseStatus, summarize, type CaseResult, type Mode, type RunReport } from "../src/suite";
 import { zeroJudgeCost, zeroSimulatorCost } from "../src";
 
 export interface FakeTrial {
@@ -73,14 +73,7 @@ function caseOf(mode: Mode, c: FakeCase): CaseResult {
   const trials = c.trials.map((t, i) => (mode === "l1" ? l1Trial(t, i + 1) : scenarioTrial(t, i + 1)));
   const ran = trials.filter((t) => t.status !== "skip");
   const passed = ran.filter((t) => t.status === "pass").length;
-  const status =
-    trials.length === 0 || trials.every((t) => t.status === "skip")
-      ? "skip"
-      : trials.some((t) => t.status === "error")
-        ? "error"
-        : passed === trials.length
-          ? "pass"
-          : "fail";
+  const status = caseStatus(trials);
   return {
     id: c.id,
     category: c.category ?? (mode === "l1" ? "l1" : "book"),

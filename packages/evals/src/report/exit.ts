@@ -7,8 +7,8 @@
  * run", with each failed precondition listed.
  */
 import { DEFAULT_SIMULATOR_PROFILE } from "../simulator";
-import type { Mode, RunReport } from "../suite";
-import { conversationMetrics, emergencyMet, exitHalf, pct, type ExitHalf, type SkippedCase } from "./metrics";
+import type { RunReport } from "../suite";
+import { conversationMetrics, emergencyMet, exitHalf, pct, type ExitHalf } from "./metrics";
 
 /** PRD §7's targets, as numbers. */
 export const EXIT_TARGETS = {
@@ -41,8 +41,7 @@ export interface ExitReport {
   /** Empty for an exit run. */
   notExitRun: string[];
   rows: ExitRow[];
-  /** Skipped cases of both runs, by mode. */
-  skipped: { mode: Mode; cases: SkippedCase[] }[];
+  /** Each run's half, its skipped cases included. */
   halves: { l1: ExitHalf; scenario: ExitHalf };
 }
 
@@ -164,10 +163,6 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
     promptVersion: scenario.promptVersion,
     notExitRun: exitPreconditionFailures(l1, scenario),
     rows,
-    skipped: [
-      { mode: "l1", cases: halves.l1.skipped },
-      { mode: "scenario", cases: s.skipped },
-    ],
     halves,
   };
 }
@@ -183,14 +178,16 @@ export function exitMarkdown(r: ExitReport): string {
     `# PRD §7 exit metrics: ${r.profile} (prompt \`${r.promptVersion}\`)`,
     "",
     ...(r.notExitRun.length === 0
-      ? ["Exit run: full suite, 3 trials per case, both modes, simulator `sonnet-4.6`, no budget stop."]
+      ? [
+          `Exit run: full suite, ${EXIT_TRIALS} trials per case, both modes, simulator \`${DEFAULT_SIMULATOR_PROFILE}\`, no budget stop.`,
+        ]
       : ["**Not an exit run:**", ...r.notExitRun.map((f) => `- ${f}`)]),
     "",
     "| Metric | Value | Target | Verdict |",
     "|---|---|---|---|",
     ...r.rows.map((row) => `| ${row.metric} | ${row.value} | ${row.target} | ${row.verdict} |`),
   ];
-  for (const { mode, cases } of r.skipped)
+  for (const { mode, skipped: cases } of [r.halves.l1, r.halves.scenario])
     if (cases.length > 0)
       lines.push(
         "",
