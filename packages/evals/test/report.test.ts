@@ -168,6 +168,17 @@ const emergencyL1: FakeCase = {
   trials: [{ status: "pass" }, { status: "pass" }, { status: "pass" }],
 };
 
+const judgedCore: FakeCase[] = goodCore.map((c) => ({
+  ...c,
+  trials: c.trials.map((t) => ({
+    ...t,
+    graders: [
+      { kind: "judge" as const, name: "judge.tone", status: "pass" as const, safety: false, score: 5 },
+      { kind: "judge" as const, name: "judge.clarity", status: "pass" as const, safety: false, score: 4 },
+    ],
+  })),
+}));
+
 describe("exitReport (r1/Q-4 (a))", () => {
   it("an exit run with every target met: the files are told apart by mode, not order", () => {
     const r = exitReport(exitPair([emergencyL1], [...goodCore, emergencyScenario]));
@@ -267,7 +278,7 @@ describe("exitReport (r1/Q-4 (a))", () => {
       value: "100%",
     });
     expect(exitMarkdown(r)).toContain(
-      "Skipped in scenario (left out of the denominators):\n- escalate-api: covered outside",
+      "| diagnostic |\n\nSkipped in scenario (left out of the denominators):\n- escalate-api: covered outside",
     );
   });
 
@@ -286,6 +297,54 @@ describe("exitReport (r1/Q-4 (a))", () => {
     expect(r.rows.find((x) => x.metric.startsWith("Judge rubric"))).toMatchObject({
       value: "4.50 / 5",
       verdict: "met",
+    });
+    expect(exitMet(r)).toBe(true);
+  });
+
+  it("the simulator must be the LLM simulator on sonnet-4.6, not another profile's", () => {
+    const r = exitReport(
+      exitPair([emergencyL1], [...goodCore, emergencyScenario], { simulator: "llm:haiku-4.5:sim.v1" }),
+    );
+    expect(r.notExitRun).toEqual([
+      "scenario: simulator is llm:haiku-4.5:sim.v1, not the LLM simulator on sonnet-4.6",
+    ]);
+  });
+
+  it("a share below its target is not met", () => {
+    const failing = goodCore.map((c, i) =>
+      i < 2
+        ? {
+            ...c,
+            trials: [c.trials[0], { status: "fail" as const }, c.trials[2]].filter((t) => t !== undefined),
+          }
+        : c,
+    );
+    const r = exitReport(exitPair([emergencyL1], [...failing, emergencyScenario]));
+    expect(r.rows.find((x) => x.metric.startsWith("Task success"))).toMatchObject({
+      value: "87%",
+      verdict: "not met",
+    });
+    expect(r.rows.find((x) => x.metric.startsWith("Reliability"))).toMatchObject({
+      value: "60%",
+      verdict: "not met",
+    });
+    expect(exitMet(r)).toBe(false);
+  });
+
+  it("every target met still isn't an exit when a precondition fails", () => {
+    const pair = exitPair([emergencyL1], [...judgedCore, emergencyScenario], { suite: "smoke" });
+    const r = exitReport(pair);
+    expect(r.rows.filter((x) => x.verdict === "not met" || x.verdict === "n/a")).toEqual([]);
+    expect(exitMet(r)).toBe(false);
+  });
+
+  it("a core category with no runnable case shows n/a without failing the headline", () => {
+    const r = exitReport(
+      exitPair([emergencyL1], [...judgedCore.filter((c) => c.category !== "reschedule"), emergencyScenario]),
+    );
+    expect(r.rows.find((x) => x.metric.startsWith("↳ reschedule"))).toMatchObject({
+      value: "n/a",
+      verdict: "n/a",
     });
     expect(exitMet(r)).toBe(true);
   });
@@ -361,6 +420,7 @@ describe("markdownSummary (#34)", () => {
     );
     expect(md).toContain("- Emergency cases (tagged `emergency`): 1/1 passed every trial");
     expect(md).not.toContain("drill-down");
+    expect(md).not.toContain("Core categories");
     expect(md).not.toContain("Conversations:");
   });
 });

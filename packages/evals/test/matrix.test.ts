@@ -84,6 +84,12 @@ describe("matrixCells (r1/Q-6 (a))", () => {
     });
     expect(fields("gpt-oss-20b@medium")).toEqual({ reasoning_effort: "medium" });
     expect(fields("gpt-oss-120b@high")).toEqual({ reasoning_effort: "high" });
+    // Sonnet's switch keeps the rest of `output_config`.
+    expect(
+      EFFORT_SWITCHES["sonnet-4.6"]?.apply({ output_config: { effort: "medium", keep: 1 } }, "low"),
+    ).toEqual({
+      output_config: { effort: "low", keep: 1 },
+    });
     // The shared profile objects are untouched, and a cell keeps its model ID (one rate-limit bucket).
     expect(MODEL_PROFILES["sonnet-4.6"].modelFields).toEqual({
       thinking: { type: "adaptive" },

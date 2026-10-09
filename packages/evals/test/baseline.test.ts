@@ -23,10 +23,14 @@ const l1 = fakeReport("l1", [
   { id: "l1-a", trials: [{ status: "pass", costUsd: 0.01 }] },
   { id: "l1-b", trials: [{ status: "fail", costUsd: 0.02 }] },
 ]);
-const scenario = fakeReport("scenario", [
-  { id: "book-a", trials: [{ status: "pass", costUsd: 0.05, simulatorCostUsd: 0.02 }] },
-  { id: "safety-a", category: "safety", trials: [{ status: "skip", reason: "covered" }] },
-]);
+const scenario = fakeReport(
+  "scenario",
+  [
+    { id: "book-a", trials: [{ status: "pass", costUsd: 0.05, simulatorCostUsd: 0.02 }] },
+    { id: "safety-a", category: "safety", trials: [{ status: "skip", reason: "covered" }] },
+  ],
+  { startedAt: "2026-10-09T12:01:00.000Z" },
+);
 
 describe("baselineFromReports (r1/A-1, r1/A-2)", () => {
   it("records each mode's statuses, model, prompt, date, passed count, safety and agent-share cost", () => {
@@ -50,7 +54,7 @@ describe("baselineFromReports (r1/A-1, r1/A-2)", () => {
         scenario: {
           modelId: "us.anthropic.claude-sonnet-4-6",
           promptVersion: "system.v1",
-          recordedAt: "2026-10-09T12:00:00.000Z",
+          recordedAt: "2026-10-09T12:01:00.000Z",
           cases: 2,
           passed: 1,
           safetyViolations: 0,
@@ -111,10 +115,10 @@ describe("the results-file steps (#34)", () => {
     const r = exitReportStep({ out: "/out", files: ["/l1.json", "/scenario.json"] }, d);
     expect(r.profile).toBe("sonnet-4.6");
     expect([...written.keys()]).toEqual([
-      "/out/2026-10-09T120000Z-exit-sonnet-4.6.json",
-      "/out/2026-10-09T120000Z-exit-sonnet-4.6.md",
+      "/out/2026-10-09T120100Z-exit-sonnet-4.6.json",
+      "/out/2026-10-09T120100Z-exit-sonnet-4.6.md",
     ]);
-    expect(written.get("/out/2026-10-09T120000Z-exit-sonnet-4.6.md")).toContain(
+    expect(written.get("/out/2026-10-09T120100Z-exit-sonnet-4.6.md")).toContain(
       "# PRD §7 exit metrics: sonnet-4.6",
     );
   });

@@ -88,7 +88,7 @@ describe("planGate (r1/Q-2 (a))", () => {
     expect(many.summary).toContain("`packages/tools/src/f9.ts` and 2 more.");
     const bot = planGate({ ...base, changed, hasCredentials: false, dependabot: true }).failure;
     expect(bot).toContain("this is a Dependabot pull request");
-    expect(bot).toContain("a push of his own to the branch");
+    expect(bot).toContain("Nick gives the run credentials (a push of his own to the branch");
     expect(planGate({ ...base, changed, hasCredentials: false }).failure).toContain(
       "this is a run without the AWS_EVAL_ROLE_ARN secret",
     );
@@ -297,13 +297,23 @@ describe("main", () => {
       store.clear();
       store.set("/b.json", JSON.stringify(baseline));
       put("l1", run("l1", "l1", { "l1-2": [{ status: "error" }] }));
+      put(
+        "l1-two",
+        run("l1", "l1", {
+          "l1-1": [{ status: "error" }],
+          "l1-3": [{ status: "fail" }],
+          "l1-4": [{ status: "error" }],
+        }),
+      );
       put("scenario", run("scenario", "sc"));
     });
 
     it("errored prints the errored IDs comma-separated, and an empty line when none", () => {
       expect(main(["errored", "/r/l1"], {}, deps())).toBe(0);
       expect(main(["errored", "/r/scenario"], {}, deps())).toBe(0);
-      expect(out).toEqual(["l1-2", ""]);
+      expect(main(["errored", "/r/l1-two"], {}, deps())).toBe(0);
+      // Only errored cases, not failed ones, comma-separated for `--ids`.
+      expect(out).toEqual(["l1-2", "", "l1-1,l1-4"]);
       expect(main(["errored", "/r/none"], {}, deps())).toBe(2);
       expect(main(["errored"], {}, deps())).toBe(2);
     });
