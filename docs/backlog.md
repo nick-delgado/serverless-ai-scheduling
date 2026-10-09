@@ -269,7 +269,7 @@ Streams S1–S8: auth, data, agent, tools, chat UI, voice, evals, escalation; sp
 | [#31](https://github.com/nick-delgado/serverless-ai-scheduling/issues/31) | S7-02 | Patient simulator (model from a profile; Sonnet 4.6 by default) with personas and stop conditions | evals | eval | — | #30, #9 |
 | [#32](https://github.com/nick-delgado/serverless-ai-scheduling/issues/32) | S7-03 | LLM judge, rubrics, and calibration workflow | evals | eval | PRD §7 | #30 |
 | [#33](https://github.com/nick-delgado/serverless-ai-scheduling/issues/33) | S7-04 | Author ~40 eval scenarios + L1 cases from the PRD (eval-first) | evals | eval | FR-030–FR-037, PRD §7 | #5 |
-| [#34](https://github.com/nick-delgado/serverless-ai-scheduling/issues/34) | S7-05 | Eval reports, model matrix, baselines, CI smoke gate, run-evals skill | evals | eval | FR-040, FR-041, FR-042 | #30, #31, #32, #8, #98, #41 |
+| [#34](https://github.com/nick-delgado/serverless-ai-scheduling/issues/34) | S7-05 | Eval reports, model matrix, baselines, CI smoke gate, run-evals skill | evals | eval | FR-040, FR-041, FR-042 | #30, #31, #32, #8, #98, #41, #171, #178 |
 | [#35](https://github.com/nick-delgado/serverless-ai-scheduling/issues/35) | S8-01 | SES notifier: escalation email with summary + transcript | escalation | feature | FR-034 | #23, #6 |
 
 **Follow-ups filed from PR reviews (M2):**

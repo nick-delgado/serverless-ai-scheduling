@@ -107,8 +107,6 @@ export interface ExitHalf {
   emergency: { ids: string[]; passedEvery: string[] };
   /** Cases left out of the denominators, by ID with their reasons. */
   skipped: SkippedCase[];
-  /** Cases the budget guard stopped. */
-  budgetStopped: string[];
 }
 
 /** Why a case was skipped: its own reason, else its first trial's. */
@@ -152,7 +150,6 @@ export function exitHalf(
       passedEvery: emergency.filter((c) => c.passHatK).map((c) => c.id),
     },
     skipped: cases.filter((c) => c.status === "skip").map((c) => ({ id: c.id, reason: skipReasonOf(c) })),
-    budgetStopped: cases.filter((c) => c.budgetStopped).map((c) => c.id),
   };
 }
 

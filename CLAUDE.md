@@ -62,16 +62,19 @@ npm run mutate -- <edits.json> -- <cmd>  # apply each { file, find, replace, exp
 
 The coverage gate checks committed changes only. A deliberate exception is a `/* v8 ignore next -- <reason> */` hint (or `start`/`stop`) in the diff; a hint without a reason fails. Lines only DynamoDB Local reaches show as uncovered locally unless it is running (`npm run dynamodb:local -w packages/tools`).
 
-Evals (ADR-008; live runs call Bedrock and cost money, so try `--dry-run` first for the case list and estimate):
+Evals (ADR-008; the full guide is the **`run-evals` skill**; live runs call Bedrock and cost money, so try `--dry-run` first for the case list and estimate):
 
 ```bash
 npm run evals -- --suite smoke --mode l1 --profile sonnet-4.6 --trials 1          # single-turn L1 cases (the default mode)
 npm run evals -- --suite smoke --mode scenario --profile sonnet-4.6 --trials 1    # multi-turn scenarios; an LLM plays the patient (--simulator-profile or SIMULATOR_MODEL_PROFILE, default sonnet-4.6) and an LLM judge scores them (--judge-profile or JUDGE_MODEL_PROFILE, default haiku-4.5; --no-judge), so it costs more than L1
 npm run evals -- --export-calibration <results.json>                               # judge calibration: write ~20 transcripts and an empty labels file to packages/evals/calibration/ (no model calls)
 npm run evals -- --calibrate                                                       # judge the labelled transcripts and report judge–human agreement
+npm run evals -- --exit-report <l1.json> <scenario.json>                           # the PRD §7 exit table from two results files (no model calls)
+npm run evals -- --update-baseline <l1.json> <scenario.json>                       # promote a smoke run at k=1 in both modes to packages/evals/baselines/<profile>.json (no model calls)
+npm run evals:matrix -- --dry-run                                                  # the model × effort matrix (FR-042): estimate per cell; a live run asks y/N first (--yes skips it)
 ```
 
-Flags: `--filter <id-substring>`, `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls; the judge still runs), `--calibration-dir <dir>`, `--out <dir>`. The judge's scores are reported beside each trial and never change its status; its cost is reported apart from `costUsd` and counts toward `--max-cost`. The calibration steps ignore the run flags (`--mode`, `--suite`, `--filter`, `--trials`, `--replay`, `--max-cost`); `--calibrate` honours `--dry-run` (estimate only), writes its report to `--out`, and prints its estimate before calling the judge. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored), and every live run also writes a copy outside the checkout, to `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/<checkout directory name>/` (`~/.local/state/…` when `XDG_STATE_HOME` isn't an absolute path), so removing a worktree keeps its results; the environment variable `EVAL_RESULTS_COPY_DIR` (an absolute path outside the repository) replaces the directory above `<checkout directory name>`.
+Flags: `--filter <id-substring>`, `--ids <id>[,<id>…]` (exact case IDs), `--max-cost <usd>` (budget guard, default 1), `--dry-run`, `--replay <results.json>` (scenario mode: replays recorded patient turns, no simulator calls; the judge still runs), `--calibration-dir <dir>`, `--out <dir>`. The judge's scores are reported beside each trial and never change its status; its cost is reported apart from `costUsd` and counts toward `--max-cost`. The calibration steps ignore the run flags (`--mode`, `--suite`, `--filter`, `--trials`, `--replay`, `--max-cost`); `--calibrate` honours `--dry-run` (estimate only), writes its report to `--out`, and prints its estimate before calling the judge. Results go to `packages/evals/results/<timestamp>-<mode>-<suite>-<profile>.{json,md}` (git-ignored), and every live run also writes a copy outside the checkout, to `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/<checkout directory name>/` (`~/.local/state/…` when `XDG_STATE_HOME` isn't an absolute path), so removing a worktree keeps its results; the environment variable `EVAL_RESULTS_COPY_DIR` (an absolute path outside the repository) replaces the directory above `<checkout directory name>`.
 
 Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
@@ -123,22 +126,23 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
   - **`cfn-lint`**: every `infra/**/*.yaml`.
   - **`Seen-failing evidence`** (its own workflow, `pr-evidence.yml`, on PR events, body edits included): `scripts/pr-evidence.ts` fails when a changed source file has no KILLED row in an `npm run mutate -- … --markdown` table in the PR body.
   - **`Journal links`** (same workflow): `scripts/journal-links.ts` fails when a journal entry the PR adds has no `PR #<this PR>` on its **Related** line, so it's red on a PR's first push until the "link PR #N" commit (`task-workflow` step 7). Not a required check.
+  - **`Eval gate`** (its own workflow, `evals.yml`, on PR events; #34, FR-041): when the PR changes a gated path (`packages/agent/**`, `packages/tools/**`, non-test files under `packages/contracts/src/`, `packages/evals/src|scenarios|baselines/**`, or `evals.yml`), it runs the smoke suite in both modes on `sonnet-4.6` through the `sched-github-evals` OIDC role and fails on a safety violation, more than one case below `packages/evals/baselines/sonnet-4.6.json` in a mode, a budget-stopped case, or a case still `error` after one re-run. Otherwise it passes without calling Bedrock. A gated change without credentials (a fork's or Dependabot's PR) fails closed. Decisions: `scripts/eval-gate.ts`.
 
-  A PR isn't done until all four are green.
+  A PR isn't done until all five are green.
 <!-- sync-end:ci-checks -->
 - **Recommended branch protection for `main`** (Nick enables it in Settings → Branches):
   - require a pull request before merging;
-  - require status checks `Lint, typecheck, test`, `cfn-lint` and `Seen-failing evidence` to pass;
+  - require status checks `Lint, typecheck, test`, `cfn-lint`, `Seen-failing evidence` and `Eval gate` to pass;
   - require branches to be up to date;
   - block force pushes.
 
-  The workflow deliberately has no path filters, so required checks always report, even on docs-only PRs.
+  The workflows deliberately have no path filters, so required checks always report, even on docs-only PRs; the eval gate decides inside its job whether to call Bedrock.
 
 ## Definition of done
 
 - Every acceptance criterion in the issue is met.
 - Tests are added or updated, and `npm run lint && npm run typecheck && npm test` passes. A test counts only once you've seen it fail ([why](docs/journal/2026-09-29-watch-the-double-booking-test-fail.md)): break each thing the code you wrote does with `npm run mutate`, each edit's `expect` naming the test that should go red. If none does, add one. That includes adapters behind injected interfaces and files written for another issue. A check you ran once by hand is evidence for the PR, not a test. A test name, comment, journal entry or PR claims only what you broke.
-- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline, or a regression the owner accepted, recorded as a decision line in the issue's "Decisions and clarifications"; an acceptance criterion that states a tolerance (such as FR-041's "no more than one case below") is that acceptance, given in advance. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. Until #34 commits baselines, the baseline is the same command run on `main`, and both rows go in the PR.
+- If the agent, prompt, tools, or model config changed: the eval smoke suite ran on the development-default profile and there's no regression against the baseline, or a regression the owner accepted, recorded as a decision line in the issue's "Decisions and clarifications"; an acceptance criterion that states a tolerance (such as FR-041's "no more than one case below") is that acceptance, given in advance. The numbers go in the PR. Other profiles' results are inputs to the M3 matrix, not gates. The baseline is `packages/evals/baselines/sonnet-4.6.json` (smoke, both modes, k=1), and the `Eval gate` check runs this comparison on the PR; a PR that changes the baseline sets its own bar, so it says why.
 - If infra changed: `sam validate --lint` passes, and the change is deployed to `dev` or the PR says why not.
 - Docs are updated:
   - An ADR for any new or reversed significant technical decision. A rule for one tool's behaviour goes in its handler header and a journal entry instead (and the PRD if patients see it).
