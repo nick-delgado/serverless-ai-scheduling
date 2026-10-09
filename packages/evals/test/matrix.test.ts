@@ -286,6 +286,22 @@ describe("runMatrix", () => {
     expect(budgets).toEqual([0.2, 0]);
   });
 
+  it("a budget spent exactly leaves no run for the next cell", async () => {
+    const calls: string[] = [];
+    const results = await runMatrix([cell("haiku-4.5"), cell("nova-pro")], 0.4, {
+      log: () => undefined,
+      run: (c, mode) => {
+        calls.push(`${c.name} ${mode}`);
+        return Promise.resolve(runOf(mode, 0.2));
+      },
+    });
+    expect(calls).toEqual(["haiku-4.5 l1", "haiku-4.5 scenario"]);
+    expect(results.map((r) => ("notRun" in r ? r.notRun : "ran"))).toEqual([
+      "ran",
+      "the matrix budget ($0.4) ran out",
+    ]);
+  });
+
   it("once the budget is spent, the remaining cells don't run", async () => {
     const results = await runMatrix([cell("haiku-4.5"), cell("nova-pro")], 0.3, {
       log: () => undefined,

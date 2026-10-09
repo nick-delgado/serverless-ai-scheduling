@@ -11,11 +11,15 @@ import {
   emergencyMet,
   exitHalf,
   exitMarkdown,
+  EXIT_TOLERANCE,
   exitMet,
   exitReport,
   markdownSummary,
   parseRunReport,
+  percentile,
+  reaches,
   summarizeJudge,
+  within,
   type RunReport,
 } from "../src";
 import { fakeReport, scenarioTrial, type FakeCase } from "./report-helpers";
@@ -65,6 +69,11 @@ describe("conversationMetrics (r1/Q-5 (b), r1/A-10)", () => {
 
   it("counts turns over completed conversations only", () => {
     expect(conversationMetrics(trials).turns).toEqual({ mean: 4, p95: 5 });
+  });
+
+  it("percentile is the nearest rank, p0 the smallest value", () => {
+    expect([0, 50, 95, 100].map((p) => percentile([3, 1, 2], p))).toEqual([1, 2, 3, 3]);
+    expect(percentile([], 95)).toBe(0);
   });
 
   it("is n/a, not 0, with no completed conversation", () => {
@@ -191,7 +200,7 @@ const judgedCore: FakeCase[] = goodCore.map((c) => ({
 }));
 
 describe("exitReport (r1/Q-4 (a))", () => {
-  it("an exit run with every target met: the files are told apart by mode, not order", () => {
+  it("an exit run with every target met", () => {
     const r = exitReport(exitPair([emergencyL1], [...goodCore, emergencyScenario]));
     expect(r.notExitRun).toEqual([]);
     expect(r.rows.find((x) => x.metric.startsWith("Task success"))).toMatchObject({
@@ -272,7 +281,7 @@ describe("exitReport (r1/Q-4 (a))", () => {
     );
   });
 
-  it("still computes the table when the pair isn't an exit run, and lists each failed precondition", () => {
+  it("still computes the table when the pair isn't an exit run, and lists each failed precondition; the files are told apart by mode, not order", () => {
     const scenario = fakeReport("scenario", [...goodCore, { ...emergencyScenario, budgetStopped: true }], {
       suite: "smoke",
       trialsPerCase: 1,
@@ -294,6 +303,19 @@ describe("exitReport (r1/Q-4 (a))", () => {
     const md = exitMarkdown(r);
     expect(md).toContain("**Not an exit run:**\n- scenario: suite is smoke, not full");
     expect(exitMet(r)).toBe(false);
+  });
+
+  it("lists the L1 run's skipped cases too", () => {
+    const cut: FakeCase = {
+      id: "l1-cut",
+      trials: [],
+      budgetStopped: true,
+      reason: "budget guard ($1 reached) after 0 of 3 trial(s)",
+    };
+    const r = exitReport(exitPair([emergencyL1, cut], [...goodCore, emergencyScenario]));
+    expect(exitMarkdown(r)).toContain(
+      "\n\nSkipped in l1 (left out of the denominators):\n- l1-cut: budget guard ($1 reached) after 0 of 3 trial(s)",
+    );
   });
 
   it("lists skipped cases by ID with their reasons, out of the denominators", () => {
@@ -340,6 +362,46 @@ describe("exitReport (r1/Q-4 (a))", () => {
     expect(r.notExitRun).toEqual([
       "scenario: simulator is llm:haiku-4.5:sim.v1, not the LLM simulator on sonnet-4.6",
     ]);
+  });
+
+  it("a rate at exactly its target meets it, though the mean picks up float error (cddafdb/TEST-101)", () => {
+    const trials = (passes: number) =>
+      [0, 1, 2].map((i) => ({
+        status: i < passes ? ("pass" as const) : ("fail" as const),
+        stoppedBecause: "goal_achieved",
+      }));
+    const categories = ["book", "reschedule", "availability", "escalate", "clarify"];
+    // 17 cases at 3/3, then 3 at 1/3: 54 of 60 trials, exactly 90%.
+    const ninety = Array.from({ length: 20 }, (_, i) => ({
+      id: `core-${i}`,
+      category: categories[i % 5] ?? "book",
+      trials: trials(i < 17 ? 3 : 1),
+    }));
+    const r = exitReport(exitPair([emergencyL1], [...ninety, emergencyScenario]));
+    expect(r.halves.scenario.taskSuccess).toBe(0.8999999999999998);
+    expect(r.rows.find((x) => x.metric.startsWith("Task success"))).toMatchObject({
+      value: "90%",
+      verdict: "met",
+    });
+    // 4 of 5 core cases with every trial passing: exactly 80%.
+    const eighty = categories.map((category, i) => ({
+      id: `r-${i}`,
+      category,
+      trials: trials(i < 4 ? 3 : 2),
+    }));
+    const r2 = exitReport(exitPair([emergencyL1], [...eighty, emergencyScenario]));
+    expect(r2.rows.find((x) => x.metric.startsWith("Reliability"))).toMatchObject({
+      value: "80%",
+      verdict: "met",
+    });
+  });
+
+  it("the tolerance absorbs float error only, far below one trial's step", () => {
+    expect(reaches(0.8999999999999998, 0.9)).toBe(true);
+    expect(reaches(0.9 - 1 / 90, 0.9)).toBe(false);
+    expect(within(0.25000000000000006, 0.25)).toBe(true);
+    expect(within(0.2501, 0.25)).toBe(false);
+    expect(EXIT_TOLERANCE).toBeLessThan(1 / 90 / 1000);
   });
 
   it("a share below its target is not met", () => {
@@ -545,6 +607,20 @@ describe("parseRunReport", () => {
     const { simulatorCost: _sim, ...noSim } = t as unknown as Record<string, unknown>;
     expect(() => parseRunReport({ ...sc, cases: [{ ...c, trials: [noSim] }] }, "b.json")).toThrow(
       /^b\.json isn't an eval results file: cases\.0\.trials\.0\.simulatorCost: /,
+    );
+  });
+
+  it("refuses a file without the summary's safety count, or with a status the gate doesn't know", () => {
+    const l1 = JSON.parse(
+      JSON.stringify(fakeReport("l1", [{ id: "l1-a", trials: [{ status: "pass" }] }])),
+    ) as RunReport;
+    const { safetyViolations: _safety, ...summary } = l1.summary;
+    expect(() => parseRunReport({ ...l1, summary }, "a.json")).toThrow(
+      /^a\.json isn't an eval results file: summary\.safetyViolations: /,
+    );
+    const [c] = l1.cases;
+    expect(() => parseRunReport({ ...l1, cases: [{ ...c, status: "passed" }] }, "a.json")).toThrow(
+      /^a\.json isn't an eval results file: cases\.0\.status: /,
     );
   });
 });

@@ -19,6 +19,20 @@ export const EXIT_TARGETS = {
   agentCostPerCompletedUsd: 0.25,
 } as const;
 
+/**
+ * How far below a target (or above a ceiling) a value may fall from float error and still meet it. Means of
+ * per-case rates such as 1/3 can land a hair under the exact target: 17 cases at 3/3 then 3 at 1/3 is 54 of 60
+ * trials, 90%, but sums to 0.8999999999999998. The tolerance stays far below the smallest real step of a rate
+ * (one trial over all core trials, about 0.011 for 30 core cases at k=3), so a real 89% never meets 90%.
+ */
+export const EXIT_TOLERANCE = 1e-9;
+
+/** True when `value` meets a `target` it must reach, allowing float error (`EXIT_TOLERANCE`). */
+export const reaches = (value: number, target: number): boolean => value >= target - EXIT_TOLERANCE;
+
+/** True when `value` stays within a `ceiling`, allowing float error (`EXIT_TOLERANCE`). */
+export const within = (value: number, ceiling: number): boolean => value <= ceiling + EXIT_TOLERANCE;
+
 /** The trials per case an exit run has (PRD §7). */
 export const EXIT_TRIALS = 3;
 
@@ -55,7 +69,7 @@ export const passHatName = (k: number): string => (k === EXIT_TRIALS ? "pass^3" 
 const share = (value: number | undefined, target: number): Pick<ExitRow, "value" | "verdict"> =>
   value === undefined
     ? { value: "n/a", verdict: "n/a" }
-    : { value: pct(value), verdict: value >= target ? "met" : "not met" };
+    : { value: pct(value), verdict: reaches(value, target) ? "met" : "not met" };
 
 /** The preconditions of an exit run that this pair fails (r1/Q-4 edges). */
 export function exitPreconditionFailures(l1: RunReport, scenario: RunReport): string[] {
@@ -130,7 +144,7 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
       metric: "Judge rubric average (tone, clarity), before calibration (#159)",
       value: judge === undefined ? "n/a" : `${judge.toFixed(2)} / 5`,
       target: `≥ ${EXIT_TARGETS.rubricAverage.toFixed(1)} / 5 after calibration`,
-      verdict: judge === undefined ? "n/a" : judge >= EXIT_TARGETS.rubricAverage ? "met" : "not met",
+      verdict: judge === undefined ? "n/a" : reaches(judge, EXIT_TARGETS.rubricAverage) ? "met" : "not met",
     },
     {
       metric: "Judge–human agreement on the calibration set",
@@ -142,7 +156,8 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
       metric: "Agent cost per completed conversation (NFR-003)",
       value: cost === undefined ? "n/a" : `$${cost.toFixed(4)}`,
       target: `≤ $${EXIT_TARGETS.agentCostPerCompletedUsd.toFixed(2)}`,
-      verdict: cost === undefined ? "n/a" : cost <= EXIT_TARGETS.agentCostPerCompletedUsd ? "met" : "not met",
+      verdict:
+        cost === undefined ? "n/a" : within(cost, EXIT_TARGETS.agentCostPerCompletedUsd) ? "met" : "not met",
     },
     {
       metric: "NFR-001 (deployed)",

@@ -1,10 +1,11 @@
 /**
- * Reading a saved results JSON back (#34): the exit report, the baseline update, the matrix and the CI gate
- * all start from `packages/evals/results/*.json`. The schema checks the fields those read (the run's identity,
- * the summary's counts, costs and latency, each case's status and rates, and each trial's status, cost,
- * safety count and graders, plus a scenario trial's turns and simulator and judge costs); the rest of the file
- * (transcripts, usage, simulator turns) is kept as written, unchecked, and the result is typed as a
- * `RunReport` on that basis.
+ * Reading a saved results JSON back (#34): `--exit-report`, `--update-baseline` and the CI gate
+ * (`scripts/eval-gate.ts`) start from `packages/evals/results/*.json`. The schema checks the fields the exit
+ * table, the baseline and the gate's verdict read from a report (the run's identity, the summary's counts,
+ * costs and latency, each case's status and rates, and each trial's status, cost, safety count and graders,
+ * plus a scenario trial's turns and simulator and judge costs, which the exit table's conversation metrics
+ * use). The rest of the file (transcripts, usage, simulator turns) is kept as written, unchecked, and the result
+ * is typed as a `RunReport` on that basis.
  */
 import { z } from "zod";
 

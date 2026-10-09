@@ -33,6 +33,7 @@ import { parseArgs } from "node:util";
 import {
   compareMode,
   MAX_REGRESSIONS_PER_MODE,
+  MODES,
   parseBaseline,
   parseRunReport,
   type Baseline,
@@ -172,7 +173,7 @@ export interface Verdict {
 export function gateVerdict(baseline: Baseline, runs: Record<Mode, ModeRuns>): Verdict {
   const failures: string[] = [];
   const modes: ModeVerdict[] = [];
-  for (const mode of ["l1", "scenario"] as const) {
+  for (const mode of MODES) {
     const m = mergeRerun(mode, runs[mode]);
     const cmp = compareMode(mode, baseline.modes[mode], {
       modelId: runs[mode].first.modelId,

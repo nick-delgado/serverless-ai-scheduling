@@ -283,7 +283,8 @@ export const baseRef = (flag: string | undefined, env: string | undefined): stri
 
 /**
  * The names `git diff --name-only <filter> <base>...HEAD -- <paths>` lists, non-ASCII ones unquoted, empty lines
- * dropped: the files changed since the merge base, as `filter` (a `--diff-filter=` flag) selects, limited to `paths`
+ * dropped: the files changed since the merge base, as `filter` (one `git diff` option: a `--diff-filter=` flag, or
+ * `--no-renames` in eval-gate.ts, which lists a renamed file under both names) selects, limited to `paths`
  * (none: every path). Git limits rename detection to `paths` too. It throws when git fails (no merge base, unknown
  * ref); each caller says why and exits. pr-evidence.ts, journal-links.ts and eval-gate.ts share it (#199, #34).
  */

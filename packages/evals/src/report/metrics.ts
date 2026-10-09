@@ -17,12 +17,13 @@ export const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 export const mean = (values: readonly number[]): number | undefined =>
   values.length === 0 ? undefined : values.reduce((a, b) => a + b, 0) / values.length;
 
-/** The nearest-rank percentile, 0 for no values. */
+/** The nearest-rank percentile (p0 is the smallest value), 0 for no values. */
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  // In range: the index is between 0 and length - 1.
-  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] as number;
+  // Clamped to 0 .. length - 1, so the index is always in range.
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index] as number;
 }
 
 /**

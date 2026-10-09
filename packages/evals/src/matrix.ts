@@ -400,6 +400,8 @@ async function main(): Promise<void> {
     () => resultsCopyDir({ env: process.env, home: homedir(), checkout: CHECKOUT }),
     fail,
   );
+  // Created once, before the first run; a dry run creates nothing (prepareResultsCopyDir reads --dry-run).
+  orUsageError(() => prepareResultsCopyDir(copyDir, args), fail);
   const ask = async (question: string): Promise<string> => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
@@ -416,7 +418,6 @@ async function main(): Promise<void> {
         ask,
         estimate: (cell) => cellEstimateUsd(cell, loaded, args, llm),
         run: async (cell, mode, budget) => {
-          prepareResultsCopyDir(copyDir, args);
           const onTrial: RunWiring["onTrial"] = (id, t) =>
             console.log(`  ${t.status.padEnd(5)} ${mode} ${id}#${t.trial}  $${t.costUsd.toFixed(5)}`);
           const options = cellRunOptions(cell, mode, args, budget, { llm, rateLimit: llm, onTrial });

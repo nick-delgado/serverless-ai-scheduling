@@ -161,6 +161,14 @@ describe("gateVerdict (FR-041)", () => {
     expect(v.failures).toEqual(["l1: budget-stopped case(s): l1-4"]);
   });
 
+  it("the comparison reads the re-run's statuses: a fail plus an error that passes on its re-run is one regression", () => {
+    const first = run("scenario", "sc", { "sc-1": [{ status: "fail" }], "sc-3": [{ status: "error" }] });
+    const rerun = fakeReport("scenario", [{ id: "sc-3", trials: [{ status: "pass" }] }]);
+    const v = gateVerdict(baseline, { ...clean(), scenario: { first, rerun } });
+    expect(v.passed).toBe(true);
+    expect(v.modes[1]?.comparison.regressions).toEqual(["sc-1"]);
+  });
+
   it("a re-run that passes replaces the errored status; its safety violations still count", () => {
     const first = run("scenario", "sc", { "sc-3": [{ status: "error" }] });
     const rerun = fakeReport("scenario", [{ id: "sc-3", trials: [{ status: "pass" }] }]);
@@ -280,6 +288,9 @@ describe("main", () => {
       expect(main(["plan"], vars, deps())).toBe(1);
       expect(appended.get("/gh/output")).toBe("run=false\n");
       expect(errors[0]).toMatch(/^::error::Gated paths changed .*a pull request from a fork/);
+      // A head in this repository isn't a fork: without the secret, it's named as a missing secret instead.
+      expect(main(["plan"], { ...vars, PR_HEAD_REPO: "owner/repo" }, deps())).toBe(1);
+      expect(errors[1]).toContain("this is a run without the AWS_EVAL_ROLE_ARN secret");
     });
 
     it("a gated path with an empty AWS_EVAL_ROLE_ARN fails closed; Dependabot is named from GITHUB_ACTOR", () => {
@@ -422,8 +433,8 @@ describe("main", () => {
   });
 });
 
-// jscpd:ignore-start -- the line slicers copy scripts/bootstrap-template.test.ts's on purpose: #157 owns the shared
-// helper (decision 91c9fc5/TEST-303 (a) on PR #229 asked for this test in that style).
+// jscpd:ignore-start -- the line slicers copy scripts/bootstrap-template.test.ts's on purpose (decision 91c9fc5/TEST-303
+// (a) on PR #229 asked for this test in that style). #157 owns the shared helper and absorbs this copy too (named there).
 const indentOf = (line: string): number => line.length - line.trimStart().length;
 
 /** The block that starts at the first line of `within` matching `header`: it and every deeper or blank line after. */
@@ -473,7 +484,8 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
     if (step === undefined) throw new Error(`no step named ${name}`);
     return step;
   };
-  const RUN_IF = "if: steps.plan.outputs.run == 'true'";
+  const PLAN_SAYS_RUN = "steps.plan.outputs.run == 'true'";
+  const RUN_IFS = [`if: ${PLAN_SAYS_RUN}`, `if: always() && ${PLAN_SAYS_RUN}`];
 
   it("runs on pull_request only, the trigger the eval role trusts", () => {
     expect(children(block(/^on:$/, workflow))).toEqual(["  pull_request:"]);
@@ -488,12 +500,11 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
   it("runs every step after the plan that reaches AWS or Bedrock only when the plan says so", () => {
     const plan = steps.findIndex((st) => st.some((l) => l.includes("scripts/eval-gate.ts plan")));
     expect(plan).toBeGreaterThan(-1);
+    // The conditions read `steps.plan`, so the plan step must carry that id.
+    expect(steps[plan]?.map((l) => l.trim())).toContain("id: plan");
     const after = steps.slice(plan + 1);
     expect(after.length).toBeGreaterThan(0);
-    for (const step of after)
-      expect(step.some((l) => l.trim() === RUN_IF || l.trim() === `if: always() && ${RUN_IF.slice(4)}`)).toBe(
-        true,
-      );
+    for (const step of after) expect(step.some((l) => RUN_IFS.includes(l.trim()))).toBe(true);
   });
 
   it("has one credentials step, which takes the eval role and masks the account ID", () => {

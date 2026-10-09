@@ -118,8 +118,8 @@ export class CliArgError extends Error {
   override readonly name = "CliArgError";
 }
 
-/** True when `value` is one of `list`'s strings. Shared with `matrix.ts`. */
-export const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
+/** True when `value` is one of `list`'s strings. */
+const isOneOf = <T extends string>(list: readonly T[], value: string): value is T =>
   (list as readonly string[]).includes(value);
 
 /** `--suite`'s value, checked. Shared with `matrix.ts`. */
@@ -593,13 +593,19 @@ export interface FileWrites {
   writeFile: (path: string, text: string) => void;
 }
 
-/** The real file system, for the calibration step's files and the run's results (`results-copy.ts`). */
+/**
+ * The real file system's writes: for the calibration and results-file steps' files, the run's results
+ * (`results-copy.ts`) and the matrix's exit tables.
+ */
 export const nodeFileWrites: FileWrites = {
   mkdir: (dir) => mkdirSync(dir, { recursive: true }),
   writeFile: (path, text) => writeFileSync(path, text),
 };
 
-/** The calibration step's real files and clock, for `cli.ts`. */
+/**
+ * The CLI's file adapters on the real file system, with the scenarios, a log and the clock: the calibration
+ * step uses all of them, the results-file steps the files and the log.
+ */
 export function fileCalibrationDeps(
   scenarios: readonly Scenario[],
   log: (line: string) => void,

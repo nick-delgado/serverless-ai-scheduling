@@ -137,8 +137,8 @@ describe("the results-file steps (#34)", () => {
     expect(log).toEqual(["evals: wrote /b/sonnet-4.6.json: l1 1/2 passed, scenario 1/2 passed"]);
   });
 
-  it("--exit-report writes the table next to the results, stamped by the scenario run", () => {
-    const { d, written } = deps();
+  it("--exit-report writes the table next to the results, stamped by the scenario run, and logs it", () => {
+    const { d, written, log } = deps();
     const r = exitReportStep({ out: "/out", files: ["/l1.json", "/scenario.json"] }, d);
     expect(r.profile).toBe("sonnet-4.6");
     expect([...written.keys()]).toEqual([
@@ -148,6 +148,9 @@ describe("the results-file steps (#34)", () => {
     expect(written.get("/out/2026-10-09T120100Z-exit-sonnet-4.6.md")).toContain(
       "# PRD §7 exit metrics: sonnet-4.6",
     );
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatch(/^# PRD §7 exit metrics: sonnet-4\.6 /);
+    expect(log[0]).toMatch(/\n\nevals: wrote \/out\/2026-10-09T120100Z-exit-sonnet-4\.6\.json$/);
   });
 
   it("a missing, unreadable or malformed file, or files that don't fit the step, are usage errors", () => {

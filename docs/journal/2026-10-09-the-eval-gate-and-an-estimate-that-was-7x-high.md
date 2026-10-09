@@ -23,8 +23,9 @@ Nick's decisions are in the ADR amendment. These are the ones the spec left open
 - **The judge rubric average with one dimension scored.** r1/A-11 says the mean of the two means. When only `tone` or only `clarity` was scored, the average is that one mean. We rejected reporting n/a, because a run that scored one dimension still has a meaningful average.
 - **The matrix budget.** `--max-cost` caps the whole matrix, with a default of 1.5x the estimate. Each run's budget guard gets whatever is left. We rejected a per-run cap: with 28 runs, it's a number nobody can reason about.
 - **The gate's credentials message.** For a fork, the remedy is to push the branch to this repository. For Dependabot, it's a push of Nick's own. GitHub's documentation says a re-run keeps the first run's privileges, so a re-run alone doesn't help. Its pages don't state that a person's push gives the run secrets: r1/Q-2's "(verify first)" is still open for Dependabot. On the review of PR #229, Nick accepted both remedies as shipped (91c9fc5/SPEC-3 (a)): the first Dependabot PR that touches a gated path confirms the Dependabot one, and its result goes in the journal.
-- **Baseline cost precision.** We round the agent-share cost to a millionth of a dollar, so float noise doesn't churn the committed file.
-- **Exit-table rows per category** are breakdown rows. `exitMet` reads only the headline rows, so a category with no runnable case shows n/a without failing the run on its own.
+- **Baseline cost precision.** We round the agent-share cost to a millionth of a dollar, so float noise doesn't churn the committed file. We rejected storing the raw sum, whose last digits change with the order of the trials.
+- **Exit-table rows per category** are breakdown rows. `exitMet` reads only the headline rows, so a category with no runnable case shows n/a without failing the run on its own. We rejected requiring each category to meet 90% as well, which PRD §7 doesn't ask for: its target is the mean over the core categories.
+- **A verdict at exactly its target** (from the review of `cddafdb`, TEST-101) is met. The comparison allows a float error of `EXIT_TOLERANCE` (1e-9), because a mean of thirds can come out at 0.8999999999999998 for an exact 90%. We rejected comparing on raw trial counts, since task success is a mean of per-case rates, not a pooled count.
 
 ## What surprised us
 
