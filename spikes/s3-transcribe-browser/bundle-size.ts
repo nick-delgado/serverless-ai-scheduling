@@ -47,6 +47,8 @@ if (!entryKey || !lazyKey)
 const entry = closure(entryKey);
 const added = [...closure(lazyKey)].filter((k) => !entry.has(k));
 const kb = (n: number) => `${(n / 1024).toFixed(1)} KiB`;
+const row = (label: string, s: { min: number; gzip: number }) =>
+  `  ${label.padEnd(40)} ${kb(s.min).padStart(10)} min ${kb(s.gzip).padStart(10)} gzip`;
 let min = 0;
 let gzip = 0;
 console.log("Chunks the dynamic import of @aws-sdk/client-transcribe-streaming adds:");
@@ -55,20 +57,14 @@ for (const key of added) {
   const s = size(file);
   min += s.min;
   gzip += s.gzip;
-  console.log(`  ${file.padEnd(40)} ${kb(s.min).padStart(10)} min ${kb(s.gzip).padStart(10)} gzip`);
+  console.log(row(file, s));
 }
-console.log(
-  `  ${"total".padEnd(40)} ${kb(min).padStart(10)} min ${kb(gzip).padStart(10)} gzip (${min} / ${gzip} bytes)`,
-);
+console.log(`${row("total", { min, gzip })} (${min} / ${gzip} bytes)`);
 console.log("Entry chunk(s), loaded before any mic use (aws-amplify sign-in and the page):");
 for (const key of entry) {
   const file = manifest[key]?.file ?? key;
-  const s = size(file);
-  console.log(`  ${file.padEnd(40)} ${kb(s.min).padStart(10)} min ${kb(s.gzip).padStart(10)} gzip`);
+  console.log(row(file, size(file)));
 }
 for (const asset of manifest[entryKey]?.assets ?? []) {
-  const s = size(asset);
-  console.log(
-    `  ${`${asset} (worklet asset)`.padEnd(40)} ${kb(s.min).padStart(10)} min ${kb(s.gzip).padStart(10)} gzip`,
-  );
+  console.log(row(`${asset} (worklet asset)`, size(asset)));
 }

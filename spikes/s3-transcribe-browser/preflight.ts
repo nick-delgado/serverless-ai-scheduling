@@ -22,6 +22,8 @@ import { redact } from "./src/redact.ts";
 import { SCRIPTS } from "./src/scripts.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
+/** The browser label the pre-flight selects; the page keys its stored runs by it. */
+const BROWSER = "chrome-desktop";
 const { values: args } = parseArgs({
   options: {
     url: { type: "string", default: "https://localhost:5175/" },
@@ -137,6 +139,9 @@ async function evaluate<T>(expression: string): Promise<T> {
   const reply = (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })) as {
     result?: { result?: { value?: T }; exceptionDetails?: { text?: string } };
   };
+  const protocolError = (reply as { error?: { code?: number; message?: string } }).error;
+  if (protocolError)
+    throw new Error(`CDP Runtime.evaluate failed: ${protocolError.message ?? JSON.stringify(protocolError)}`);
   if (reply.result?.exceptionDetails)
     throw new Error(reply.result.exceptionDetails.text ?? "evaluate failed");
   return reply.result?.result?.value as T;
@@ -185,7 +190,9 @@ async function run(variant: "main" | "stabilized", speakMs: number): Promise<Sto
   await sleep(speakMs);
   await evaluate(`document.getElementById("send").click()`);
   await waitFor(`/OK|FAILED/.test(${text("run-status")}) ? "y" : ""`, 15_000);
-  return evaluate<StoredRun>(`JSON.parse(localStorage.getItem("s3:chrome-desktop")).runs.at(-1)`);
+  return evaluate<StoredRun>(
+    `JSON.parse(localStorage.getItem(${JSON.stringify(`s3:${BROWSER}`)})).runs.at(-1)`,
+  );
 }
 
 const report: Record<string, unknown> = { url: args.url };
@@ -194,7 +201,7 @@ try {
   await send("Page.enable");
   await open("./");
   await evaluate(
-    `(() => { const b = document.getElementById("browser"); b.value = "chrome-desktop"; b.dispatchEvent(new Event("change")); })()`,
+    `(() => { const b = document.getElementById("browser"); b.value = ${JSON.stringify(BROWSER)}; b.dispatchEvent(new Event("change")); })()`,
   );
   report.env = await evaluate<string>(text("env"));
   await evaluate(`(() => {
@@ -246,6 +253,7 @@ try {
 } catch (error) {
   report.error = String(error);
   report.consoleErrors = consoleLines.slice(0, 10);
+  process.exitCode = 1;
 } finally {
   ws.close();
   chrome.kill();

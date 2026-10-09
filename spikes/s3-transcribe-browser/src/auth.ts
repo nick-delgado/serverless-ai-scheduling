@@ -37,14 +37,15 @@ export async function signInDemo(username: string, password: string): Promise<st
 export { signOut };
 
 /** Cached by Amplify; refreshed only when the credentials are near expiry. */
-export async function credentials(forceRefresh = false): Promise<StaticCredentials | undefined> {
-  const session = await fetchAuthSession({ forceRefresh });
+export async function credentials(): Promise<StaticCredentials | undefined> {
+  const session = await fetchAuthSession();
   return session.credentials;
 }
 
 export interface RoleScopeCheck {
   at: string;
   action: "transcribe:ListTranscriptionJobs";
+  /** preflight.ts waits for this field's name in the page's output; keep the two in sync. */
   denied: boolean;
   result: string;
 }

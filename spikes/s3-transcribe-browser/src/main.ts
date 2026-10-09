@@ -21,15 +21,25 @@ import {
   start,
   TARGET_RATE,
   type EndMode,
+  LANGUAGE_CODE,
+  MEDIA_ENCODING,
 } from "./capture";
 import { redact } from "./redact";
-import { BEST_EFFORT_TOTAL, type Length, LENGTHS, MAIN_TARGET, SCRIPTS, VARIANT_TARGET } from "./scripts";
+import {
+  BEST_EFFORT_TOTAL,
+  countsTowardRule,
+  type Length,
+  LENGTHS,
+  MAIN_TARGET,
+  MEASURED_BROWSERS,
+  SCRIPTS,
+  VARIANT_BROWSERS,
+  VARIANT_TARGET,
+} from "./scripts";
 
 const AUTO_SEND_MS = 60_000; // FR-021
 type Variant = "main" | "stabilized";
 type Check = "none" | "lock-screen" | "tab-switch" | "reload";
-const MEASURED = ["ios-safari", "android-chrome", "chrome-desktop", "safari-macos"];
-const VARIANT_BROWSERS = ["chrome-desktop", "ios-safari"];
 
 interface RunRecord extends RunOutcome {
   id: string;
@@ -45,6 +55,7 @@ interface RunRecord extends RunOutcome {
 
 interface Probe16k {
   at: string;
+  /** preflight.ts waits for this field's name in the page's output; keep the two in sync. */
   constructed: boolean;
   reportedRate?: number;
   honoured?: boolean;
@@ -184,6 +195,7 @@ function renderEnv(info: EnvInfo): void {
 async function refreshAuthStatus(): Promise<void> {
   try {
     const creds = await credentials();
+    // preflight.ts waits for "credentials ready" or an error here; keep the two in sync.
     $("auth-status").innerHTML = creds
       ? `<span class="ok">Identity Pool credentials ready</span> (expire ${creds.expiration?.toLocaleTimeString() ?? "?"})`
       : "Not signed in.";
@@ -321,6 +333,7 @@ $("start").onclick = async () => {
       },
     });
     recordingSince = performance.now();
+    // preflight.ts waits for a status starting "Recording"; keep the two in sync.
     $("run-status").textContent = "Recording: read the script, then press Send right after the last word.";
     timerHandle = setInterval(() => {
       const s = Math.floor((performance.now() - recordingSince) / 1000);
@@ -363,6 +376,7 @@ async function finish(reason: "send" | "auto"): Promise<void> {
   delete store.pending;
   save(store);
   setRunning(false);
+  // preflight.ts waits for "OK" or "FAILED" here; keep the two in sync.
   $("run-status").innerHTML = record.ok
     ? `<span class="ok">OK</span> stop→final ${Math.round(record.latencyMs ?? NaN)} ms${record.cold ? " (cold)" : ""}`
     : `<span class="bad">FAILED: ${record.failure?.kind}</span> ${record.failure?.detail ?? ""}`;
@@ -399,22 +413,18 @@ function renderScript(): void {
   $("script").textContent = SCRIPTS[lengthSelect.value as Length];
 }
 
-function counted(r: RunRecord): boolean {
-  return r.check === "none";
-}
-
 function renderProgress(): void {
   const browser = browserSelect.value;
   const runs = store.runs;
-  if (!MEASURED.includes(browser)) {
-    const done = runs.filter(counted).length;
+  if (!MEASURED_BROWSERS.includes(browser)) {
+    const done = runs.filter(countsTowardRule).length;
     $("progress").innerHTML = `Best effort (r1/A-7): ${done} / ${BEST_EFFORT_TOTAL} utterances, any length.`;
     return;
   }
   const variants: Variant[] = VARIANT_BROWSERS.includes(browser) ? ["main", "stabilized"] : ["main"];
   const rows = LENGTHS.map((length) => {
     const cells = variants.map((variant) => {
-      const set = runs.filter((r) => counted(r) && r.length === length && r.variant === variant);
+      const set = runs.filter((r) => countsTowardRule(r) && r.length === length && r.variant === variant);
       const target = variant === "main" ? MAIN_TARGET[length] : VARIANT_TARGET[length];
       const failed = set.filter((r) => !r.ok).length;
       const done = set.length >= target;
@@ -422,11 +432,22 @@ function renderProgress(): void {
     });
     return `<tr><td>${length}</td>${cells.join("")}</tr>`;
   });
-  const checks = runs.filter((r) => !counted(r)).length;
+  const checks = runs.filter((r) => !countsTowardRule(r)).length;
   $("progress").innerHTML =
     `<table><tr><th>Length</th>${variants.map((v) => `<th>${v}</th>`).join("")}</tr>${rows.join("")}</table>` +
     `<div class="muted">Deliberate-check runs (not counted): ${checks}. Failed main streams count toward r1/Q-2 (more than one fails the browser).</div>`;
 }
+
+/** What a lock-screen or tab-switch try mid-recording did (r1/Q-5, phones only). */
+const MID_RECORDING_OUTCOMES = [
+  "",
+  "not tried",
+  "kept recording",
+  "stream failed",
+  "audio stopped, stream kept",
+  "page reloaded",
+  "other (notes)",
+];
 
 const CHECK_FIELDS: [keyof Checklist, string, string[]][] = [
   ["permissionPromptFirstUse", "Permission prompt on first use", ["", "yes", "no"]],
@@ -436,38 +457,14 @@ const CHECK_FIELDS: [keyof Checklist, string, string[]][] = [
     "Mic indicator turns off after Send",
     ["", "yes", "no", "after a delay", "not tried"],
   ],
-  [
-    "lockScreen",
-    "Lock screen mid-recording (phones)",
-    [
-      "",
-      "not tried",
-      "kept recording",
-      "stream failed",
-      "audio stopped, stream kept",
-      "page reloaded",
-      "other (notes)",
-    ],
-  ],
-  [
-    "tabSwitch",
-    "Switch tab mid-recording (phones)",
-    [
-      "",
-      "not tried",
-      "kept recording",
-      "stream failed",
-      "audio stopped, stream kept",
-      "page reloaded",
-      "other (notes)",
-    ],
-  ],
+  ["lockScreen", "Lock screen mid-recording (phones)", MID_RECORDING_OUTCOMES],
+  ["tabSwitch", "Switch tab mid-recording (phones)", MID_RECORDING_OUTCOMES],
 ];
 
 function autoChecklist(): Record<string, unknown> {
   const rates = [...new Set(store.runs.map((r) => r.audio.contextRate))];
   const states = [...new Set(store.runs.map((r) => r.audio.contextStateAtCreate))];
-  const main = store.runs.filter((r) => counted(r) && r.variant === "main");
+  const main = store.runs.filter((r) => countsTowardRule(r) && r.variant === "main");
   return {
     contextSampleRates: rates,
     contextStateWhenCreatedOnTap: states,
@@ -529,8 +526,8 @@ function exportJson(): { name: string; body: string } {
     userAgent: navigator.userAgent,
     config: {
       region: REGION,
-      languageCode: "en-US",
-      mediaEncoding: "pcm",
+      languageCode: LANGUAGE_CODE,
+      mediaEncoding: MEDIA_ENCODING,
       sampleRateHertz: TARGET_RATE,
       chunkSamples: CHUNK_SAMPLES,
       stabilizedVariant: { EnablePartialResultsStabilization: true, PartialResultsStability: STABILITY },

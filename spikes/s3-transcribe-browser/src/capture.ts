@@ -1,8 +1,19 @@
 /**
  * Mic → AudioWorklet → 16 kHz s16le → Amazon Transcribe Streaming over WebSocket, instrumented for
  * spike S-3 (#10). Shaped like `apps/web/src/voice/transcriber.ts` (`start()` resolves once
- * recording has begun; `stop()` resolves with the outcome; `cancel()` is idempotent) so #29 can lift
- * it if ADR-006's "For #29" list recommends that, but nothing is imported from `apps/web` (r1/A-6).
+ * recording has begun; `stop()` resolves with the outcome; `cancel()` is idempotent), but nothing is
+ * imported from `apps/web` (r1/A-6), and it is not that interface. What #29 would change to lift it:
+ * - `start(opts)` takes the region, credentials, tap time and spike options, where the `Transcriber`'s
+ *   `start(callbacks)` fetches its own credentials; `onPartial` is spike-only (ADR-006 exposes no
+ *   partials).
+ * - `stop()` resolves with a `RunOutcome` (marks, socket and audio stats), never rejects, and applies
+ *   its own 10 s timeout; the `Transcriber`'s `stop()` resolves with the transcript string, rejects
+ *   with a `TranscriberError`, and leaves the timeout to the overlay.
+ * - `onError` passes a spike `Failure`, not a `TranscriberError`, and `start()` rejects with raw
+ *   errors rather than `denied` / `unavailable` / `failed`.
+ * - Instrumentation to strip: the module replaces the page's global `WebSocket` with
+ *   `ObservedWebSocket` at import, to see the socket's path and close code; also the marks, the
+ *   visibility log and the `cold` count.
  *
  * Timing (r1/A-1), all `performance.now()` and relative to the mic tap:
  * - `stop` is the Send click or the 60 s auto-send; `lastFinal` is the arrival of the last
@@ -10,8 +21,10 @@
  * - also `streamEnd` (Send → end), and `wsOpen` and `firstResult` (tap → …), flagged cold or warm.
  * Credentials are fetched by the caller before the tap, outside every window.
  *
- * Failure (r1/Q-2 (a)): the stream errors, the WebSocket closes before the final results (before
- * Send, or with no final after Send), or no final arrives within 10 s of Send (FR-022).
+ * Failure (r1/Q-2 (a)): the stream errors; the WebSocket closes before Send, or after Send without a
+ * clean code-1000 close; the stream ends with no final result at all; or the stream doesn't end, or
+ * its last final arrives, more than 10 s after Send (FR-022). A run whose finals all arrived before
+ * Send is a success, counted as 0 ms of stop→final (Nick's decision 50ed723/SPEC-2 (a) on PR #225).
  *
  * Ending the audio: the SDK's WebSocket handler closes the socket (code 1000) as soon as the audio
  * iterable ends, which can cut off the final results. So by default (`endMode: "empty-event"`) the
@@ -29,6 +42,8 @@ export const TARGET_RATE = 16_000;
 export const CHUNK_SAMPLES = 1_600; // 100 ms at 16 kHz (r1/A-2)
 export const FINAL_TIMEOUT_MS = 10_000; // FR-022
 export const STABILITY = "high"; // the r1/A-2 (corrected) variant: favours speed over accuracy
+export const LANGUAGE_CODE = "en-US";
+export const MEDIA_ENCODING = "pcm";
 
 export interface StaticCredentials {
   accessKeyId: string;
@@ -93,7 +108,7 @@ export interface RunOutcome {
   ok: boolean;
   failure?: Failure;
   cold: boolean;
-  stopReason?: "send" | "auto" | "cancel";
+  stopReason?: "send" | "auto";
   transcript: string;
   finalCount: number;
   finalsAfterStop: number;
@@ -121,7 +136,6 @@ export interface RunOutcome {
 export interface CaptureSession {
   stop(reason?: "send" | "auto"): Promise<RunOutcome>;
   cancel(): void;
-  readonly marks: Marks;
 }
 
 // ---- WebSocket observation ---------------------------------------------------------------------
@@ -150,6 +164,31 @@ function loadSdk(): Promise<Sdk> {
 
 const END = Symbol("end");
 
+/**
+ * The capture context, running, with the worklet loaded. A throw on the way (a rejected `resume()` or
+ * `addModule()`) stops the mic's tracks and closes the context before it propagates, since the caller
+ * holds nothing to release yet.
+ */
+async function openContext(
+  media: MediaStream,
+  mark: (name: "contextReady" | "workletReady") => void,
+): Promise<{ ctx: AudioContext; contextStateAtCreate: AudioContextState }> {
+  let ctx: AudioContext | undefined;
+  try {
+    ctx = new AudioContext();
+    const contextStateAtCreate = ctx.state;
+    if (ctx.state === "suspended") await ctx.resume();
+    mark("contextReady");
+    await ctx.audioWorklet.addModule(workletUrl);
+    mark("workletReady");
+    return { ctx, contextStateAtCreate };
+  } catch (error) {
+    for (const track of media.getTracks()) track.stop();
+    await ctx?.close().catch(() => undefined);
+    throw error;
+  }
+}
+
 export async function start(opts: StartOptions): Promise<CaptureSession> {
   const t = () => performance.now() - opts.tapAt;
   const marks: Marks = {};
@@ -169,12 +208,7 @@ export async function start(opts: StartOptions): Promise<CaptureSession> {
   const track = media.getAudioTracks()[0];
   let micTrackEndedAt: number | undefined;
 
-  const ctx = new AudioContext();
-  const contextStateAtCreate = ctx.state;
-  if (ctx.state === "suspended") await ctx.resume();
-  marks.contextReady = t();
-  await ctx.audioWorklet.addModule(workletUrl);
-  marks.workletReady = t();
+  const { ctx, contextStateAtCreate } = await openContext(media, (mark) => (marks[mark] = t()));
 
   // ---- audio queue ------------------------------------------------------------------------------
   const queue: (Uint8Array | typeof END)[] = [];
@@ -269,8 +303,8 @@ export async function start(opts: StartOptions): Promise<CaptureSession> {
     try {
       const response = await client.send(
         new sdk.StartStreamTranscriptionCommand({
-          LanguageCode: "en-US",
-          MediaEncoding: "pcm",
+          LanguageCode: LANGUAGE_CODE,
+          MediaEncoding: MEDIA_ENCODING,
           MediaSampleRateHertz: TARGET_RATE,
           AudioStream: audioStream(),
           ...(opts.stabilization
@@ -355,11 +389,11 @@ export async function start(opts: StartOptions): Promise<CaptureSession> {
   }
 
   return {
-    marks,
     async stop(reason = "send") {
       if (stopped || cancelled) throw new Error("stop() called twice");
       stopped = true;
-      marks.stop = t();
+      const stopAt = t();
+      marks.stop = stopAt;
       if (streamFailure) {
         await release();
         return outcome(streamFailure, reason);
@@ -387,11 +421,14 @@ export async function start(opts: StartOptions): Promise<CaptureSession> {
           kind: "no-final",
           detail: `stream ended with no final result (ws close ${ws.closeCode ?? "?"})`,
         };
-      } else if (
-        !failure &&
-        marks.lastFinal !== undefined &&
-        marks.lastFinal - (marks.stop ?? 0) > FINAL_TIMEOUT_MS
-      ) {
+      } else if (!failure && ws.closeCode !== undefined && (ws.closeCode !== 1000 || ws.wasClean === false)) {
+        // The SDK ends the response stream without an error on any close, so finals already received
+        // would otherwise hide a socket that dropped after Send.
+        failure = {
+          kind: "closed-early",
+          detail: `socket closed after Send without a clean 1000 (code ${ws.closeCode}, clean ${String(ws.wasClean)})`,
+        };
+      } else if (!failure && marks.lastFinal !== undefined && marks.lastFinal - stopAt > FINAL_TIMEOUT_MS) {
         failure = { kind: "timeout", detail: "last final more than 10 s after Send" };
       }
       return outcome(failure, reason);

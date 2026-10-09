@@ -32,6 +32,23 @@ export const SCRIPTS: Record<Length, string> = {
     "One more thing: if a slot opens up earlier because someone cancels, I'd like to take it. Thanks so much for your help.",
 };
 
+/**
+ * The browser labels (r1/Q-2, r1/A-7), shared by the page and `summarize.ts`. `index.html`'s
+ * "Browser being measured" options repeat them; keep the two in sync.
+ */
+export const MEASURED_BROWSERS: readonly string[] = [
+  "ios-safari",
+  "android-chrome",
+  "chrome-desktop",
+  "safari-macos",
+];
+export const BEST_EFFORT_BROWSERS: readonly string[] = ["firefox", "edge"];
+/** The r1/A-2 (corrected) stabilization variant runs on these only. */
+export const VARIANT_BROWSERS: readonly string[] = ["chrome-desktop", "ios-safari"];
+
+/** r1/Q-2 and r1/Q-4 count a run unless it was a deliberate check (reload, lock screen, tab switch). */
+export const countsTowardRule = (run: { check: string }): boolean => run.check === "none";
+
 /** Run targets per length: r1/Q-4 (a) for the main runs, r1/A-2 (corrected) for the variant. */
 export const MAIN_TARGET: Record<Length, number> = { "5s": 7, "20s": 7, "60s": 6 };
 export const VARIANT_TARGET: Record<Length, number> = { "5s": 5, "20s": 5, "60s": 5 };
