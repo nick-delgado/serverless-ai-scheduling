@@ -26,8 +26,8 @@ Parameters:
     Type: CommaDelimitedList
     Default: Amazon Bedrock
     Description: >-
-      The Cost Explorer service names the Bedrock budget counts. Check them in Cost Explorer (group by Service)
-      after the first eval runs: model charges may appear under other names (runbook, "CI credentials").
+      The Cost Explorer service names the Bedrock budget counts. Read the names past Claude spend appears under in
+      Cost Explorer (group by Service) and pass them on the first apply (runbook, "CI credentials", step 1).
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -293,8 +293,9 @@ Resources:
   #
   # Trust: every subject uses the repository's immutable form (owner and repository IDs) with the subject
   # customization the runbook sets (claim keys repo, context, job_workflow_ref), so a renamed or recreated
-  # repository can't match. The exact strings are confirmed from each workflow's first run (runbook, "CI
-  # credentials (GitHub OIDC)"); scripts/bootstrap-template.test.ts pins them.
+  # repository can't match. The format was confirmed from a probe workflow's tokens before the first apply
+  # (journal, 2026-10-08); each workflow's first run confirms its own string (runbook, "CI credentials (GitHub
+  # OIDC)"). scripts/bootstrap-template.test.ts pins them.
   # ---------------------------------------------------------------------------
   GitHubOidcProvider:
     Type: AWS::IAM::OIDCProvider
@@ -324,7 +325,8 @@ Resources:
                 token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:environment:dev:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/deploy.yml@refs/heads/main"
       Policies:
         # Copied from infra/bootstrap/sched-deployer-policy.json (the statements the two scripts use), narrowed
-        # to dev and without DeleteStack, drift, debugging, seeding, Bedrock or SES. Keep in sync with it.
+        # to dev and without DeleteStack, drift, debugging, seeding, Bedrock or SES. Keep in sync with it and with
+        # GitHubE2eRole's copy below (the same statements for e2e, plus seeding).
         - PolicyName: sched-github-deploy
           PolicyDocument:
             Version: "2012-10-17"
@@ -383,7 +385,8 @@ Resources:
                   - !Sub ${ArtifactBucket.Arn}/*
                   - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*
                   - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*/*
-              # Distribution IDs are random, so this is every distribution in the account; invalidation only.
+              # Distribution IDs are random, so this is every distribution in the account (other envs' too);
+              # invalidation only.
               - Sid: SpaInvalidation
                 Effect: Allow
                 Action:
@@ -443,7 +446,8 @@ Resources:
   # .github/workflows/e2e.yml (#40): on-demand E2E against the `e2e` env, in the `e2e` GitHub Environment,
   # whose deployment-branch rule decides which branches may run it (r1/Q-2 (b)); so the ref after
   # `e2e.yml@refs/heads/` is the one wildcard. Full e2e lifecycle without DeleteStack: deploy, publish the
-  # SPA, reseed (seed-users.ts, seed-data.ts, --reset included). Nothing on dev.
+  # SPA, reseed (seed-users.ts, seed-data.ts, --reset included). Every write is scoped to e2e; the CloudFormation
+  # reads and the CloudFront invalidation are account-wide, so they reach dev too (decision 9165bd3/SPEC-1 (a)).
   GitHubE2eRole:
     Type: AWS::IAM::Role
     Properties:
@@ -463,7 +467,8 @@ Resources:
               StringLike:
                 token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:environment:e2e:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/e2e.yml@refs/heads/*"
       Policies:
-        # Copied from infra/bootstrap/sched-deployer-policy.json, narrowed to e2e. Keep in sync with it.
+        # Copied from infra/bootstrap/sched-deployer-policy.json, narrowed to e2e. Keep in sync with it and with
+        # GitHubDeployRole's copy above (the same statements for dev, without seeding).
         - PolicyName: sched-github-e2e
           PolicyDocument:
             Version: "2012-10-17"

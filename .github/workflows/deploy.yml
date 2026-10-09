@@ -4,7 +4,7 @@
 # stored keys). The role trusts only this file at refs/heads/main in the `dev` GitHub Environment, so a run from
 # another branch can't assume it; the environment's required reviewer approves each run. Setup, the secrets it
 # reads and the first-run checks: docs/runbooks/aws-setup.md, "CI credentials (GitHub OIDC)".
-# Not a required check: a docs-only PR never triggers it.
+# Not a required check: it never runs on pull requests, only when Nick starts it from main.
 name: Deploy
 
 on:
