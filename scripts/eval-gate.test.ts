@@ -378,6 +378,7 @@ describe("main", () => {
         join(dir, "l1", "run.json"),
         JSON.stringify(run("l1", "l1", { "l1-3": [{ status: "error" }] })),
       );
+      writeFileSync(join(dir, "l1", "run.md"), "# Eval run\n"); // only the .json counts as a results file
       expect(main(["errored", join(dir, "l1")], {}, logsTo(out, errors))).toBe(0);
       expect(out).toEqual(["l1-3"]);
       expect(main(["errored", join(dir, "none")], {}, logsTo(out, errors))).toBe(2);
