@@ -2,7 +2,7 @@
 
 **Chapter:** 4. Teaching the agent to schedule
 **Milestone:** M2
-**Related:** #29 (S6-02), #28, #10, ADR-005, ADR-006, PRD FR-020–FR-024, NFR-002, NFR-006
+**Related:** #29 (S6-02), #28, #10, #36, ADR-005, ADR-006, PRD FR-020–FR-024, NFR-002, NFR-006
 
 ## What happened
 
@@ -43,6 +43,24 @@ The issue left these choices to the agent:
 - **jsdom's `DOMException` isn't an `Error`.** The first mic tests mapped every permission error to `failed`, because `instanceof Error` was false. The code now reads `name` from any object, which is also safer on older engines.
 - **`Amplify.Auth.getTokens` isn't on the installed facade.** In this aws-amplify version, the singleton exposes `getTokens` directly. It's the same call that `fetchAuthSession` makes first.
 - **The SDK's WebSocket path doesn't survive minification as text.** The lazy-chunk check uses `StartStreamTranscription` instead, the command's name, which does.
+
+## What broke on the first deploy
+
+The `voice29` env went up, and before recording anything Nick signed in on desktop Chrome. Cognito answered 200, but `POST /api/session` came back 401 and the app sent him to the sign-in page. The request had no `Authorization` header at all.
+
+The coordinating session's first guess was the new token path: `getIdToken` now calls `Amplify.getTokens` rather than `fetchAuthSession`. The agent read the installed aws-amplify (6.22.1) and ruled it out:
+
+- `Amplify.getTokens` reads the same global context that `Amplify.configure` sets, and calls the same Cognito token provider that `fetchAuthSession` calls first.
+- There is one copy of `@aws-amplify/core`.
+- `getIdToken`'s tests already ran real Amplify against the Cognito mock, refresh and a failing Cognito Identity endpoint included.
+
+The real cause was that nothing ever called `getIdToken`. `ChatPage` takes its API client from `ChatApiContext`, whose default sends no token, and no route provided another one. The comment at that default said #36 would. That gap was already on `main`: any deployed build would have been a 401 on its first request. No deployed build had run the full sign-in-then-chat path since #25 and #26 merged.
+
+The tests missed it because every page test either injects its own client or runs against the mock API, which ignores `Authorization`.
+
+Nick moved that one criterion of #36 into #29. The `/chat` route now wraps the page in `ChatApiContext` with `createChatApi({ getToken: getIdToken })` (`apps/web/src/app/routes.tsx`). A new test, `routes.token.test.tsx`, runs the real route tree with the real auth service (SRP against the Cognito mock). It sees the session call and a chat turn both carry the ID token. It fails with the provider removed, with the getter removed, or with `ChatPage` ignoring the context. The same file shows that a 401 on a chat turn signs the patient out to `/login`, through #27's handling.
+
+The header is the raw ID token, as `chat/api.ts` and the API's Cognito authorizer expect, not `Bearer <token>`.
 
 ## Evidence
 
