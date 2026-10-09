@@ -1,0 +1,7 @@
+# Pool IDs written by `npm run config` (never committed), and the build used for the bundle-size measurement.
+.env.local
+dist/
+# Local TLS material, if a custom certificate is used (README "Certificate").
+*.pem
+*.key
+*.crt

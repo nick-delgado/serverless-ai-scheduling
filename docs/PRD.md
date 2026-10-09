@@ -161,7 +161,7 @@ These are M3 exit criteria. Measured by the eval harness (ADR-008) on the produc
 |---|---|
 | Opus 5 / Sonnet 5 not entitled on this account | Model choice is config; six entitled profiles via Converse (ADR-010); S-1b (#49) when AWS lifts the restriction |
 | Streaming through CloudFront/SAM has rough edges | Spike S-2; buffered fallback shape already in the contract (ADR-007). **Retired:** S-2 passed (ADR-007 accepted) |
-| Safari AudioWorklet or Transcribe WebSocket quirks | Spike S-3; batch fallback behind the `Transcriber` interface (ADR-006) |
+| Safari AudioWorklet or Transcribe WebSocket quirks | Spike S-3; batch fallback behind the `Transcriber` interface (ADR-006). **Retired:** S-3 passed (ADR-006 accepted; 0 failed streams in 80 runs on four browsers, stop→final p95 ≤ 276 ms); the quirks it found are listed for #29 |
 | LLM judge unreliable | Calibration set; deterministic checks carry the safety metrics (ADR-008) |
 | Eval runs cost more than expected | Smoke suite on PRs only; estimate before full runs; results report actual spend |
 | SES sandbox limits recipients | Verified recipient for the demo; documented |
