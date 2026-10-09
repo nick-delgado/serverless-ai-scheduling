@@ -99,3 +99,9 @@ Results: [summary](../../spikes/s3-transcribe-browser/results/summary-2026-10-08
   - its `stop()` resolves with a `RunOutcome` and never rejects, and it applies its own 10 s timeout, where the interface's `stop()` resolves with the transcript, rejects with a `TranscriberError`, and leaves the timeout to the overlay;
   - its `onError` and `start()` failures are spike `Failure`s and raw errors, not `TranscriberError`s (`denied`, `unavailable`, `failed`);
   - its instrumentation goes: the module replaces the page's global `WebSocket` with an observing subclass at import, and it records marks, visibility changes and the cold flag.
+
+## Amendment (2026-10-09): settled while building the real Transcriber (#29)
+
+- **Page hidden mid-recording** (the open item in "For #29" above): an error on every browser (#29 r2/Q-1 (a)). When the page becomes hidden while recording, the Transcriber calls `onError` with `failed`, stops the mic and closes the stream, and the overlay shows FR-024's retry / type-instead. Hidden during the permission prompt or after Send isn't an error.
+- **Measuring on the shipped bundle:** AC6's timings come from an opt-in build flag, `VITE_VOICE_TIMING=1`, on an ephemeral env; other builds contain no timing code (#29 r2/Q-2 (a)).
+- The rest of "For #29" was built as written: the empty `AudioEvent` with the input kept open, the native-rate context created at the tap and resumed before `addModule`, 1600-sample chunks, no stabilization, and the SDK lazy-loaded (`apps/web/src/voice/transcribe/`).
