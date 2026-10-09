@@ -1,15 +1,20 @@
 /**
- * The GitHub OIDC roles' trust conditions and their protection in the bootstrap stack (#41, r1/Q-4 (a)).
+ * The GitHub OIDC roles' trust conditions and their protection in the bootstrap stack (#41, r1/Q-4 (a)), and the
+ * deploy workflow's security-relevant settings (decision 9165bd3/TEST-3 (a) on PR #224).
  * `infra/` has no Vitest project, so this lives with the other repo-level tests. It reads
  * `infra/bootstrap/bootstrap.yaml` as text, so it checks the template as committed, before Nick applies it:
- *   - each role is assumable only with a GitHub OIDC token (`sts:AssumeRoleWithWebIdentity` from the provider),
- *     whose `aud` is `sts.amazonaws.com` and whose `sub` is exactly the one decided (r1/A-4, r1/A-5, r1/Q-2 (b)),
- *     in the repository's immutable subject form, with no other `sub` condition beside it;
+ *   - each role's trust has exactly one statement, which allows `sts:AssumeRoleWithWebIdentity` from GitHub's OIDC
+ *     provider only when the token's `aud` is `sts.amazonaws.com` and its `sub` is exactly the one decided
+ *     (r1/A-4, r1/A-5, r1/Q-2 (b)), in the repository's immutable subject form, with no other `sub` condition;
  *   - each role's sessions last at most an hour (r1/A-3);
- *   - each role, and the OIDC provider, is on `sched-cfn-exec`'s `ProtectBootstrapIdentities` deny, so no stack
- *     can rewrite a role's trust.
- * It doesn't check the grants (the PR lists them) or that AWS and GitHub agree on the subject strings: the
- * first run of each workflow shows that (runbook, "CI credentials (GitHub OIDC)").
+ *   - each role, and the OIDC provider, is on `sched-cfn-exec`'s unconditional `ProtectBootstrapIdentities` deny,
+ *     so no stack can rewrite a role's trust.
+ * It also reads `.github/workflows/deploy.yml` as text: its only trigger is `workflow_dispatch`, its job runs only
+ * on `refs/heads/main` in the `dev` environment (which the deploy role's `sub` names) with `id-token: write`, its
+ * one credentials step masks the account ID (r1/Q-3 (a)), and it runs the two scripts with `dev` and nothing else.
+ * It doesn't check the grants (the PR lists them) or that AWS accepts the subject strings: the format was seen in a
+ * probe run's tokens (journal, 2026-10-08), and the first run of each workflow shows the rest (runbook, "CI
+ * credentials (GitHub OIDC)").
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -34,7 +39,7 @@ const indentOf = (line: string): number => line.length - line.trimStart().length
  */
 function block(header: RegExp, within: string[] = lines): string[] {
   const start = within.findIndex((line) => header.test(line));
-  if (start === -1) throw new Error(`bootstrap.yaml: no line matches ${String(header)}`);
+  if (start === -1) throw new Error(`no line matches ${String(header)}`);
   const indent = indentOf(within[start] ?? "");
   const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
   return within.slice(start, end === -1 ? undefined : end);
@@ -58,6 +63,17 @@ const REPO = "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382";
 const WORKFLOWS = "nick-delgado/serverless-ai-scheduling/.github/workflows";
 const AUD = "token.actions.githubusercontent.com:aud";
 const SUB = "token.actions.githubusercontent.com:sub";
+
+/** The non-blank, non-comment lines directly under a block's header line (its children, not theirs). */
+function children(lines: string[]): string[] {
+  const body = lines.slice(1).filter((l) => l.trim() !== "" && !l.trimStart().startsWith("#"));
+  const childIndent = indentOf(body[0] ?? "");
+  return body.filter((l) => indentOf(l) === childIndent);
+}
+
+/** sched-cfn-exec's deny on the bootstrap identities, looked up inside that role only (in a test, so a miss fails it). */
+const protectDeny = (): string[] =>
+  block(/^\s+- Sid: ProtectBootstrapIdentities$/, block(/^ {2}CfnExecutionRole:$/));
 
 const ROLES = [
   {
@@ -83,6 +99,7 @@ const ROLES = [
 describe.each(ROLES)("$logicalId (bootstrap.yaml)", ({ logicalId, roleName, operator, sub }) => {
   const role = block(new RegExp(`^ {2}${logicalId}:$`));
   const trust = block(/^\s+AssumeRolePolicyDocument:$/, role);
+  const statements = children(block(/^\s+Statement:$/, trust)).filter((l) => l.trimStart().startsWith("- "));
   const condition = block(/^\s+Condition:$/, trust);
 
   it(`is named ${roleName}, with sessions of at most an hour`, () => {
@@ -92,8 +109,11 @@ describe.each(ROLES)("$logicalId (bootstrap.yaml)", ({ logicalId, roleName, oper
     });
   });
 
-  it("is assumable only with a token from GitHub's OIDC provider", () => {
-    expect(trust.filter((l) => /^\s+- Effect:/.test(l))).toEqual([expect.stringMatching(/- Effect: Allow$/)]);
+  it("has one trust statement, which allows only a token from GitHub's OIDC provider", () => {
+    expect(statements).toHaveLength(1);
+    expect(trust.filter((l) => /^\s+(- )?Effect:/.test(l))).toEqual([
+      expect.stringMatching(/Effect: Allow$/),
+    ]);
     expect(entries(block(/^\s+Principal:$/, trust))).toEqual({ Federated: "!Ref GitHubOidcProvider" });
     expect(trust.some((l) => /^\s+Action: sts:AssumeRoleWithWebIdentity$/.test(l))).toBe(true);
   });
@@ -107,10 +127,11 @@ describe.each(ROLES)("$logicalId (bootstrap.yaml)", ({ logicalId, roleName, oper
     expect(condition.filter((l) => l.includes(SUB))).toHaveLength(1);
   });
 
-  it("is on sched-cfn-exec's ProtectBootstrapIdentities deny", () => {
-    const deny = block(/^\s+- Sid: ProtectBootstrapIdentities$/);
+  it("is on sched-cfn-exec's unconditional ProtectBootstrapIdentities deny", () => {
+    const deny = protectDeny();
     expect(deny).toContain("                Effect: Deny");
     expect(deny).toContain("                Action: iam:*");
+    expect(deny.some((l) => /^\s+Condition:/.test(l))).toBe(false);
     expect(block(/^\s+Resource:$/, deny)).toContain(
       `                  - !Sub arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/${roleName}`,
     );
@@ -131,8 +152,44 @@ describe("GitHubOidcProvider (bootstrap.yaml)", () => {
   });
 
   it("is on sched-cfn-exec's ProtectBootstrapIdentities deny", () => {
-    expect(block(/^\s+Resource:$/, block(/^\s+- Sid: ProtectBootstrapIdentities$/))).toContain(
-      "                  - !Ref GitHubOidcProvider",
-    );
+    expect(block(/^\s+Resource:$/, protectDeny())).toContain("                  - !Ref GitHubOidcProvider");
+  });
+});
+
+describe("deploy workflow (.github/workflows/deploy.yml)", () => {
+  const workflow = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", ".github", "workflows", "deploy.yml"),
+    "utf8",
+  ).split("\n");
+  const job = block(/^ {2}deploy:$/, workflow);
+
+  it("runs only by hand (workflow_dispatch)", () => {
+    expect(children(block(/^on:$/, workflow))).toEqual(["  workflow_dispatch:"]);
+  });
+
+  it("runs only from main, in the dev environment the deploy role's subject names", () => {
+    expect(entries(job)).toMatchObject({ if: "github.ref == 'refs/heads/main'", environment: "dev" });
+    expect(ROLES.find((r) => r.logicalId === "GitHubDeployRole")?.sub).toContain(":environment:dev:");
+  });
+
+  it("asks for an OIDC token and only read access to the code", () => {
+    expect(entries(block(/^\s+permissions:$/, job))).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  it("has one credentials step, which takes the deploy role and masks the account ID", () => {
+    const uses = /^\s+- uses: aws-actions\/configure-aws-credentials@/;
+    expect(job.filter((l) => uses.test(l))).toHaveLength(1);
+    expect(entries(block(/^\s+with:$/, block(uses, job)))).toMatchObject({
+      "role-to-assume": "${{ secrets.AWS_DEPLOY_ROLE_ARN }}",
+      "mask-aws-account-id": "true",
+    });
+  });
+
+  it("deploys dev with the two scripts and runs no other script", () => {
+    const scripts = job.filter((l) => /^\s+(- )?run: .*scripts\//.test(l));
+    expect(scripts.map((l) => l.trim().replace(/^- /, ""))).toEqual([
+      "run: scripts/deploy.sh all dev",
+      "run: scripts/deploy-web.sh dev",
+    ]);
   });
 });
