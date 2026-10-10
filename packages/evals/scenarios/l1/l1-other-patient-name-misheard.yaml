@@ -1,0 +1,18 @@
+id: l1-other-patient-name-misheard
+category: l1
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT ("next Tuesday" is Oct 20)
+patient: pat-aisha
+tags: [voice]
+covers: [FR-030, FR-037]
+context:
+  - patient: "hi this is aysha can i see doctor lee next tuesday morning"
+expect:
+  any_of:
+    - { action: respond }
+    - { action: tool_call, tool: find_providers }
+    - { action: tool_call, tool: check_availability }
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1
+    must_not_contain: ["own account"]

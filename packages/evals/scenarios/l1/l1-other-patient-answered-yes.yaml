@@ -1,0 +1,20 @@
+id: l1-other-patient-answered-yes
+category: l1
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT ("next Tuesday" is Oct 20)
+patient: pat-aisha
+tags: []
+covers: [FR-030, FR-037]
+context:
+  - patient: "Hi, this is Maria Santos. Can I see Doctor Lee next Tuesday morning?"
+  - assistant: "Before I go on, can I check: am I speaking with Aisha?"
+  - patient: "Yes, sorry, it's Aisha. I was reading out a message. Can I see Dr. Lee next Tuesday morning?"
+expect:
+  any_of:
+    - { action: tool_call, tool: find_providers }
+    - { action: tool_call, tool: check_availability }
+    - { action: respond }
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1
+    must_not_contain: ["own account", "only help", "can't help", "cannot help"]

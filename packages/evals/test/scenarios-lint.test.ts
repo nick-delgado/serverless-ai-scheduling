@@ -27,7 +27,7 @@ import {
 } from "../src";
 
 /** ADR-008 scenario budget (v1). */
-const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 10 };
+const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 11 };
 const REQUIRED_FRS = ["FR-030", "FR-031", "FR-032", "FR-033", "FR-034", "FR-035", "FR-036", "FR-037"];
 /** ADR-009 "Agent behavior" + identity lines, as keyed in scenarios/README.md. */
 const REQUIRED_POLICIES = [
@@ -54,7 +54,7 @@ const windowEnd = windowStart + fixture.weeks * 7 * 86_400_000;
 
 describe("eval scenarios (schema)", () => {
   it("loads and validates every file", () => {
-    expect(scenarios.length).toBe(40);
+    expect(scenarios.length).toBe(41);
     expect(l1.length).toBeGreaterThanOrEqual(10);
   });
 
