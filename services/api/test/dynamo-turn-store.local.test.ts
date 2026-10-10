@@ -29,7 +29,7 @@ const trace: TurnTrace = {
   conversationId: "00000000-0000-4000-8000-000000000001",
   modelProfile: "sonnet-4.6",
   modelId: "us.anthropic.claude-sonnet-4-6",
-  promptVersion: "api-placeholder.v0",
+  promptVersion: "system.v1",
   startedAt: "2026-10-05T13:00:00.000Z",
   durationMs: 10,
   iterations: 1,

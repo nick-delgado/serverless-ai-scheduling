@@ -2,8 +2,6 @@
 
 This is a one-page overview; each part links to the ADR that decided it. It will be updated as spikes land. Anything still marked *Proposed* in an ADR may change.
 
-Parts marked *planned* aren't live yet: the SES escalation email (#35 built the notifier, its IAM grant and the failed-send alarm; #36 wires it into the chat handler). Until #36 lands, escalations are stored with a `FAILED` notification status.
-
 ## System diagram
 
 ```
@@ -35,7 +33,7 @@ Parts marked *planned* aren't live yet: the SES escalation email (#35 built the 
                     │       find_providers · check_availability  │    └──────────────┬───────────────┘
                     │       get_my_appointments · get_patient_profile                │
                     │       book_appointment · reschedule_appointment                │
-                    │       escalate_to_human ──► SES (planned)  │                   │
+                    │       escalate_to_human ──► SES            │                   │
                     └───────────┬────────────────────────────────┘                   │
                                 ▼                                                    │
                     ┌────────────────────────────────────────────┐                   │
@@ -52,7 +50,7 @@ Parts marked *planned* aren't live yet: the SES escalation email (#35 built the 
 1. The SPA sends `POST /api/chat {conversationId?, clientMessageId, text}` with the Cognito ID token.
 2. The REST API authorizer validates the JWT. The Lambda receives `claims.sub` as the patient ID.
 3. ChatFn loads the conversation history through the owned read (DynamoDB; an unknown or foreign `conversationId` starts a new conversation, ADR-007 amendment). It then matches the send's `clientMessageId` against the last patient message stored there ([ADR-007 2026-10-04 amendment](adr/0007-chat-transport.md#amendment-2026-10-04-chat-retries-as-built-104)). A repeat of an answered message replays the stored reply without a model call; a repeat of an interrupted message re-runs the agent on the history before that message, without storing it again. Neither counts a turn. Only a new message counts against the patient's daily cap (50, ADR-009; 429 when reached), and only a new message is appended before the agent loop runs, so tools that read the stored conversation (the `escalate_to_human` staff transcript) see the turn in progress. A turn that starts a conversation then sends a `conversation` event naming it, the first line of the 200 response, so a Retry after a cut stream continues it ([ADR-007 #160 amendment](adr/0007-chat-transport.md#amendment-2026-10-05-name-a-new-conversation-before-the-agent-runs-160)). ChatFn then calls `runAgentTurn` with the history **as loaded before that append** (the loop adds the user message itself, as the first entry of `newMessages`), plus:
-   - a tool executor bound to a `ToolContext` carrying the patientId **from the JWT**, the conversation ID, the clock, the repositories, and the staff notifier when one is configured (none until #36 wires the SES notifier from #35, so escalations are recorded `FAILED`) (the loop itself never sees the patient ID; ADR-001 amendment);
+   - a tool executor bound to a `ToolContext` carrying the patientId **from the JWT**, the conversation ID, the clock, the repositories, and the SES staff notifier (#35) when the env has SES addresses (without one, escalations are recorded `FAILED` and the failed-notification metric counts them) (the loop itself never sees the patient ID; ADR-001 amendment);
    - `ConverseLlmClient`;
    - the configured `ModelProfile`.
 4. The loop calls the configured model (`AGENT_MODEL_PROFILE`, default Sonnet 4.6) through Converse (ADR-010). When the model requests tools, it runs them (in parallel when there are several), emits a `status` event for each, and returns their results to the model. This repeats until the model ends the turn, capped at 8 iterations.

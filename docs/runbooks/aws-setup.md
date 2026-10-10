@@ -238,7 +238,7 @@ DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/seed-data.ts --env dev -
 
 **When to run it:**
 
-- the CloudWatch alarm `sched-<env>-notification-failed` fired (metric `Sched/NotificationFailed`, dimension `Env`, written by the SES notifier for each failed send); or
+- the CloudWatch alarm `sched-<env>-notification-failed` fired (metric `Sched/NotificationFailed`, dimension `Env`, one record per escalation stored `FAILED`: the SES notifier writes it for a failed send, the chat handler for every other failure, such as no notifier or a record it couldn't read); or
 - an escalation is stuck at `PENDING` (for example, the function timed out mid-turn, which the alarm doesn't see).
 
 **How:**
