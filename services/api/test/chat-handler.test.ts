@@ -111,24 +111,26 @@ function profileReadInEscalation(result: () => Promise<unknown>): void {
   };
 }
 
-/** The model escalates, then replies. */
-async function escalatingModel(): Promise<void> {
+/** The model escalates `times` times (one tool call per step), then replies. */
+async function escalatingModel(times: number): Promise<void> {
   const agent = await vi.importActual<typeof Agent>("@sched/agent");
-  llm.steps = [
+  const call = (i: number) =>
     agent.scriptedToolUse([
       {
-        id: "tu_1",
+        id: `tu_${String(i)}`,
         name: "escalate_to_human",
         input: { reason: "patient_requested", summary: "The patient asked to speak with the front desk." },
       },
-    ]),
+    ]);
+  llm.steps = [
+    ...Array.from({ length: times }, (_, i) => call(i)),
     agent.scriptedText("The front desk has your request."),
   ];
 }
 
 /** Runs one escalating turn and returns the stored escalation and every EMF record written to stdout. */
-async function escalate() {
-  await escalatingModel();
+async function escalate(times = 1) {
+  await escalatingModel(times);
   const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   const { handler } = await import("../src/handlers/chat");
   const events = await invoke(handler);
@@ -205,7 +207,7 @@ describe("handlers/chat", () => {
       expect(emf).toEqual([expect.objectContaining({ errorName: "MessageRejected" })]);
     });
 
-    it("writes one record (NoNotifier) when no notifier is configured", async () => {
+    it("writes one record (NotifierNotConfigured) when no notifier is configured", async () => {
       const { escalation, emf } = await escalate();
       expect(escalation?.notification).toEqual({ status: "FAILED", error: "No notifier configured" });
       expect(emf).toEqual([
@@ -214,12 +216,27 @@ describe("handlers/chat", () => {
           NotificationFailed: 1,
           escalationId: escalation?.escalationId,
           conversationId: escalation?.conversationId,
-          errorName: "NoNotifier",
+          errorName: "NotifierNotConfigured",
         }),
       ]);
       expect(emf[0]?._aws).toMatchObject({
         CloudWatchMetrics: [{ Namespace: "Sched", Dimensions: [["Env"]] }],
       });
+    });
+
+    it("writes no second record when the model escalates again (already_escalated: true)", async () => {
+      const { emf } = await escalate(2);
+      expect(emf).toHaveLength(1);
+    });
+
+    it("writes no record when updateNotification finds no escalation to update", async () => {
+      aws.tweak = (repos) => {
+        repos.escalations.updateNotification = () => Promise.resolve(null);
+      };
+
+      const { escalation, emf } = await escalate();
+      expect(escalation?.notification.status).toBe("PENDING");
+      expect(emf).toEqual([]);
     });
 
     it("writes one record when the patient's profile can't be read, without sending", async () => {

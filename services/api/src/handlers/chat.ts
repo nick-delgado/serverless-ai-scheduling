@@ -36,7 +36,7 @@ import { consoleLogger } from "../lib/log";
 /** The stored error text of a failed send starts with this; the notifier has already recorded it. */
 const SEND_ERROR_PREFIX = `${new NotificationSendError("").name}:`;
 /** The metric's `errorName` when no notifier is configured. */
-const NO_NOTIFIER_ERROR_NAME = "NoNotifier";
+const NO_NOTIFIER_ERROR_NAME = "NotifierNotConfigured";
 
 /** The error's name from a stored notification error (`name: message`), or `UnknownError`. */
 function errorNameOf(errorText: string): string {
