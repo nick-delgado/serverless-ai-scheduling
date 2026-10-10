@@ -11,7 +11,8 @@ import { type ChatTurn, type Greeting, useChat, type UseChatOptions } from "./us
 
 /**
  * The API the chat page talks to. The default sends no `Authorization` header (the mock API needs
- * none); #36 provides one built with `createChatApi({ getToken })` from the login's session.
+ * none); the app's `/chat` route provides one built with `createChatApi({ getToken: getIdToken })`
+ * (`src/app/routes.tsx`, #29).
  */
 export const ChatApiContext = createContext<ChatApi>(createChatApi());
 

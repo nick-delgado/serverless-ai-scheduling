@@ -3,16 +3,23 @@
  * secrets, but they stay out of the repo: they're baked in at build time from `VITE_USER_POOL_ID`
  * and `VITE_SPA_CLIENT_ID` (SSM `/sched/<env>/auth/user-pool-id` and `/auth/spa-client-id`; see
  * apps/web/README.md). The dev server and tests fall back to the Cognito mock in src/mocks.
+ *
+ * The Identity Pool ID (`VITE_IDENTITY_POOL_ID`, SSM `/sched/<env>/auth/identity-pool-id`; S6-02 #29)
+ * is optional and outside the "both or neither" rule: without it sign-in still works and only voice
+ * leaves the real path. It's ignored on the mock fallback, whose tokens can't be exchanged (r1/A-2).
  */
 
 export interface CognitoConfig {
   userPoolId: string;
   userPoolClientId: string;
+  /** The Identity Pool that exchanges the ID token for Transcribe-only AWS credentials (ADR-005, ADR-006). */
+  identityPoolId?: string;
 }
 
 export interface CognitoEnv {
   VITE_USER_POOL_ID?: string;
   VITE_SPA_CLIENT_ID?: string;
+  VITE_IDENTITY_POOL_ID?: string;
 }
 
 /**
@@ -23,9 +30,39 @@ export interface CognitoEnv {
 export function resolveCognitoConfig(env: CognitoEnv, fallback?: CognitoConfig): CognitoConfig {
   const userPoolId = env.VITE_USER_POOL_ID?.trim() ?? "";
   const userPoolClientId = env.VITE_SPA_CLIENT_ID?.trim() ?? "";
-  if (userPoolId && userPoolClientId) return { userPoolId, userPoolClientId };
+  if (userPoolId && userPoolClientId) {
+    const identityPoolId = env.VITE_IDENTITY_POOL_ID?.trim() ?? "";
+    return identityPoolId
+      ? { userPoolId, userPoolClientId, identityPoolId }
+      : { userPoolId, userPoolClientId };
+  }
   if (!userPoolId && !userPoolClientId && fallback) return fallback;
   throw new Error(
     "Sign-in is not configured: set both VITE_USER_POOL_ID and VITE_SPA_CLIENT_ID at build time (apps/web/README.md).",
   );
+}
+
+/**
+ * Whether the build sets neither Cognito ID, so the dev server signs in to the Cognito mock
+ * (`session.ts`'s fallback). The mock's tokens can't be exchanged for AWS credentials.
+ */
+export function usesCognitoMock(env: CognitoEnv): boolean {
+  return !env.VITE_USER_POOL_ID?.trim() && !env.VITE_SPA_CLIENT_ID?.trim();
+}
+
+/** The region of an Identity Pool ID such as `us-east-1:…`, its prefix (#29 r1/A-4). */
+export function identityPoolRegion(identityPoolId: string): string {
+  return identityPoolId.slice(0, Math.max(0, identityPoolId.indexOf(":")));
+}
+
+/**
+ * The build's Identity Pool ID, or `undefined` when there is none or sign-in uses the mock (the IDs
+ * aren't both set). Never throws: a missing ID only takes voice off the real path.
+ */
+export function resolveIdentityPoolId(env: CognitoEnv): string | undefined {
+  try {
+    return resolveCognitoConfig(env).identityPoolId;
+  } catch {
+    return undefined;
+  }
 }

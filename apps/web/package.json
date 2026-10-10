@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-transcribe-streaming": "^3.1148.0",
     "@sched/contracts": "*",
     "aws-amplify": "^6.22.1",
     "react": "^19.3.0",
@@ -20,6 +21,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@aws-sdk/client-transcribe": "^3.1148.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

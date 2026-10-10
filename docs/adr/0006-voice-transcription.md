@@ -1,6 +1,7 @@
 # ADR-006: Voice transcription — browser streams to Amazon Transcribe during recording
 
 - **Status:** Accepted (2026-10-08). Spike S-3 (#10) confirmed it on all four measured browsers; see Validation.
+- **Amended:** 2026-10-09 (settled while building the real Transcriber, #29; see [Amendment](#amendment-2026-10-09-settled-while-building-the-real-transcriber-29))
 - **Date:** 2026-09-28 (proposed), 2026-10-08 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-020…FR-024, NFR-002, ADR-005
@@ -93,9 +94,26 @@ Results: [summary](../../spikes/s3-transcribe-browser/results/summary-2026-10-08
 - **Clip mix for AC6:** reuse the spike's three scripts and its mix of 7 × ~5 s, 7 × ~20 s and 6 × ~60 s. Report Send→stream end beside stop→final, since a third of short clips finalise before Send.
 - **Sample rate:** keep the native-rate context with worklet downsampling, the path measured here. A 16 kHz context worked everywhere but wasn't measured for accuracy.
 - **AudioContext:** create it in the tap handler and always `await ctx.resume()`, because Safari and Firefox create it suspended after the earlier awaits.
-- **Page hidden mid-recording:** on iOS the audio stops silently while the stream lives on. #29 should listen for `visibilitychange` and treat hidden-while-recording as an error (`onError`, then cancel), or warn the patient. Nick decides which in #29.
+- **Page hidden mid-recording:** on iOS the audio stops silently while the stream lives on. #29 should listen for `visibilitychange` and treat hidden-while-recording as an error (`onError`, then cancel), or warn the patient. Nick decides which in #29. *(Decided in the [amendment](#amendment-2026-10-09-settled-while-building-the-real-transcriber-29): an error on every browser.)*
 - **Code to move:** `src/capture.ts` has the `Transcriber`'s `start` / `stop` / `cancel` shape (credentials fetched before the tap, chunks held until the socket opens), and `src/pcm-worklet.ts` is about 100 lines. Both are worth moving into `apps/web` as a starting point, with the downsampler unit-tested there (#29 r1/A-6). `capture.ts` isn't the interface yet, though:
   - its `start(opts)` takes the region, credentials and tap time, where `Transcriber.start(callbacks)` gets its own credentials, and its `onPartial` callback is spike-only;
   - its `stop()` resolves with a `RunOutcome` and never rejects, and it applies its own 10 s timeout, where the interface's `stop()` resolves with the transcript, rejects with a `TranscriberError`, and leaves the timeout to the overlay;
   - its `onError` and `start()` failures are spike `Failure`s and raw errors, not `TranscriberError`s (`denied`, `unavailable`, `failed`);
   - its instrumentation goes: the module replaces the page's global `WebSocket` with an observing subclass at import, and it records marks, visibility changes and the cold flag.
+
+## Amendment (2026-10-09): settled while building the real Transcriber (#29)
+
+- **Page hidden mid-recording** (the open item in "For #29" above): an error on every browser (#29 r2/Q-1 (a)). When the page becomes hidden while recording, the Transcriber calls `onError` with `failed`, stops the mic and closes the stream, and the overlay shows FR-024's retry / type-instead. Hidden during the permission prompt or after Send isn't an error.
+- **Measuring on the shipped bundle:** AC6's timings come from an opt-in build flag, `VITE_VOICE_TIMING=1`, on an ephemeral env; other builds contain no timing code (#29 r2/Q-2 (a)).
+- The rest of "For #29" was built as written: the empty `AudioEvent` with the input kept open, the native-rate context created at the tap and resumed before `addModule`, 1600-sample chunks, no stabilization, and the SDK lazy-loaded (`apps/web/src/voice/transcribe/`).
+- **#29's AC6 runs** (2026-10-09, the shipped bundle on an ephemeral env, the spike's three scripts, 20 counted runs per browser) passed on all four measured browsers, with 0 failed streams as the shipped classifier counts them. Firefox and Edge weren't run. That count can't see a socket that closes after Send once some finals have arrived: the SDK ends its stream without an error, and the `WebSocket` instrumentation that could see the close stayed in the spike. Reading the 5 s and 20 s transcripts (14 of each browser's 20 runs) found each ending with its script's last words; the 60 s ones are cut by the auto-send, so reading can't show a drop there. Nick accepted the count with this gap (#29, PR #231).
+
+| Browser | ok / counted runs | failed | stop→final p95 | Send→stream end p95 | finals before Send |
+|---|---|---|---|---|---|
+| Chrome (desktop) | 20 / 20 | 0 | 205 ms | 325 ms | 0 |
+| Safari (macOS) | 20 / 20 | 0 | 183 ms | 209 ms | 2 |
+| iOS Safari | 20 / 20 | 0 | 243 ms | 266 ms | 0 |
+| Android Chrome | 20 / 20 | 0 | 270 ms | 431 ms | 0 |
+| Firefox, Edge (best effort) | not run | | | | |
+
+  The "Revisit if" rule wasn't triggered, so no browser takes the batch fallback. A deliberate hidden-page check on iOS Safari and on Android Chrome each ended in the FR-024 error, as decided above. The same Identity Pool credentials were refused `transcribe:ListTranscriptionJobs` (`AccessDeniedException`) on every browser.

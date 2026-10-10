@@ -1,13 +1,15 @@
 import "./voice.css";
 
-import { type RefObject, useContext, useEffect, useId, useRef } from "react";
+import { type RefObject, Suspense, useContext, useEffect, useId, useRef } from "react";
 
 import { RecordingOverlay } from "./RecordingOverlay";
 import { TranscriberContext } from "./TranscriberContext";
 import { type MicNotice, useRecording } from "./useRecording";
+import { TimingPanel } from "./voiceTiming";
 
 export const MIC_LABEL = "Record a voice message";
-export const NO_VOICE = "Voice input isn't available yet.";
+/** The missing-config state (#29 r1/A-3): a build without the Identity Pool ID. */
+export const NO_VOICE = "Voice input isn't set up on this site. You can type your message.";
 export const NOTICES: Record<MicNotice, string> = {
   denied:
     "Microphone access is blocked. To use voice, allow the microphone for this site in your browser's site settings, then tap the mic again. You can also type your message.",
@@ -92,6 +94,11 @@ export function VoiceInput({ onTranscript, responding, inputRef }: VoiceInputPro
           onTypeInstead={typeInstead}
           onCancel={recording.close}
         />
+      )}
+      {TimingPanel && (
+        <Suspense fallback={null}>
+          <TimingPanel />
+        </Suspense>
       )}
     </>
   );

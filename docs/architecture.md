@@ -2,7 +2,7 @@
 
 This is a one-page overview; each part links to the ADR that decided it. It will be updated as spikes land. Anything still marked *Proposed* in an ADR may change.
 
-Parts marked *planned* aren't live yet: the SES escalation email (#35 built the notifier, its IAM grant and the failed-send alarm; #36 wires it into the chat handler) and voice (ADR-006, spike #10, #28/#29). Until #36 lands, escalations are stored with a `FAILED` notification status.
+Parts marked *planned* aren't live yet: the SES escalation email (#35 built the notifier, its IAM grant and the failed-send alarm; #36 wires it into the chat handler). Until #36 lands, escalations are stored with a `FAILED` notification status.
 
 ## System diagram
 
@@ -15,7 +15,7 @@ Parts marked *planned* aren't live yet: the SES escalation email (#35 built the 
                                  ▼                       ▼
                     ┌────────────────────────┐   ┌──────────────────────────────┐
                     │ CloudFront             │   │ Amazon Transcribe            │
-                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006, planned) │
+                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006)          │
                     │  /api/* → REST API     │   └──────────────────────────────┘
                     └───────────┬────────────┘            ▲
                                 │                         │ creds via Cognito
@@ -67,10 +67,10 @@ On page load the SPA sends `POST /api/session` (empty body, ID token). SessionFn
 
 ## Voice input
 
-*(Planned: ADR-006 was accepted after spike S-3, #10; the voice UI ships with #29.)*
+ADR-006, accepted after spike S-3 (#10). #28 built the mic and the recording overlay; #29 built the real Transcriber (`apps/web/src/voice/transcribe/`), which every build with the Identity Pool ID uses.
 
 1. Mic tap → permission prompt (first time) → recording overlay with a timer.
-2. The AudioWorklet converts the mic audio to 16 kHz PCM and streams ~100 ms chunks to Transcribe over WebSocket, using Identity Pool credentials that can do nothing else.
+2. The AudioWorklet converts the mic audio to 16 kHz PCM and streams ~100 ms chunks to Transcribe over WebSocket, using Identity Pool credentials that can do nothing else. The Transcribe SDK loads on first use, and the page becoming hidden while recording is an error the overlay shows (iOS stops the audio).
 3. On Send: the audio ends with an empty AudioEvent, a "Transcribing…" spinner shows until Transcribe ends the stream with the final results, and the transcript is posted as the patient's message. From there it follows the chat-turn path above.
 
 ## Where the code lives
