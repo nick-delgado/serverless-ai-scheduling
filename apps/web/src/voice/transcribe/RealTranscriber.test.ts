@@ -11,12 +11,7 @@ import { FAKE_AWS_CREDENTIALS } from "../../auth/testing";
 import { fakeTime } from "../../chat/testUtils";
 import { TranscriberError } from "../transcriber";
 import { FINAL_TIMEOUT_MS, useRecording } from "../useRecording";
-import {
-  identityPoolRegion,
-  loadStreamClient,
-  RealTranscriber,
-  type StreamObserver,
-} from "./RealTranscriber";
+import { loadStreamClient, RealTranscriber, type StreamObserver } from "./RealTranscriber";
 import { fakeMic, fakeTranscribe, settle } from "./testing";
 
 const CTX = { fake: "AudioContext" } as unknown as AudioContext;
@@ -25,10 +20,11 @@ function setup(
   overrides: {
     credentials?: () => Promise<typeof FAKE_AWS_CREDENTIALS | undefined>;
     noResultStream?: boolean;
+    micRate?: number;
   } = {},
 ) {
   const transcribe = fakeTranscribe({ noResultStream: overrides.noResultStream });
-  const mic = fakeMic();
+  const mic = fakeMic(overrides.micRate);
   const log: string[] = [];
   const observer: StreamObserver = {
     recording: vi.fn(),
@@ -82,11 +78,6 @@ describe("RealTranscriber construction", () => {
     expect(t.transcriber.options.region).toBe("us-east-1");
   });
 
-  it("takes its region from the Identity Pool ID's prefix", () => {
-    expect(identityPoolRegion("eu-west-2:00000000-0000-4000-8000-000000000000")).toBe("eu-west-2");
-    expect(identityPoolRegion("no-region")).toBe("");
-  });
-
   it("loads the SDK adapter lazily, as a factory", async () => {
     await expect(loadStreamClient()).resolves.toBeTypeOf("function");
   });
@@ -100,14 +91,14 @@ describe("start()", () => {
     expect(t.log).toEqual(["context", "sdk", "credentials", "mic"]);
   });
 
-  it("opens the stream with the patient's credentials: en-US, PCM at the mic's rate", async () => {
-    const { client, observer } = await recording();
+  it("opens the stream with the patient's credentials: en-US, PCM at the mic's rate (8 kHz here)", async () => {
+    const { client, observer } = await recording({ micRate: 8_000 });
     expect(client?.region).toBe("us-east-1");
     expect(client?.credentials).toBe(FAKE_AWS_CREDENTIALS);
     expect(client?.input).toMatchObject({
       LanguageCode: "en-US",
       MediaEncoding: "pcm",
-      MediaSampleRateHertz: 16_000,
+      MediaSampleRateHertz: 8_000,
     });
     expect(observer.recording).toHaveBeenCalledTimes(1);
   });
@@ -133,6 +124,24 @@ describe("start()", () => {
     t.mic.chunk(3196);
     await settle();
     expect(t.transcribe.client()?.sizes()).toEqual([3200, 3198, 3196]);
+  });
+
+  it("Send before the socket opens: the held chunks, then the empty event, then the transcript", async () => {
+    let grant!: (credentials: typeof FAKE_AWS_CREDENTIALS) => void;
+    const t = setup({ credentials: () => new Promise((resolve) => (grant = resolve)) });
+    const session = await t.transcriber.start(t.callbacks);
+    t.mic.chunk(3200);
+    const stopped = session.stop();
+    await settle();
+    expect(t.transcribe.clients).toEqual([]);
+    grant(FAKE_AWS_CREDENTIALS);
+    await settle();
+    const client = t.transcribe.client();
+    expect(client?.sizes()).toEqual([3200, 0]);
+    expect(client?.inputEnded).toBe(false);
+    client?.result("Hi, this is Maria Santos.");
+    client?.end();
+    await expect(stopped).resolves.toBe("Hi, this is Maria Santos.");
   });
 
   it("reports levels while recording, not after Send", async () => {
@@ -346,8 +355,11 @@ describe("errors while recording reach the overlay through onError", () => {
 
 describe("the page becoming hidden (r2/Q-1 (a))", () => {
   it("while recording: onError with failed, the mic stopped and the stream closed", async () => {
-    const { callbacks, mic, client } = await recording();
+    const { callbacks, mic, client, observer } = await recording();
     setVisibility("hidden");
+    expect(observer.end).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", reason: "hidden" }),
+    );
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
     expect(callbacks.onError.mock.calls[0]?.[0]).toMatchObject({ kind: "failed" });
     expect(mic.mic.close).toHaveBeenCalled();
@@ -363,10 +375,13 @@ describe("the page becoming hidden (r2/Q-1 (a))", () => {
   });
 
   it("after Send (Transcribing…) is not an error, and the listener is gone", async () => {
+    const add = vi.spyOn(document, "addEventListener");
     const { session, callbacks, client } = await recording();
+    const listener = add.mock.calls.find(([type]) => type === "visibilitychange")?.[1];
+    expect(listener).toBeTypeOf("function");
     const remove = vi.spyOn(document, "removeEventListener");
     const stopped = session.stop();
-    expect(remove).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+    expect(remove).toHaveBeenCalledWith("visibilitychange", listener);
     setVisibility("hidden");
     client?.result("Thanks.");
     client?.end();

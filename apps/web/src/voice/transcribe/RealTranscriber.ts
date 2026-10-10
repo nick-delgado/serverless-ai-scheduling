@@ -35,7 +35,7 @@ import {
 import { createAudioContext, describeError, type Mic, type MicHandlers, openMic } from "./mic";
 import type { StreamClient, StreamClientFactory } from "./streamClient";
 
-export const LANGUAGE_CODE = "en-US";
+const LANGUAGE_CODE = "en-US";
 
 /** Why a stream failed, for the timing record (#29 AC6). */
 export type FailureReason = "error" | "closed-early" | "hidden" | "mic-ended";
@@ -77,11 +77,6 @@ export interface RealTranscriberOptions {
 export const loadStreamClient = (): Promise<StreamClientFactory> =>
   import("./streamClient").then((module) => module.createStreamClient);
 
-/** The region of an Identity Pool ID such as `us-east-1:…` (r1/A-4). */
-export function identityPoolRegion(identityPoolId: string): string {
-  return identityPoolId.slice(0, Math.max(0, identityPoolId.indexOf(":")));
-}
-
 export class RealTranscriber implements Transcriber {
   readonly options: RealTranscriberOptions;
   private readonly deps: Required<Omit<RealTranscriberOptions, "observe">>;
@@ -109,7 +104,12 @@ type RunState = "starting" | "recording" | "stopping" | "done" | "failed" | "can
 
 const END = Symbol("end");
 
-/** A Transcribe exception the response stream carried as an event rather than throwing. */
+/**
+ * A Transcribe exception the response stream carried as an event rather than throwing. Matched by
+ * the member's name: the SDK's union has a member per exception (five today, plus `$unknown`), each
+ * typed on its own variant, so a name check covers them all, and any added later, without a cast per
+ * member or a list to keep in step with the SDK.
+ */
 function streamException(event: TranscriptResultStream): Error | undefined {
   for (const [name, value] of Object.entries(event)) {
     if (name.endsWith("Exception") && value) {
@@ -124,7 +124,8 @@ function streamException(event: TranscriptResultStream): Error | undefined {
 /** One recording: the mic, the queue of chunks, the stream and its results. */
 class StreamRun {
   private state: RunState = "starting";
-  private mic: Mic | undefined;
+  /** Set by `open()`; nothing reads it before (the session exists only after `open()` resolves). */
+  private mic!: Mic;
   private client: StreamClient | undefined;
   private readonly queue: (Uint8Array | typeof END)[] = [];
   private wake: (() => void) | undefined;
@@ -172,7 +173,7 @@ class StreamRun {
         const response = await this.client.start({
           LanguageCode: LANGUAGE_CODE,
           MediaEncoding: "pcm",
-          MediaSampleRateHertz: this.mic?.sampleRate,
+          MediaSampleRateHertz: this.mic.sampleRate,
           AudioStream: this.audio(),
         });
         for await (const event of response.TranscriptResultStream ?? []) {
@@ -198,9 +199,9 @@ class StreamRun {
     this.state = "stopping";
     this.observer?.send();
     document.removeEventListener("visibilitychange", this.onVisibility);
-    await this.mic?.flush();
+    await this.mic.flush();
     this.enqueue(END);
-    void this.mic?.close();
+    void this.mic.close();
     return this.result;
   }
 
@@ -215,7 +216,7 @@ class StreamRun {
   }
 
   private active(): boolean {
-    return this.state === "starting" || this.state === "recording" || this.state === "stopping";
+    return this.state === "recording" || this.state === "stopping";
   }
 
   /** The audio Transcribe reads: queued chunks, then the empty event, then open until the response ends. */
@@ -272,6 +273,6 @@ class StreamRun {
     this.client?.destroy();
     this.enqueue(END);
     this.endOutput();
-    void this.mic?.close();
+    void this.mic.close();
   }
 }
