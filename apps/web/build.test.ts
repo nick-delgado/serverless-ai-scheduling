@@ -38,11 +38,15 @@ interface Build {
 
 let main: Build;
 let timing: Build;
-let outDir = "";
-let files: string[] = [];
 
 async function contents(of: Build = main): Promise<string[]> {
   return Promise.all(of.files.map((file) => readFile(join(of.outDir, file), "utf8")));
+}
+
+/** The script `index.html` loads: the entry chunk. */
+async function entryChunk(of: Build = main): Promise<string | undefined> {
+  const html = await readFile(join(of.outDir, "index.html"), "utf8");
+  return /<script type="module"[^>]*src="\/(assets\/[^"]+\.js)"/.exec(html)?.[1];
 }
 
 /** The files of `of` that contain `text`. */
@@ -78,7 +82,6 @@ async function productionBuild(env: Record<string, string> = {}): Promise<Build>
 beforeAll(async () => {
   main = await productionBuild();
   timing = await productionBuild({ VITE_VOICE_TIMING: "1" });
-  ({ outDir, files } = main);
 }, 120_000);
 
 afterAll(async () => {
@@ -87,19 +90,19 @@ afterAll(async () => {
 
 describe("production build", () => {
   it("writes index.html and hashed scripts under assets/", async () => {
-    expect(files).toContain("index.html");
-    const scripts = files.filter((file) => /^assets\/.+\.js$/.test(file));
+    expect(main.files).toContain("index.html");
+    const scripts = main.files.filter((file) => /^assets\/.+\.js$/.test(file));
     expect(scripts.length).toBeGreaterThan(0);
-    const html = await readFile(join(outDir, "index.html"), "utf8");
+    const html = await readFile(join(main.outDir, "index.html"), "utf8");
     expect(scripts.some((script) => html.includes(`/${script}`))).toBe(true);
   });
 
   it("contains no mock API code and no service worker", async () => {
-    expect(files.some((file) => file.includes("mockServiceWorker"))).toBe(false);
+    expect(main.files.some((file) => file.includes("mockServiceWorker"))).toBe(false);
     const mockCode = /mockServiceWorker|setupWorker|schedMock|\[MSW\]/;
     const texts = await contents();
     // Report the file and the match, not the whole bundle.
-    const hits = files.flatMap((file, i) => {
+    const hits = main.files.flatMap((file, i) => {
       const match = texts[i]?.match(mockCode);
       return match ? [`${file}: ${match[0]}`] : [];
     });
@@ -111,15 +114,13 @@ describe("production build", () => {
     ["app client ID", MOCK_COGNITO_CONFIG.userPoolClientId],
     ["password", MOCK_PASSWORD],
   ])("leaves out the Cognito mock's %s", async (_, value) => {
-    const texts = await contents();
-    expect(files.filter((_file, i) => texts[i]?.includes(value))).toEqual([]);
+    expect(await filesWith(value)).toEqual([]);
   });
 });
 
 describe("voice in the production build (S6-02, #29)", () => {
   it("lazy-loads the Transcribe Streaming SDK: the entry chunk leaves it out, another chunk has it", async () => {
-    const html = await readFile(join(outDir, "index.html"), "utf8");
-    const entry = /<script type="module"[^>]*src="\/(assets\/[^"]+\.js)"/.exec(html)?.[1];
+    const entry = await entryChunk();
     expect(entry).toBeDefined();
     const withSdk = await filesWith(TRANSCRIBE_SDK);
     expect(withSdk).not.toContain(entry);
@@ -131,7 +132,7 @@ describe("voice in the production build (S6-02, #29)", () => {
   });
 
   it("ships the capture worklet as a script of its own", () => {
-    expect(files.some((file) => /^assets\/pcm-worklet-.+\.js$/.test(file))).toBe(true);
+    expect(main.files.some((file) => /^assets\/pcm-worklet-.+\.js$/.test(file))).toBe(true);
   });
 
   it.each(TIMING_CODE)("has no timing code without VITE_VOICE_TIMING=1 (%s)", async (marker) => {
@@ -141,8 +142,7 @@ describe("voice in the production build (S6-02, #29)", () => {
   it.each(TIMING_CODE)(
     "has the timing code with VITE_VOICE_TIMING=1 (%s), outside the entry chunk",
     async (marker) => {
-      const html = await readFile(join(timing.outDir, "index.html"), "utf8");
-      const entry = /<script type="module"[^>]*src="\/(assets\/[^"]+\.js)"/.exec(html)?.[1];
+      const entry = await entryChunk(timing);
       const found = await filesWith(marker, timing);
       expect(found.length).toBeGreaterThan(0);
       expect(found).not.toContain(entry);
