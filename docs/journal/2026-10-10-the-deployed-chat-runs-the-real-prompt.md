@@ -85,11 +85,11 @@ These are the decisions the spec left open. Nick's answers on the issue (Q-1 to 
   - a failed send: the notifier's record only;
   - no notifier: `NotifierNotConfigured`;
   - a profile read, a transcript read or a notice build that throws: one record, with the thrown error's name;
-  - a non-`Error` rejection: `UnknownError`;
+  - a non-`Error` rejection: `UnknownError`, unless its text is shaped like `Word: …`, which is recorded under its first word; an `Error` whose name isn't an identifier: `UnknownError`;
   - `already_escalated`: no second record;
   - a `null` update: no record.
 
-  It also covers the prompt version, the cold-start failures (no `SCHED_ENV`, half-set SES) and the SES send. In `npm run mutate`, all 17 behavioural edits were KILLED by the test their `expect` named, and 2 type-level edits by `tsc` (the PR has both tables).
+  It also covers the prompt version, the cold-start failures (no `SCHED_ENV`, half-set SES) and the SES send. In `npm run mutate`, all 23 behavioural edits were KILLED by the test their `expect` named, and 3 type-level edits by `tsc` (the PR has both tables).
 - **Bundle (A-8):** `make -f services/api/Makefile build-ChatFunction` produces an `index.mjs` that contains `SendEmailCommand` and `system.v1`. No `package.json` change was needed.
 - **Failed send on `i36fail`:**
   - The stored error: `NotificationSendError: MessageRejected: Email address is not verified. The following identities failed the check in region US-EAST-1: <address>` (the notifier redacts the address).
