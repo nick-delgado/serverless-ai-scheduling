@@ -4,7 +4,13 @@
  */
 import { PassThrough } from "node:stream";
 
-import { ScriptedLlmClient, resolveModelProfile, scriptedText, type ScriptedStep } from "@sched/agent";
+import {
+  ScriptedLlmClient,
+  buildSystemPrompt,
+  resolveModelProfile,
+  scriptedText,
+  type ScriptedStep,
+} from "@sched/agent";
 import { parseChatResponseBody } from "@sched/contracts";
 import { FrozenClock, createInMemoryRepositories } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
@@ -13,8 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createInMemoryTurnStore,
   NDJSON_HEADERS,
-  placeholderSystemPrompt,
   type RestApiProxyEvent,
+  type SystemPromptFactory,
 } from "../src";
 import { chatStreamHandler, deadlineSignal, PERSIST_RESERVE_MS } from "../src/lib/lambda";
 
@@ -53,7 +59,7 @@ async function invoke(
     llm,
     profile: resolveModelProfile("sonnet-4.6"),
     clock,
-    systemPrompt: placeholderSystemPrompt,
+    systemPrompt: buildSystemPrompt satisfies SystemPromptFactory,
     dailyTurnCap: 50,
   });
   const stream = new PassThrough();
