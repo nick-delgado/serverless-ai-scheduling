@@ -7,7 +7,8 @@
  *   deployed build, `scripts/deploy-web.sh`): the `RealTranscriber`, streaming to Amazon Transcribe.
  * - The dev server without it (on the Cognito mock, whose tokens can't get AWS credentials): a
  *   `MockTranscriber` that "hears" a sample sentence about a second after Send.
- * - Any other build without it, the dev server on real Cognito included: none. The mic shows disabled with a one-line note (`NO_VOICE`).
+ * - Any other build without it, the dev server on real Cognito included: none. The mic shows disabled with a
+ *   one-line note (`NO_VOICE`).
  *
  * Nothing here touches browser audio APIs, fetches credentials or loads the Transcribe SDK; the
  * `RealTranscriber` does all of that in `start()` (r2/A-3). So rendering `<ChatPage>` in jsdom needs

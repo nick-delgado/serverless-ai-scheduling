@@ -88,4 +88,4 @@ The header is the raw ID token, as `chat/api.ts` and the API's Cognito authorize
 
 #36, now without its token-wiring criterion, checks voice end to end on `dev` once this is deployed there.
 
-`voice29` is still up: it is torn down with `scripts/teardown.sh voice29` once Nick approves it after the review re-check (review decision a36d8e0/SPEC-3 (a) on PR #231).
+`voice29` was torn down on 2026-10-10 with `scripts/teardown.sh voice29`, after the review re-check and with Nick's approval (review decision a36d8e0/SPEC-3 (a) on PR #231).

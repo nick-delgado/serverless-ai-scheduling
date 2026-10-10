@@ -1,7 +1,7 @@
 /**
- * A `Transcriber` with no audio (S6-01, #28). The dev server on the Cognito mock uses it in place of
- * the browser's mic prompt (`TranscriberContext.ts`, #29), and the tests configure it through its constructor (or `options`, which a test can
- * change between recordings, e.g. to grant permission on the second tap).
+ * A `Transcriber` with no audio (S6-01, #28). The dev server on the Cognito mock uses it in place of the
+ * browser's mic prompt (`TranscriberContext.ts`, #29), and the tests configure it through its constructor (or
+ * `options`, which a test can change between recordings, e.g. to grant permission on the second tap).
  */
 import {
   type Transcriber,
