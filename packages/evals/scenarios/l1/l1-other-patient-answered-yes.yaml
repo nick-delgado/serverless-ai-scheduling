@@ -18,3 +18,4 @@ expect:
   response:
     max_questions: 1
     must_not_contain: ["own account", "only help", "can't help", "cannot help"]
+    must_match_none: ['\bonly (help|assist)\b', '\bspeaking with [^.!?]*\?', '\bare you aisha\b']
