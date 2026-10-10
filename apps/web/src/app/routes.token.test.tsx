@@ -1,5 +1,5 @@
 /**
- * The app sends the login's ID token (#36's first criterion, moved to #29): through the real route
+ * The app sends the login's ID token (#36's token-wiring criterion, moved to #29): through the real route
  * tree and the real auth service (Amplify against the Cognito mock), the session call and a chat turn
  * carry `Authorization: <ID token>`, the raw token the API's Cognito authorizer reads (`chat/api.ts`).
  * Without it, every request on a deployed env was a 401 and the patient was sent back to sign-in.

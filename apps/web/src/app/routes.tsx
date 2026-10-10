@@ -12,7 +12,7 @@ import { Layout } from "./Layout";
 import { NotFoundPage } from "./NotFoundPage";
 
 /**
- * The chat's API client, sending the login's ID token as `Authorization` (#36's first criterion,
+ * The chat's API client, sending the login's ID token as `Authorization` (#36's token-wiring criterion,
  * moved to #29 by Nick's decision there: without it every deployed request was a 401). The token
  * comes from the app's auth service (`src/auth/session.ts`), as `AuthProvider`'s default does; a 401
  * still signs the patient out through the auth context (#27).
