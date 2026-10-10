@@ -9,7 +9,7 @@ import { PassThrough } from "node:stream";
 import type * as Agent from "@sched/agent";
 import type * as Ses from "@aws-sdk/client-sesv2";
 import { parseChatResponseBody } from "@sched/contracts";
-import { createInMemoryRepositories, type InMemoryRepositories } from "@sched/tools";
+import { createInMemoryRepositories, type EscalationRepo, type InMemoryRepositories } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -239,6 +239,43 @@ describe("handlers/chat", () => {
       expect(emf).toEqual([]);
     });
 
+    it("writes no record when updateNotification throws, leaving the escalation PENDING", async () => {
+      aws.tweak = (repos) => {
+        repos.escalations.updateNotification = () => Promise.reject(new Error("write failed"));
+      };
+
+      const { events, escalation, emf } = await escalate();
+      expect(events.at(-1)?.type).toBe("done");
+      expect(escalation?.notification.status).toBe("PENDING");
+      expect(emf).toEqual([]);
+    });
+
+    it("works with an escalation repo whose methods live on a class prototype", async () => {
+      /** Delegates through a private field, so its methods need `this` and aren't own properties. */
+      class ClassEscalations implements EscalationRepo {
+        readonly #inner: EscalationRepo;
+        constructor(inner: EscalationRepo) {
+          this.#inner = inner;
+        }
+        record(...args: Parameters<EscalationRepo["record"]>) {
+          return this.#inner.record(...args);
+        }
+        getForConversation(...args: Parameters<EscalationRepo["getForConversation"]>) {
+          return this.#inner.getForConversation(...args);
+        }
+        updateNotification(...args: Parameters<EscalationRepo["updateNotification"]>) {
+          return this.#inner.updateNotification(...args);
+        }
+      }
+      aws.tweak = (repos) => {
+        repos.escalations = new ClassEscalations(repos.escalations);
+      };
+
+      const { escalation, emf } = await escalate();
+      expect(escalation?.notification).toEqual({ status: "FAILED", error: "No notifier configured" });
+      expect(emf).toEqual([expect.objectContaining({ errorName: "NotifierNotConfigured" })]);
+    });
+
     it("writes one record when the patient's profile can't be read, without sending", async () => {
       withSes();
       profileReadInEscalation(() => Promise.reject(new RangeError("profile read failed")));
@@ -281,6 +318,26 @@ describe("handlers/chat", () => {
       withSes();
 
       profileReadInEscalation(() => Promise.reject("not an Error"));
+
+      const { emf } = await escalate();
+      expect(emf).toEqual([expect.objectContaining({ errorName: "UnknownError" })]);
+    });
+
+    // The name comes from the stored `name: message` text (owner decision c0dcd27/SPEC-1 (a)).
+    it("names a non-Error rejection shaped like `Word: …` by its first word", async () => {
+      withSes();
+
+      profileReadInEscalation(() => Promise.reject("Throttled: slow down"));
+
+      const { emf } = await escalate();
+      expect(emf).toEqual([expect.objectContaining({ errorName: "Throttled" })]);
+    });
+
+    it("names an Error whose name isn't an identifier UnknownError", async () => {
+      withSes();
+      const error = new Error("profile read failed");
+      error.name = "Some Error";
+      profileReadInEscalation(() => Promise.reject(error));
 
       const { emf } = await escalate();
       expect(emf).toEqual([expect.objectContaining({ errorName: "UnknownError" })]);

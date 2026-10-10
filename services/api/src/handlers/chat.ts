@@ -16,7 +16,10 @@
  *   a failed send (`NotificationSendError`); this handler writes it for every other FAILED (no notifier, a
  *   profile or transcript read that throws, a notice that can't be built or rendered), by decorating
  *   `escalations.updateNotification`. The record is written once the FAILED status is stored; a write that
- *   throws or finds no record writes none (reporting those is #38's).
+ *   throws or finds no record writes none (reporting those is #38's). The record's `errorName` is read from
+ *   the stored `name: message` text (owner decision c0dcd27/SPEC-1 (a)), so a non-`Error` rejection whose
+ *   text has that shape is recorded under its first word, and a name that isn't an identifier is recorded
+ *   as `UnknownError`.
  */
 import { ConverseLlmClient, buildSystemPrompt } from "@sched/agent";
 import { SystemClock, type Repositories } from "@sched/tools";
@@ -39,7 +42,7 @@ const SEND_ERROR_PREFIX = `${new NotificationSendError("").name}:`;
 const NO_NOTIFIER_ERROR_NAME = "NotifierNotConfigured";
 
 /** The error's name from a stored notification error (`name: message`), or `UnknownError`. */
-function errorNameOf(errorText: string): string {
+function errorNameFromStoredText(errorText: string): string {
   return /^([A-Za-z_$][\w$]*): /.exec(errorText)?.[1] ?? "UnknownError";
 }
 
@@ -48,12 +51,13 @@ function withNotificationFailedMetric(
   repos: Repositories,
   options: { hasNotifier: boolean; report: (failure: NotificationFailure) => void },
 ): Repositories {
-  // Both repo implementations are plain objects of closures, so a spread copy keeps working.
   const escalations = repos.escalations;
   return {
     ...repos,
     escalations: {
-      ...escalations,
+      // Bound references, not a spread: they work for any `EscalationRepo`, a class instance included.
+      record: escalations.record.bind(escalations),
+      getForConversation: escalations.getForConversation.bind(escalations),
       async updateNotification(patientId, conversationId, notification) {
         const updated = await escalations.updateNotification(patientId, conversationId, notification);
         const error = notification.error ?? "";
@@ -61,7 +65,7 @@ function withNotificationFailedMetric(
           options.report({
             escalationId: updated.escalationId,
             conversationId: updated.conversationId,
-            errorName: options.hasNotifier ? errorNameOf(error) : NO_NOTIFIER_ERROR_NAME,
+            errorName: options.hasNotifier ? errorNameFromStoredText(error) : NO_NOTIFIER_ERROR_NAME,
           });
         }
         return updated;
