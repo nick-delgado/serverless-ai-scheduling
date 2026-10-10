@@ -93,9 +93,9 @@ interface World {
 }
 
 function world(
-  options: { steps?: ScriptedStep[]; cap?: number; overrides?: Partial<ChatTurnDeps> } = {},
+  options: { steps?: ScriptedStep[]; cap?: number; now?: string; overrides?: Partial<ChatTurnDeps> } = {},
 ): World {
-  const clock = new FrozenClock(NOW);
+  const clock = new FrozenClock(options.now ?? NOW);
   const repos = createInMemoryRepositories({ clock, seed: buildClinicFixture() });
   const turns = createInMemoryTurnStore();
   const llm = new ScriptedLlmClient(options.steps ?? []);
@@ -212,11 +212,12 @@ describe("handleChatTurn: happy paths", () => {
     w.llm.requests[0]?.system.map((b) => ("text" in b ? b.text : "")).join("\n");
 
   it("passes the patient's first name and the injected clock's date, in clinic time, to the system prompt", async () => {
-    const w = world({ steps: [scriptedText("Hi!")] });
+    // 10:30 PM ET on Monday October 5 is already Tuesday October 6 in UTC.
+    const w = world({ steps: [scriptedText("Hi!")], now: "2026-10-06T02:30:00Z" });
     await w.send("Hello");
     const system = systemOf(w);
     expect(system).toContain("The patient's first name, from their profile: Maria.");
-    // The frozen instant's clinic-local date, not the wall clock's.
+    // The frozen instant's clinic-local date: not the wall clock's, and not its UTC date.
     expect(system).toContain("Today is Monday, October 5, 2026 (2026-10-05)");
   });
 
