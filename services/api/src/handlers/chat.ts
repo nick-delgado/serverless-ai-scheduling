@@ -48,13 +48,12 @@ function withNotificationFailedMetric(
   repos: Repositories,
   options: { hasNotifier: boolean; report: (failure: NotificationFailure) => void },
 ): Repositories {
+  // Both repo implementations are plain objects of closures, so a spread copy keeps working.
   const escalations = repos.escalations;
   return {
     ...repos,
     escalations: {
-      record: (input) => escalations.record(input),
-      getForConversation: (patientId, conversationId) =>
-        escalations.getForConversation(patientId, conversationId),
+      ...escalations,
       async updateNotification(patientId, conversationId, notification) {
         const updated = await escalations.updateNotification(patientId, conversationId, notification);
         const error = notification.error ?? "";
