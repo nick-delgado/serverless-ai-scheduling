@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Auth from "../../auth";
 import { getAwsCredentials, resolveIdentityPoolId } from "../../auth";
 import { FAKE_AWS_CREDENTIALS } from "../../auth/testing";
 import { checkRoleScope } from "./roleCheck";
@@ -10,7 +11,8 @@ import { SCRIPTS } from "./scripts";
 import TimingPanel from "./TimingPanel";
 import { TimingStore, type TimingRun } from "./timing";
 
-vi.mock("../../auth", () => ({
+vi.mock("../../auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof Auth>()),
   getAwsCredentials: vi.fn(() => Promise.resolve(undefined)),
   resolveIdentityPoolId: vi.fn(() => undefined),
 }));
@@ -77,6 +79,9 @@ describe("TimingPanel", () => {
       sendToEndMs: undefined,
     });
     store.addRun({ ...RUN, at: "3", deliberate: true });
+    // Neither counts toward chrome-desktop's 5 s clips: another browser's run, and a tester's cancel.
+    store.addRun({ ...RUN, at: "4", browser: "android-chrome" });
+    store.addRun({ ...RUN, at: "5", outcome: "cancelled", stopToFinalMs: undefined, sendToEndMs: undefined });
     render(<TimingPanel store={store} />);
     await open();
     expect(screen.getByRole("option", { name: "5s (2/7)" })).toBeInTheDocument();
@@ -86,6 +91,7 @@ describe("TimingPanel", () => {
     expect(row).toHaveTextContent("260 ms");
     expect(screen.getByText(/failed \(timeout\), stop→final –/)).toBeInTheDocument();
     expect(screen.getByText(/\(deliberate\): ok/)).toBeInTheDocument();
+    expect(screen.getByText(/^android-chrome 5s: ok/)).toBeInTheDocument();
   });
 
   it("deletes the last run, and clears everything after a confirm", async () => {

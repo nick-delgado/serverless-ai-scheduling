@@ -11,9 +11,8 @@ import "./timing.css";
 import { useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
-import { getAwsCredentials, resolveIdentityPoolId } from "../../auth";
+import { getAwsCredentials, identityPoolRegion, resolveIdentityPoolId } from "../../auth";
 import { describeError } from "./mic";
-import { identityPoolRegion } from "./RealTranscriber";
 import { SCRIPTS } from "./scripts";
 import {
   BROWSERS,
@@ -78,9 +77,10 @@ export default function TimingPanel({ store = timingStore, roleCheck }: TimingPa
     if (window.confirm("Delete every recorded run and role check in this browser?")) store.clear();
   };
 
-  const mine = runs.filter((run) => run.browser === labels.browser);
-  const done = (clip: Clip) =>
-    mine.filter((run) => run.clip === clip && !run.deliberate && run.outcome !== "cancelled").length;
+  const summary = summarize(runs);
+  // The runs that count, by `summarize`'s rule, for the browser being measured.
+  const counted = summary.find((row) => row.browser === labels.browser)?.byClip;
+  const done = (clip: Clip) => counted?.[clip] ?? 0;
 
   return createPortal(
     <div className="voice-timing">
@@ -142,7 +142,7 @@ export default function TimingPanel({ store = timingStore, roleCheck }: TimingPa
             </tr>
           </thead>
           <tbody>
-            {summarize(runs).map((row) => (
+            {summary.map((row) => (
               <tr key={row.browser}>
                 <td>{row.browser}</td>
                 <td>

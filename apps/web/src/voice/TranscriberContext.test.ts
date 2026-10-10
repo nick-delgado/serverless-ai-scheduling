@@ -1,6 +1,6 @@
 /**
  * The default Transcriber, #29's real-or-mock factory (r1/Q-2 (a), r1/A-3): the RealTranscriber in a
- * build with the Identity Pool ID, the mock on the dev server without one, none elsewhere.
+ * build with the Identity Pool ID, the mock on the dev server on the Cognito mock, none elsewhere.
  */
 import { renderHook } from "@testing-library/react";
 import { useContext } from "react";
@@ -38,6 +38,18 @@ describe("defaultTranscriber", () => {
     expect(transcriber).toBeInstanceOf(MockTranscriber);
     // Literal: a 0.3 s "permission prompt", then the transcript 1 s after Send.
     expect((transcriber as MockTranscriber).options).toEqual({ startDelayMs: 300, delayMs: 1000 });
+  });
+
+  it("is the RealTranscriber on a dev server with all three IDs", () => {
+    stubDeployedBuild();
+    vi.stubEnv("DEV", true);
+    expect(defaultTranscriber()).toBeInstanceOf(RealTranscriber);
+  });
+
+  it("is none on a dev server on real Cognito without the Identity Pool ID (no mock transcript to the real API)", () => {
+    stubDeployedBuild("");
+    vi.stubEnv("DEV", true);
+    expect(defaultTranscriber()).toBeNull();
   });
 
   it("is the mock on the dev server's Cognito mock even with an Identity Pool ID (its tokens can't be exchanged)", () => {

@@ -43,6 +43,19 @@ export function resolveCognitoConfig(env: CognitoEnv, fallback?: CognitoConfig):
 }
 
 /**
+ * Whether the build sets neither Cognito ID, so the dev server signs in to the Cognito mock
+ * (`session.ts`'s fallback). The mock's tokens can't be exchanged for AWS credentials.
+ */
+export function usesCognitoMock(env: CognitoEnv): boolean {
+  return !env.VITE_USER_POOL_ID?.trim() && !env.VITE_SPA_CLIENT_ID?.trim();
+}
+
+/** The region of an Identity Pool ID such as `us-east-1:…`, its prefix (#29 r1/A-4). */
+export function identityPoolRegion(identityPoolId: string): string {
+  return identityPoolId.slice(0, Math.max(0, identityPoolId.indexOf(":")));
+}
+
+/**
  * The build's Identity Pool ID, or `undefined` when there is none or sign-in uses the mock (the IDs
  * aren't both set). Never throws: a missing ID only takes voice off the real path.
  */

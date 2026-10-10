@@ -7,7 +7,7 @@
  *   deployed build, `scripts/deploy-web.sh`): the `RealTranscriber`, streaming to Amazon Transcribe.
  * - The dev server without it (on the Cognito mock, whose tokens can't get AWS credentials): a
  *   `MockTranscriber` that "hears" a sample sentence about a second after Send.
- * - Any other build without it: none. The mic shows disabled with a one-line note (`NO_VOICE`).
+ * - Any other build without it, the dev server on real Cognito included: none. The mic shows disabled with a one-line note (`NO_VOICE`).
  *
  * Nothing here touches browser audio APIs, fetches credentials or loads the Transcribe SDK; the
  * `RealTranscriber` does all of that in `start()` (r2/A-3). So rendering `<ChatPage>` in jsdom needs
@@ -16,9 +16,9 @@
  */
 import { createContext } from "react";
 
-import { getAwsCredentials, resolveIdentityPoolId } from "../auth";
+import { getAwsCredentials, identityPoolRegion, resolveIdentityPoolId, usesCognitoMock } from "../auth";
 import { MockTranscriber } from "./MockTranscriber";
-import { identityPoolRegion, RealTranscriber } from "./transcribe/RealTranscriber";
+import { RealTranscriber } from "./transcribe/RealTranscriber";
 import type { Transcriber } from "./transcriber";
 import { observeTiming } from "./voiceTiming";
 
@@ -34,7 +34,9 @@ export function defaultTranscriber(): Transcriber | null {
       ...(observeTiming ? { observe: observeTiming } : {}),
     });
   }
-  return import.meta.env.DEV ? new MockTranscriber({ ...DEV_MOCK_OPTIONS }) : null;
+  return import.meta.env.DEV && usesCognitoMock(import.meta.env)
+    ? new MockTranscriber({ ...DEV_MOCK_OPTIONS })
+    : null;
 }
 
 /** The mic's Transcriber; null shows the mic disabled. */

@@ -10,6 +10,12 @@ export {
   type SignInResult,
 } from "./authService";
 export { type AuthContextValue, AuthProvider, type AuthState, useAuth } from "./AuthProvider";
-export { type CognitoConfig, resolveCognitoConfig, resolveIdentityPoolId } from "./config";
+export {
+  type CognitoConfig,
+  identityPoolRegion,
+  resolveCognitoConfig,
+  resolveIdentityPoolId,
+  usesCognitoMock,
+} from "./config";
 export { RequireAuth } from "./RequireAuth";
 export { defaultAuthService, getAwsCredentials, getIdToken } from "./session";

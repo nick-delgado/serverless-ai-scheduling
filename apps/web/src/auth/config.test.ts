@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveCognitoConfig, resolveIdentityPoolId } from "./config";
+import { identityPoolRegion, resolveCognitoConfig, resolveIdentityPoolId, usesCognitoMock } from "./config";
 
 const MOCK = { userPoolId: "us-east-1_Mock", userPoolClientId: "mockclient" };
 
@@ -51,5 +51,21 @@ describe("the Identity Pool ID (S6-02, #29)", () => {
   it("is ignored on the mock fallback, whose tokens can't be exchanged", () => {
     expect(resolveCognitoConfig({ VITE_IDENTITY_POOL_ID: "us-east-1:abc" }, MOCK)).toBe(MOCK);
     expect(resolveIdentityPoolId({ VITE_IDENTITY_POOL_ID: "us-east-1:abc" })).toBeUndefined();
+  });
+});
+
+describe("usesCognitoMock", () => {
+  it("is true only when neither user-pool ID is set", () => {
+    expect(usesCognitoMock({})).toBe(true);
+    expect(usesCognitoMock({ VITE_USER_POOL_ID: " ", VITE_SPA_CLIENT_ID: "" })).toBe(true);
+    expect(usesCognitoMock({ VITE_USER_POOL_ID: "us-east-1_Pool" })).toBe(false);
+    expect(usesCognitoMock({ VITE_SPA_CLIENT_ID: "client" })).toBe(false);
+  });
+});
+
+describe("identityPoolRegion", () => {
+  it("is the Identity Pool ID's prefix", () => {
+    expect(identityPoolRegion("eu-west-2:00000000-0000-4000-8000-000000000000")).toBe("eu-west-2");
+    expect(identityPoolRegion("no-region")).toBe("");
   });
 });
