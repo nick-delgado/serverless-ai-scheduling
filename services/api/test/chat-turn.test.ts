@@ -6,6 +6,7 @@
 import {
   FALLBACK_MESSAGES,
   ScriptedLlmClient,
+  buildSystemPrompt,
   resolveModelProfile,
   scriptedMalformed,
   scriptedMaxTokens,
@@ -20,7 +21,6 @@ import {
   FrozenClock,
   RecordingNotifier,
   createInMemoryRepositories,
-  formatClinicDateTime,
   type InMemoryRepositories,
 } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
@@ -30,7 +30,6 @@ import {
   createInMemoryTurnStore,
   handleChatTurn,
   memorySink,
-  placeholderSystemPrompt,
   type ChatTurnDeps,
   type LogEntry,
 } from "../src";
@@ -109,7 +108,7 @@ function world(
     llm,
     profile: resolveModelProfile("sonnet-4.6"),
     clock,
-    systemPrompt: placeholderSystemPrompt,
+    systemPrompt: buildSystemPrompt,
     dailyTurnCap: options.cap ?? 50,
     notifier,
     newId: uuidSequence(),
@@ -212,21 +211,21 @@ describe("handleChatTurn: happy paths", () => {
   const systemOf = (w: World): string | undefined =>
     w.llm.requests[0]?.system.map((b) => ("text" in b ? b.text : "")).join("\n");
 
-  it("passes the patient's first name and the injected clock's time, in clinic time, to the system prompt", async () => {
+  it("passes the patient's first name and the injected clock's date, in clinic time, to the system prompt", async () => {
     const w = world({ steps: [scriptedText("Hi!")] });
     await w.send("Hello");
     const system = systemOf(w);
-    expect(system).toContain("first name is Maria");
-    // The frozen instant rendered in Eastern Time (9:00 AM), not the wall clock and not UTC (1:00 PM).
-    expect(system).toContain(`Current time: ${formatClinicDateTime(new Date(NOW))}`);
+    expect(system).toContain("The patient's first name, from their profile: Maria.");
+    // The frozen instant's clinic-local date, not the wall clock's.
+    expect(system).toContain("Today is Monday, October 5, 2026 (2026-10-05)");
   });
 
-  it("leaves the first name out of the prompt for a patient with no profile on file", async () => {
+  it("tells the prompt the first name isn't known for a patient with no profile on file", async () => {
     const w = world({ steps: [scriptedText("Hi!")] });
     const { response } = await w.send("Hello", { patientId: NO_PROFILE });
     expect(response.events.at(-1)?.type).toBe("done");
-    expect(systemOf(w)).toContain("Current time:");
-    expect(systemOf(w)).not.toContain("first name is");
+    expect(systemOf(w)).toContain("The patient's first name isn't known.");
+    expect(systemOf(w)).not.toContain("from their profile:");
   });
 
   it("runs tools, streams their status, and stores the tool messages verbatim", async () => {

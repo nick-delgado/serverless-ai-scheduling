@@ -98,7 +98,7 @@ Resources:
           TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
           AGENT_MODEL_PROFILE: !Ref AgentModelProfile
           DAILY_TURN_CAP: !Ref DailyTurnCap
-          # Read by sesNotifierFromEnv (@sched/tools/ses); wired into the tools by #36.
+          # Read by sesNotifierFromEnv (@sched/tools/ses) in handlers/chat.ts, which passes the notifier to the tools.
           SES_SENDER: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]
           SES_STAFF_RECIPIENT: !If [SesConfigured, !Ref SesStaffRecipient, !Ref AWS::NoValue]
           NODE_OPTIONS: --enable-source-maps
@@ -157,8 +157,10 @@ Resources:
               - !Ref AWS::NoValue
 
   # ---------------------------------------------------------------------------------------------
-  # Failed staff notifications (#35): the SES notifier writes an EMF record of Sched/NotificationFailed
-  # (ids only) per failed send. Shared with #38's dashboard. The runbook's retry section says what to do.
+  # Failed staff notifications (#35, #36): one EMF record of Sched/NotificationFailed (ids only) per
+  # escalation stored FAILED. The SES notifier writes it for a failed send; handlers/chat.ts writes it for
+  # every other FAILED (no notifier, an unreadable record). Shared with #38's dashboard. The runbook's
+  # retry section says what to do.
   # ---------------------------------------------------------------------------------------------
   NotificationFailedAlarm:
     Type: AWS::CloudWatch::Alarm

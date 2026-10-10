@@ -40,6 +40,8 @@ import {
   type LlmClient,
   type LlmMessage,
   type ModelProfile,
+  type SystemPrompt,
+  type SystemPromptContext,
 } from "@sched/agent";
 import {
   ChatRequest,
@@ -77,8 +79,10 @@ import {
 import { errorSummary, silentLogger, type Logger } from "./log";
 import { parseJsonBody } from "./request";
 import { EventWriter, type EventSink } from "./stream";
-import type { SystemPromptFactory } from "./system-prompt";
 import type { TurnStore } from "./turn-store";
+
+/** Builds the turn's system prompt. The chat handler passes `buildSystemPrompt` from `@sched/agent`. */
+export type SystemPromptFactory = (context: SystemPromptContext) => SystemPrompt;
 
 /** ADR-009's example cap: 50 agent turns per patient per clinic-local day. */
 export const DEFAULT_DAILY_TURN_CAP = 50;
@@ -429,7 +433,7 @@ class ChatTurn {
       userMessage: text,
       system: this.#deps.systemPrompt({
         now: clock.now(),
-        patientFirstName: profileRecord?.firstName ?? null,
+        patientFirstName: profileRecord?.firstName,
       }),
       executor,
       llm: this.#deps.llm,
