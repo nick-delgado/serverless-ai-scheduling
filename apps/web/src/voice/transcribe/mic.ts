@@ -50,7 +50,7 @@ const DENIED = new Set(["NotAllowedError", "SecurityError"]);
 const NO_DEVICE = new Set(["NotFoundError", "OverconstrainedError"]);
 
 /** An error's `name`: `getUserMedia` rejects with a `DOMException`, which isn't an `Error` everywhere (jsdom). */
-function errorName(error: unknown): string {
+export function errorName(error: unknown): string {
   const name = (error as { name?: unknown } | null | undefined)?.name;
   return typeof name === "string" ? name : "";
 }

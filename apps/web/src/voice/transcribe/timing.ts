@@ -17,7 +17,7 @@
  * with some finals received counts as `ok` here; its transcript, kept in the record, shows the cut.
  */
 import { FINAL_TIMEOUT_MS } from "../useRecording";
-import type { StreamObserver, StreamOutcome } from "./RealTranscriber";
+import type { FailureReason, StreamObserver, StreamOutcome } from "./RealTranscriber";
 
 export const TIMING_STORAGE_KEY = "sched.voiceTiming";
 
@@ -39,9 +39,9 @@ export type Clip = (typeof CLIPS)[number];
 export const CLIP_MIX: Record<Clip, number> = { "5s": 7, "20s": 7, "60s": 6 };
 
 /** A cancel this long after Send is the overlay's 10 s timer giving up, not the tester. */
-export const TIMEOUT_CANCEL_MS = FINAL_TIMEOUT_MS - 500;
+const TIMEOUT_CANCEL_MS = FINAL_TIMEOUT_MS - 500;
 
-export type FailureKind = "error" | "closed-early" | "no-final" | "timeout" | "hidden" | "mic-ended";
+export type FailureKind = FailureReason | "no-final" | "timeout";
 
 export interface TimingLabels {
   browser: Browser;

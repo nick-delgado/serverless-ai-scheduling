@@ -7,6 +7,7 @@
 import { ListTranscriptionJobsCommand, TranscribeClient } from "@aws-sdk/client-transcribe";
 
 import type { AwsCredentials } from "../../auth/authService";
+import { errorName } from "./mic";
 import type { RoleCheck } from "./timing";
 
 export const ROLE_CHECK_ACTION = "transcribe:ListTranscriptionJobs";
@@ -26,7 +27,7 @@ export async function checkRoleScope(
       result: "ALLOWED: the role is too broad",
     };
   } catch (error) {
-    const name = error instanceof Error ? error.name : "unknown error";
+    const name = errorName(error) || "unknown error";
     const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
     return {
       at: at.toISOString(),

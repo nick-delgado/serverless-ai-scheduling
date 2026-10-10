@@ -8,7 +8,6 @@ import {
   exportTiming,
   p95,
   summarize,
-  TIMEOUT_CANCEL_MS,
   TIMING_STORAGE_KEY,
   type TimingRun,
   TimingStore,
@@ -78,27 +77,27 @@ describe("classify", () => {
     ).toEqual({ outcome: "failed", failure: "hidden", detail: "hidden", finals: 0, finalsBeforeSend: 0 });
   });
 
-  it("is a timeout when the overlay gave up 10 s after Send", () => {
-    expect(
-      classify(
-        { recording: 0, send: 5_000, finals: [], end: 5_000 + TIMEOUT_CANCEL_MS },
-        { status: "cancelled", afterSend: true },
-      ),
-    ).toMatchObject({ outcome: "failed", failure: "timeout" });
+  /** A cancel `ms` after Send, while the stream is still open. */
+  const cancelAfter = (ms: number) =>
+    classify(
+      { recording: 0, send: 5_000, finals: [], end: 5_000 + ms },
+      { status: "cancelled", afterSend: true },
+    );
+
+  // Literal times, not TIMEOUT_CANCEL_MS: the overlay gives up exactly 10 000 ms after Send (FR-022,
+  // useRecording's FINAL_TIMEOUT_MS), so a threshold that moves past it, or far below 9 500 ms, goes red.
+  it.each([10_000, 9_500])("is a timeout when cancelled %i ms after Send (the overlay giving up)", (ms) => {
+    expect(cancelAfter(ms)).toMatchObject({ outcome: "failed", failure: "timeout" });
   });
 
-  it("is a tester's cancel, which doesn't count, sooner after Send or before it", () => {
-    expect(
-      classify(
-        { recording: 0, send: 5_000, finals: [], end: 6_000 },
-        { status: "cancelled", afterSend: true },
-      ),
-    ).toMatchObject({ outcome: "cancelled" });
+  it.each([9_000, 1_000])("is a tester's cancel, which doesn't count, %i ms after Send", (ms) => {
+    expect(cancelAfter(ms)).toMatchObject({ outcome: "cancelled" });
+  });
+
+  it("is a tester's cancel, which doesn't count, before Send", () => {
     expect(
       classify({ recording: 0, finals: [], end: 900 }, { status: "cancelled", afterSend: false }),
-    ).toMatchObject({
-      outcome: "cancelled",
-    });
+    ).toMatchObject({ outcome: "cancelled" });
   });
 });
 

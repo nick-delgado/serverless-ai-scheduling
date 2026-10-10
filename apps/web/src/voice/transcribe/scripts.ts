@@ -1,7 +1,8 @@
 /**
  * The three utterance scripts for AC6's runs (#29 r2/Q-2 edges), shown by the timing panel so the
  * tester reads them off the device. A copy of `SCRIPTS` in `spikes/s3-transcribe-browser/src/
- * scripts.ts` (the spike stays as it is, and apps don't import spikes); keep the two in sync. Everyone
+ * scripts.ts` (the spike stays as it is, and apps don't import spikes), whose README repeats them too;
+ * keep the three copies in sync (`scripts.test.ts` compares this one with the spike's source). Everyone
  * named is fictional (CLAUDE.md rule 6). The 60 s script runs a little past 60 s, into the auto-send.
  */
 import type { Clip } from "./timing";

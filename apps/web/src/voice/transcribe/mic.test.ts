@@ -211,6 +211,7 @@ describe("openMic", () => {
     expect(error).toBeInstanceOf(TranscriberError);
     expect(error).toMatchObject({ kind: "failed" });
     expect(track.stop).toHaveBeenCalled();
+    expect(ctx.close).toHaveBeenCalled();
   });
 });
 
