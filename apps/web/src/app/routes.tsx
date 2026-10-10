@@ -45,7 +45,9 @@ export const pageRoutes: RouteObject[] = [
 /**
  * The route tree. The error boundary sits on a pathless route inside the layout, so a page that
  * throws still renders with the header and disclaimer. Auth state wraps everything; tests can pass
- * their own `AuthService`.
+ * their own `AuthService`. An injected `AuthService` drives sign-in state and the 401 sign-out, but the
+ * chat's token always comes from the app's auth service (`chatApi` above, `getIdToken` from
+ * `src/auth/session.ts`).
  */
 export function appRoutes(pages: RouteObject[] = pageRoutes, auth?: AuthService): RouteObject[] {
   return [

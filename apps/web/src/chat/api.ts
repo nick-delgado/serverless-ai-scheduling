@@ -3,7 +3,8 @@
  *
  * Auth is injected: `getToken` returns the Cognito ID token, sent raw as `Authorization` (what the
  * REST API's Cognito authorizer reads). Without a getter, or when it returns nothing, no header is
- * sent, which is what the mock API expects. Wiring in the login's token getter is #36.
+ * sent, which is what the mock API expects. The app's `/chat` route passes the login's token getter
+ * (`src/app/routes.tsx`, #29).
  *
  * Failures are typed so the error and retry UI (#27) can tell them apart:
  * - `ChatHttpError`: a non-2xx response that carried no stream `error` event (e.g. API Gateway's 401);

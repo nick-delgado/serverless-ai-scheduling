@@ -75,8 +75,8 @@ The header is the raw ID token, as `chat/api.ts` and the API's Cognito authorize
 | Android Chrome | 20 / 20 | 0 | 270 ms | 431 ms | 0 | 272 ms |
 | Firefox, Edge (best effort) | not run | | | | | |
 
-  - **Failures:** none, 0 failed streams in 80 counted runs. Every measured browser is far inside NFR-002's 2 s.
-  - **Transcripts:** every 5 s and 20 s transcript ends with its script's last words, so no socket dropped mid-answer unnoticed. The 60 s ones stop where the auto-send cut the script.
+  - **Failures:** none counted: 0 failed streams in 80 runs, as the classifier counts them. Every measured browser is far inside NFR-002's 2 s.
+  - **What the count can't see:** a socket that closes after Send once some finals have arrived. The SDK ends its stream without an error then, and the WebSocket instrumentation that could see the close stayed in the spike, as ADR-006 directed. The agent checked by hand only the 5 s and 20 s transcripts, 14 of each browser's 20 runs: each ends with its script's last words, so none of those lost its last finals. The 60 s transcripts stop where the auto-send cut the script, so reading them can't show a cut. Nick accepted the count as AC6's evidence with this gap stated (review decision a36d8e0/SPEC-1 (a) on PR #231).
   - **The one slow run:** a 60 s clip on iOS whose last final came 1.2 s after the auto-send. It's still well under 2 s, and it sits above the p95.
   - These numbers are in line with the spike's (156 to 276 ms stop→final p95), now on the shipped bundle.
 - **Hidden-page checks:** Nick locked the screen or switched apps mid-recording once on the iPhone and once on Android. Each time he saw the FR-024 error with Record again / Type instead, and each export records the run as `failed` with `failure: hidden`, marked deliberate and left out of the counts.
@@ -86,4 +86,6 @@ The header is the raw ID token, as `chat/api.ts` and the API's Cognito authorize
 
 ## What's next
 
-`voice29` is torn down once Nick has no more checks for it. #36, now without its token-wiring criterion, checks voice end to end on `dev` once this is deployed there.
+#36, now without its token-wiring criterion, checks voice end to end on `dev` once this is deployed there.
+
+`voice29` is still up: it is torn down with `scripts/teardown.sh voice29` once Nick approves it after the review re-check (review decision a36d8e0/SPEC-3 (a) on PR #231).
