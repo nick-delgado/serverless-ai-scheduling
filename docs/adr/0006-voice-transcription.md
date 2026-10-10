@@ -105,3 +105,14 @@ Results: [summary](../../spikes/s3-transcribe-browser/results/summary-2026-10-08
 - **Page hidden mid-recording** (the open item in "For #29" above): an error on every browser (#29 r2/Q-1 (a)). When the page becomes hidden while recording, the Transcriber calls `onError` with `failed`, stops the mic and closes the stream, and the overlay shows FR-024's retry / type-instead. Hidden during the permission prompt or after Send isn't an error.
 - **Measuring on the shipped bundle:** AC6's timings come from an opt-in build flag, `VITE_VOICE_TIMING=1`, on an ephemeral env; other builds contain no timing code (#29 r2/Q-2 (a)).
 - The rest of "For #29" was built as written: the empty `AudioEvent` with the input kept open, the native-rate context created at the tap and resumed before `addModule`, 1600-sample chunks, no stabilization, and the SDK lazy-loaded (`apps/web/src/voice/transcribe/`).
+- **#29's AC6 runs** (2026-10-09, the shipped bundle on an ephemeral env, the spike's three scripts, 20 counted runs per browser) passed on all four measured browsers, with 0 failed streams. Firefox and Edge weren't run.
+
+| Browser | ok / counted runs | failed | stop→final p95 | Send→stream end p95 | finals before Send |
+|---|---|---|---|---|---|
+| Chrome (desktop) | 20 / 20 | 0 | 205 ms | 325 ms | 0 |
+| Safari (macOS) | 20 / 20 | 0 | 183 ms | 209 ms | 2 |
+| iOS Safari | 20 / 20 | 0 | 243 ms | 266 ms | 0 |
+| Android Chrome | 20 / 20 | 0 | 270 ms | 431 ms | 0 |
+| Firefox, Edge (best effort) | not run | | | | |
+
+  The "Revisit if" rule wasn't triggered, so no browser takes the batch fallback. A deliberate hidden-page check on iOS Safari and on Android Chrome each ended in the FR-024 error, as decided above. The same Identity Pool credentials were refused `transcribe:ListTranscriptionJobs` (`AccessDeniedException`) on every browser.

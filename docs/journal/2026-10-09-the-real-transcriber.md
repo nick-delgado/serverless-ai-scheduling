@@ -65,8 +65,25 @@ The header is the raw ID token, as `chat/api.ts` and the API's Cognito authorize
 ## Evidence
 
 - Tests: the real Transcriber against a fake Transcribe client and a fake mic; `useRecording` giving up 10 s after Send closes the fake client; the worklet run in jsdom with stubbed globals; and both production builds.
-- AC4 (role check on the ephemeral env) and AC6 (timed runs on four browsers) are pending Nick's runs; their numbers will be added here and in the PR.
+- **AC6:** Nick read the spike's three scripts into each browser on `voice29`, on 2026-10-09: 7 × ~5 s, 7 × ~20 s and 6 × ~60 s, so 20 counted runs per browser. The table comes from the timing panel's exports, which the agent re-derived from the raw runs. p95 is nearest rank over each browser's 20 runs, and a final before Send counts as 0 ms.
+
+| Browser | ok / counted runs | failed | stop→final p95 | Send→stream end p95 | finals before Send | slowest run (stop→final) |
+|---|---|---|---|---|---|---|
+| Chrome (desktop) | 20 / 20 | 0 | 205 ms | 325 ms | 0 | 250 ms |
+| Safari (macOS) | 20 / 20 | 0 | 183 ms | 209 ms | 2 | 233 ms |
+| iOS Safari | 20 / 20 | 0 | 243 ms | 266 ms | 0 | 1235 ms |
+| Android Chrome | 20 / 20 | 0 | 270 ms | 431 ms | 0 | 272 ms |
+| Firefox, Edge (best effort) | not run | | | | | |
+
+  - **Failures:** none, 0 failed streams in 80 counted runs. Every measured browser is far inside NFR-002's 2 s.
+  - **Transcripts:** every 5 s and 20 s transcript ends with its script's last words, so no socket dropped mid-answer unnoticed. The 60 s ones stop where the auto-send cut the script.
+  - **The one slow run:** a 60 s clip on iOS whose last final came 1.2 s after the auto-send. It's still well under 2 s, and it sits above the p95.
+  - These numbers are in line with the spike's (156 to 276 ms stop→final p95), now on the shipped bundle.
+- **Hidden-page checks:** Nick locked the screen or switched apps mid-recording once on the iPhone and once on Android. Each time he saw the FR-024 error with Record again / Type instead, and each export records the run as `failed` with `failure: hidden`, marked deliberate and left out of the counts.
+- **AC4:** the deployed `sched-voice29-auth` template gives the Identity Pool role one inline policy, `transcribe-streaming-only`, with the single action `transcribe:StartStreamTranscriptionWebSocket`, no managed policies, and trust only for authenticated identities of its own pool. With the same signed-in credentials that streamed the transcripts above, the panel's `transcribe:ListTranscriptionJobs` call was refused with `AccessDeniedException (HTTP 400)` on all four browsers.
+- **No follow-up issues:** no browser missed 2 s or had more than one failed stream, so ADR-006's "Revisit if" didn't trigger.
+- **The raw exports aren't committed:** they stay on Nick's machine, and this table summarises them.
 
 ## What's next
 
-Nick runs AC4 and AC6 on the `voice29` env, then the env is torn down. #36 checks voice end to end on `dev`.
+`voice29` is torn down once Nick has no more checks for it. #36, now without its token-wiring criterion, checks voice end to end on `dev` once this is deployed there.
