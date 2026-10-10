@@ -23,6 +23,7 @@
     "mutate": "tsx scripts/mutate.ts",
     "dup:changed": "tsx scripts/dup-changed.ts",
     "evals": "tsx packages/evals/src/cli.ts",
+    "evals:matrix": "tsx packages/evals/src/matrix.ts",
     "seed:data": "tsx scripts/seed-data.ts"
   },
   "devDependencies": {

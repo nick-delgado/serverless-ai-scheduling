@@ -95,7 +95,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 | ID | Pri | Requirement | Acceptance criteria |
 |---|---|---|---|
 | FR-040 | M | Eval harness CLI | `npm run evals -- --suite <smoke\|full> --mode <l1\|scenario> --profile <model-profile> --trials <k>` runs single-turn L1 cases (the default mode) or multi-turn scenarios with the patient simulator, and writes JSON + markdown reports with the §7 metrics. `--max-cost` is a budget guard; `--dry-run` lists the cases with a cost estimate. |
-| FR-041 | M | CI eval gate | An eval-gate job runs on every PR, always reports, and is a required check. When no agent, tools, prompt or model-config path changed, it passes without calling Bedrock. Otherwise it runs the smoke suite in both modes (k=1) on the development-default profile (`sonnet-4.6` today) with `--max-cost 1`, and fails on any safety violation (as ADR-008 defines it), more than one case below the committed baseline in either mode, a budget-stopped case, or a case still `error` after one re-run of the errored cases. Credentials come from the GitHub OIDC role (#41). Other profiles' results feed the M3 matrix and don't gate. |
+| FR-041 | M | CI eval gate | An eval-gate job runs on every PR, always reports, and is a required check. When no gated path changed (the agent, tools, prompt or model config, the contracts they share, or the eval harness's own code, scenarios and baselines, and the gate's own script; ADR-008's 2026-10-09 amendment lists them), it passes without calling Bedrock. Otherwise it runs the smoke suite in both modes (k=1) on the development-default profile (`sonnet-4.6` today) with `--max-cost 1`, and fails on any safety violation (as ADR-008 defines it), more than one case below the committed baseline in either mode, a budget-stopped case, or a case still `error` after one re-run of the errored cases. Credentials come from the GitHub OIDC role (#41). Other profiles' results feed the M3 matrix and don't gate. |
 | FR-042 | S | Model comparison report | One command produces the comparison across the six entitled model profiles (Claude, Amazon Nova and OpenAI gpt-oss, all through Bedrock Converse), with effort levels only where a profile has a reasoning switch, used to choose the production profile (ADR-002's method, ADR-010's profiles). Cost compares the agent's share, not the simulator's. The production profile is the cheapest, by agent cost per completed conversation (NFR-003), that meets every §7 target and NFR-001, with the lower p95 breaking ties; if none qualifies, `sonnet-4.6` stays and the reason is recorded (#37). |
 | FR-050 | M | Reproducible deploys | Each stack deploys with one documented command. A new environment in an account where the bootstrap and the runbook's one-time steps are done deploys from the runbook alone. |
 | FR-051 | S | Per-turn trace | Each agent turn persists a trace (model calls, tool calls, latency, tokens, cache reads) viewable for debugging. |
@@ -150,7 +150,7 @@ These are M3 exit criteria. Measured by the eval harness (ADR-008) on the produc
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | **M0 Foundations** (Phase 0) | CLAUDE.md, ADRs, PRD, research, runbook, workflow skills, backlog | Docs merged; AWS access works; backlog on the Project board |
-| **M1 Contracts + walking skeleton** | Monorepo, contracts, repo interfaces + in-memory fakes, SAM skeletons, streaming hello-world through CloudFront→API→Lambda→Bedrock, CI, spikes S-1/S-3 | Skeleton deployed to `dev`; CI green; ADR-007 accepted (S-2); ADR-002/010 updated with S-1/S-1c data. S-3 (#10) moved to M2, and ADR-006 stays Proposed until it lands; S-1b (#49, blocked on AWS entitlement) moved to M3 |
+| **M1 Contracts + walking skeleton** | Monorepo, contracts, repo interfaces + in-memory fakes, SAM skeletons, streaming hello-world through CloudFront→API→Lambda→Bedrock, CI, spikes S-1/S-3 | Skeleton deployed to `dev`; CI green; ADR-007 accepted (S-2); ADR-002/010 updated with S-1/S-1c data. S-3 (#10) moved to M2, and ADR-006 stays Proposed until it lands; S-1b (#49, blocked on AWS entitlement) moved to M3, then closed as not planned on 2026-10-09 when AWS declined the entitlement |
 | **M2 Parallel build** | Streams S1–S8 (auth, data, agent, tools, chat UI, voice, evals, escalation), spike S-3, plus follow-ups filed from PR reviews | Each stream's issues closed with DoD; smoke evals runnable |
 | **M3 Integration and hardening** | Wire real repos/tools, full eval matrix, model decision, observability, security review, E2E test | §7 targets met; production profile chosen and recorded (ADR-002's method, ADR-010's profiles; #37); security review done |
 | **M4 Story** | Narrative README, diagrams, eval results, demo script/video | README reads as a story; demo reproducible |
@@ -159,18 +159,18 @@ These are M3 exit criteria. Measured by the eval harness (ADR-008) on the produc
 
 | Risk / question | Mitigation / owner |
 |---|---|
-| Opus 5 / Sonnet 5 not entitled on this account | Model choice is config; six entitled profiles via Converse (ADR-010); S-1b (#49) when AWS lifts the restriction |
+| Opus 5 / Sonnet 5 not entitled on this account | Model choice is config; six entitled profiles via Converse (ADR-010). AWS Support declined to enable them, so S-1b (#49) was closed as not planned (2026-10-09) and the six entitled profiles stand |
 | Streaming through CloudFront/SAM has rough edges | Spike S-2; buffered fallback shape already in the contract (ADR-007). **Retired:** S-2 passed (ADR-007 accepted) |
 | Safari AudioWorklet or Transcribe WebSocket quirks | Spike S-3; batch fallback behind the `Transcriber` interface (ADR-006). **Retired:** S-3 passed (ADR-006 accepted; 0 failed streams in 80 runs on four browsers, stop→final p95 ≤ 276 ms); the quirks it found are listed for #29 |
 | LLM judge unreliable | Calibration set; deterministic checks carry the safety metrics (ADR-008) |
 | Eval runs cost more than expected | Smoke suite on PRs only; estimate before full runs; results report actual spend |
 | SES sandbox limits recipients | Verified recipient for the demo; documented |
-| Bedrock quota (10 RPM for Claude) slows eval runs | One token bucket per model at 90% of quota (ADR-008); quota increase requested (#49) |
+| Bedrock quota (10 RPM for Claude) slows eval runs | One token bucket per model at 90% of quota (ADR-008), the standing mitigation: AWS declined the quota increases for Sonnet 4.6 and Haiku 4.5, both still 10 RPM (checked 2026-10-09) |
 | A cheaper profile fails safety checks the prompt can't fix | Guards outside the prompt (#107); only the development-default profile gates PRs |
 
 ## 10. Traceability
 
-Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and updated on 2026-10-03 with the follow-up issues filed from PR reviews (#49–#122); keep it updated when issues are added or split. Dependency map: [`docs/backlog.md`](backlog.md).
+Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and updated on 2026-10-03 with the follow-up issues filed from PR reviews (#49–#122), and on 2026-10-09 (#227: #49 closed as not planned and removed); keep it updated when issues are added or split. Dependency map: [`docs/backlog.md`](backlog.md).
 
 | Requirement | Issue(s) |
 |---|---|
@@ -201,7 +201,7 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | FR-038 | _deferred to v1.1 (Could)_; v1 escalates cancel-only: #16, #33 |
 | FR-040 | #30, #31, #32, #34, #105, #108 |
 | FR-041 | #8, #34, #41, #98 |
-| FR-042 | #34, #37, #49, #60 |
+| FR-042 | #34, #37, #60 |
 | FR-050 | #6, #41, #42, #100 |
 | FR-051 | #15, #17, #38 |
 | NFR-001 | #7, #9, #37, #38 |

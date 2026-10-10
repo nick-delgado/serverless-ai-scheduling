@@ -1,6 +1,7 @@
 /**
- * Helpers for the scripts' tests. A throwaway git repository (coverage-changed, pr-evidence, dup-changed, journal-links;
- * #184 shared it when the duplicate check flagged the third copy): `main` checked out, no commits, a test identity and no signing.
+ * Helpers for the scripts' tests. A throwaway git repository (coverage-changed, pr-evidence, dup-changed, journal-links,
+ * eval-gate; #184 shared it when the duplicate check flagged the third copy): `main` checked out, no commits, a test
+ * identity and no signing.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";

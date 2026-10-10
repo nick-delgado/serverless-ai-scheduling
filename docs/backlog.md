@@ -1,6 +1,6 @@
 # Backlog map
 
-The **source of truth for status** is GitHub: issues, labels, milestones, native *blocked by* links, and the [project board](https://github.com/users/nick-delgado/projects/1). This page is the static map: which streams exist, what depends on what, and which issues can run in parallel. Regenerate it if the backlog's structure changes. Last updated 2026-10-03 (#123): the follow-up issues filed from PR reviews are added, and the milestone moves and new blockers decided in the drift audit are shown. Of the issues filed since M2 started, only the open follow-ups are mapped; closed ones (such as #56, #57, #60 and #88) are on GitHub, which is the source of truth for them.
+The **source of truth for status** is GitHub: issues, labels, milestones, native *blocked by* links, and the [project board](https://github.com/users/nick-delgado/projects/1). This page is the static map: which streams exist, what depends on what, and which issues can run in parallel. Regenerate it if the backlog's structure changes. Last updated 2026-10-03 (#123): the follow-up issues filed from PR reviews are added, and the milestone moves and new blockers decided in the drift audit are shown. Updated 2026-10-09 (#227): #49 is closed as not planned. Of the issues filed since M2 started, only the open follow-ups are mapped; closed ones (such as #56, #57, #60 and #88) are on GitHub, which is the source of truth for them.
 
 **How to pick work:** use the `task-workflow` skill. Only issues labeled `status:ready` (all blockers closed) are claimable. When you close an issue, promote any dependents whose blockers are now all closed from `status:backlog` to `status:ready`.
 
@@ -33,7 +33,7 @@ flowchart LR
     S3_02["#16 S3-02<br/>System prompt v1 and agent behavior policy"]
     S3_03["#17 S3-03<br/>Chat streaming Lambda handler POST /api/chat"]
     S3_04["#18 S3-04<br/>Session endpoint: personalized greeting + conver"]
-    F49["#49 M1-07b<br/>Spike S-1b: Opus 5 / Sonnet 5 once entitled"]
+    F49["#49 M1-07b<br/>Spike S-1b: closed, not planned (AWS declined)"]
     F104["#104<br/>Chat retries: de-duplicate by clientMessageId"]
     F105["#105<br/>Shared agent helpers (absorbs #85)"]
     F107["#107<br/>Nova Pro safety guards outside the prompt"]
@@ -207,7 +207,7 @@ After M1 lands, these streams run in parallel; each owns distinct paths (listed 
 | Foundation (M0/M1) | [#1](https://github.com/nick-delgado/serverless-ai-scheduling/issues/1) M0-01, [#2](https://github.com/nick-delgado/serverless-ai-scheduling/issues/2) M0-02, [#3](https://github.com/nick-delgado/serverless-ai-scheduling/issues/3) M1-01, [#4](https://github.com/nick-delgado/serverless-ai-scheduling/issues/4) M1-02, [#5](https://github.com/nick-delgado/serverless-ai-scheduling/issues/5) M1-03, [#6](https://github.com/nick-delgado/serverless-ai-scheduling/issues/6) M1-04, [#7](https://github.com/nick-delgado/serverless-ai-scheduling/issues/7) M1-05, [#8](https://github.com/nick-delgado/serverless-ai-scheduling/issues/8) M1-06; follow-up [#113](https://github.com/nick-delgado/serverless-ai-scheduling/issues/113) | — |
 | S1 Auth | [#12](https://github.com/nick-delgado/serverless-ai-scheduling/issues/12) S1-01, [#25](https://github.com/nick-delgado/serverless-ai-scheduling/issues/25) S1-02 | #6 M1-04, #24 S5-01 |
 | S2 Data | [#13](https://github.com/nick-delgado/serverless-ai-scheduling/issues/13) S2-01, [#14](https://github.com/nick-delgado/serverless-ai-scheduling/issues/14) S2-02 | #5 M1-03, #6 M1-04, #12 S1-01 |
-| S3 Agent | [#9](https://github.com/nick-delgado/serverless-ai-scheduling/issues/9) M1-07, [#15](https://github.com/nick-delgado/serverless-ai-scheduling/issues/15) S3-01, [#16](https://github.com/nick-delgado/serverless-ai-scheduling/issues/16) S3-02, [#17](https://github.com/nick-delgado/serverless-ai-scheduling/issues/17) S3-03, [#18](https://github.com/nick-delgado/serverless-ai-scheduling/issues/18) S3-04; follow-ups [#49](https://github.com/nick-delgado/serverless-ai-scheduling/issues/49), [#104](https://github.com/nick-delgado/serverless-ai-scheduling/issues/104), [#105](https://github.com/nick-delgado/serverless-ai-scheduling/issues/105), [#107](https://github.com/nick-delgado/serverless-ai-scheduling/issues/107), [#114](https://github.com/nick-delgado/serverless-ai-scheduling/issues/114), [#121](https://github.com/nick-delgado/serverless-ai-scheduling/issues/121) | #2 M0-02, #4 M1-02, #7 M1-05, #13 S2-01 |
+| S3 Agent | [#9](https://github.com/nick-delgado/serverless-ai-scheduling/issues/9) M1-07, [#15](https://github.com/nick-delgado/serverless-ai-scheduling/issues/15) S3-01, [#16](https://github.com/nick-delgado/serverless-ai-scheduling/issues/16) S3-02, [#17](https://github.com/nick-delgado/serverless-ai-scheduling/issues/17) S3-03, [#18](https://github.com/nick-delgado/serverless-ai-scheduling/issues/18) S3-04; follow-ups [#49](https://github.com/nick-delgado/serverless-ai-scheduling/issues/49) (closed, not planned), [#104](https://github.com/nick-delgado/serverless-ai-scheduling/issues/104), [#105](https://github.com/nick-delgado/serverless-ai-scheduling/issues/105), [#107](https://github.com/nick-delgado/serverless-ai-scheduling/issues/107), [#114](https://github.com/nick-delgado/serverless-ai-scheduling/issues/114), [#121](https://github.com/nick-delgado/serverless-ai-scheduling/issues/121) | #2 M0-02, #4 M1-02, #7 M1-05, #13 S2-01 |
 | S4 Tools | [#11](https://github.com/nick-delgado/serverless-ai-scheduling/issues/11) M1-09, [#19](https://github.com/nick-delgado/serverless-ai-scheduling/issues/19) S4-01, [#20](https://github.com/nick-delgado/serverless-ai-scheduling/issues/20) S4-02, [#21](https://github.com/nick-delgado/serverless-ai-scheduling/issues/21) S4-03, [#22](https://github.com/nick-delgado/serverless-ai-scheduling/issues/22) S4-04, [#23](https://github.com/nick-delgado/serverless-ai-scheduling/issues/23) S4-05; follow-up [#77](https://github.com/nick-delgado/serverless-ai-scheduling/issues/77) | #4 M1-02, #5 M1-03 |
 | S5 Chat UI | [#24](https://github.com/nick-delgado/serverless-ai-scheduling/issues/24) S5-01, [#26](https://github.com/nick-delgado/serverless-ai-scheduling/issues/26) S5-02, [#27](https://github.com/nick-delgado/serverless-ai-scheduling/issues/27) S5-03; follow-ups [#99](https://github.com/nick-delgado/serverless-ai-scheduling/issues/99), [#100](https://github.com/nick-delgado/serverless-ai-scheduling/issues/100), [#122](https://github.com/nick-delgado/serverless-ai-scheduling/issues/122) | #3 M1-01, #4 M1-02 |
 | S6 Voice | [#10](https://github.com/nick-delgado/serverless-ai-scheduling/issues/10) M1-08, [#28](https://github.com/nick-delgado/serverless-ai-scheduling/issues/28) S6-01, [#29](https://github.com/nick-delgado/serverless-ai-scheduling/issues/29) S6-02 | #2 M0-02, #12 S1-01, #24 S5-01 |
@@ -227,7 +227,7 @@ Phase 0: CLAUDE.md, ADRs, PRD, research, runbook, workflow skills, backlog; AWS 
 
 ## M1 Contracts + walking skeleton
 
-Monorepo, contracts, repo interfaces + in-memory fakes, SAM skeletons, streaming hello-world through CloudFront→API→Lambda→Bedrock, CI, spikes S-1/S-2/S-3. Spike S-3 (#10) moved to M2, and S-1b (#49) to M3 (decided in the drift audit, #123).
+Monorepo, contracts, repo interfaces + in-memory fakes, SAM skeletons, streaming hello-world through CloudFront→API→Lambda→Bedrock, CI, spikes S-1/S-2/S-3. Spike S-3 (#10) moved to M2, and S-1b (#49) to M3 (decided in the drift audit, #123). #49 was closed as not planned on 2026-10-09: AWS declined the Opus 5 / Sonnet 5 entitlement (#227).
 
 | # | ID | Task | Stream | Type | PRD | Blocked by |
 |---|---|---|---|---|---|---|
@@ -269,7 +269,7 @@ Streams S1–S8: auth, data, agent, tools, chat UI, voice, evals, escalation; sp
 | [#31](https://github.com/nick-delgado/serverless-ai-scheduling/issues/31) | S7-02 | Patient simulator (model from a profile; Sonnet 4.6 by default) with personas and stop conditions | evals | eval | — | #30, #9 |
 | [#32](https://github.com/nick-delgado/serverless-ai-scheduling/issues/32) | S7-03 | LLM judge, rubrics, and calibration workflow | evals | eval | PRD §7 | #30 |
 | [#33](https://github.com/nick-delgado/serverless-ai-scheduling/issues/33) | S7-04 | Author ~40 eval scenarios + L1 cases from the PRD (eval-first) | evals | eval | FR-030–FR-037, PRD §7 | #5 |
-| [#34](https://github.com/nick-delgado/serverless-ai-scheduling/issues/34) | S7-05 | Eval reports, model matrix, baselines, CI smoke gate, run-evals skill | evals | eval | FR-040, FR-041, FR-042 | #30, #31, #32, #8, #98, #41 |
+| [#34](https://github.com/nick-delgado/serverless-ai-scheduling/issues/34) | S7-05 | Eval reports, model matrix, baselines, CI smoke gate, run-evals skill | evals | eval | FR-040, FR-041, FR-042 | #30, #31, #32, #8, #98, #41, #171, #178 |
 | [#35](https://github.com/nick-delgado/serverless-ai-scheduling/issues/35) | S8-01 | SES notifier: escalation email with summary + transcript | escalation | feature | FR-034 | #23, #6 |
 
 **Follow-ups filed from PR reviews (M2):**
@@ -308,7 +308,7 @@ Wire real repos/tools, full eval matrix + model decision, observability, securit
 | # | Task | Stream | Type | PRD | Blocked by |
 |---|---|---|---|---|---|
 | [#107](https://github.com/nick-delgado/serverless-ai-scheduling/issues/107) | Nova Pro safety guards outside the prompt: strip `<thinking>` from visible text, keep patient-supplied IDs out of escalation summaries | agent | feature | FR-037 | #16 |
-| [#49](https://github.com/nick-delgado/serverless-ai-scheduling/issues/49) | Spike S-1b: measure Opus 5 / Sonnet 5 once AWS lifts the entitlement restriction (moved from M1) | agent | spike | NFR-001, NFR-003 | AWS entitlement (external) |
+| [#49](https://github.com/nick-delgado/serverless-ai-scheduling/issues/49) | Spike S-1b: measure Opus 5 / Sonnet 5 (moved from M1). **Closed, not planned (2026-10-09):** AWS declined the entitlement, so the six entitled profiles stand (ADR-010; #227) | agent | spike | NFR-001, NFR-003 | — |
 
 ## M4 Story
 

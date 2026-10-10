@@ -1,8 +1,8 @@
 /**
  * `npm run evals -- --suite smoke|full --mode l1|scenario --profile <name> --trials <k>`
  *
- * `--mode` defaults to `l1` until the simulator (#31) makes scenarios runnable; #34 switches it (owner
- * decision on PR #71, ADR-008 amendment).
+ * `--mode` defaults to `l1` and stays so (drift-audit decision 7, ADR-008 amendment 2026-10-03); the CI
+ * eval gate passes `--mode` explicitly. The full guide is the `run-evals` skill.
  *
  * Live runs call Bedrock (cost real money): every call goes through the shared per-model rate limiter
  * with 429 backoff, a budget guard stops the run at `--max-cost`, and the estimated cost is printed
@@ -27,8 +27,13 @@
  * (it prints only its estimate) and writes its report to `--out`; it prints its estimate before calling
  * the judge. The export ignores `--dry-run`.
  *
- * Other flags: `--filter <substring>[,<substring>…]`, `--max-cost <usd>` (default 1), `--dry-run`
- * (list cases and the estimate, no calls), `--out <dir>`.
+ * Steps on saved results files, no model calls (#34): `--exit-report <a.json> <b.json>` writes the PRD §7
+ * exit table from one L1 and one scenario results file to `--out`; `--update-baseline <a.json> <b.json>`
+ * promotes one L1 and one scenario smoke run at k=1 to `packages/evals/baselines/<profile>.json`.
+ *
+ * Other flags: `--filter <substring>[,<substring>…]`, `--ids <id>[,<id>…]` (exactly these case IDs; the CI
+ * gate's re-run of errored cases), `--max-cost <usd>` (default 1), `--dry-run` (list cases and the
+ * estimate, no calls), `--out <dir>`.
  */
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -50,6 +55,7 @@ import {
   runOptions,
   selectCases,
   simulatorSetup,
+  resultsStep,
 } from "./cli-args";
 import { loadScenarios } from "./loader";
 import { errorReason } from "./util";
@@ -59,7 +65,7 @@ import { failedChecks, markdownSummary, runSuite } from "./suite";
 
 const RESULTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "results");
 
-/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's and results-copy.ts's tested functions (setup, options, the calibration step and files, usage errors, the results copy and its writes); what stays here is untested wiring: the client, the checkout path, the calibration-or-run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results line (the copy warning goes through results-copy.ts). */
+/* v8 ignore start -- the process entry point: main() runs only as a script under tsx, never in tests. Its steps are cli-args.ts's and results-copy.ts's tested functions (setup, options, the calibration step and files, the exit-report and baseline steps, usage errors, the results copy and its writes); what stays here is untested wiring: the client, the checkout path, the calibration, results-step or run dispatch, the replay file read, the estimate line's wording (judge included), the progress lines, and printing the results line (the copy warning goes through results-copy.ts). */
 /** The checkout running the CLI: `packages/evals/src/../../..`. */
 const CHECKOUT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -72,6 +78,11 @@ async function main(): Promise<void> {
   const args = orUsageError(() => parseCliArgs(process.argv.slice(2), RESULTS_DIR), fail);
   const { mode, suite, trials, maxCostUsd, profile } = args;
   const loaded = loadScenarios();
+  if (args.resultsStep !== undefined) {
+    const step = { ...args, resultsStep: args.resultsStep };
+    orUsageError(() => resultsStep(step, fileCalibrationDeps(loaded.scenarios, console.log)), fail);
+    return;
+  }
 
   // One rate-limited client for the agent, the simulator and the judge: one quota per model ID (#31, #32).
   const llm = rateLimited(new ConverseLlmClient({ maxAttempts: 1 }), {
@@ -92,7 +103,7 @@ async function main(): Promise<void> {
     () => resultsCopyDir({ env: process.env, home: homedir(), checkout: CHECKOUT }),
     fail,
   );
-  const cases = selectCases(loaded, args);
+  const cases = orUsageError(() => selectCases(loaded, args), fail);
   if (cases.length === 0) fail("no cases match");
   const setup = orUsageError(
     () => simulatorSetup(args, { llm, readReplay: (path) => JSON.parse(readFileSync(path, "utf8")) }),

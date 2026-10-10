@@ -113,7 +113,7 @@ describe("runSuite / summarize", () => {
     expect(md).toMatch(/\| l1-book-after-explicit-yes \| skip \| – \| budget guard /);
   });
 
-  it("an errored trial makes the case `error`, counts in summary.errored, and is left out of accuracy", async () => {
+  it("an errored trial makes the case `error`, counts in summary.errored and against the pass rate, and is left out of accuracy", async () => {
     const report = await runSuite([cases[2]], {
       mode: "l1",
       suite: "smoke",
@@ -134,6 +134,9 @@ describe("runSuite / summarize", () => {
       trials: 2,
     });
     expect(ok.summary.toolCallAccuracy).toBe(1); // 1 of 1 graded trial, not 1 of 2
+    // An errored trial counts against the case's pass rate (PRD §7, #34 AC 2): 1 pass of 2 trials.
+    expect(ok.cases[0]?.passRate).toBe(0.5);
+    expect(ok.cases[0]?.passHatK).toBe(false);
   });
 
   it("the report's promptVersion is the version the prompt factory builds (runner.test checks the trials get that prompt)", async () => {

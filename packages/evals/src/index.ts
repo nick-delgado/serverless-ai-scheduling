@@ -8,8 +8,10 @@
  * - `suite` / `cli`: suites, metrics, JSON + markdown results (`npm run evals`);
  * - `results-copy`: the second copy of each run's results, outside every checkout (#195);
  * - `rate-limit`: the shared per-model token bucket with 429 backoff every live call goes through;
- * - `judge`: the LLM judge's rubrics, grader results and calibration (#32).
- * Reports and baselines (#34) plug in on top.
+ * - `judge`: the LLM judge's rubrics, grader results and calibration (#32);
+ * - `report`: conversation metrics, the PRD §7 exit table, baselines and their comparison (#34), read by
+ *   the CLI's `--exit-report` and `--update-baseline`, the matrix (`matrix.ts`, `npm run evals:matrix`)
+ *   and the CI eval gate (`scripts/eval-gate.ts`).
  */
 export const PACKAGE_NAME = "@sched/evals";
 
@@ -20,6 +22,7 @@ export * from "./judge";
 export * from "./l1";
 export * from "./loader";
 export * from "./rate-limit";
+export * from "./report";
 export * from "./results-copy";
 export * from "./runner";
 export * from "./schema";

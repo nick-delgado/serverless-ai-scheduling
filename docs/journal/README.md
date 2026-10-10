@@ -74,4 +74,6 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-08 | [The date tests now run in Los Angeles, because UTC and the clinic's zone each hid a date bug we knew of](2026-10-08-the-date-tests-run-in-los-angeles.md) | 4. Teaching the agent to schedule |
 | 2026-10-08 | [Three CI roles that each trust one workflow file, and a probe that checked their subjects first](2026-10-08-three-ci-roles-trust-one-workflow-each.md) | 5. What the evals showed |
 | 2026-10-08 | [Browser voice passes on four browsers, but ending the SDK's audio stream the obvious way loses the transcript](2026-10-08-voice-streams-pass-but-the-sdk-hangs-up-early.md) | 4. Teaching the agent to schedule |
+| 2026-10-09 | [AWS declined Opus 5, Sonnet 5 and the quota increases, so six profiles at 10 RPM are the plan, not a stopgap](2026-10-09-aws-declined-opus-5-and-the-quota-increases.md) | 5. What the evals showed |
+| 2026-10-09 | [The eval gate compares cases, not counts, and our cost estimate was 7x high](2026-10-09-the-eval-gate-and-an-estimate-that-was-7x-high.md) | 5. What the evals showed |
 | 2026-10-09 | [The mic streams for real, and a build flag carries the stopwatch to the phones](2026-10-09-the-real-transcriber.md) | 4. Teaching the agent to schedule |
