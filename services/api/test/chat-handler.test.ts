@@ -167,13 +167,13 @@ describe("handlers/chat", () => {
     });
   });
 
-  it("sends the current system prompt (system.v1) with the patient's first name, and records its version", async () => {
+  it("sends the current system prompt (system.v2) with the patient's first name, and records its version", async () => {
     const { handler } = await import("../src/handlers/chat");
 
     await invoke(handler);
     const system = JSON.stringify(llm.requests[0]?.system);
     expect(system).toContain("The patient's first name, from their profile: Maria.");
-    expect(aws.turns?.traces[0]?.trace.promptVersion).toBe("system.v1");
+    expect(aws.turns?.traces[0]?.trace.promptVersion).toBe("system.v2");
   });
 
   it("fails the cold start without SCHED_ENV", async () => {
