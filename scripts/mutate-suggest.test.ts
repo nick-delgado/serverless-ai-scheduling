@@ -311,7 +311,8 @@ describe("mutate --suggest", () => {
 
   it("logs to the console by default", async () => {
     await withConsole(async (log, error) => {
-      expect(await mutate(["--suggest", "--base", "main"], { cwd: repo.dir, env: {} })).toBe(0);
+      // No env: the process's, whose COVERAGE_BASE (if any) --base overrides.
+      expect(await mutate(["--suggest", "--base", "main"], { cwd: repo.dir })).toBe(0);
       expect(log).toHaveBeenCalledWith(expect.stringContaining('"note": "flip-equality"'));
       expect(error).toHaveBeenCalledWith(expect.stringContaining("3 edits since main"));
     });

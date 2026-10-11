@@ -312,8 +312,8 @@ export function main(
   const edits: SuggestedEdit[] = [];
   let skipped = 0;
   let uncommitted = 0;
-  const files = [...addedSince(git, base)].sort(([a], [b]) => a.localeCompare(b));
-  for (const [file, lines] of files) {
+  // In git's path order, so by file.
+  for (const [file, lines] of addedSince(git, base)) {
     if (!isSourceFile(file, EVIDENCE_GLOBS)) continue;
     const found = suggestEdits(file, git("show", `HEAD:${file}`), new Set(lines.map(({ line }) => line)));
     const count = found.edits.length + found.skipped;
