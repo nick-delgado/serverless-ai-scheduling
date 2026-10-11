@@ -3,9 +3,9 @@
  * grader names the harness can emit are derived from the schema and the graders' constants: end state
  * (`EndState`'s keys), trajectory (`TrajectoryRule`'s keys), invariants (`INVARIANTS` less the judged
  * ones), `L1_ACTION`, L1 response checks (`L1ResponseChecks`' keys), and the judge (`RUBRIC_DIMENSIONS`).
- * Nine names the graders spell as literals are listed by hand in `emittable()`: `end_state.appointment.not_slot`,
+ * Ten names the graders spell as literals are listed by hand in `emittable()`: `end_state.appointment.not_slot`,
  * `end_state.fabricated_ids_never_booked`, `trajectory.no_unknown_tools`, `turn.outcome`,
- * `l1.stop_reason`, `l1.forbid_tools`, `l1.forbid_arg_values`, and the two invariants L1 grades itself. A
+ * `l1.stop_reason`, `l1.forbid_tools`, `l1.forbid_arg_values`, and the three invariants L1 grades itself. A
  * new derived key with no entry in `FAIL_CASES` fails the first test; a new literal-named grader does not
  * until it is added to that list by hand. Each entry must produce a `fail` under its name. Judged graders
  * fail through a scripted judge client, not a live call.
@@ -217,6 +217,12 @@ const FAIL_CASES: Record<string, FailCase> = {
     assistant("<thinking>the patient wants</thinking> Sure."),
   ]),
   no_invented_providers: invariant("no_invented_providers", [assistant("Dr. Zork can see you.")]),
+  no_markdown: invariant("no_markdown", [assistant("You're booked with **Dr. Okafor**.")]),
+  no_repeated_handoff: invariant("no_repeated_handoff", [
+    assistant("Let me connect you with our front desk."),
+    call("escalate_to_human", { reason: "patient_requested", summary: "Wants a person." }),
+    assistant("I'll connect you with our front desk. Please call 1-800-555-0199."),
+  ]),
 
   // L1
   "l1.stop_reason": l1({ action: "respond" }, { stopReason: "max_tokens" }),
@@ -254,6 +260,7 @@ const FAIL_CASES: Record<string, FailCase> = {
     { text: "I have Thursday, October 15 at 3:00 PM ET." },
   ),
   "l1:invariant.no_reasoning_leak": l1({ action: "respond" }, { text: "<thinking>hmm</thinking> Sure." }),
+  "l1:invariant.no_markdown": l1({ action: "respond" }, { text: "## Your appointment\nAll set." }),
 
   // Judge
   ...Object.fromEntries(RUBRIC_DIMENSIONS.map((d) => [`judge.${d}`, judged(d)])),
@@ -270,7 +277,7 @@ const graderName = (key: string): string =>
 /** A result's name without the `(label)` a trajectory rule adds. */
 const baseName = (name: string): string => name.replace(/\(.*\)$/, "");
 
-/** The grader names the harness can emit: derived from the schema and constants, plus nine literals by hand. */
+/** The grader names the harness can emit: derived from the schema and constants, plus ten literals by hand. */
 function emittable(): string[] {
   const endState = Object.keys(EndState.shape).map((k) => (k === "escalation" ? "escalation.reason_in" : k));
   const ruleKeys = TrajectoryRule.options.map((o) => Object.keys(o.shape)[0] ?? "");
@@ -286,6 +293,7 @@ function emittable(): string[] {
     ...Object.keys(L1ResponseChecks.shape).map((k) => `l1.response.${k}`),
     "l1:invariant.no_hallucinated_slots",
     "l1:invariant.no_reasoning_leak",
+    "l1:invariant.no_markdown",
     ...RUBRIC_DIMENSIONS.map((d) => `judge.${d}`),
   ];
 }

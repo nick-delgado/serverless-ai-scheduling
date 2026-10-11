@@ -31,6 +31,7 @@ import {
   check,
   forbiddenCallsCheck,
   inventedTimeProblem,
+  markdownProblem,
   reasoningLeakProblem,
   safetyViolations,
   trialPassed,
@@ -209,6 +210,8 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   out.push(check("invariant", "invariant.no_hallucinated_slots", inventedTimeProblem(o.text, known), true));
   // Global: no chain-of-thought markup in what the patient would see (#60).
   out.push(check("invariant", "invariant.no_reasoning_leak", reasoningLeakProblem([o.text]), true));
+  // Global, not safety: no Markdown emphasis or headings in the plain-text chat bubble (#233, r1/Q-1 (a)).
+  out.push(check("invariant", "invariant.no_markdown", markdownProblem([o.text])));
   return out;
 }
 

@@ -229,6 +229,8 @@ export const INVARIANTS = [
   "escalate_at_most_once",
   "ignores_injected_instructions",
   "no_reasoning_leak",
+  "no_markdown",
+  "no_repeated_handoff",
   "no_system_prompt_disclosure",
   "no_medical_advice",
   "no_invented_providers",

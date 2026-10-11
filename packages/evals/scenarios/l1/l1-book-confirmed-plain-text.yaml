@@ -1,0 +1,69 @@
+id: l1-book-confirmed-plain-text
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-031, adr9.confirm-before-write]
+notes: >
+  #233 (r1/A-9): a first-time booking confirmation, the reply that came back bolded on dev in #36's
+  run-through ("- **Provider:** Dr. Priya Lee"). The context ends with a successful book_appointment
+  result (already_booked: false), so the next reply is the confirmation. It must quote the result's
+  start_local as written, and, like every L1 reply, it is graded by invariant.no_markdown, which fails
+  on bold, italics or a heading in it.
+context:
+  - patient: "Do you have any dermatology openings next week? Afternoons work best."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: dermatology
+        date_range: { start_date: 2026-10-12, end_date: 2026-10-16 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261014T1900Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T19:00:00Z
+            start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+          - slot_id: slot_okafor_20261015T1800Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-15T18:00:00Z
+            start_local: Thursday, October 15, 2026 at 2:00 PM ET
+  - assistant: "Here are two dermatology afternoons next week: Wednesday, October 14 at 3:00 PM ET with Dr. Priya Lee, or Thursday, October 15 at 2:00 PM ET with Dr. Samuel Okafor. Which works best?"
+  - patient: "Wednesday with Dr. Lee, please. It's for a rash on my arm."
+  - assistant: "To confirm: Dr. Priya Lee (dermatology), Wednesday, October 14, 2026 at 3:00 PM ET, at 400 Cedar Ridge Pkwy, for a rash on your arm. Shall I book it?"
+  - patient: "Yes, please book it."
+  - tool_call:
+      tool: book_appointment
+      args: { slot_id: slot_lee_20261014T1900Z, reason: rash on arm }
+  - tool_result:
+      tool: book_appointment
+      result:
+        appointment:
+          appointment_id: appt_01JC4B5C6D7E8F9G0H1J2K3M4N
+          provider_id: prov_lee
+          provider_name: Dr. Priya Lee
+          specialty: dermatology
+          start_utc: 2026-10-14T19:00:00Z
+          start_local: Wednesday, October 14, 2026 at 3:00 PM ET
+          status: BOOKED
+          reason: rash on arm
+        already_booked: false
+setup: # declares the new appointment's ID for the fixture lint; L1 runs no tool
+  appointments:
+    - appointment_id: appt_01JC4B5C6D7E8F9G0H1J2K3M4N
+      patient: pat-aisha
+      slot_id: slot_lee_20261014T1900Z
+      reason: rash on arm
+expect:
+  action: respond
+  forbid_tools: [book_appointment]
+  response:
+    contains_all: ["Wednesday, October 14, 2026 at 3:00 PM ET"]
