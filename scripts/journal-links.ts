@@ -1,18 +1,26 @@
 /**
- * Journal PR-link check (#194, B7-3, from the review of PR #189, STD-2): a journal entry a PR adds names that PR on
- * its `**Related:**` line (`task-workflow` step 7, "add `PR #<number>` to its Related line").
+ * Journal checks (#194, B7-3, from the review of PR #189, STD-2; #240, B9-6): a journal entry a PR adds names that PR
+ * on its `**Related:**` line (`task-workflow` step 7, "add `PR #<number>` to its Related line"), and pins each count
+ * the PR can still change to a commit or a run.
  *
  *   tsx scripts/journal-links.ts [--base <ref>] [--pr <number>]
  *
  * Entries are the `.md` files under `docs/journal/` other than `README.md` that `git diff --diff-filter=A
- * <base>...HEAD` adds (one git pairs with a deleted file as a rename isn't added); each is read at HEAD. One whose
- * Related line doesn't contain `PR #<number>` (not as the start of a longer number), or that has no Related line,
- * fails. A PR that adds no entry passes. The PR number is `--pr`, else
+ * <base>...HEAD` adds (one git pairs with a deleted file as a rename isn't added); each is read at HEAD once, for
+ * both checks. One whose Related line doesn't contain `PR #<number>` (not as the start of a longer number), or that
+ * has no Related line, fails. So does a line of one (a fenced code line too) that states a count without a pin on the
+ * same line (`unpinnedCount`):
+ *   - a mutation count: a number in digits followed within three words by "edit(s)", "break(s)", "mutation(s)",
+ *     "mutant(s)" or "killed", in any case ("11 mutate edits", "All 259 were killed"; r1/Q-2 on #240). A number
+ *     after `#` (an issue), or inside a name or date (`B9-1`, `ADR-008`, `2026-10-11`), isn't a count;
+ *   - a gate result: a line that says "gate" (any case) with a `<n>/<n>` count.
+ * A pin is a backticked 7–40 character hex SHA, an `actions/runs/<id>` link or a `/commit/<sha>` link. A count with no
+ * number ("the PR's table lists each edit") needs none. A PR that adds no entry passes. The PR number is `--pr`, else
  * `PR_NUMBER`; the base is `--base`, else `PR_BASE` (the workflow passes the PR's base SHA), else `origin/main`. A PR's
  * first push is red until its "link PR #N" commit, since the number exists only once the PR does.
  *
- * Exit codes: 0 every added entry links the PR; 1 one doesn't; 2 the check couldn't run (bad arguments, no PR number,
- * no merge base with the base).
+ * Exit codes: 0 every added entry links the PR and pins its counts; 1 one doesn't; 2 the check couldn't run (bad
+ * arguments, no PR number, no merge base with the base).
  */
 import { parseArgs } from "node:util";
 
@@ -29,6 +37,20 @@ export const relatedLine = (text: string): string | undefined => field(text, "Re
 export function linksPr(text: string, pr: string): boolean {
   return new RegExp(`(?<![\\w#])PR #${pr}(?!\\d)`).test(relatedLine(text) ?? "");
 }
+
+/** A mutation count: digits (not after `#`, nor inside a name or date) and one of the words within three words. */
+const MUTATION_COUNT =
+  /(?<![#\w./:-])\d+(?![\w/-])(?:[^\w\n]+\w+){0,2}?[^\w\n]+(?:edits?|breaks?|mutations?|mutants?|killed)\b/i;
+
+/** A `<n>/<n>` count, on a line that says "gate". */
+const GATE_COUNT = /(?<![\w/#])\d+\/\d+(?![\w/])/;
+
+/** What pins a count: a backticked SHA, an Actions run link, or a commit link. */
+const PIN = /`[0-9a-f]{7,40}`|actions\/runs\/\d+|\/commit\/[0-9a-f]{7,40}\b/;
+
+/** True when `line` states a mutation or gate count and names no commit or run it was taken at. */
+export const unpinnedCount = (line: string): boolean =>
+  (MUTATION_COUNT.test(line) || (/gate/i.test(line) && GATE_COUNT.test(line))) && !PIN.test(line);
 
 /** True for a journal entry: a `.md` file under `docs/journal/`, not the index. */
 export const isEntry = (file: string): boolean =>
@@ -63,7 +85,11 @@ export function main(
     logError(`journal-links: can't diff against ${base} (fetch the full history): ${(err as Error).message}`);
     return 2;
   }
-  const unlinked = added.filter((file) => !linksPr(git("show", `HEAD:${file}`), pr));
+  const texts = added.map((file) => ({ file, text: git("show", `HEAD:${file}`) }));
+  const unlinked = texts.filter(({ text }) => !linksPr(text, pr)).map(({ file }) => file);
+  const unpinned = texts.flatMap(({ file, text }) =>
+    text.split("\n").flatMap((line, i) => (unpinnedCount(line) ? [`${file}:${i + 1}: ${line}`] : [])),
+  );
   if (unlinked.length > 0) {
     log(`Journal entries this PR adds whose Related line doesn't name PR #${pr} (${unlinked.length}):`);
     for (const file of unlinked) log(file);
@@ -71,9 +97,22 @@ export function main(
       `journal-links: add \`PR #${pr}\` to each entry's **Related:** line, then commit and push ` +
         "(task-workflow step 7).",
     );
-    return 1;
   }
-  log(`journal-links: every journal entry added since ${base} names PR #${pr} (${added.length} added).`);
+  if (unpinned.length > 0) {
+    log(
+      `Journal lines this PR adds that state a mutation or gate count without a commit or run (${unpinned.length}):`,
+    );
+    for (const line of unpinned) log(line);
+    logError(
+      "journal-links: name the commit (a backticked SHA) or run (an actions/runs/<id> link) each count was taken " +
+        "at, or point to the PR's table without a number (dev-journal skill, Evidence over adjectives).",
+    );
+  }
+  if (unlinked.length + unpinned.length > 0) return 1;
+  log(
+    `journal-links: every journal entry added since ${base} names PR #${pr} and pins its counts ` +
+      `(${added.length} added).`,
+  );
   return 0;
 }
 
