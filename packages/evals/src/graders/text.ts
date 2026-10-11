@@ -19,7 +19,8 @@ export const REASONING_TAG =
   /<\/?\s*(thinking|reasoning|think|reflection|scratchpad|analysis|inner_monologue)\b[^>]*>/i;
 
 /**
- * Markdown the plain-text chat bubble would show as raw characters (#233, r1/Q-2 (b)), one line at a time:
+ * Markdown the plain-text chat bubble would show as raw characters (#233, r1/Q-2 (b)). `markdownIn` reads one line
+ * at a time, so every pair is within one line:
  * - bold: a `**…**` or `__…__` pair within one line;
  * - italics: a single-asterisk pair `*…*` within one line, whose opening `*` has no space after it and whose
  *   closing `*` has no space before it, and neither is part of `**`, so a `* ` bullet (`LIST_ITEM_PREFIX`) never
@@ -27,10 +28,7 @@ export const REASONING_TAG =
  * - a heading: a line that starts with one to six `#` and a space.
  * Nothing else counts: a `#` inside a line ("#2"), a single underscore pair, a day line ending in a colon.
  */
-export const MARKDOWN_EMPHASIS = [
-  /(\*\*|__)[^\n]+?\1/,
-  /(?<!\*)\*(?![\s*])[^*\n]*?(?<![\s*])\*(?!\*)/,
-] as const;
+export const MARKDOWN_EMPHASIS = [/(\*\*|__).+?\1/, /(?<!\*)\*(?![\s*])[^*]*?(?<![\s*])\*(?!\*)/] as const;
 export const MARKDOWN_HEADING = /^#{1,6}[ \t]/;
 
 /** The first Markdown (`MARKDOWN_EMPHASIS`, `MARKDOWN_HEADING`) in `text`, as written, or undefined. */

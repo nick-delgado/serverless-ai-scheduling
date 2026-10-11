@@ -113,6 +113,7 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
     ["numbered and bulleted items", "1. Tuesday\n2) Wednesday\n• Thursday"],
     ["a day line ending in a colon", "Monday, October 12:\n- 9:00 AM ET with Dr. Lee"],
     ["a # inside a line", "You're #2 on the list."],
+    ["a # and a space inside a line", "Ask for window # 2 at the front desk."],
     ["seven #s", "####### not a heading"],
     ["a # with no space", "#hashtag"],
     ["a single underscore pair", "Use the _main_ entrance."],
@@ -120,6 +121,7 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
     ["an asterisk with a space after it, which opens nothing", "Rates * vary* by visit."],
     ["an asterisk with a space before it, which closes nothing", "Plan *b is *ok"],
     ["a bold pair split across lines", "**Tuesday\nat 2:30 PM ET**"],
+    ["an italic pair split across lines", "*Tuesday\nat 2:30 PM ET*"],
     ["a lone asterisk", "Dr. Lee* is in."],
   ])("never flags %s", (_label, text) => {
     expect(markdownIn(text)).toBeUndefined();
