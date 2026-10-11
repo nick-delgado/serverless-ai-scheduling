@@ -51,7 +51,7 @@ All live runs were on 2026-10-11, on `sonnet-4.6` with `system.v3`, from this br
 - The local gate verdict on our two local smoke files: pass, with "prompt version system.v3, baseline system.v1" warnings in both modes.
 - The new L1 case's reply, three times: "You're all set, Aisha! Your appointment with Dr. Priya Lee is booked for Wednesday, October 14, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy." and a closing line.
 - Offline, on the recorded `system.v1` trials (`packages/evals/test/plain-text.test.ts`): `no_markdown` fails 11 of 20, including `book-derm-next-week-afternoon#1` ("**Tuesday, October 13**") and `reschedule-single-appointment#1` (the italic); `no_repeated_handoff` fails `escalate-explicit-human-request#1` turn 1, `escalate-frustration#1` turn 3, `escalate-repeated-failure#1` turn 4 and `reschedule-into-est-after-dst#1` turn 4.
-- `npm run mutate`: 30 edits to the prompt, its index, the harness default, the matchers, the invariants, the L1 check and the schema, all killed (the PR's table). The first run left one survivor and one killed-other (T7, T6), which became two new test cases and a simpler pattern.
+- `npm run mutate`: 36 edits to the prompt, its index, the harness default, the matchers, the invariants, the L1 check and the schema, all 36 killed (the PR's table). Six of them came with the fixes after the review of `3a88282`: the `escalate_to_human` name condition, both italics lookarounds, the heading's space, the handoff phrase's flags, and the prompt's handoff wording. The first run left one survivor and one killed-other (T7, T6), which became two new test cases and a simpler pattern.
 
 ## What's next
 
