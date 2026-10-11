@@ -1,0 +1,16 @@
+{
+  "name": "@sched/spike-refusal-fallback",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike (#37, r1/Q-4 (a)): one forced refusal-fallback turn, live on Bedrock, through runAgentTurn. Throwaway; informs ADR-002's 2026-10 amendment.",
+  "scripts": {
+    "start": "tsx run.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@sched/agent": "*",
+    "@sched/contracts": "*",
+    "@sched/tools": "*"
+  }
+}
