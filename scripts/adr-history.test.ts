@@ -9,7 +9,8 @@
  *
  * It also checks, in the working tree with no git, that each amendment's date is in its ADR's header (the
  * `**Status:**` or `**Amended:**` line) and in the ADR's row of docs/adr/README.md (#240, B9-3). Each distinct date
- * counts once: a second amendment on the same day isn't checked apart. */
+ * counts once: a second amendment on the same day isn't checked apart.
+ */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -86,6 +87,9 @@ export function lostPointers(base: string, head: string): string[] {
   });
 }
 
+/** An ADR's file name: `NNNN-slug.md`. */
+const ADR_FILE = /^\d{4}-.*\.md$/;
+
 const isAccepted = (text: string) => /^- \*\*Status:\*\* Accepted\b/m.test(text);
 
 /** The distinct dates of an ADR's `## Amendment (YYYY-MM-DD)` sections, in order. */
@@ -104,14 +108,11 @@ const header = (text: string) =>
     .join("\n");
 
 /** The amendment dates missing from the ADR's header, and from its index row (all of them when it has no row). */
-export function missingDates(
-  text: string,
-  indexRow: string | undefined,
-): { header: string[]; index: string[] } {
+export function missingDates(text: string, row: string | undefined): { header: string[]; index: string[] } {
   const dates = amendmentDates(text);
   return {
     header: dates.filter((date) => !header(text).includes(date)),
-    index: dates.filter((date) => !(indexRow ?? "").includes(date)),
+    index: dates.filter((date) => !(row ?? "").includes(date)),
   };
 }
 
@@ -221,12 +222,18 @@ describe("missingDates", () => {
   });
 });
 
-const adrFiles = readdirSync(join(root, "docs/adr")).filter((name) => /^\d{4}-.*\.md$/.test(name));
+const adrFiles = readdirSync(join(root, "docs/adr")).filter((name) => ADR_FILE.test(name));
 const adrIndex = readFileSync(join(root, "docs/adr/README.md"), "utf8");
 
 describe("each amendment date is in its ADR's header and index row", () => {
-  it("finds the amended ADRs", () => {
-    expect(adrFiles.length).toBeGreaterThan(5);
+  it("finds the amended ADRs, ADR-002 and ADR-008 among them", () => {
+    const amended = adrFiles.filter(
+      (name) => amendmentDates(readFileSync(join(root, "docs/adr", name), "utf8")).length > 0,
+    );
+    expect(amended.length).toBeGreaterThan(5);
+    expect(amended).toEqual(
+      expect.arrayContaining(["0002-model-and-bedrock-client.md", "0008-evaluation-strategy.md"]),
+    );
   });
 
   it.each(adrFiles)("%s", (name) => {
@@ -243,7 +250,7 @@ const base = mergeBase();
 const accepted = base
   ? git("ls-tree", "--name-only", base, "docs/adr/")
       .split("\n")
-      .filter((f) => /^docs\/adr\/\d{4}-.*\.md$/.test(f))
+      .filter((f) => f.startsWith("docs/adr/") && ADR_FILE.test(f.slice("docs/adr/".length)))
       .map((file) => ({ file, text: git("show", `${base}:${file}`) }))
       .filter(({ text }) => isChecked(text))
   : [];
