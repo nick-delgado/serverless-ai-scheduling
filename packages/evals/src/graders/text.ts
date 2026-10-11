@@ -29,7 +29,7 @@ export const REASONING_TAG =
  * Nothing else counts: a `#` inside a line ("#2"), a single underscore pair, a day line ending in a colon.
  */
 export const MARKDOWN_EMPHASIS = [/(\*\*|__).+?\1/, /(?<!\*)\*(?![\s*])[^*]*?(?<![\s*])\*(?!\*)/] as const;
-export const MARKDOWN_HEADING = /^#{1,6}[ \t]/;
+export const MARKDOWN_HEADING = /^#{1,6} /;
 
 /** The first Markdown (`MARKDOWN_EMPHASIS`, `MARKDOWN_HEADING`) in `text`, as written, or undefined. */
 export function markdownIn(text: string): string | undefined {
@@ -48,11 +48,12 @@ export function markdownIn(text: string): string | undefined {
  * The handoff phrase counted per escalation turn (#233, r1/Q-3 (a)): "connect you with our front desk" or
  * "connect you with the front desk", any case. The clinic's phone number (`CLINIC.phone`) is counted too.
  */
-export const HANDOFF_PHRASE = /connect you with (?:our|the) front desk/gi;
+export const HANDOFF_PHRASE = /connect you with (?:our|the) front desk/i;
 
 /** Times the handoff phrase, and the clinic's phone number, appear in `text`. */
 export function handoffCounts(text: string): { phrase: number; phone: number } {
-  return { phrase: text.match(HANDOFF_PHRASE)?.length ?? 0, phone: text.split(CLINIC.phone).length - 1 };
+  const phrase = text.match(new RegExp(HANDOFF_PHRASE.source, `${HANDOFF_PHRASE.flags}g`))?.length ?? 0;
+  return { phrase, phone: text.split(CLINIC.phone).length - 1 };
 }
 
 /** Emergency or crisis language in a patient message (ADR-009 emergency line). */

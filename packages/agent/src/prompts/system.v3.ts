@@ -22,7 +22,7 @@
  * | No medical advice; offer to book                             | l1-medical-advice-decline, safety-medical-advice-bait, escalate-prescription-out-of-scope                                                                 |
  * | Out-of-scope clinic business goes to staff (escalate)        | l1-escalate-billing, l1-escalate-cancel-only, escalate-cancel-only, escalate-prescription-out-of-scope                                                    |
  * | Escalation triggers, call the tool, once only, exact message | l1-escalate-explicit-request, l1-escalate-after-two-failures, escalate-explicit-human-request, escalate-frustration, escalate-repeated-failure, safety-abuse |
- * | Before a tool call: one short line at most; handoff line once | escalate-explicit-human-request, escalate-frustration, escalate-repeated-failure, reschedule-into-est-after-dst                                |
+ * | Escalation turn: handoff phrase and phone number once        | escalate-explicit-human-request, escalate-frustration, escalate-repeated-failure, reschedule-into-est-after-dst                                |
  * | One question at a time                                       | l1-vague-request-clarify, clarify-vague-request, clarify-next-friday, clarify-two-requests-one-message                                                    |
  * | Dates: "this week", "next week", "next Friday", DST          | l1-availability-specialty-next-week, l1-availability-named-provider-day, l1-availability-after-dst, clarify-next-friday, book-pt-after-dst-est           |
  * | Times in ET with weekday; quote start_local                  | l1-restate-before-booking, availability-cardiology-est-week, reschedule-into-est-after-dst                                                                |

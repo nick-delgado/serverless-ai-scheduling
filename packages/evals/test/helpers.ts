@@ -48,11 +48,21 @@ export function l1Case(id: string): L1Case {
   return c;
 }
 
+/** The committed calibration set: the 2026-10-05 full run's trials (PR #165). */
+function recordedSet(): CalibrationSet {
+  const path = join(import.meta.dirname, "..", "calibration", "transcripts.json");
+  return CalibrationSet.parse(JSON.parse(readFileSync(path, "utf8")));
+}
+
+/** The ids (`<scenario>#<trial>`) of every committed trial `recorded()` can return. */
+export const recordedIds = (): string[] => recordedSet().transcripts.map((t) => t.id);
+
+/** The scenario id of a recorded trial id (`<scenario>#<trial>`). */
+export const scenarioOf = (trial: string): string => trial.split("#")[0] ?? trial;
+
 /** A committed trial's events, by id (`<scenario>#<trial>`), from the 2026-10-05 full run (PR #165). */
 export function recorded(id: string): TranscriptEvent[] {
-  const path = join(import.meta.dirname, "..", "calibration", "transcripts.json");
-  const set = CalibrationSet.parse(JSON.parse(readFileSync(path, "utf8")));
-  const trial = set.transcripts.find((t) => t.id === id);
+  const trial = recordedSet().transcripts.find((t) => t.id === id);
   if (trial === undefined) throw new Error(`no recorded trial ${id}`);
   return trial.events;
 }

@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { listItemLines, type Invariant, type TranscriptEvent } from "../src";
-import { assistant, byName, invariants, recorded } from "./helpers";
+import { assistant, byName, invariants, recorded, scenarioOf } from "./helpers";
 
 const ID = "book-derm-next-week-afternoon";
 const ONLY: Invariant[] = ["max_five_options"];
@@ -18,8 +18,6 @@ async function maxFive(events: TranscriptEvent[], id = ID) {
   const { results } = await invariants(id, events, ONLY);
   return byName(results, "invariant.max_five_options");
 }
-
-const scenarioOf = (trial: string) => trial.split("#")[0] ?? trial;
 
 /** Five list lines from one search after a 2:00 PM floor, two at the inclusive floor itself. */
 const FIVE_AFTER_TWO = [

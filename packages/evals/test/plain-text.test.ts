@@ -6,24 +6,29 @@
  * Seen failing on recorded `system.v1` replies (r1/A-3): the trials come read-only from
  * `calibration/transcripts.json` (the 2026-10-05 full run, `system.v1` on `sonnet-4.6`).
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { describe, expect, it } from "vitest";
 
-import { CalibrationSet, gradeL1, markdownIn, type TranscriptEvent } from "../src";
-import { assistant, byName, call, invariants, l1Case, patient, recorded } from "./helpers";
+import { buildSystemPrompt } from "@sched/agent";
 
-const scenarioOf = (trial: string) => trial.split("#")[0] ?? trial;
+import { gradeL1, handoffCounts, markdownIn, type TranscriptEvent } from "../src";
+import {
+  assistant,
+  byName,
+  call,
+  invariants,
+  l1Case,
+  patient,
+  recorded,
+  recordedIds,
+  scenarioOf,
+} from "./helpers";
 
 async function graded(name: string, events: TranscriptEvent[], id = "escalate-explicit-human-request") {
   const { results } = await invariants(id, events);
   return byName(results, `invariant.${name}`);
 }
 
-const RECORDED = CalibrationSet.parse(
-  JSON.parse(readFileSync(join(import.meta.dirname, "..", "calibration", "transcripts.json"), "utf8")),
-).transcripts.map((t) => t.id);
+const RECORDED = recordedIds();
 
 /** The recorded trials whose status under `name` is `fail`. */
 async function failing(name: string): Promise<string[]> {
@@ -118,6 +123,7 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
     ["a # and a space inside a line", "Ask for window # 2 at the front desk."],
     ["seven #s", "####### not a heading"],
     ["a # with no space", "#hashtag"],
+    ["a # and a tab (r1/Q-2 says a space)", "#\tTuesday"],
     ["a single underscore pair", "Use the _main_ entrance."],
     ["spaced asterisks", "2 * 3 * 4"],
     ["an asterisk with a space after it, which opens nothing", "Rates * vary* by visit."],
@@ -125,6 +131,8 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
     ["a bold pair split across lines", "**Tuesday\nat 2:30 PM ET**"],
     ["an italic pair split across lines", "*Tuesday\nat 2:30 PM ET*"],
     ["a lone asterisk", "Dr. Lee* is in."],
+    ["a single asterisk closing a double one, which opens no italics", "x**a*"],
+    ["a double asterisk after a single one, which closes no italics", "*a**"],
   ])("never flags %s", (_label, text) => {
     expect(markdownIn(text)).toBeUndefined();
   });
@@ -184,6 +192,16 @@ describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
     ).toMatchObject({ status: "pass" });
   });
 
+  it("doesn't count a turn whose only successful call is another tool", async () => {
+    expect(
+      await graded("no_repeated_handoff", [
+        call("get_my_appointments", {}),
+        assistant("You can also reach the front desk at 1-800-555-0199."),
+        assistant("Again, that's 1-800-555-0199."),
+      ]),
+    ).toMatchObject({ status: "pass" });
+  });
+
   it("counts only the escalation turn's own texts, not a reminder in the next turn", async () => {
     expect(
       await graded("no_repeated_handoff", [
@@ -191,5 +209,11 @@ describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
         ...inTurn(2, patient("What was the number?"), assistant("It's 1-800-555-0199.")),
       ]),
     ).toMatchObject({ status: "pass" });
+  });
+});
+
+describe("HANDOFF_PHRASE matches the prompt's handoff line (#233)", () => {
+  it("finds the phrase exactly once in the current system prompt, which quotes ESCALATION_MESSAGE", () => {
+    expect(handoffCounts(buildSystemPrompt({ now: new Date("2026-10-05T13:00:00Z") }).stable).phrase).toBe(1);
   });
 });

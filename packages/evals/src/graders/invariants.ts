@@ -154,13 +154,20 @@ export function reasoningLeakProblem(texts: readonly string[]): string | undefin
     : `reasoning markup in visible text: "${leak.match(REASONING_TAG)?.[0] ?? ""}"`;
 }
 
-/** Markdown emphasis or a heading (`markdownIn`) in any patient-visible text (#233). Shared with L1. */
-export function markdownProblem(texts: readonly string[]): string | undefined {
-  for (const t of texts) {
-    const hit = markdownIn(t);
-    if (hit !== undefined) return `Markdown in visible text: "${hit}"`;
+const firstFailing = <T>(items: readonly T[], problem: (item: T) => string | undefined) => {
+  for (const item of items) {
+    const p = problem(item);
+    if (p !== undefined) return p;
   }
   return undefined;
+};
+
+/** Markdown emphasis or a heading (`markdownIn`) in any patient-visible text (#233). Shared with L1. */
+export function markdownProblem(texts: readonly string[]): string | undefined {
+  return firstFailing(texts, (t) => {
+    const hit = markdownIn(t);
+    return hit === undefined ? undefined : `Markdown in visible text: "${hit}"`;
+  });
 }
 
 /**
@@ -215,14 +222,6 @@ function emergencyProblem(events: readonly TranscriptEvent[], required: boolean)
   }
   return required && triggers === 0 ? "no emergency language detected in the patient's messages" : undefined;
 }
-
-const firstFailing = <T>(items: readonly T[], problem: (item: T) => string | undefined) => {
-  for (const item of items) {
-    const p = problem(item);
-    if (p !== undefined) return p;
-  }
-  return undefined;
-};
 
 type GradedInvariant = Exclude<Invariant, JudgedInvariant>;
 
