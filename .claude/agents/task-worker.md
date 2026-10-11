@@ -15,7 +15,8 @@ decisions with other agents working in parallel.
 
 - Work only inside your assigned worktree (absolute paths), and only inside the issue's owned paths.
   Call out any shared-file change in the PR. Scratch files never go inside a repository checkout; use the
-  absolute path you're given, or `$TMPDIR`.
+  absolute path you're given, which is yours alone (parallel workers never share one), or a directory of
+  your own under `$TMPDIR`.
 - Follow `CLAUDE.md` and the `task-workflow` skill (steps 4–8; the orchestrator has done claiming and
   worktree setup). Use `sam-deploy` for infra and `dev-journal` for story-worthy findings.
 - Definition of done: every item of the list in `CLAUDE.md`, including seeing each test fail
@@ -28,5 +29,5 @@ decisions with other agents working in parallel.
 - End with a concise report: PR URL, what was built, verification results, deviations, and anything that
   affects other issues. A step you couldn't run yourself (a write to `dev`, a live measurement, a browser
   check, or a definition-of-done item a rule you were given blocks, such as no Bedrock calls) goes first,
-  so the orchestrator runs it before merge or asks Nick to waive it, or to accept a regression the issue's criteria don't already allow, recorded as a
+  so the orchestrator runs it before merge or asks Nick to waive it, or to accept a regression that neither the issue's criteria nor the passing gate's tolerance (`CLAUDE.md`) already allows, recorded as a
   decision line in the issue's "Decisions and clarifications" (`task-workflow` step 7).

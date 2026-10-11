@@ -3,6 +3,11 @@
  * seen-failing pass an exact edit with a recorded result.
  *
  *   npm run mutate -- <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] [--markdown] -- <test command...>
+ *   npm run --silent mutate -- --suggest [--base <ref>] > edits.json
+ *
+ * `--suggest` (#240, B9-1) prints an edits file of suggested breaks for the lines this branch adds, to start from; it
+ * takes no other option and runs no command (`scripts/mutate-suggest.ts`, loaded only then, has its rules and exit
+ * codes). The rest of this header is about a run.
  *
  * `edits.json` is a list of `{ "id"?, "file", "find", "replace", "expect"? }` (paths relative to the current
  * directory, which `npm run` makes the repo root; other fields are kept as notes). `expect` lists the tests the edit
@@ -12,7 +17,8 @@
  *   - the edit is written, the test command runs, and the file is restored, also on an error, SIGINT or
  *     SIGTERM (a SIGKILL of this process leaves the edit in place);
  *   - one line is printed: `KILLED|KILLED-OTHER|SURVIVED|ERROR|TIMEOUT|REFUSED <id> <file>: <find> → <replace>`,
- *     with newlines shown as ⏎.
+ *     with newlines shown as ⏎; an ERROR adds the last non-empty lines (at most five) of the command's output, its
+ *     cause (#217 P2; the `--markdown` table's Status cell doesn't change).
  * A command that names `vitest` gets Vitest's JSON reporter added, and a KILLED edit lists the tests that
  * failed (`    ✗ <test file> > <test name>`). A Vitest run that fails with no failing test (a compile error, a
  * crash, a failed import) is ERROR, not KILLED. Any other command that exits non-zero is KILLED, with no names.
@@ -28,7 +34,7 @@
  *
  * Exit codes: 0 every edit was killed or timed out; 1 an edit survived or was KILLED-OTHER; 2 an edit was refused or errored, the
  * unedited run failed, or the arguments were wrong (including an edits file that can't be read or isn't a list of
- * edits, and an `--only` id no edit has).
+ * edits, an `--only` id no edit has, and `--suggest` with a run's arguments).
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -79,7 +85,8 @@ export interface CliArgs {
 
 export const DEFAULT_TIMEOUT_SECONDS = 300;
 export const USAGE =
-  "usage: mutate <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] [--markdown] -- <test command...>";
+  "usage: mutate <edits.json> [--timeout <s>] [--json <out.json>] [--only <id,...>] [--markdown] -- <test command...>" +
+  " | mutate --suggest [--base <ref>]";
 
 /** How many times `find` occurs in `text` (non-overlapping); an empty `find` occurs nowhere. */
 export function occurrences(text: string, find: string): number {
@@ -269,12 +276,23 @@ function note(result: EditResult): string | undefined {
   return undefined;
 }
 
-/** The printed lines for one result. */
+/** How many of an errored command's last output lines an ERROR result prints. */
+const ERROR_LINES = 5;
+
+/** The last `ERROR_LINES` non-empty lines of `text` (a whitespace-only line counts as empty). */
+const lastLines = (text: string): string[] =>
+  text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .slice(-ERROR_LINES);
+
+/** The printed lines for one result: an ERROR ends with the last lines of the command's output, its cause. */
 export function formatResult(result: EditResult): string[] {
   const lines = [
     `${result.status} ${result.id} ${result.file}: ${shown(result.find)} → ${shown(result.replace)}`,
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
+  if (result.status === "ERROR") for (const line of lastLines(result.detail ?? "")) lines.push(`    ${line}`);
   const why = note(result);
   if (why !== undefined) lines.push(`    (${why})`);
   return lines;
@@ -326,6 +344,8 @@ export interface MutateDeps {
   cwd?: string;
   log?: (line: string) => void;
   logError?: (line: string) => void;
+  /** The environment `--suggest` reads `COVERAGE_BASE` from; defaults to the process's. */
+  env?: Record<string, string | undefined>;
 }
 
 /** The script's entry point; returns the exit code (see the header). */
@@ -334,6 +354,14 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   const out = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
   let log = out;
+  // Loaded only here, so a plain run never loads the TypeScript compiler (and pr-evidence.ts, which imports this
+  // module, isn't imported back at load time). Only the runner's own arguments count: a `--suggest` after `--`
+  // belongs to the test command.
+  const dash = argv.indexOf("--");
+  if ((dash < 0 ? argv : argv.slice(0, dash)).includes("--suggest")) {
+    const suggest = await import("./mutate-suggest");
+    return suggest.main(argv, deps.env ?? process.env, { cwd, log: out, logError });
+  }
   let args: CliArgs;
   try {
     args = parseCliArgs(argv);

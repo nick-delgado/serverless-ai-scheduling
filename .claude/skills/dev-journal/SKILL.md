@@ -57,6 +57,8 @@ One to three bullets.
 
 **Evidence over adjectives.** "p95 turn latency dropped from 14.2 s to 6.8 s after lowering effort to `low`" beats "much faster". If you don't have a number, say what you'd measure. Never invent one: a fabricated metric in a portfolio is worse than none.
 
+A count the PR can still change (mutation edits killed, an `Eval gate` result) names the commit (a backticked SHA) or run (an `actions/runs/<id>` link) it was taken at, or points to the PR's table without a number; the `Journal links` check fails a bare one.
+
 **Keep out:** secrets, account IDs, real personal data, and setup instructions (those go in `docs/runbooks/`).
 
 ## Writing or updating an ADR

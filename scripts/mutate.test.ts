@@ -2,7 +2,8 @@
  * scripts/mutate.ts against a throwaway directory: a target file, a small Node checker standing in for a test
  * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes a
  * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; three
- * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM.
+ * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM. `--suggest` has its own
+ * tests, in mutate-suggest.test.ts.
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -298,9 +299,29 @@ describe("formatResult", () => {
     ]);
   });
 
-  it("prints no detail line for an error, whose detail is the command's output", () => {
-    expect(formatResult({ ...result, status: "ERROR", failedTests: [], detail: "output" })).toEqual([
+  it("ends an error with the last five non-empty lines of its detail, the command's output, after any failed tests", () => {
+    const detail = "one\ntwo\n\nthree\nfour\n   \nfive\nsix\n";
+    expect(formatResult({ ...result, status: "ERROR", failedTests: ["a.test.ts > one"], detail })).toEqual([
       "ERROR 7 a.ts: x⏎y → z",
+      "    ✗ a.test.ts > one",
+      "    two",
+      "    three",
+      "    four",
+      "    five",
+      "    six",
+    ]);
+    expect(
+      formatResult({ ...result, status: "ERROR", failedTests: [], detail: "spawn nope ENOENT" }),
+    ).toEqual(["ERROR 7 a.ts: x⏎y → z", "    spawn nope ENOENT"]);
+    // A result read back from JSON may lack its detail.
+    expect(formatResult({ ...result, status: "ERROR", failedTests: [] })).toEqual(["ERROR 7 a.ts: x⏎y → z"]);
+  });
+
+  it("prints no output lines for a status other than ERROR, even with a detail", () => {
+    expect(formatResult({ ...result, detail: "output" })).toEqual([
+      "KILLED 7 a.ts: x⏎y → z",
+      "    ✗ a.test.ts > one",
+      "    ✗ a.test.ts > two",
     ]);
   });
 
@@ -439,6 +460,16 @@ describe("main", () => {
     );
     expect(code).toBe(1);
     expect(target()).toBe(TARGET);
+  });
+
+  it("runs the edits when --suggest appears only in the test command, after --", async () => {
+    const edits = editsFile([{ id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
+    const code = await main([edits, "--", ...checker(), "--suggest"], deps());
+    expect(out[0]).toBe("KILLED k target.txt: ok ? 1 → bad ? 1");
+    expect(code).toBe(0);
+    // With `--` first there is no runner argument at all, so no edits file, not --suggest.
+    expect(await main(["--", ...checker(), "--suggest"], deps())).toBe(2);
+    expect(errors.at(-1)).toContain("no edits file");
   });
 
   it("exits 0 when every edit was killed or timed out", async () => {
