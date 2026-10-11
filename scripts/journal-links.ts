@@ -13,8 +13,8 @@
  *   - a mutation count: a number in digits followed within three words by "edit(s)", "break(s)", "mutation(s)",
  *     "mutant(s)" or "killed", in any case ("11 mutate edits", "All 259 were killed", "36/36 killed"; r1/Q-2 on
  *     #240). A number right after `#`, a letter or digit, `.`, `:` or `-` (an issue, a version such as `v1.2`, a
- *     `file:line`, a name or date such as `B9-1` or `2026-10-11`), or right before a letter, digit or `-`, isn't a
- *     count;
+ *     `file:line`, a name or date such as `B9-1` or `2026-10-11`), or right before `-`, isn't a count (one right
+ *     before a letter has no word break to reach the keyword);
  *   - a gate result: a line with the word "gate" or "gates" (any case) and a `<n>/<n>` count, neither number joined
  *     to a letter, a digit, `/` or (before it) `#`.
  * A pin is a backticked 7–40 character hex SHA, an `actions/runs/<id>` link or a `/commit/<sha>` link. A count with no
@@ -43,7 +43,7 @@ export function linksPr(text: string, pr: string): boolean {
 
 /** A mutation count: digits (not inside an issue, version, `file:line`, name or date) and a word within three words. */
 const MUTATION_COUNT =
-  /(?<![#\w.:-])\d+(?![\w-])(?:[^\w\n]+\w+){0,2}?[^\w\n]+(?:edits?|breaks?|mutations?|mutants?|killed)\b/i;
+  /(?<![#\w.:-])\d+(?!-)(?:[^\w\n]+\w+){0,2}?[^\w\n]+(?:edits?|breaks?|mutations?|mutants?|killed)\b/i;
 
 /** A `<n>/<n>` count, on a line with the word "gate" or "gates". */
 const GATE_COUNT = /(?<![\w/#])\d+\/\d+(?![\w/])/;

@@ -86,6 +86,8 @@ describe("unpinnedCount", () => {
       "the gate v12/13",
       "a gate at 12/13px",
       "we investigated 3/5 failures",
+      "the aggregate 3/5",
+      "a gateway at 3/5",
       "v1.2 edits",
       "see journal-links.ts:42 edits",
       "the gate ran twice",
