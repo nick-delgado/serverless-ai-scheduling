@@ -224,6 +224,7 @@ function candidates(source: ts.SourceFile): Candidate[] {
 function enclosing(node: ts.Node): ts.Node {
   for (let up: ts.Node | undefined = node; up !== undefined; up = up.parent)
     if (ts.isStatement(up) || ts.isClassElement(up)) return up;
+  /* v8 ignore next -- a fallback: each value a candidate reads sits in a statement or a class member */
   return node.getSourceFile();
 }
 
