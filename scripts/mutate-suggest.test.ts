@@ -98,6 +98,8 @@ describe("suggestEdits", () => {
     const text =
       "type T = 1 | [2];\nlet t: 3 = 3 as 3;\nenum E { A = 4 }\nconst o = { 5: x };\nclass C { 6 = y; }\n";
     expect(all(text).edits.map((edit) => edit.find)).toEqual(["3 as", "3 as"]);
+    // A declaration's initializer is a value, though its parent has a name.
+    expect(all("const n = 5;").edits.map((edit) => edit.replace)).toEqual(["6", "4"]);
   });
 
   it("widens a find by whole tokens until it occurs once, and replaces only the break", () => {
@@ -114,9 +116,21 @@ describe("suggestEdits", () => {
     ]);
   });
 
+  it("widens right when nothing is left of the find, and left when nothing is right of it", () => {
+    // "a && " and "a && b" occur twice, and nothing in the statement is left of them.
+    const first = suggestEdits("a.ts", "a && b;\na && bc;\n", new Set([1]));
+    expect(first.edits.map((edit) => [edit.find, edit.replace])[0]).toEqual(["a && b;", "b;"]);
+    // ">=", ">= b", "a >= b", "a >= b;" and "+ a >= b;" occur twice; the statement ends at ";".
+    const left = suggestEdits("a.ts", "x = k + a >= b;\ny = m + a >= b;\n", new Set([1]));
+    expect(left.edits.map((edit) => [edit.find, edit.replace])).toEqual([["k + a >= b;", "k + a > b;"]]);
+  });
+
   it("skips and counts a candidate whose whole statement occurs twice", () => {
     const text = "function f() {\n  return x >= y;\n}\nfunction g() {\n  return x >= y;\n}\n";
     expect(suggestEdits("a.ts", text, new Set([5]))).toEqual({ edits: [], skipped: 1 });
+    // A class member is a statement's peer: two identical ones in two classes repeat too.
+    const members = "class A {\n  x = a >= b;\n}\nclass B {\n  x = a >= b;\n}\n";
+    expect(suggestEdits("a.ts", members, new Set([5]))).toEqual({ edits: [], skipped: 1 });
   });
 
   it("suggests nothing for a line the branch didn't add, and only the operands that start on an added line", () => {
@@ -145,6 +159,13 @@ describe("suggestEdits", () => {
       ["regex-alternative", "const BOLD = /(\\*\\*).+?\\1/;"],
     ]);
     expect(applied("r = /(?=a)/;", all("r = /(?=a)/;").edits)).toEqual([["regex-lookaround", "r = /(?:)/;"]]);
+    // The v flag, read from the flags, makes a class nest.
+    const nested = (flags: string) => `r = /[[]|]a|b/${flags};`;
+    expect(applied(nested("v"), all(nested("v")).edits).map(([, text]) => text)).toEqual([
+      nested("v").replace("[[]|]a|", ""),
+      nested("v").replace("|b", ""),
+    ]);
+    expect(all(nested("")).edits).toHaveLength(3);
   });
 });
 
@@ -169,6 +190,12 @@ describe("regexParts", () => {
         "a|(b|c)",
       ],
     });
+  });
+
+  it("reads the alternatives inside a lookaround, and a | in the innermost open group", () => {
+    expect(removals("(?=a|b)c")).toEqual({ lookarounds: ["c"], alternatives: ["(?=b)c", "(?=a)c"] });
+    expect(removals("(x(b|c))").alternatives).toEqual(["(x(c))", "(x(b))"]);
+    expect(removals("a\\|b")).toEqual({ lookarounds: [], alternatives: [] });
   });
 
   it("removes a nested lookaround on its own, and reads a named group as a group", () => {
@@ -223,6 +250,7 @@ describe("mutate --suggest", () => {
 
   it("prints an edits file for the added source lines that the runner reads, and counts them on stderr", async () => {
     expect(await mutate(["--suggest", "--base", "main"], deps())).toBe(0);
+    expect(out[0]?.startsWith('[\n  {\n    "file": "scripts/a.ts",\n')).toBe(true);
     writeFileSync(join(repo.dir, "edits.json"), out.join("\n"));
     expect(readEdits(join(repo.dir, "edits.json"))).toEqual([
       { id: "1", file: "scripts/a.ts", find: "===", replace: "!==", expect: [], note: "flip-equality" },
@@ -246,14 +274,19 @@ describe("mutate --suggest", () => {
     expect(errors[2]).toContain("3 edits since main");
   });
 
-  it("names a file with uncommitted changes and skips its candidates", async () => {
-    repo.write("scripts/a.ts", "// edited\n");
+  it("names a file with uncommitted changes and skips its candidates, and not one with none", async () => {
+    repo.write("scripts/b.ts", "export const b = (x: string) => x;\n");
+    repo.write("scripts/c.ts", "export const c = (x: string, y: string) => x === y;\n");
+    repo.commit("two more files");
+    for (const file of ["a", "b", "c"]) repo.write(`scripts/${file}.ts`, "// edited\n");
     expect(await mutate(["--suggest", "--base", "main"], deps())).toBe(0);
     expect(out).toEqual(["[]"]);
-    expect(errors[0]).toBe(
+    expect(errors).toEqual([
       "mutate --suggest: scripts/a.ts has uncommitted changes; skipped its 3 candidates.",
-    );
-    expect(errors[1]).toContain("and 3 in files with uncommitted changes");
+      "mutate --suggest: scripts/c.ts has uncommitted changes; skipped its 1 candidates.",
+      "mutate --suggest: 0 edits since main; skipped 0 whose statement occurs more than once, and 4 in files with " +
+        "uncommitted changes. Fill in each edit's expect.",
+    ]);
   });
 
   it("exits 2 for a run's arguments with --suggest, an unknown option, or a base with no merge base", async () => {

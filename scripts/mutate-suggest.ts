@@ -15,7 +15,7 @@
  *   - `boundary`: `<`, `<=`, `>`, `>=` moved to its boundary neighbour (`<` ↔ `<=`, `>` ↔ `>=`);
  *     `flip-equality`: `===` ↔ `!==`.
  *   - `number+1`, `number-1`: a numeric or bigint literal in a value position (not a type, an enum member or a
- *     property name), written in decimal, a negative result in parentheses (A-6).
+ *     member's name), written in decimal, a negative result in parentheses (A-6).
  *   - `regex-lookaround`, `regex-alternative`: in a regex literal, each lookaround removed, and each alternative of
  *     each group (the whole pattern included) removed with one `|` next to it, at any depth (r1/Q-4). The pattern is
  *     read by `regexParts`, a character scanner; a pattern passed to `new RegExp(…)` as a string gets nothing.
@@ -74,10 +74,11 @@ export interface Span {
 export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span[]; alternatives: Span[] } {
   const lookarounds: Span[] = [];
   const alternatives: Span[] = [];
-  // Each open group: where its content starts, the `|`s directly in it, and whether it is a lookaround.
+  // Each open group: where it opens, where its content starts, the `|`s directly in it, and whether it is a
+  // lookaround. The whole pattern is the group around them all.
   const groups: { open: number; content: number; bars: number[]; lookaround: boolean }[] = [];
-  const top = { open: -1, content: 0, bars: [] as number[], lookaround: false };
-  const close = (group: typeof top, end: number) => {
+  const top: { content: number; bars: number[] } = { content: 0, bars: [] };
+  const close = (group: { content: number; bars: number[] }, end: number) => {
     const bounds = [group.content - 1, ...group.bars, end];
     group.bars.forEach((bar, k) => {
       // Alternative k with the `|` after it; the last alternative with the `|` before it.
@@ -96,8 +97,7 @@ export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span
     } else if (c === "[") {
       classDepth = 1;
     } else if (c === "(") {
-      const head = pattern.slice(i, i + 4);
-      const prefix = ["(?=", "(?!", "(?<=", "(?<!"].find((opener) => head.startsWith(opener));
+      const prefix = ["(?=", "(?!", "(?<=", "(?<!"].find((opener) => pattern.startsWith(opener, i));
       groups.push({
         open: i,
         content: i + (prefix?.length ?? 1),
@@ -145,11 +145,10 @@ const literal = (value: number | bigint, suffix: string) => {
   return value < 0 ? `(${text})` : text;
 };
 
-/** True for a numeric literal whose value code reads: not in a type, an enum, or a property name. */
+/** True for a numeric literal whose value code reads: not in a type, an enum, or a member's name. */
 function inValuePosition(node: ts.Node): boolean {
   const parent = node.parent;
-  if ((ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.name === node)
-    return false;
+  if ((parent as { name?: ts.Node }).name === node) return false;
   for (let up: ts.Node | undefined = parent; up !== undefined; up = up.parent)
     if (ts.isTypeNode(up) || ts.isEnumDeclaration(up)) return false;
   return true;
@@ -203,7 +202,7 @@ function candidates(source: ts.SourceFile): Candidate[] {
       const raw = node.getText(source);
       const slash = raw.lastIndexOf("/");
       const pattern = raw.slice(1, slash);
-      const { lookarounds, alternatives } = regexParts(pattern, raw.slice(slash + 1).includes("v"));
+      const { lookarounds, alternatives } = regexParts(pattern, raw.slice(slash).includes("v"));
       const spans = [
         ...lookarounds.map((span) => ({ span, note: "regex-lookaround" as const })),
         ...alternatives.map((span) => ({ span, note: "regex-alternative" as const })),
@@ -233,10 +232,8 @@ function tokens(node: ts.Node, source: ts.SourceFile): { start: number; end: num
   const leaves: { start: number; end: number }[] = [];
   const walk = (child: ts.Node) => {
     const children = child.getChildren(source);
-    if (children.length === 0) {
-      if (child.getEnd() > child.getStart(source))
-        leaves.push({ start: child.getStart(source), end: child.getEnd() });
-    } else children.forEach(walk);
+    if (children.length === 0) leaves.push({ start: child.getStart(source), end: child.getEnd() });
+    else children.forEach(walk);
   };
   walk(node);
   return leaves;
