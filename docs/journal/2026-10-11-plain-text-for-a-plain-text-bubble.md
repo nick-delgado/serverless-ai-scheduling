@@ -31,19 +31,22 @@ On recorded `system.v1` replies the checks fire much more than the issue's two e
 
 On `system.v3`, Sonnet 4.6 wrote no Markdown in any reply we ran: the 8 L1 smoke cases, 3 trials of the new L1 case and the 8 smoke scenarios. The escalation scenario gave the handoff once, with no text before the call. The five L1 smoke cases that end in a tool call came back with no text at all beside the call. The model still uses lists, as plain `1.` and `- ` lines, and its booking restatement became a `- Provider: …` list without the asterisks, which the prompt allows.
 
-The scenario smoke run had one regression, and it isn't about formatting. `book-derm-next-week-afternoon` failed `max_five_options`: after the patient asked for "later slots on Thursday, or anything after 1pm on Tuesday with a different doctor", the reply listed five Tuesday times and two Thursday lines, seven times in one message. Option counts are #212's, and ADR-008's gate tolerates one regression per mode, which Nick accepted in advance for this issue (r1/A-8). One k=1 trial doesn't tell us whether the new list rule made this more likely.
+Our local scenario smoke run had one regression, and it isn't about formatting. `book-derm-next-week-afternoon` failed `max_five_options`: after the patient asked for "later slots on Thursday, or anything after 1pm on Tuesday with a different doctor", the reply listed five Tuesday times and two Thursday lines, seven times in one message. Of the two CI Eval gate runs on PR #238, the first passed all 8 scenarios, and the second failed the same case on a different check, `times_in_clinic_tz_with_weekday` ("October 15 slots from 1:00 PM" has no weekday or ET). So the case failed 2 of its 3 k=1 trials on `system.v3`, each time on an older check, none on a plain-text check. Option counts are #212's, and ADR-008's gate tolerates one regression per mode, which Nick accepted in advance for this issue (r1/A-8). Three k=1 trials don't tell us whether the new list rule made these slips more likely; #37's k=3 runs on `system.v3` will.
 
 ## Evidence
 
-All live runs were on 2026-10-11, on `sonnet-4.6` with `system.v3`, from this branch.
+All live runs were on 2026-10-11, on `sonnet-4.6` with `system.v3`, from this branch: the first three locally, the gate runs in CI.
 
 | Run | Result | Cost |
 |---|---|---|
 | L1 `l1-book-confirmed-plain-text`, k=3 | 3/3 pass, 0 safety violations | $0.0369 |
 | L1 smoke, k=1 | 8/8 pass, 0 safety violations, 0 regressions | $0.0417 |
 | Scenario smoke, k=1 | 7/8 pass, 0 safety violations, 1 regression (`book-derm-next-week-afternoon`, `max_five_options`) | $0.3103 + judge $0.0391 |
+| Eval gate 1 (CI, `8d0f526`), both smoke modes, k=1 | pass: L1 8/8, scenario 8/8, 0 regressions, 0 safety violations | $0.0599 + $0.3365 + judge $0.0430 |
+| Eval gate 2 (CI, `0528586`), both smoke modes, k=1 | pass: L1 8/8, scenario 7/8, 1 regression (`book-derm-next-week-afternoon`, `times_in_clinic_tz_with_weekday`), 0 safety violations | $0.0416 + $0.3513 + judge $0.0499 |
 
-- The local gate verdict on those two smoke files: pass, with "prompt version system.v3, baseline system.v1" warnings in both modes.
+- On `dev`, after `scripts/deploy.sh api dev` from this branch, as demo patient Maria Santos: the booking confirmation came back as "You're all set, Maria! Your appointment with Dr. Priya Lee is booked for Monday, October 12, 2026 at 12:30 PM ET at 400 Cedar Ridge Pkwy. Is there anything else I can help you with?", and a request for a person as "I'll connect you with our front desk. Please call 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET). I've passed a summary of our conversation to them.", with no text before either tool call, no asterisks and one handoff line.
+- The local gate verdict on our two local smoke files: pass, with "prompt version system.v3, baseline system.v1" warnings in both modes.
 - The new L1 case's reply, three times: "You're all set, Aisha! Your appointment with Dr. Priya Lee is booked for Wednesday, October 14, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy." and a closing line.
 - Offline, on the recorded `system.v1` trials (`packages/evals/test/plain-text.test.ts`): `no_markdown` fails 11 of 20, including `book-derm-next-week-afternoon#1` ("**Tuesday, October 13**") and `reschedule-single-appointment#1` (the italic); `no_repeated_handoff` fails `escalate-explicit-human-request#1` turn 1, `escalate-frustration#1` turn 3, `escalate-repeated-failure#1` turn 4 and `reschedule-into-est-after-dst#1` turn 4.
 - `npm run mutate`: 30 edits to the prompt, its index, the harness default, the matchers, the invariants, the L1 check and the schema, all killed (the PR's table). The first run left one survivor and one killed-other (T7, T6), which became two new test cases and a simpler pattern.
