@@ -19,11 +19,11 @@ export const REASONING_TAG =
   /<\/?\s*(thinking|reasoning|think|reflection|scratchpad|analysis|inner_monologue)\b[^>]*>/i;
 
 /**
- * Markdown the plain-text chat bubble would show as raw characters (#233, r1/Q-2 (b)), one line at a time;
- * emphasis is looked for after the line's list-item prefix (`LIST_ITEM_PREFIX`), so a `* ` bullet never matches:
+ * Markdown the plain-text chat bubble would show as raw characters (#233, r1/Q-2 (b)), one line at a time:
  * - bold: a `**…**` or `__…__` pair within one line;
  * - italics: a single-asterisk pair `*…*` within one line, whose opening `*` has no space after it and whose
- *   closing `*` has no space before it, and neither is part of `**`;
+ *   closing `*` has no space before it, and neither is part of `**`, so a `* ` bullet (`LIST_ITEM_PREFIX`) never
+ *   opens one;
  * - a heading: a line that starts with one to six `#` and a space.
  * Nothing else counts: a `#` inside a line ("#2"), a single underscore pair, a day line ending in a colon.
  */
@@ -38,9 +38,8 @@ export function markdownIn(text: string): string | undefined {
   for (const line of text.split("\n")) {
     const heading = MARKDOWN_HEADING.exec(line);
     if (heading) return heading[0];
-    const body = line.replace(LIST_ITEM_PREFIX, "");
     for (const re of MARKDOWN_EMPHASIS) {
-      const hit = re.exec(body);
+      const hit = re.exec(line);
       if (hit) return hit[0];
     }
   }

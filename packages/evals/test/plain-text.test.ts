@@ -117,6 +117,8 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
     ["a # with no space", "#hashtag"],
     ["a single underscore pair", "Use the _main_ entrance."],
     ["spaced asterisks", "2 * 3 * 4"],
+    ["an asterisk with a space after it, which opens nothing", "Rates * vary* by visit."],
+    ["an asterisk with a space before it, which closes nothing", "Plan *b is *ok"],
     ["a bold pair split across lines", "**Tuesday\nat 2:30 PM ET**"],
     ["a lone asterisk", "Dr. Lee* is in."],
   ])("never flags %s", (_label, text) => {
