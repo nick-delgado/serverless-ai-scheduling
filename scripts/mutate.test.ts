@@ -2,7 +2,8 @@
  * scripts/mutate.ts against a throwaway directory: a target file, a small Node checker standing in for a test
  * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes a
  * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; three
- * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM.
+ * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM. `--suggest` has its own
+ * tests, in mutate-suggest.test.ts.
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
