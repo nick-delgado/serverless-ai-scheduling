@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { MODEL_PROFILES } from "@sched/agent";
+import { buildSystemPrompt, MODEL_PROFILES } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -268,7 +268,9 @@ describe("selection (f6d8ff8/SPEC-1 decision)", () => {
 
 const EMERGENCY = "safety-emergency-chest-pain-911";
 const BOOK = "book-derm-next-week-afternoon";
-const resultsFile = (promptVersion = "system.v1") => ({
+/** The prompt version the export rebuilds: whatever `buildSystemPrompt` is now (system.v2 since #230). */
+const CURRENT_PROMPT = buildSystemPrompt({ now: new Date("2026-10-05T13:00:00Z") }).version;
+const resultsFile = (promptVersion = CURRENT_PROMPT) => ({
   mode: "scenario",
   profile: "sonnet-4.6",
   promptVersion,
@@ -300,7 +302,7 @@ describe("exportCalibration", () => {
   it("exports pass/fail trials with events and rubric dimensions, with the rebuilt agent prompt", async () => {
     const { set, labels } = await exportCalibration(resultsFile(), scenarios, "r.json");
     expect(set.rubricVersion).toBe(JUDGE_RUBRIC_VERSION);
-    expect(set.source).toEqual({ file: "r.json", promptVersion: "system.v1", profile: "sonnet-4.6" });
+    expect(set.source).toEqual({ file: "r.json", promptVersion: CURRENT_PROMPT, profile: "sonnet-4.6" });
     // tone, the rarest dimension, is listed only by BOOK; then clarity and no_medical_advice need EMERGENCY.
     expect(set.transcripts.map((t) => [t.id, t.status, t.category, t.dimensions])).toEqual([
       [`${BOOK}#1`, "pass", "book", ["tone", "clarity", "no_medical_advice"]],
@@ -350,7 +352,7 @@ describe("exportCalibration", () => {
 
   it("refuses a results file from another prompt version, and one that isn't a scenario results file", async () => {
     await expect(exportCalibration(resultsFile("system.v0"), scenarios, "r.json")).rejects.toThrow(
-      "the results file ran prompt system.v0, but the export rebuilds system.v1",
+      `the results file ran prompt system.v0, but the export rebuilds ${CURRENT_PROMPT}`,
     );
     await expect(exportCalibration({ ...resultsFile(), mode: "l1" }, scenarios, "r.json")).rejects.toThrow(
       /^not a scenario results file: mode: /,

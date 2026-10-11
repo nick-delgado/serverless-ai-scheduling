@@ -1,6 +1,6 @@
 /**
  * The system prompt the harness gives the agent. The default is the production prompt from `@sched/agent`
- * (`buildSystemPrompt`, currently `system.v1`, #16), so eval results and the chat handler use the same
+ * (`buildSystemPrompt`, currently `system.v2`, #16, #230), so eval results and the chat handler use the same
  * prompt. The interim prompt (`eval-interim.v0`, the S-1 spike's draft from
  * `spikes/s1-bedrock-tool-latency/fixture.ts`) stays exported for before/after comparisons. Results are
  * comparable only within one prompt version, which every report records.
