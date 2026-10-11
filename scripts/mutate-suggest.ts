@@ -1,0 +1,337 @@
+/**
+ * Edit suggester for `npm run mutate` (#240, B9-1; the #238 review's P1): reads the code this branch adds and prints
+ * an edits file of breaks to start the seen-failing pass from, so the breaks come from the code rather than the spec.
+ *
+ *   npm run --silent mutate -- --suggest [--base <ref>] > edits.json
+ *
+ * (Without `--silent`, npm's `> … mutate` banner goes to stdout too, and the file isn't JSON.) `scripts/mutate.ts`
+ * loads this module only for `--suggest`. The added lines are the committed ones, `git diff -U0 -M <base>...HEAD`, in
+ * the files the `Seen-failing evidence` check covers (`EVIDENCE_GLOBS`: non-test `.ts`/`.tsx` sources). Each file is
+ * parsed at HEAD with the TypeScript compiler API, and each of these on an added line gets one edit:
+ *   - `drop-operand`: an operand of a `&&`, `||` or `??` chain removed with the operator next to it. A chain of one
+ *     operator is flattened (`a && b && c` gives three drops); an operand in parentheses or built with another
+ *     operator is one operand, with its own drops inside (r1/Q-3). An operand counts when its first character is on
+ *     an added line. `&&=`, `||=` and `??=` are assignments, not chains.
+ *   - `boundary`: `<`, `<=`, `>`, `>=` moved to its boundary neighbour (`<` ↔ `<=`, `>` ↔ `>=`);
+ *     `flip-equality`: `===` ↔ `!==`.
+ *   - `number+1`, `number-1`: a numeric or bigint literal in a value position (not a type, an enum member or a
+ *     property name), written in decimal, a negative result in parentheses (A-6).
+ *   - `regex-lookaround`, `regex-alternative`: in a regex literal, each lookaround removed, and each alternative of
+ *     each group (the whole pattern included) removed with one `|` next to it, at any depth (r1/Q-4). The pattern is
+ *     read by `regexParts`, a character scanner; a pattern passed to `new RegExp(…)` as a string gets nothing.
+ *
+ * Each edit's `find` occurs exactly once in its file (`occurrences`, as the runner counts): the changed text widened
+ * by whole tokens, alternately right and left, within the nearest enclosing statement (or class member). A candidate
+ * whose whole statement still occurs more than once is skipped and counted on stderr (r1/Q-5). A file with
+ * uncommitted changes is named on stderr and its candidates skipped and counted, since `find` is cut from HEAD (A-1).
+ * `expect` is empty for the author to fill in, and `note` names the kind of break (A-7). Edits are ordered by file,
+ * then position. The base is `--base`, else `COVERAGE_BASE`, else `origin/main`, as `coverage:changed` resolves it.
+ *
+ * Exit codes: 0 the list was printed (`[]` when nothing added is a candidate); 2 the arguments were wrong (`--suggest`
+ * takes only `--base`) or there's no merge base with the base (A-3).
+ */
+import { parseArgs } from "node:util";
+
+import ts from "typescript";
+
+import { addedSince, baseRef, isSourceFile, type ScriptDeps, scriptIo } from "./coverage-changed";
+import { type Edit, occurrences, USAGE } from "./mutate";
+import { EVIDENCE_GLOBS } from "./pr-evidence";
+
+export type Note =
+  | "drop-operand"
+  | "boundary"
+  | "flip-equality"
+  | "number+1"
+  | "number-1"
+  | "regex-lookaround"
+  | "regex-alternative";
+
+export type SuggestedEdit = Edit & { expect: string[]; note: Note };
+
+/** A change to the file's text: replace `[start, end)` with `text`. */
+interface Candidate {
+  start: number;
+  end: number;
+  text: string;
+  note: Note;
+  /** Where the break is, for "is it on an added line" and for ordering. */
+  at: number;
+  node: ts.Node;
+}
+
+/** A span of a regex pattern, `[start, end)`, as offsets into the pattern. */
+export interface Span {
+  start: number;
+  end: number;
+}
+
+/**
+ * The lookarounds of a regex pattern, and the spans that remove each alternative of each group (the whole pattern
+ * included) with one `|` next to it. Escapes and character classes (nested ones with the `v` flag) aren't syntax;
+ * `(?<name>` is a group, not a lookbehind.
+ */
+export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span[]; alternatives: Span[] } {
+  const lookarounds: Span[] = [];
+  const alternatives: Span[] = [];
+  // Each open group: where its content starts, the `|`s directly in it, and whether it is a lookaround.
+  const groups: { open: number; content: number; bars: number[]; lookaround: boolean }[] = [];
+  const top = { open: -1, content: 0, bars: [] as number[], lookaround: false };
+  const close = (group: typeof top, end: number) => {
+    const bounds = [group.content - 1, ...group.bars, end];
+    group.bars.forEach((bar, k) => {
+      // Alternative k with the `|` after it; the last alternative with the `|` before it.
+      alternatives.push({ start: (bounds[k] as number) + 1, end: bar + 1 });
+      if (k === group.bars.length - 1) alternatives.push({ start: bar, end });
+    });
+  };
+  let classDepth = 0;
+  for (let i = 0; i < pattern.length; i += 1) {
+    const c = pattern[i];
+    if (c === "\\") {
+      i += 1;
+    } else if (classDepth > 0) {
+      if (c === "]") classDepth -= 1;
+      else if (c === "[" && vFlag) classDepth += 1;
+    } else if (c === "[") {
+      classDepth = 1;
+    } else if (c === "(") {
+      const head = pattern.slice(i, i + 4);
+      const prefix = ["(?=", "(?!", "(?<=", "(?<!"].find((opener) => head.startsWith(opener));
+      groups.push({
+        open: i,
+        content: i + (prefix?.length ?? 1),
+        bars: [],
+        lookaround: prefix !== undefined,
+      });
+    } else if (c === "|") {
+      (groups.at(-1) ?? top).bars.push(i);
+    } else if (c === ")") {
+      const group = groups.pop();
+      if (group === undefined) continue;
+      close(group, i);
+      if (group.lookaround) lookarounds.push({ start: group.open, end: i + 1 });
+    }
+  }
+  close(top, pattern.length);
+  return { lookarounds, alternatives };
+}
+
+const CHAINS = new Set([
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+const SWAPS = new Map<ts.SyntaxKind, [string, Note]>([
+  [ts.SyntaxKind.LessThanToken, ["<=", "boundary"]],
+  [ts.SyntaxKind.LessThanEqualsToken, ["<", "boundary"]],
+  [ts.SyntaxKind.GreaterThanToken, [">=", "boundary"]],
+  [ts.SyntaxKind.GreaterThanEqualsToken, [">", "boundary"]],
+  [ts.SyntaxKind.EqualsEqualsEqualsToken, ["!==", "flip-equality"]],
+  [ts.SyntaxKind.ExclamationEqualsEqualsToken, ["===", "flip-equality"]],
+]);
+
+/** The operands of the chain `node` heads: same-operator children flattened, parentheses kept as one operand. */
+function operands(node: ts.Expression, op: ts.SyntaxKind): ts.Expression[] {
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === op)
+    return [...operands(node.left, op), ...operands(node.right, op)];
+  return [node];
+}
+
+/** A number written for code: decimal, a negative one in parentheses so `a-0` doesn't become `a--1`. */
+const literal = (value: number | bigint, suffix: string) => {
+  const text = `${String(value)}${suffix}`;
+  return value < 0 ? `(${text})` : text;
+};
+
+/** True for a numeric literal whose value code reads: not in a type, an enum, or a property name. */
+function inValuePosition(node: ts.Node): boolean {
+  const parent = node.parent;
+  if ((ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.name === node)
+    return false;
+  for (let up: ts.Node | undefined = parent; up !== undefined; up = up.parent)
+    if (ts.isTypeNode(up) || ts.isEnumDeclaration(up)) return false;
+  return true;
+}
+
+/** The candidate breaks in one parsed file, wherever they are. */
+function candidates(source: ts.SourceFile): Candidate[] {
+  const found: Candidate[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isBinaryExpression(node)) {
+      const op = node.operatorToken.kind;
+      const parentOp = ts.isBinaryExpression(node.parent) ? node.parent.operatorToken.kind : undefined;
+      if (CHAINS.has(op) && parentOp !== op) {
+        const parts = operands(node, op);
+        const start = node.getStart(source);
+        parts.forEach((part, i) => {
+          // The first operand goes with the operator after it, any other with the operator before it.
+          const cut =
+            i === 0
+              ? { start, end: (parts[1] as ts.Node).getStart(source) }
+              : { start: (parts[i - 1] as ts.Node).getEnd(), end: part.getEnd() };
+          found.push({ ...cut, text: "", note: "drop-operand", at: part.getStart(source), node });
+        });
+      }
+      const swap = SWAPS.get(op);
+      if (swap) {
+        const token = node.operatorToken;
+        const at = token.getStart(source);
+        found.push({ start: at, end: token.getEnd(), text: swap[0], note: swap[1], at, node });
+      }
+    } else if ((ts.isNumericLiteral(node) || ts.isBigIntLiteral(node)) && inValuePosition(node)) {
+      const at = node.getStart(source);
+      const bigint = ts.isBigIntLiteral(node);
+      const digits = node.getText(source).replaceAll("_", "");
+      for (const [delta, note] of [
+        [1, "number+1"],
+        [-1, "number-1"],
+      ] as const) {
+        const value = bigint ? BigInt(digits.slice(0, -1)) + BigInt(delta) : Number(digits) + delta;
+        found.push({
+          start: at,
+          end: node.getEnd(),
+          text: literal(value, bigint ? "n" : ""),
+          note,
+          at,
+          node,
+        });
+      }
+    } else if (ts.isRegularExpressionLiteral(node)) {
+      const start = node.getStart(source);
+      const raw = node.getText(source);
+      const slash = raw.lastIndexOf("/");
+      const pattern = raw.slice(1, slash);
+      const { lookarounds, alternatives } = regexParts(pattern, raw.slice(slash + 1).includes("v"));
+      const spans = [
+        ...lookarounds.map((span) => ({ span, note: "regex-lookaround" as const })),
+        ...alternatives.map((span) => ({ span, note: "regex-alternative" as const })),
+      ];
+      for (const { span, note } of spans) {
+        // A pattern left empty would read as a `//` comment.
+        const empty = span.end - span.start === pattern.length;
+        const at = start + 1 + span.start;
+        found.push({ start: at, end: start + 1 + span.end, text: empty ? "(?:)" : "", note, at, node });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+/** The nearest statement or class member around `node`: how far a `find` may widen. */
+function enclosing(node: ts.Node): ts.Node {
+  for (let up: ts.Node | undefined = node; up !== undefined; up = up.parent)
+    if (ts.isStatement(up) || ts.isClassElement(up)) return up;
+  return node.getSourceFile();
+}
+
+/** The start and end of each token in `node`, in order. */
+function tokens(node: ts.Node, source: ts.SourceFile): { start: number; end: number }[] {
+  const leaves: { start: number; end: number }[] = [];
+  const walk = (child: ts.Node) => {
+    const children = child.getChildren(source);
+    if (children.length === 0) {
+      if (child.getEnd() > child.getStart(source))
+        leaves.push({ start: child.getStart(source), end: child.getEnd() });
+    } else children.forEach(walk);
+  };
+  walk(node);
+  return leaves;
+}
+
+/** The candidate as an edit whose `find` occurs once in the file, or undefined when its whole statement repeats. */
+function unique(candidate: Candidate, file: string, source: ts.SourceFile): SuggestedEdit | undefined {
+  const text = source.text;
+  const scope = enclosing(candidate.node);
+  const marks = tokens(scope, source);
+  let { start, end } = candidate;
+  for (let right = true; ; right = !right) {
+    const find = text.slice(start, end);
+    if (occurrences(text, find) === 1) {
+      const replace = text.slice(start, candidate.start) + candidate.text + text.slice(candidate.end, end);
+      return { file, find, replace, expect: [], note: candidate.note };
+    }
+    const next = marks.find((mark) => mark.end > end);
+    const previous = marks.findLast((mark) => mark.start < start);
+    if (next === undefined && previous === undefined) return undefined;
+    if ((right && next) || previous === undefined) end = (next as { end: number }).end;
+    else start = previous.start;
+  }
+}
+
+/**
+ * The suggested edits for one file's text, for the breaks that start on `added` lines (1-based), in order of
+ * position, and how many candidates were skipped because their whole statement occurs more than once.
+ */
+export function suggestEdits(
+  file: string,
+  text: string,
+  added: ReadonlySet<number>,
+): { edits: SuggestedEdit[]; skipped: number } {
+  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+  const onAdded = candidates(source)
+    .filter((candidate) => added.has(source.getLineAndCharacterOfPosition(candidate.at).line + 1))
+    .sort((a, b) => a.at - b.at);
+  const edits: SuggestedEdit[] = [];
+  let skipped = 0;
+  for (const candidate of onAdded) {
+    const edit = unique(candidate, file, source);
+    if (edit) edits.push(edit);
+    else skipped += 1;
+  }
+  return { edits, skipped };
+}
+
+/** The `--suggest` entry point, called by `mutate`'s `main`; returns the exit code (see the header). */
+export function main(
+  argv: readonly string[],
+  vars: Record<string, string | undefined>,
+  deps: ScriptDeps = {},
+): number {
+  const { log, logError, git } = scriptIo(deps);
+  let base: string;
+  try {
+    if (argv.includes("--")) throw new Error("--suggest takes no test command");
+    const { values } = parseArgs({
+      args: [...argv],
+      options: { suggest: { type: "boolean" }, base: { type: "string" } },
+      strict: true,
+    });
+    base = baseRef(values.base, vars.COVERAGE_BASE);
+  } catch (err) {
+    logError(`${(err as Error).message}. ${USAGE}`);
+    return 2;
+  }
+  try {
+    git("merge-base", base, "HEAD");
+  } catch {
+    logError(`mutate --suggest: no merge base with ${base} (fetch it, or pass --base <ref>).`);
+    return 2;
+  }
+  const edits: SuggestedEdit[] = [];
+  let skipped = 0;
+  let uncommitted = 0;
+  const files = [...addedSince(git, base)].sort(([a], [b]) => a.localeCompare(b));
+  for (const [file, lines] of files) {
+    if (!isSourceFile(file, EVIDENCE_GLOBS)) continue;
+    const found = suggestEdits(file, git("show", `HEAD:${file}`), new Set(lines.map(({ line }) => line)));
+    const count = found.edits.length + found.skipped;
+    if (count > 0 && git("status", "--porcelain", "--", file).trim() !== "") {
+      logError(`mutate --suggest: ${file} has uncommitted changes; skipped its ${count} candidates.`);
+      uncommitted += count;
+      continue;
+    }
+    edits.push(...found.edits);
+    skipped += found.skipped;
+  }
+  log(JSON.stringify(edits, null, 2));
+  logError(
+    `mutate --suggest: ${edits.length} edits since ${base}; skipped ${skipped} whose statement occurs more than ` +
+      `once, and ${uncommitted} in files with uncommitted changes. Fill in each edit's expect.`,
+  );
+  return 0;
+}
