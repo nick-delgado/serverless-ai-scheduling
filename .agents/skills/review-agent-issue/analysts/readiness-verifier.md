@@ -65,8 +65,12 @@ resource: a review that asks twenty questions is not read.
    against `<RUN_DIR>/worktree`, check the output is what it expects, and quote both under
    "What was checked"; mark one that builds, tests or writes "(verify first)". Check that
    each option's text claims no more than it covers, and that each assumption naming a
-   place says whether it is required or a suggestion. Where they disagree, fix the draft or turn the disagreement
-   into a question. Where an assumption's basis shows an issue line is wrong, add an edit
+   place says whether it is required or a suggestion. Hold every question, assumption and
+   edit to the format's rules on owned paths (whole files, with their follow-on edits),
+   prescribed checks (an input they must reject), "stays as is" (the search that shows
+   it) and measured criteria (where the number is seen). Give each question its own "Makes
+   stale" line. Where they disagree, fix the draft or turn the disagreement into a
+   question. Where an assumption's basis shows an issue line is wrong, add an edit
    for that line. Cite a stale line the same way everywhere it appears.
 10. **Choose the verdict** by the table in the format reference. "Not ready" says what to do
    instead (split along these criteria; rewrite the goal).

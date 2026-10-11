@@ -41,6 +41,8 @@ replies. Then ask for the apply step, which writes your answers into the issue's
 - **Options:** (one per line)
   - (a) <option>: <what it means for the code and for users>. Scope: within the issue | adds <...>
   - (b) <option>: <...>. Scope: <...>. Owned paths: + `<path>`
+- **Makes stale:** <the lines any option would make wrong, as `path:line`, one per line,
+  saying which option; or "nothing">
 - **Edges:** <how the choice settles the cases at its edges, whichever apply: boundary
   inputs (empty, the exact limit, just past it); every point where two concurrent calls can
   interleave and one can lose; a case where an edit and an assumption both apply, and which
@@ -158,6 +160,17 @@ The review is advisory: the owner decides whether work starts.
   verification (a section of the issue template, the PR template, or the PR description).
 - **Suggested edits are exact:** the "Before" text exists verbatim in the current
   description, so the apply step can make the change mechanically.
+- **Owned paths are whole files.** An option or edit that widens the owned paths names
+  whole files (or directories), never line numbers, and also names the files its change
+  forces: the tests, docs and fixtures that must follow it.
+- **A prescribed check says what it rejects.** A criterion or option that prescribes a
+  check (a test, a lint rule, a matcher, a command) quotes at least one input or reply the
+  check must reject, as well as one it must accept, so the agent cannot build a check that
+  passes everything.
+- **"Stays as is" is checked.** An assumption or option saying something does not change
+  cites the search showing nothing else needs it to change.
+- **A measured criterion stays observable:** it says where the number is seen (a test's
+  output, a log line, a report) and by whom, so a reviewer can check it.
 - **A prescribed command is run first.** An edit or criterion that names a command whose
   output is the check (a search, a listing, a git query) is run against the default branch
   before it is suggested, and its output is quoted under "What was checked". A command that
