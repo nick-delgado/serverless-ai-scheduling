@@ -222,6 +222,15 @@ label() {
   esac
 }
 
+# A phase output is published only if it passed validate.sh as it is now.
+stamped() {
+  local stage="$1" file="$2"
+  if [ ! -f "$run/.validated-$stage" ] || [ "$(cksum < "$file")" != "$(cat "$run/.validated-$stage")" ]; then
+    echo "error: $(basename "$file") has not passed 'validate.sh <run> $stage' in its current form; run it, send any problems back to the subagent that wrote the file, and assemble again" >&2
+    exit 1
+  fi
+}
+
 # The counts for the report header, computed from verified.md so nobody copies them by
 # hand: confirmed findings by reviewer (from the ID prefix) and severity, by action, and
 # the rejected and merged totals.
@@ -561,6 +570,7 @@ case "$mode" in
     for required in "$run/report-head.md" "$run/report-meta.md" "$verified"; do
       [ -s "$required" ] || { echo "error: missing or empty $required" >&2; exit 1; }
     done
+    stamped verified "$verified"
     need "$verified" "Summary" "Confirmed findings" "Minor findings table" "Rejected findings" "Spot checks" "Previous findings" "Convergence" "Verification summary" "Reviewer tables"
     fail_if_missing
     confirmed="$(h2 "$verified" "Confirmed findings")"
@@ -633,6 +643,7 @@ case "$mode" in
     case "$3" in '' | *[!0-9]*) echo "error: PR number must be numeric, got '$3'" >&2; exit 2 ;; esac
     case "$4" in '' | *[!0-9a-f]*) echo "error: head sha must be hexadecimal, got '$4'" >&2; exit 2 ;; esac
     [ -s "$rootcause" ] || { echo "error: missing or empty $rootcause" >&2; exit 1; }
+    stamped root-cause "$rootcause"
     need "$rootcause" "Cause summary" "Patterns" "Proposals" "Not explained"
     fail_if_missing
 

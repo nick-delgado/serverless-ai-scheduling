@@ -53,12 +53,12 @@ case "$stage" in
       for s in "$run"/spec/*.md; do
         [ -f "$s" ] || continue
         rel="spec/$(basename "$s")"; lines="$(awk 'END { print NR }' "$s")"
-        wcl="$(wc -l < "$s" | tr -d ' ')"   # wc -l misses a last line without a newline
+        lastnb="$(awk 'NF { l = NR } END { print l + 0 }' "$s")"   # counts from here to $lines are all the end
         row="$(awk '/^## Sources read/ { on = 1; next } on && /^## / { exit } on' "$run/analysis/spec.md" | grep -F "$rel" | head -n 1 || true)"
         to="$(printf '%s' "$row" | sed -n 's/.*read to line \([0-9][0-9]*\) of \([0-9][0-9]*\).*/\1 \2/p')"
         if [ -z "$to" ]; then
           problem "spec.md: list $rel under Sources read as \"(read to line $lines of $lines)\", after reading it to its end"
-        elif ! { { [ "${to% *}" = "$lines" ] || [ "${to% *}" = "$wcl" ]; } && { [ "${to#* }" = "$lines" ] || [ "${to#* }" = "$wcl" ]; }; }; then
+        elif [ "${to% *}" -lt "$lastnb" ] || [ "${to% *}" -gt "$lines" ] || [ "${to#* }" -lt "$lastnb" ] || [ "${to#* }" -gt "$lines" ]; then
           problem "spec.md: $rel was read to line ${to% *} of ${to#* }, but it has $lines lines: read the rest from the file itself, in line ranges"
         fi
       done
@@ -79,8 +79,9 @@ case "$stage" in
     awk -v k="$k" '
       fence != "" { if (index($0, fence) == 1 && $0 ~ /^(`+|~+)[ \t]*$/) fence = ""; next }
       match($0, /^(```+|~~~+)/) { fence = substr($0, 1, RLENGTH); next }
-      /^#### Q-[0-9]+:/ { if (q != "") check(); q = $2; sub(/:$/, "", q); opts = 0; rec = 0; reply = 0; edges = 0; next }
+      /^#### Q-[0-9]+:/ { if (q != "") check(); q = $2; sub(/:$/, "", q); opts = 0; rec = 0; reply = 0; edges = 0; stale = 0; next }
       q != "" && /^- \*\*Edges:\*\* [^ <]/ { edges = 1 }
+      q != "" && /^- \*\*Makes stale:\*\* [^ <]/ { stale = 1 }
       /^#{2,4} / { if (q != "") check(); q = "" }
       q != "" && /^[ ]+- \([a-z]\) / { opts++; if ($0 !~ /Scope: /) print q ": option without a Scope label" }
       q != "" && /^- \*\*Recommendation:\*\* \([a-z]\)/ { rec = 1 }
@@ -88,6 +89,7 @@ case "$stage" in
       function check() {
         if (opts < 2) print q ": fewer than two options"
         if (!rec) print q ": no Recommendation naming an option"
+        if (!stale) print q ": no Makes stale line (the lines any option makes wrong, or \"nothing\")"
         if (!edges) print q ": no Edges line (boundary inputs, concurrent calls, edit-and-assumption cases, evidence, lists; or \"none: <why>\")"
         if (!reply) print q ": no Reply line (`Decision r" k "/" q ": ...`)"
       }
@@ -100,6 +102,10 @@ case "$stage" in
     while IFS= read -r l; do [ -n "$l" ] && problem "readiness.md: $l"; done < "$run/.validate-a"
     rm -f "$run/.validate-a"
     # "Like X" pointers are not allowed: reuse says import, move and share, or ask.
+    # Owned paths widened by line numbers: name whole files and their follow-on edits.
+    awk '/^```/ { inb = !inb; next } !inb && /Owned paths: \+/ { s = $0; sub(/.*Owned paths: \+/, "", s); if (s ~ /`[^`]+` *\(([^)]* )?lines? [0-9]/) print NR }' "$f" > "$run/.validate-own" || true
+    while IFS= read -r l; do [ -n "$l" ] && problem "readiness.md: line $l widens the owned paths by line numbers; name whole files, and the files the change forces (tests, docs)"; done < "$run/.validate-own"
+    rm -f "$run/.validate-own"
     # Quoted issue text (inside ``` blocks) is not checked.
     awk '/^```/ { inb = !inb; next } !inb && (/[Ll]ike `[^`]+`/ || /(the way|same as|as) `[^`]+` (does|did)/) { print NR }' "$f" > "$run/.validate-like" || true
     while IFS= read -r l; do [ -n "$l" ] && problem "readiness.md: line $l points to code by likeness; say import it, move and share it, or ask"; done < "$run/.validate-like"

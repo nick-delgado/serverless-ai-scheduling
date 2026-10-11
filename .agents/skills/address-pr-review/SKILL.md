@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.08.2"
+  harness-version: "2026.10.11.1"
 ---
 
 # Address a PR review
@@ -135,6 +135,10 @@ Take them in order (blockers and majors first). For each finding:
    about, see the test fail, then restore it. Break each part on its own: every condition
    of a compound check, every operand of a comparison, every flag or option. A test that
    fails when the whole line is deleted can still pass when one half of an `&&` is wrong.
+   Break a comparison at its boundary (`<` made `<=`, the limit moved by one), and swap
+   the values a decision reads (two arguments, two fields, two zones) to see the test
+   notice. This applies equally to a check you add as a test (a lint rule, a guard test,
+   a scenario): it must fail on what it is there to catch.
    Where the project records evidence that a test can fail (in the PR description, an
    earlier response, or wherever its rules keep it), keep that evidence true when you
    change the test: a changed test can stop catching what it used to.
@@ -145,7 +149,8 @@ Take them in order (blockers and majors first). For each finding:
      codebase for an existing one and import it. If you cannot (it is outside the task's
      scope, or not exported), say so in the response instead of copying it.
    - **Claim only what you did.** In commit messages, test names and headers, and the PR
-     description, name what you covered. Never write "every", "all" or "each … has a test
+     description, name what you covered. Before a comment or doc names who uses something
+     ("used by the scheduler"), search for every caller and name them all, or none. Never write "every", "all" or "each … has a test
      that fails": a broad claim the tests do not fully back becomes a major finding in the
      next review.
 3. **If the fix needs a file outside the task's scope**, would change a rule rather than a
@@ -222,7 +227,8 @@ record it there too, as part of implementing it.
 
 A decision implemented in code is a behaviour change like any other: give it a test that
 fails without it, and one for each branch or condition the chosen option introduces (a
-fallback, an exception, a limit), not only its main path.
+fallback, an exception, a limit), not only its main path. A decision carried out as a test
+follows the test rules in step 3.
 
 ### 5. Bring the branch up to date with its base
 
@@ -307,7 +313,8 @@ against the diff. After fixes it is usually out of date (test counts, behaviour,
 decisions, follow-ups), and a stale claim becomes a finding in the next review.
 
 Read the current description (`gh api repos/{owner}/{repo}/pulls/<n> --jq .body`) and correct every
-statement your changes made untrue, and add what the owner decided where the description
+statement your changes made untrue, and do the same in every record the PR itself adds
+(a changelog line, a journal or decision entry, docs written for this change); and add what the owner decided where the description
 covers that behaviour. Keep the project's PR template and the existing structure; edit in
 place rather than appending a "changes after review" section, since the response comment
 is the record of the review round. Save it with

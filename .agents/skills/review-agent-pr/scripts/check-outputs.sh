@@ -47,9 +47,11 @@ check_file() {
   for spec in "$run"/spec/*.md; do
     [ -f "$spec" ] || continue
     rel="spec/$(basename "$spec")"
-    # wc -l does not count a last line without a newline; accept either count.
+    # Tools count a file's length differently: wc -l misses a last line without a newline,
+    # and a reader may not show trailing blank lines. Accept any count from the last
+    # non-blank line to the full length.
     lines="$(awk 'END { print NR }' "$spec")"
-    wcl="$(wc -l < "$spec" | tr -d ' ')"
+    lastnb="$(awk 'NF { l = NR } END { print l + 0 }' "$spec")"
     row="$(awk '/^### Sources read/ { on = 1; next } on && /^#/ { exit } on' "$file" | grep -F "$rel" | head -n 1 || true)"
     if [ -z "$row" ]; then
       [ "$reviewer" = "spec-alignment" ] && problems="$problems
@@ -61,7 +63,7 @@ check_file() {
     if [ -z "$to" ]; then
       problems="$problems
   $rel under Sources read does not say how far it was read: \"(read to line <n> of $lines)\""
-    elif { [ "$of" != "$lines" ] && [ "$of" != "$wcl" ]; } || { [ "$to" != "$lines" ] && [ "$to" != "$wcl" ]; }; then
+    elif [ "$of" -lt "$lastnb" ] || [ "$of" -gt "$lines" ] || [ "$to" -lt "$lastnb" ] || [ "$to" -gt "$lines" ]; then
       problems="$problems
   $rel was read to line $to of ${of}, but it has $lines lines: read the rest from the file itself, in line ranges"
     fi

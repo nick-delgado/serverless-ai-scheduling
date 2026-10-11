@@ -9,7 +9,10 @@
 #   verified     RUN_DIR/verified.md, written by the verifier (also checks its citations)
 #   root-cause   RUN_DIR/root-cause.md, written by the root-cause analyst
 #
-# Prints "ok" or one line per problem; exits 1 on any problem.
+# Prints "ok" or one line per problem; exits 1 on any problem. On "ok" for verified or
+# root-cause it stamps the file (RUN_DIR/.validated-<stage>, its checksum); the assembly
+# script refuses a file without a matching stamp, so nothing that failed, or changed after
+# passing, is published.
 
 set -euo pipefail
 
@@ -26,10 +29,15 @@ problem() { problems="$problems
 $1"; }
 
 finish() {
+  rm -f "$run/.validated-$stage"
   if [ -n "$problems" ]; then
     printf '%s\n' "$problems" | sed '/^$/d'
     exit 1
   fi
+  case "$stage" in
+    verified) cksum < "$run/verified.md" > "$run/.validated-verified" ;;
+    root-cause) cksum < "$run/root-cause.md" > "$run/.validated-root-cause" ;;
+  esac
   echo "ok"
 }
 

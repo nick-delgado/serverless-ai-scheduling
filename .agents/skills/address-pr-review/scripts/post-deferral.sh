@@ -27,7 +27,7 @@ if ! printf '%s\n' "$first" | grep -qE '^<!-- agent-pr-review:deferred pr=[0-9]+
   exit 1
 fi
 
-state="$(gh api "repos/{owner}/{repo}/issues/${n}" --jq 'if .pull_request then "pull request" else .state end')"
+state="$(gh api "repos/{owner}/{repo}/issues/${n}" --jq 'if .pull_request then "a pull request" else .state end')"
 if [ "$state" != "open" ]; then
   echo "error: #${n} is ${state}, not an open issue; ask the owner where the finding should go instead" >&2
   exit 1
