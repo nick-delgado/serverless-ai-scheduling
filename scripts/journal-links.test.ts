@@ -52,6 +52,9 @@ describe("unpinnedCount", () => {
       "25 MUTANTS of the handler",
       "1 mutation",
       "    12 edits: 12 killed, 0 survived",
+      "all 36/36 killed",
+      "17 of 17 breaks killed",
+      "All 3 edits were killed",
     ])
       expect(unpinnedCount(line), line).toBe(true);
   });
@@ -59,6 +62,7 @@ describe("unpinnedCount", () => {
   it("flags a gate result with an <n>/<n> count", () => {
     expect(unpinnedCount("The Eval gate passed at 13/14 in L1.")).toBe(true);
     expect(unpinnedCount("GATE run 2: 9/10")).toBe(true);
+    expect(unpinnedCount("both gates: 9/10")).toBe(true);
   });
 
   it("passes a count pinned by a backticked SHA, a run link or a commit link on the same line", () => {
@@ -78,6 +82,12 @@ describe("unpinnedCount", () => {
       "4 tests in the new file, and the edits",
       "4 tests in the edits",
       "the gate ran on 2026/10/11",
+      "Eval gate on #12/13",
+      "the gate v12/13",
+      "a gate at 12/13px",
+      "we investigated 3/5 failures",
+      "v1.2 edits",
+      "see journal-links.ts:42 edits",
       "the gate ran twice",
       "13/14 cases passed",
       "a 3a88282 edits list",

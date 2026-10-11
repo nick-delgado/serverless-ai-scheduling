@@ -11,9 +11,12 @@
  * has no Related line, fails. So does a line of one (a fenced code line too) that states a count without a pin on the
  * same line (`unpinnedCount`):
  *   - a mutation count: a number in digits followed within three words by "edit(s)", "break(s)", "mutation(s)",
- *     "mutant(s)" or "killed", in any case ("11 mutate edits", "All 259 were killed"; r1/Q-2 on #240). A number
- *     after `#` (an issue), or inside a name or date (`B9-1`, `ADR-008`, `2026-10-11`), isn't a count;
- *   - a gate result: a line that says "gate" (any case) with a `<n>/<n>` count.
+ *     "mutant(s)" or "killed", in any case ("11 mutate edits", "All 259 were killed", "36/36 killed"; r1/Q-2 on
+ *     #240). A number right after `#`, a letter or digit, `.`, `:` or `-` (an issue, a version such as `v1.2`, a
+ *     `file:line`, a name or date such as `B9-1` or `2026-10-11`), or right before a letter, digit or `-`, isn't a
+ *     count;
+ *   - a gate result: a line with the word "gate" or "gates" (any case) and a `<n>/<n>` count, neither number joined
+ *     to a letter, a digit, `/` or (before it) `#`.
  * A pin is a backticked 7–40 character hex SHA, an `actions/runs/<id>` link or a `/commit/<sha>` link. A count with no
  * number ("the PR's table lists each edit") needs none. A PR that adds no entry passes. The PR number is `--pr`, else
  * `PR_NUMBER`; the base is `--base`, else `PR_BASE` (the workflow passes the PR's base SHA), else `origin/main`. A PR's
@@ -38,11 +41,11 @@ export function linksPr(text: string, pr: string): boolean {
   return new RegExp(`(?<![\\w#])PR #${pr}(?!\\d)`).test(relatedLine(text) ?? "");
 }
 
-/** A mutation count: digits (not after `#`, nor inside a name or date) and one of the words within three words. */
+/** A mutation count: digits (not inside an issue, version, `file:line`, name or date) and a word within three words. */
 const MUTATION_COUNT =
-  /(?<![#\w./:-])\d+(?![\w/-])(?:[^\w\n]+\w+){0,2}?[^\w\n]+(?:edits?|breaks?|mutations?|mutants?|killed)\b/i;
+  /(?<![#\w.:-])\d+(?![\w-])(?:[^\w\n]+\w+){0,2}?[^\w\n]+(?:edits?|breaks?|mutations?|mutants?|killed)\b/i;
 
-/** A `<n>/<n>` count, on a line that says "gate". */
+/** A `<n>/<n>` count, on a line with the word "gate" or "gates". */
 const GATE_COUNT = /(?<![\w/#])\d+\/\d+(?![\w/])/;
 
 /** What pins a count: a backticked SHA, an Actions run link, or a commit link. */
@@ -50,7 +53,7 @@ const PIN = /`[0-9a-f]{7,40}`|actions\/runs\/\d+|\/commit\/[0-9a-f]{7,40}\b/;
 
 /** True when `line` states a mutation or gate count and names no commit or run it was taken at. */
 export const unpinnedCount = (line: string): boolean =>
-  (MUTATION_COUNT.test(line) || (/gate/i.test(line) && GATE_COUNT.test(line))) && !PIN.test(line);
+  (MUTATION_COUNT.test(line) || (/\bgates?\b/i.test(line) && GATE_COUNT.test(line))) && !PIN.test(line);
 
 /** True for a journal entry: a `.md` file under `docs/journal/`, not the index. */
 export const isEntry = (file: string): boolean =>
