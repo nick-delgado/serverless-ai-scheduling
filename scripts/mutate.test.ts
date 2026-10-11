@@ -298,9 +298,27 @@ describe("formatResult", () => {
     ]);
   });
 
-  it("prints no detail line for an error, whose detail is the command's output", () => {
-    expect(formatResult({ ...result, status: "ERROR", failedTests: [], detail: "output" })).toEqual([
+  it("ends an error with the last five non-empty lines of its detail, the command's output, after any failed tests", () => {
+    const detail = "one\ntwo\n\nthree\nfour\n   \nfive\nsix\n";
+    expect(formatResult({ ...result, status: "ERROR", failedTests: ["a.test.ts > one"], detail })).toEqual([
       "ERROR 7 a.ts: x⏎y → z",
+      "    ✗ a.test.ts > one",
+      "    two",
+      "    three",
+      "    four",
+      "    five",
+      "    six",
+    ]);
+    expect(
+      formatResult({ ...result, status: "ERROR", failedTests: [], detail: "spawn nope ENOENT" }),
+    ).toEqual(["ERROR 7 a.ts: x⏎y → z", "    spawn nope ENOENT"]);
+  });
+
+  it("prints no output lines for a status other than ERROR, even with a detail", () => {
+    expect(formatResult({ ...result, detail: "output" })).toEqual([
+      "KILLED 7 a.ts: x⏎y → z",
+      "    ✗ a.test.ts > one",
+      "    ✗ a.test.ts > two",
     ]);
   });
 

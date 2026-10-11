@@ -12,7 +12,8 @@
  *   - the edit is written, the test command runs, and the file is restored, also on an error, SIGINT or
  *     SIGTERM (a SIGKILL of this process leaves the edit in place);
  *   - one line is printed: `KILLED|KILLED-OTHER|SURVIVED|ERROR|TIMEOUT|REFUSED <id> <file>: <find> → <replace>`,
- *     with newlines shown as ⏎.
+ *     with newlines shown as ⏎; an ERROR adds the last non-empty lines (at most five) of the command's output, its
+ *     cause (#217 P2; the `--markdown` table's Status cell doesn't change).
  * A command that names `vitest` gets Vitest's JSON reporter added, and a KILLED edit lists the tests that
  * failed (`    ✗ <test file> > <test name>`). A Vitest run that fails with no failing test (a compile error, a
  * crash, a failed import) is ERROR, not KILLED. Any other command that exits non-zero is KILLED, with no names.
@@ -269,12 +270,23 @@ function note(result: EditResult): string | undefined {
   return undefined;
 }
 
-/** The printed lines for one result. */
+/** How many of an errored command's last output lines an ERROR result prints. */
+export const ERROR_LINES = 5;
+
+/** The last `ERROR_LINES` non-empty lines of `text` (a whitespace-only line counts as empty). */
+const lastLines = (text: string): string[] =>
+  text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .slice(-ERROR_LINES);
+
+/** The printed lines for one result: an ERROR ends with the last lines of the command's output, its cause. */
 export function formatResult(result: EditResult): string[] {
   const lines = [
     `${result.status} ${result.id} ${result.file}: ${shown(result.find)} → ${shown(result.replace)}`,
   ];
   for (const name of result.failedTests) lines.push(`    ✗ ${name}`);
+  if (result.status === "ERROR") for (const line of lastLines(result.detail ?? "")) lines.push(`    ${line}`);
   const why = note(result);
   if (why !== undefined) lines.push(`    (${why})`);
   return lines;
