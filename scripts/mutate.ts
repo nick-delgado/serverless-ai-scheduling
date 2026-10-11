@@ -277,7 +277,7 @@ function note(result: EditResult): string | undefined {
 }
 
 /** How many of an errored command's last output lines an ERROR result prints. */
-export const ERROR_LINES = 5;
+const ERROR_LINES = 5;
 
 /** The last `ERROR_LINES` non-empty lines of `text` (a whitespace-only line counts as empty). */
 const lastLines = (text: string): string[] =>
@@ -355,8 +355,10 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   const logError = deps.logError ?? ((line: string) => console.error(line));
   let log = out;
   // Loaded only here, so a plain run never loads the TypeScript compiler (and pr-evidence.ts, which imports this
-  // module, isn't imported back at load time).
-  if (argv.includes("--suggest")) {
+  // module, isn't imported back at load time). Only the runner's own arguments count: a `--suggest` after `--`
+  // belongs to the test command.
+  const dash = argv.indexOf("--");
+  if ((dash < 0 ? argv : argv.slice(0, dash)).includes("--suggest")) {
     const suggest = await import("./mutate-suggest");
     return suggest.main(argv, deps.env ?? process.env, { cwd, log: out, logError });
   }

@@ -462,6 +462,13 @@ describe("main", () => {
     expect(target()).toBe(TARGET);
   });
 
+  it("runs the edits when --suggest appears only in the test command, after --", async () => {
+    const edits = editsFile([{ id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
+    const code = await main([edits, "--", ...checker(), "--suggest"], deps());
+    expect(out[0]).toBe("KILLED k target.txt: ok ? 1 → bad ? 1");
+    expect(code).toBe(0);
+  });
+
   it("exits 0 when every edit was killed or timed out", async () => {
     const edits = editsFile([
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" },
