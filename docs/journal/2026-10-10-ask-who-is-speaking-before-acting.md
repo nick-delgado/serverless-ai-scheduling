@@ -35,7 +35,7 @@ The misheard name proceeded without a question in all three trials. "hi this is 
 
 ## Evidence
 
-All runs were on `sonnet-4.6` with the `sched-dev` profile, on 2026-10-10.
+All runs were on `sonnet-4.6` with the `sched-dev` profile: the first four on 2026-10-10, and the two marked 2026-10-11 on that day.
 
 | Run | Prompt | Result | Cost |
 |---|---|---|---|
@@ -48,7 +48,7 @@ All runs were on `sonnet-4.6` with the `sched-dev` profile, on 2026-10-10.
 
 - What the yes case did, three times: `find_providers {name_query: "Lee"}` and `check_availability` for 2026-10-20, mornings.
 - What the first reply said, three times, for example: "I want to make sure I'm speaking with the right person. Are you Aisha, the patient signed in to this account?"
-- `npm run mutate`: 14 edits to the prompt, its index and the harness default, all killed. The table is in the PR.
+- `npm run mutate`: 15 edits to the prompt, its index and the harness default, all killed, plus 6 edits to the eval cases' checks, all killed. Both tables are in the PR.
 
 ## What's next
 
