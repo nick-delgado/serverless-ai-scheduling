@@ -16,18 +16,22 @@ The same PR carries the batch's other items:
 
 - **ERROR shows its cause (B9-7).** `mutate` now prints the last five non-empty lines of an errored command's output, so an ERROR row no longer means opening `--json` to learn why (#217's review).
 - **ADR checks (B9-3, B9-4).** `scripts/adr-history.test.ts` now covers every ADR with an amendment, not only those whose status starts "Accepted", so ADR-002 is checked again (#228's TEST-2). A new check needs each amendment date in its ADR's status or `**Amended:**` line and in its index row. `docs/adr/README.md` tells an amendment to search the body for each name, count and "only" claim it makes false.
-- **Journal counts (B9-6).** `scripts/journal-links.ts` also fails a line in an added entry that states a count of mutation edits or killed ones, or a gate `<n>/<n>` result, without a backticked SHA or an `actions/runs/<id>` link. Four reviews had found a journal count that a later commit had made stale. This entry follows the rule: each count names `cb6a231`, and the final ones point to the PR's tables.
+- **Journal counts (B9-6).** `scripts/journal-links.ts` also fails a line in an added entry that states a count of mutation edits or killed ones, or a gate `<n>/<n>` result, without a backticked SHA, an `actions/runs/<id>` link or a `/commit/<sha>` link. Four reviews had found a journal count that a later commit had made stale. This entry follows the rule: each count names `cb6a231`, and the final ones point to the PR's tables.
 - **The gate tolerance (B9-5).** Nick generalised #233's decision: a passing `Eval gate` is his advance acceptance of one regressed case per mode. The PR names that case. A decision line is still needed for two or more different regressed cases in a mode, any safety violation, or the same case regressing on two or more gate runs.
 - **Scratch paths (B9-9).** `task-worker.md` now says a worker's scratch path is its own, after two parallel workers overwrote each other's files on 2026-10-09.
 
-## Decisions the spec left open
+## Why we chose what we chose
 
-- **What a `find` starts from.** The changed text itself: the operand with its operator for a drop, the operator token for a comparison, the literal for a number, the group for a regex part. It widens from there, so a find stays as short as uniqueness allows.
-- **Which names hold no numbers.** Besides the issue's type positions, enums and property names, a numeric literal that is any declaration's name (a method `1() {}` as well) gets no edit. The check is one comparison, `parent.name === node`.
-- **An emptied pattern.** Removing the only lookaround of `/(?=a)/` would leave `//`, a comment, so the edit writes `/(?:)/`.
-- **Numbers inside names and dates.** The journal check reads `B9-1 edits`, `ADR-008 edits` and `2026-10-11 edits` as no count: a number joined to a name or a date by `-` isn't counted.
-- **The skip test.** The issue's example, `return x >= 0;` twice, gives three candidates per statement (the comparison and two number edits). The test uses `return x >= y;`, so the count reads "skipped 1" as the issue says.
-- **Infinite loops and equivalent edits.** Edits that stop a loop from advancing (the scanner's `i += 0`, the widening steps' `>=` and `<=`) time out or crash the test run, and a few edits change nothing a caller can see. We leave both out of the PR's tables and list them in the PR instead.
+These are the decisions the spec left open, each with the option it beat.
+
+- **What a `find` starts from.** The changed text itself: the operand with its operator for a drop, the operator token for a comparison, the literal for a number, the group for a regex part. It widens from there, so a find stays as short as uniqueness allows. We didn't start from the whole chain or the whole comparison, which reads more easily but gives a long multi-line `find` for a long chain.
+- **Which names hold no numbers.** Besides the issue's type positions, enums and property names, a numeric literal that is any declaration's name (a method `1() {}` as well) gets no edit. The check is one comparison, `parent.name === node`. We didn't list property assignments and declarations by kind: the list was longer and caught nothing more.
+- **An emptied pattern.** Removing the only lookaround of `/(?=a)/` would leave `//`, a comment, so the edit writes `/(?:)/`. We didn't skip the candidate, since the break is still worth trying.
+- **Numbers inside versions, names and dates.** The journal check doesn't count a number joined to what comes before it by a letter, `.`, `:` or `-` (`v1.2 edits`, `file.ts:42 edits`, `B9-1 edits`, `2026-10-11 edits`). A `/` before it doesn't stop it, so `<n>/<n> killed` counts. We didn't read every number in digits as r1/Q-2 (b) words it, because these lines would then each need a SHA for a count that isn't one.
+- **The gate's word.** The gate rule needs the word "gate" or "gates", so "investigated" next to an `<n>/<n>` isn't a gate result. We didn't match "gate" anywhere in a word.
+- **Infinite loops and equivalent edits.** Edits that stop a loop from advancing (the scanner's `i += 0`, the widening steps' `>=` and `<=`) time out or crash the test run, and a few edits change nothing a caller can see. We leave both out of the PR's tables and list them in the PR instead, rather than listing rows that read ERROR, TIMEOUT or SURVIVED with no test that could change them.
+
+One departure from an owner decision: r1/Q-5's edges ask for a test where `return x >= 0;` twice is "counted on stderr as "skipped 1"". With A-6's number edits, that statement gives three candidates (the comparison and two number edits), so we used `return x >= y;`. The `suggestEdits` test reads a skip count of 1 for one added copy. The `mutate --suggest` test commits both copies as added lines, so its stderr reads "skipped 2". The PR names this under its departures.
 
 ## Evidence
 
