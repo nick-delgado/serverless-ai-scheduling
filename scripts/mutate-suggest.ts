@@ -254,9 +254,10 @@ function unique(candidate: Candidate, file: string, source: ts.SourceFile): Sugg
     }
     const next = marks.find((mark) => mark.end > end);
     const previous = marks.findLast((mark) => mark.start < start);
-    if (next === undefined && previous === undefined) return undefined;
-    if ((right && next) || previous === undefined) end = (next as { end: number }).end;
-    else start = previous.start;
+    if (previous === undefined || (right && next !== undefined)) {
+      if (next === undefined) return undefined;
+      end = next.end;
+    } else start = previous.start;
   }
 }
 

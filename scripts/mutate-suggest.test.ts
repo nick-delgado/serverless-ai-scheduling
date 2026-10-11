@@ -223,10 +223,19 @@ describe("regexParts", () => {
   });
 });
 
+/** Two identical statements, whose comparisons can't get a unique find. */
+const DUPLICATES =
+  "export function f(x: number, y: number) {\n  return x >= y;\n}\nexport function g(x: number, y: number) {\n  return x >= y;\n}\n";
+
 describe("mutate --suggest", () => {
   let repo: TestRepo;
   let out: string[];
   let errors: string[];
+  /** Writes what `main` printed on stdout to an edits file, and returns its path. */
+  const writeOut = () => {
+    writeFileSync(join(repo.dir, "edits.json"), out.join("\n"));
+    return join(repo.dir, "edits.json");
+  };
   const deps = (env: Record<string, string | undefined> = {}) => ({
     cwd: repo.dir,
     env,
@@ -266,6 +275,21 @@ describe("mutate --suggest", () => {
     ]);
   });
 
+  it("counts on stderr the candidates whose whole statement occurs twice", async () => {
+    repo.write("scripts/d.ts", DUPLICATES);
+    repo.commit("two identical statements");
+    expect(await mutate(["--suggest", "--base", "main"], deps())).toBe(0);
+    expect(readEdits(writeOut()).map((edit) => edit.file)).toEqual([
+      "scripts/a.ts",
+      "scripts/a.ts",
+      "scripts/a.ts",
+    ]);
+    expect(errors).toEqual([
+      "mutate --suggest: 3 edits since main; skipped 2 whose statement occurs more than once, and 0 in files with " +
+        "uncommitted changes. Fill in each edit's expect.",
+    ]);
+  });
+
   it("takes the base from COVERAGE_BASE, then origin/main, and --base over both", async () => {
     expect(await mutate(["--suggest"], deps({ COVERAGE_BASE: "main" }))).toBe(0);
     expect(errors[0]).toContain("3 edits since main");
@@ -279,15 +303,16 @@ describe("mutate --suggest", () => {
 
   it("names a file with uncommitted changes and skips its candidates, and not one with none", async () => {
     repo.write("scripts/b.ts", "export const b = (x: string) => x;\n");
-    repo.write("scripts/c.ts", "export const c = (x: string, y: string) => x === y;\n");
+    // One edit and, in the two identical statements, two skipped candidates.
+    repo.write("scripts/c.ts", "export const c = (x: string, y: string) => x === y;\n" + DUPLICATES);
     repo.commit("two more files");
     for (const file of ["a", "b", "c"]) repo.write(`scripts/${file}.ts`, "// edited\n");
     expect(await mutate(["--suggest", "--base", "main"], deps())).toBe(0);
     expect(out).toEqual(["[]"]);
     expect(errors).toEqual([
       "mutate --suggest: scripts/a.ts has uncommitted changes; skipped its 3 candidates.",
-      "mutate --suggest: scripts/c.ts has uncommitted changes; skipped its 1 candidates.",
-      "mutate --suggest: 0 edits since main; skipped 0 whose statement occurs more than once, and 4 in files with " +
+      "mutate --suggest: scripts/c.ts has uncommitted changes; skipped its 3 candidates.",
+      "mutate --suggest: 0 edits since main; skipped 0 whose statement occurs more than once, and 6 in files with " +
         "uncommitted changes. Fill in each edit's expect.",
     ]);
   });
