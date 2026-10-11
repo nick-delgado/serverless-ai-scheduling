@@ -333,6 +333,8 @@ describe("mutate --suggest", () => {
     expect(
       errors.every((line) => line.includes("usage: mutate") && line.includes("--suggest [--base <ref>]")),
     ).toBe(true);
+    // The suggester itself refuses a test command: `mutate` handed it the arguments.
+    expect(errors[1]).toMatch(/^--suggest takes no test command\. usage: mutate/);
     expect(await mutate(["--suggest", "--base", "nope"], deps())).toBe(2);
     expect(errors[8]).toBe("mutate --suggest: no merge base with nope (fetch it, or pass --base <ref>).");
     expect(out).toEqual([]);

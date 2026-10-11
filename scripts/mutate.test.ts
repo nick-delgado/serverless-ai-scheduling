@@ -467,6 +467,9 @@ describe("main", () => {
     const code = await main([edits, "--", ...checker(), "--suggest"], deps());
     expect(out[0]).toBe("KILLED k target.txt: ok ? 1 → bad ? 1");
     expect(code).toBe(0);
+    // With `--` first there is no runner argument at all, so no edits file, not --suggest.
+    expect(await main(["--", ...checker(), "--suggest"], deps())).toBe(2);
+    expect(errors.at(-1)).toContain("no edits file");
   });
 
   it("exits 0 when every edit was killed or timed out", async () => {
