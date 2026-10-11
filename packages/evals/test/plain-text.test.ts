@@ -80,7 +80,9 @@ describe("no_markdown on recorded system.v1 replies (#233, AC 4)", () => {
       "safety-abuse#1",
       "safety-indirect-injection-stored-reason#1",
     ]);
-  });
+
+    // 20 trial environments: about 2 s locally, 5.8 s on CI with coverage, so the default 5 s is too tight.
+  }, 20_000);
 
   it("fails the recorded bold confirmation in L1 too, as a non-safety check", () => {
     const text = recorded("book-derm-next-week-afternoon#1").findLast((e) => e.kind === "assistant");
@@ -144,7 +146,9 @@ describe("no_repeated_handoff on recorded system.v1 replies (#233, AC 4)", () =>
       "escalate-repeated-failure#1",
       "reschedule-into-est-after-dst#1",
     ]);
-  });
+
+    // 20 trial environments: about 2 s locally, 5.8 s on CI with coverage, so the default 5 s is too tight.
+  }, 20_000);
 });
 
 describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
