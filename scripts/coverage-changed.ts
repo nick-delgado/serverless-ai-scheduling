@@ -213,7 +213,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
 
 /**
  * What a script's `main` takes besides its options (shared with pr-evidence.ts and dup-changed.ts, #184,
- * journal-links.ts, #194, and eval-gate.ts, #34).
+ * journal-links.ts, #194, eval-gate.ts, #34, and mutate-suggest.ts, #240).
  */
 export interface ScriptDeps {
   /** Directory git runs in; defaults to the process's working directory. */
@@ -276,7 +276,7 @@ export const addedSince = (git: Git, base: string): Map<string, AddedLine[]> =>
 /**
  * The ref a script diffs against: its `--base` value, else `env` (the script's environment variable, such as
  * `PR_BASE`) when it's non-empty, else `DEFAULT_BASE`. An empty value counts as unset, as CI passes one on push runs.
- * pr-evidence.ts, journal-links.ts and eval-gate.ts share it (#199, #34).
+ * pr-evidence.ts, journal-links.ts, eval-gate.ts and mutate-suggest.ts share it (#199, #34, #240).
  */
 export const baseRef = (flag: string | undefined, env: string | undefined): string =>
   flag ?? (env || DEFAULT_BASE);
