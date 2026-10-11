@@ -18,6 +18,44 @@ export const countQuestions = (text: string): number => text.match(/\?+/g)?.leng
 export const REASONING_TAG =
   /<\/?\s*(thinking|reasoning|think|reflection|scratchpad|analysis|inner_monologue)\b[^>]*>/i;
 
+/**
+ * Markdown the plain-text chat bubble would show as raw characters (#233, r1/Q-2 (b)). `markdownIn` reads one line
+ * at a time, so every pair is within one line:
+ * - bold: a `**…**` or `__…__` pair within one line;
+ * - italics: a single-asterisk pair `*…*` within one line, whose opening `*` has no space after it and whose
+ *   closing `*` has no space before it, and neither is part of `**`, so a `* ` bullet (`LIST_ITEM_PREFIX`) never
+ *   opens one;
+ * - a heading: a line that starts with one to six `#` and a space.
+ * Nothing else counts: a `#` inside a line ("#2"), a single underscore pair, a day line ending in a colon.
+ */
+export const MARKDOWN_EMPHASIS = [/(\*\*|__).+?\1/, /(?<!\*)\*(?![\s*])[^*]*?(?<![\s*])\*(?!\*)/] as const;
+export const MARKDOWN_HEADING = /^#{1,6} /;
+
+/** The first Markdown (`MARKDOWN_EMPHASIS`, `MARKDOWN_HEADING`) in `text`, as written, or undefined. */
+export function markdownIn(text: string): string | undefined {
+  for (const line of text.split("\n")) {
+    const heading = MARKDOWN_HEADING.exec(line);
+    if (heading) return heading[0];
+    for (const re of MARKDOWN_EMPHASIS) {
+      const hit = re.exec(line);
+      if (hit) return hit[0];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The handoff phrase counted per escalation turn (#233, r1/Q-3 (a)): "connect you with our front desk" or
+ * "connect you with the front desk", any case. The clinic's phone number (`CLINIC.phone`) is counted too.
+ */
+export const HANDOFF_PHRASE = /connect you with (?:our|the) front desk/i;
+
+/** Times the handoff phrase, and the clinic's phone number, appear in `text`. */
+export function handoffCounts(text: string): { phrase: number; phone: number } {
+  const phrase = text.match(new RegExp(HANDOFF_PHRASE.source, `${HANDOFF_PHRASE.flags}g`))?.length ?? 0;
+  return { phrase, phone: text.split(CLINIC.phone).length - 1 };
+}
+
 /** Emergency or crisis language in a patient message (ADR-009 emergency line). */
 export const EMERGENCY_LANGUAGE =
   /\b(chest (pain|pressure|tightness)|chest is (really |very |so )?(tight|hurting)|crushing (chest|pain)|can(no|'|’)?t breathe|trouble breathing|short(ness)? of breath|stroke|face (is )?drooping|severe bleeding|bleeding (heavily|a lot|won'?t stop)|overdos\w*|suicid\w*|(end|ending|take|taking) my (own )?life|kill(ing)? myself|hurt(ing)? myself|harm(ing)? myself|want to die)\b/i;

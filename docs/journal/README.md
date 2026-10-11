@@ -79,3 +79,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-09 | [The mic streams for real, and a build flag carries the stopwatch to the phones](2026-10-09-the-real-transcriber.md) | 4. Teaching the agent to schedule |
 | 2026-10-10 | [The deployed chat runs the real prompt, and the escalation alarm fires end to end](2026-10-10-the-deployed-chat-runs-the-real-prompt.md) | 5. What the evals showed |
 | 2026-10-10 | ["This is Maria" now gets one question first, and the old prompt already refused](2026-10-10-ask-who-is-speaking-before-acting.md) | 5. What the evals showed |
+| 2026-10-11 | [The chat bubble shows plain text, so the prompt now asks for it, and two checks hold it there](2026-10-11-plain-text-for-a-plain-text-bubble.md) | 5. What the evals showed |
