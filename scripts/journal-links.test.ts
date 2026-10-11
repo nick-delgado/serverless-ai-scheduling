@@ -47,6 +47,7 @@ describe("unpinnedCount", () => {
       "All 259 were killed.",
       "re-ran them, all 36 killed (the PR's table)",
       "4 of 4 killed",
+      "11 of them killed",
       "47 deliberate breaks",
       "25 MUTANTS of the handler",
       "1 mutation",
@@ -75,6 +76,8 @@ describe("unpinnedCount", () => {
       "the PR's table lists each edit and the test it killed",
       "B9-1 edits, ADR-008 edits, and the 2026-10-11 edits",
       "4 tests in the new file, and the edits",
+      "4 tests in the edits",
+      "the gate ran on 2026/10/11",
       "the gate ran twice",
       "13/14 cases passed",
       "a 3a88282 edits list",
@@ -161,11 +164,13 @@ describe("main", () => {
     expect(errors[1]).toContain("point to the PR's table without a number");
     out.length = 0;
     repo.write("docs/journal/2026-10-06-café.md", entry("#194, PR #42"));
-    repo.commit("link PR #42");
+    repo.write("docs/journal/2026-10-06-linked.md", entry("#194, PR #42", "", "We ran 12 edits."));
+    repo.commit("link PR #42, and one unpinned count left");
     expect(main(["--base", "main", "--pr", "42"], {}, deps())).toBe(1);
-    expect(out[0]).toBe(
-      "Journal lines this PR adds that state a mutation or gate count without a commit or run (2):",
-    );
+    expect(out).toEqual([
+      "Journal lines this PR adds that state a mutation or gate count without a commit or run (1):",
+      "docs/journal/2026-10-06-linked.md:9: We ran 12 edits.",
+    ]);
   });
 
   it("doesn't count an entry renamed since the base as added", () => {

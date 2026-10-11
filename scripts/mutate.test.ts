@@ -313,6 +313,8 @@ describe("formatResult", () => {
     expect(
       formatResult({ ...result, status: "ERROR", failedTests: [], detail: "spawn nope ENOENT" }),
     ).toEqual(["ERROR 7 a.ts: x⏎y → z", "    spawn nope ENOENT"]);
+    // A result read back from JSON may lack its detail.
+    expect(formatResult({ ...result, status: "ERROR", failedTests: [] })).toEqual(["ERROR 7 a.ts: x⏎y → z"]);
   });
 
   it("prints no output lines for a status other than ERROR, even with a detail", () => {

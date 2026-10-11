@@ -149,6 +149,9 @@ describe("suggestEdits", () => {
     expect(
       suggestEdits("a.tsx", "const v = <b>{n > 1}</b>;\n", new Set([1])).edits.map((e) => e.note),
     ).toEqual(["boundary", "number+1", "number-1"]);
+    // JSX text holds no comparison; read as TS, the same line has two.
+    expect(suggestEdits("a.tsx", "const v = <p>a >= 1</p>;\n", new Set([1])).edits).toEqual([]);
+    expect(suggestEdits("a.ts", "const v = <p>a >= 1</p>;\n", new Set([1])).edits).toHaveLength(4);
     expect(all('const r = new RegExp("(?=a)|b");').edits).toEqual([]);
   });
 
@@ -293,6 +296,7 @@ describe("mutate --suggest", () => {
     for (const argv of [
       ["--suggest", "edits.json"],
       ["--suggest", "--", "true"],
+      ["--suggest", "--"],
       ["--suggest", "--markdown"],
       ["--suggest", "--json", "x.json"],
       ["--suggest", "--only", "1"],
@@ -300,12 +304,12 @@ describe("mutate --suggest", () => {
       ["--suggest", "--bogus"],
     ])
       expect(await mutate(argv, deps())).toBe(2);
-    expect(errors).toHaveLength(7);
+    expect(errors).toHaveLength(8);
     expect(
       errors.every((line) => line.includes("usage: mutate") && line.includes("--suggest [--base <ref>]")),
     ).toBe(true);
     expect(await mutate(["--suggest", "--base", "nope"], deps())).toBe(2);
-    expect(errors[7]).toBe("mutate --suggest: no merge base with nope (fetch it, or pass --base <ref>).");
+    expect(errors[8]).toBe("mutate --suggest: no merge base with nope (fetch it, or pass --base <ref>).");
     expect(out).toEqual([]);
   });
 
