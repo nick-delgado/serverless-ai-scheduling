@@ -356,7 +356,7 @@ describe("runAgentTurn: stop_reason refusal", () => {
     // The fallback request uses the fallback's own fields: Haiku 4.5 takes no effort and no thinking.
     expect(llm.requests[0]?.modelFields).toEqual({
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
+      output_config: { effort: "high" },
     });
     expect(llm.requests[1]?.modelFields).toEqual({});
     expect(llm.requests[1]?.maxTokens).toBe(haiku.maxTokens);

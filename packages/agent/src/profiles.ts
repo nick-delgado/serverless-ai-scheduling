@@ -1,7 +1,8 @@
 /**
  * Model profiles (ADR-002, ADR-010): everything that differs per model lives here, so neither the loop
  * nor the Converse adapter branches on model names. `AGENT_MODEL_PROFILE` selects one; the model is
- * configuration, not code. The M3 eval matrix (#37) chooses the production default.
+ * configuration, not code. The M3 eval matrix chose the production profile: `sonnet-4.6` at effort `high`
+ * (ADR-002's 2026-10-12 amendment, #37).
  *
  * Every model is called through Bedrock Converse. On-demand Claude and Nova calls need the `us.`
  * cross-region inference profile; gpt-oss is called by its in-region model ID. Request fields that
@@ -25,7 +26,7 @@ export type ModelProfileName = (typeof MODEL_PROFILE_NAMES)[number];
 /** The environment variable that selects the profile. */
 export const MODEL_PROFILE_ENV = "AGENT_MODEL_PROFILE";
 
-/** The development default (ADR-002 interim decision, kept by ADR-010). */
+/** The development default and the production profile (ADR-002's 2026-10-12 amendment, #37). */
 export const DEFAULT_MODEL_PROFILE: ModelProfileName = "sonnet-4.6";
 
 /** USD per million tokens. On-demand list prices, used only for cost estimates in traces and evals. */
@@ -87,7 +88,8 @@ export interface ModelProfile {
  * The refusal fallback for each profile. Claude follows the ADR-002 matrix (Opus 5 → Sonnet 5 →
  * Haiku 4.5, and the two callable Claude models back each other up); the others pair within their own
  * family so a fallback never changes vendor mid-turn. A switch costs a cold cache and drops reasoning
- * blocks the new model can't read, which is fine for a rare event. The eval matrix may revise this.
+ * blocks the new model can't read, which is fine for a rare event. The M3 matrix kept these pairs; Sonnet 4.6's
+ * fallback to Haiku 4.5 was run live once (ADR-002's 2026-10-12 amendment, #37).
  */
 export const REFUSAL_FALLBACKS: Readonly<Record<ModelProfileName, ModelProfileName>> = {
   "opus-5": "sonnet-5",
@@ -101,13 +103,19 @@ export const REFUSAL_FALLBACKS: Readonly<Record<ModelProfileName, ModelProfileNa
 };
 
 const CLAUDE_ADAPTIVE = { thinking: { type: "adaptive" }, output_config: { effort: "medium" } } as const;
+/**
+ * Sonnet 4.6 at effort `high`: the M3 matrix's selected cell (ADR-002's 2026-10-12 amendment, #37, Decision r2/M-1).
+ * The eval simulator's requests come from this profile too, so it also runs at `high`.
+ */
+const SONNET_46_HIGH = { thinking: { type: "adaptive" }, output_config: { effort: "high" } } as const;
 const CLAUDE_CACHE = { system: true, messages: true } as const;
 const SYSTEM_CACHE_ONLY = { system: true, messages: false } as const;
 const NO_CACHE = { system: false, messages: false } as const;
 
 export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = {
   /**
-   * Development default. Sonnet 4.6 runs WITHOUT thinking unless adaptive thinking is set explicitly.
+   * Development default and production profile, at effort `high` (ADR-002's 2026-10-12 amendment, #37). Sonnet 4.6
+   * runs WITHOUT thinking unless adaptive thinking is set explicitly.
    * Spike S-1: 10/10 correct tool calls, full turn p50 5.16 s, and it caches our ~2.1k-token prefix.
    */
   "sonnet-4.6": {
@@ -116,7 +124,7 @@ export const MODEL_PROFILES: Readonly<Record<ModelProfileName, ModelProfile>> = 
     modelId: "us.anthropic.claude-sonnet-4-6",
     family: "anthropic.claude",
     entitled: true,
-    modelFields: CLAUDE_ADAPTIVE,
+    modelFields: SONNET_46_HIGH,
     replaysReasoning: true,
     cachePoints: CLAUDE_CACHE,
     minCacheableTokens: 1_024,

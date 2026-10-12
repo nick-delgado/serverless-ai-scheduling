@@ -57,7 +57,7 @@ describe("model profiles", () => {
   it("sets each model's reasoning switch in modelFields", () => {
     expect(MODEL_PROFILES["sonnet-4.6"].modelFields).toEqual({
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
+      output_config: { effort: "high" },
     });
     expect(MODEL_PROFILES["haiku-4.5"].modelFields).toEqual({}); // Haiku 4.5 rejects effort
     expect(MODEL_PROFILES["nova-2-lite"].modelFields).toEqual({
