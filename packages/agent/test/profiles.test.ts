@@ -64,6 +64,12 @@ describe("model profiles", () => {
       reasoningConfig: { type: "enabled", maxReasoningEffort: "low" },
     });
     expect(MODEL_PROFILES["gpt-oss-120b"].modelFields).toEqual({ reasoning_effort: "low" });
+    // Only sonnet-4.6 moved to `high` (#37, r1/Q-5 (a)); the not-entitled Claude targets keep `medium`.
+    for (const name of ["opus-5", "sonnet-5"] as const)
+      expect(MODEL_PROFILES[name].modelFields).toEqual({
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+      });
   });
 
   it("never disables Claude thinking and never sends sampling params", () => {
