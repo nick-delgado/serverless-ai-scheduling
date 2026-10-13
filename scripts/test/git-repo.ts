@@ -1,7 +1,8 @@
 /**
  * Helpers for the scripts' tests. A throwaway git repository (coverage-changed, pr-evidence, dup-changed, journal-links,
- * eval-gate, mutate-suggest; #184 shared it when the duplicate check flagged the third copy): `main` checked out, no commits, a test
- * identity and no signing.
+ * eval-gate, mutate-suggest, and the shell scripts' tests through shell-harness.ts: deploy, teardown, deploy-web; #184
+ * shared it when the duplicate check flagged the third copy): `main` checked out, no commits, a test identity and no
+ * signing.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -21,8 +22,10 @@ export interface TestRepo {
   remove: () => void;
 }
 
-export function gitRepo(prefix: string): TestRepo {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+/** A new repository in a temporary directory named from `prefix`, or at `at` (made if missing) when it's given. */
+export function gitRepo(prefix: string, at?: string): TestRepo {
+  if (at !== undefined) mkdirSync(at, { recursive: true });
+  const dir = realpathSync(at ?? mkdtempSync(join(tmpdir(), prefix)));
   const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
   git("init", "-q", "-b", "main");
   git("config", "user.email", "test@example.invalid");
