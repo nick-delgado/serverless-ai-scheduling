@@ -5,7 +5,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { BAD_ENV_NAMES, GOOD_ENV_NAMES, sandbox, type Sandbox } from "./test/shell-harness";
+import {
+  BAD_ENV_NAMES,
+  expectArgumentsRefused,
+  GOOD_ENV_NAMES,
+  sandbox,
+  type Sandbox,
+} from "./test/shell-harness";
 
 const ROLE = "arn:aws:iam::000000000000:role/sched-cfn-exec-test";
 const ALL = "sched-pr7-web sched-pr7-api sched-pr7-auth sched-pr7-data";
@@ -44,10 +50,7 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
     it.each([[[]], ...BAD_ENV_NAMES.map((name) => [[name]])])(
       "rejects %j with exit 2 and no aws call",
       (args) => {
-        const r = run(args);
-        expect(r.status).toBe(2);
-        expect(r.out).toContain("usage: ");
-        expect(r.calls).toEqual([]);
+        expectArgumentsRefused(run(args), "usage: ");
       },
     );
 

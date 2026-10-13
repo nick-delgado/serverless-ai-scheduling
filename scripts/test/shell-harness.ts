@@ -29,6 +29,8 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { expect } from "vitest";
+
 import { gitRepo, type TestRepo } from "./git-repo";
 
 /** The checkout these tests live in; files are copied from here. */
@@ -147,6 +149,13 @@ export interface SandboxOptions {
   standIns?: Partial<Record<StandIn, string>>;
   /** The PATH the TOOLS are resolved from; the parent's by default. */
   parentPath?: string;
+}
+
+/** The script refused its arguments: exit 2, `message` printed, and no stand-in called. */
+export function expectArgumentsRefused(r: ShellRun, message: string): void {
+  expect(r.status).toBe(2);
+  expect(r.out).toContain(message);
+  expect(r.calls).toEqual([]);
 }
 
 export function sandbox(options: SandboxOptions): Sandbox {

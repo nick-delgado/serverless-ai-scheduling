@@ -10,7 +10,14 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BAD_ENV_NAMES, GOOD_ENV_NAMES, sandbox, type Sandbox, type ShellRun } from "./test/shell-harness";
+import {
+  BAD_ENV_NAMES,
+  expectArgumentsRefused,
+  GOOD_ENV_NAMES,
+  sandbox,
+  type Sandbox,
+  type ShellRun,
+} from "./test/shell-harness";
 
 const STACKS = ["data", "auth", "api", "web"];
 
@@ -227,10 +234,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
 
   describe("arguments", () => {
     it.each(BAD_ENV_NAMES)("rejects the env name %s with exit 2 and no aws call", (env) => {
-      const r = run(["data", env]);
-      expect(r.status).toBe(2);
-      expect(r.out).toContain(`invalid env: ${env}`);
-      expect(r.calls).toEqual([]);
+      expectArgumentsRefused(run(["data", env]), `invalid env: ${env}`);
     });
 
     it.each(GOOD_ENV_NAMES)("accepts the env name %s (2 and 16 characters are the length bounds)", (env) => {
@@ -242,11 +246,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     it.each([[[]], [["lambda", "pr7"]], [["lambda"]]])(
       "rejects the stack arguments %j with the usage line",
       (args) => {
-        const r = run(args);
-        expect(r.status).toBe(2);
-        expect(r.out).toContain("usage: ");
-        expect(r.out).toContain("<data|auth|api|web|all> [env] [-- Key=Value ...]");
-        expect(r.calls).toEqual([]);
+        expectArgumentsRefused(run(args), "<data|auth|api|web|all> [env] [-- Key=Value ...]");
       },
     );
 
