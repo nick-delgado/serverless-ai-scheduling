@@ -177,7 +177,7 @@ Two cells measure a defect rather than the model:
 - `gpt-oss-20b`: 68 errored trials from invented tool names replayed in history (#247).
 
 **How the choice was made (Nick's decisions on #37):**
-- **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success by 8 points or more.
+- **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success: `sonnet-4.6@medium` comes closest at 83%, 7 points short of 90%, and every other cell misses by more (corrected 2026-10-13: 8 → 7 points, #259).
 - **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`).
 
 **The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below):
