@@ -10,7 +10,7 @@
  *     turn 1's history in the request.
  * "Confirmed" means turn 2 ends with outcome `completed`, and its calls after the refusal use the fallback's model ID.
  * It prints each call's model ID and stop reason, and each turn's outcome, and writes them to
- * `results/<stamp>-<profile>.md`.
+ * `results/summary-<stamp>-<profile>.md`, like the other spikes' `summary-` files.
  *
  * Usage (from the repo root; calls Bedrock, a few cents):
  *   AWS_PROFILE=sched-dev AWS_REGION=us-east-1 npx tsx spikes/refusal-fallback/run.ts [--profile <name>]
@@ -70,12 +70,13 @@ class RefuseOnceLlmClient implements LlmClient {
     if (this.refuseNext) {
       this.refuseNext = false;
       const r = scriptedRefusal();
-      return Promise.resolve({
+      const response: LlmResponse = {
         content: r.content,
         stopReason: r.stopReason,
-        providerStopReason: r.providerStopReason,
+        providerStopReason: r.providerStopReason ?? r.stopReason,
         usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
-      } as LlmResponse);
+      };
+      return Promise.resolve(response);
     }
     return this.#live.streamMessage(request, handlers, options);
   }
@@ -161,5 +162,5 @@ const out = lines.join("\n");
 console.log(out);
 mkdirSync(join(here, "results"), { recursive: true });
 const stamp = new Date().toISOString().replaceAll(":", "").replace(/\.\d+/, "");
-writeFileSync(join(here, "results", `${stamp}-${chosen.name}.md`), `${out}\n`);
+writeFileSync(join(here, "results", `summary-${stamp}-${chosen.name}.md`), `${out}\n`);
 process.exitCode = confirmed ? 0 : 1;
