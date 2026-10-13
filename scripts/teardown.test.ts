@@ -7,13 +7,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   BAD_ENV_NAMES,
+  BOOTSTRAP_SSM,
   expectArgumentsRefused,
   GOOD_ENV_NAMES,
   sandbox,
   type Sandbox,
 } from "./test/shell-harness";
 
-const ROLE = "arn:aws:iam::000000000000:role/sched-cfn-exec-test";
+const ROLE = BOOTSTRAP_SSM["/sched/bootstrap/cfn-exec-role-arn"];
 const ALL = "sched-pr7-web sched-pr7-api sched-pr7-auth sched-pr7-data";
 
 let sb: Sandbox;
@@ -30,7 +31,7 @@ const emptied = (calls: string[]) => calls.filter((c) => c.startsWith("aws s3 rm
 
 function setBucket(bucket: string | undefined): void {
   sb.setSsm({
-    "/sched/bootstrap/cfn-exec-role-arn": ROLE,
+    ...BOOTSTRAP_SSM,
     ...(bucket === undefined ? {} : { "/sched/pr7/web/bucket-name": bucket }),
   });
 }

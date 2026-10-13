@@ -10,17 +10,10 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { BAD_ENV_NAMES, GOOD_ENV_NAMES, sandbox, type Sandbox } from "./test/shell-harness";
+import { BAD_ENV_NAMES, GOOD_ENV_NAMES, sandbox, type Sandbox, webSsm } from "./test/shell-harness";
 
-// Synthetic values in the shape the stacks publish; none of them exists.
-const SSM: Record<string, string> = {
-  "/sched/dev/auth/user-pool-id": "us-east-1_TESTPOOL1",
-  "/sched/dev/auth/spa-client-id": "testclient0000000000000000",
-  "/sched/dev/auth/identity-pool-id": "us-east-1:00000000-0000-4000-8000-000000000000",
-  "/sched/dev/web/bucket-name": "sched-dev-web-000000000000",
-  "/sched/dev/web/distribution-id": "ETESTDIST",
-  "/sched/dev/web/domain": "dtest.cloudfront.example",
-};
+const SSM = webSsm("dev");
+const POOL = SSM["/sched/dev/auth/user-pool-id"] ?? "";
 
 // Writes apps/web/dist like Vite does, unless FAKE_BUILD says otherwise.
 const FAKE_NPM = `#!/usr/bin/env bash
@@ -82,7 +75,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     expect(status, out).toBe(0);
 
     expect(builds(calls)).toEqual([
-      "npm run build -w apps/web VITE_USER_POOL_ID=us-east-1_TESTPOOL1 VITE_SPA_CLIENT_ID=testclient0000000000000000 VITE_IDENTITY_POOL_ID=us-east-1:00000000-0000-4000-8000-000000000000",
+      `npm run build -w apps/web VITE_USER_POOL_ID=${POOL} VITE_SPA_CLIENT_ID=${SSM["/sched/dev/auth/spa-client-id"] ?? ""} VITE_IDENTITY_POOL_ID=${SSM["/sched/dev/auth/identity-pool-id"] ?? ""}`,
     ]);
     const bucket = "s3://sched-dev-web-000000000000";
     expect(syncs(calls)).toEqual([
@@ -200,10 +193,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
   it("never publishes a stale build left in apps/web/dist", () => {
     mkdirSync(join(sb.repo.dir, "apps/web/dist/assets"), { recursive: true });
     writeFileSync(join(sb.repo.dir, "apps/web/dist/index.html"), "old");
-    writeFileSync(
-      join(sb.repo.dir, "apps/web/dist/assets/old.js"),
-      SSM["/sched/dev/auth/user-pool-id"] ?? "",
-    );
+    writeFileSync(join(sb.repo.dir, "apps/web/dist/assets/old.js"), POOL);
     const { status, out, calls } = run(["dev"], { FAKE_BUILD: "none" });
     expect(status).toBe(1);
     expect(out).toContain("no apps/web/dist/index.html");

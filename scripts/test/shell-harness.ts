@@ -34,13 +34,13 @@ import { expect } from "vitest";
 import { gitRepo, type TestRepo } from "./git-repo";
 
 /** The checkout these tests live in; files are copied from here. */
-export const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-export const STAND_INS = ["aws", "sam", "npm"] as const;
+const STAND_INS = ["aws", "sam", "npm"] as const;
 export type StandIn = (typeof STAND_INS)[number];
 
 /** Everything deploy.sh, teardown.sh, deploy-web.sh and the stand-ins call that isn't a bash builtin. */
-export const TOOLS = [
+const TOOLS = [
   "bash",
   "git",
   "dirname",
@@ -60,12 +60,31 @@ export const TOOLS = [
 export const BAD_ENV_NAMES = ["Dev", "dev_x", "d", "a2345678901234567"];
 export const GOOD_ENV_NAMES = ["ab", "a234567890123456"];
 
+// Synthetic SSM values in the shape the stacks publish; none of them exists.
+/** What deploy.sh and teardown.sh read from the bootstrap stack. */
+export const BOOTSTRAP_SSM: Readonly<Record<string, string>> = {
+  "/sched/bootstrap/cfn-exec-role-arn": "arn:aws:iam::000000000000:role/sched-cfn-exec-test",
+  "/sched/bootstrap/artifact-bucket": "sched-test-artifacts",
+};
+
+/** What deploy-web.sh reads for `env` from its auth and web stacks; the bucket is `sched-<env>-web-…`. */
+export function webSsm(env: string): Record<string, string> {
+  return {
+    [`/sched/${env}/auth/user-pool-id`]: "us-east-1_TESTPOOL1",
+    [`/sched/${env}/auth/spa-client-id`]: "testclient0000000000000000",
+    [`/sched/${env}/auth/identity-pool-id`]: "us-east-1:00000000-0000-4000-8000-000000000000",
+    [`/sched/${env}/web/bucket-name`]: `sched-${env}-web-000000000000`,
+    [`/sched/${env}/web/distribution-id`]: "ETESTDIST",
+    [`/sched/${env}/web/domain`]: "dtest.cloudfront.example",
+  };
+}
+
 /**
  * Logs each call to $FAKE_LOG. `sts` fails with FAKE_STS_FAIL; `ssm get-parameter` answers from $FAKE_SSM_DIR (one
  * file per name) or fails with FAKE_SSM_ERROR; `cloudformation describe-stacks` finds only the stacks in FAKE_STACKS
  * (space-separated names); `cloudformation wait` fails for the stack named in FAKE_WAIT_FAIL.
  */
-export const FAKE_AWS = `#!/usr/bin/env bash
+const FAKE_AWS = `#!/usr/bin/env bash
 echo "aws $*" >> "$FAKE_LOG"
 case "$1 $2" in
   "sts get-caller-identity") echo "identity profile=$AWS_PROFILE region=$AWS_REGION" >> "$FAKE_LOG"; [[ -n "\${FAKE_STS_FAIL:-}" ]] && exit 255; echo '{}' ;;
@@ -83,12 +102,12 @@ exit 0
 `;
 
 /** Logs each call to $FAKE_LOG and prints nothing, so a value it's given never reaches the script's output. */
-export const FAKE_SAM = `#!/usr/bin/env bash
+const FAKE_SAM = `#!/usr/bin/env bash
 echo "sam $*" >> "$FAKE_LOG"
 `;
 
 /** deploy.sh and teardown.sh never run npm; this one is there so that a call can't reach the real one. */
-export const FAKE_NPM_UNUSED = `#!/usr/bin/env bash
+const FAKE_NPM_UNUSED = `#!/usr/bin/env bash
 echo "npm $*" >> "$FAKE_LOG"
 exit 1
 `;
@@ -115,7 +134,7 @@ export interface ShellRun {
   calls: string[];
 }
 
-export interface RunOptions {
+interface RunOptions {
   /** Added to the scripts' environment (HOME, PATH and the stand-ins' variables are already set). */
   env?: Record<string, string>;
   /** stdin; without it the script reads end-of-file. */
@@ -132,14 +151,17 @@ export interface Sandbox {
   setSsm: (values: Record<string, string>) => void;
   /** Writes a stand-in, or removes it when `body` is undefined. */
   standIn: (name: StandIn, body: string | undefined) => void;
-  calls: () => string[];
   clearCalls: () => void;
-  /** Runs `script` (relative to the checkout) with bash; throws when a stand-in is missing or a command wasn't found. */
+  /**
+   * Runs `script` (relative to the checkout) with bash. Throws before the run when the checkout isn't a real path inside
+   * the sandbox whose git common dir is the sandbox repo's, and after it when a stand-in is missing or a command wasn't
+   * found.
+   */
   run: (script: string, args: string[], options?: RunOptions) => ShellRun;
   remove: () => void;
 }
 
-export interface SandboxOptions {
+interface SandboxOptions {
   prefix: string;
   /** Paths relative to the checkout, copied into the repo, which then gets one commit. */
   files: string[];
@@ -170,7 +192,10 @@ export function sandbox(options: SandboxOptions): Sandbox {
   const parentPath = options.parentPath ?? process.env.PATH ?? "";
   for (const tool of TOOLS) {
     const found = which(tool, parentPath);
-    if (found === undefined) throw new Error(`shell harness: ${tool} is not on the parent's PATH`);
+    if (found === undefined) {
+      rmSync(dir, { recursive: true, force: true });
+      throw new Error(`shell harness: ${tool} is not on the parent's PATH`);
+    }
     symlinkSync(found, join(tools, tool));
   }
   const bash = join(tools, "bash");
@@ -204,8 +229,19 @@ export function sandbox(options: SandboxOptions): Sandbox {
   setSsm({});
   const calls = () => (existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : []);
 
+  // r1/Q-1: the copy's repo_root, and the main checkout its .env falls back to, are both the sandbox's.
+  const checkRoot = (root: string) => {
+    if (realpathSync(root) !== root || !root.startsWith(`${dir}/`))
+      throw new Error(`shell harness: ${root} is not a real path inside the sandbox ${dir}`);
+    const common = repo.git("-C", root, "rev-parse", "--path-format=absolute", "--git-common-dir").trim();
+    if (dirname(common) !== repo.dir)
+      throw new Error(`shell harness: ${root}'s main checkout is ${dirname(common)}, not the sandbox repo`);
+  };
+
   const run = (script: string, args: string[], runOptions: RunOptions = {}): ShellRun => {
-    const r = spawnSync(bash, [join(runOptions.root ?? repo.dir, script), ...args], {
+    const root = runOptions.root ?? repo.dir;
+    checkRoot(root);
+    const r = spawnSync(bash, [join(root, script), ...args], {
       cwd: dir,
       encoding: "utf8",
       input: runOptions.input ?? "",
@@ -232,7 +268,6 @@ export function sandbox(options: SandboxOptions): Sandbox {
     repo,
     setSsm,
     standIn,
-    calls,
     clearCalls: () => rmSync(log, { force: true }),
     run,
     remove: () => rmSync(dir, { recursive: true, force: true }),

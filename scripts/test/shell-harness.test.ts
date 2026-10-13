@@ -3,13 +3,24 @@
  * and puts an impostor of that name first on the parent's PATH, where an inherited PATH would find it; the run throws
  * and the impostor never runs. With every stand-in present, the same run passes and still never reaches it.
  */
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { sandbox, type Sandbox, type StandIn } from "./shell-harness";
+import { gitRepo } from "./git-repo";
+import { BOOTSTRAP_SSM, sandbox, type Sandbox, type StandIn, webSsm, which } from "./shell-harness";
 
 let impostors = "";
 let sb: Sandbox | undefined;
@@ -39,16 +50,7 @@ const CASES: [StandIn, string, string[]][] = [
   ["npm", "scripts/deploy-web.sh", ["pr7", "--dry-run"]],
 ];
 
-const SSM = {
-  "/sched/bootstrap/cfn-exec-role-arn": "arn:aws:iam::000000000000:role/sched-cfn-exec-test",
-  "/sched/bootstrap/artifact-bucket": "sched-test-artifacts",
-  "/sched/pr7/auth/user-pool-id": "us-east-1_TESTPOOL1",
-  "/sched/pr7/auth/spa-client-id": "testclient0000000000000000",
-  "/sched/pr7/auth/identity-pool-id": "us-east-1:00000000-0000-4000-8000-000000000000",
-  "/sched/pr7/web/bucket-name": "sched-pr7-web-000000000000",
-  "/sched/pr7/web/distribution-id": "ETESTDIST",
-  "/sched/pr7/web/domain": "dtest.cloudfront.example",
-};
+const SSM = { ...BOOTSTRAP_SSM, ...webSsm("pr7") };
 
 // An npm that builds what deploy-web.sh checks for, so the run with every stand-in present passes.
 const BUILDING_NPM = `#!/usr/bin/env bash
@@ -83,13 +85,74 @@ describe("shell harness guard", { timeout: 30_000 }, () => {
     },
   );
 
-  it("a run that calls a command off the allow-list throws", () => {
+  it("a run that calls a real command off the allow-list (uname) throws", () => {
+    expect(which("uname", process.env.PATH ?? "")).toBeDefined();
     sb = sandbox({
       prefix: "sched-guard-",
       files: ["scripts/deploy.sh", "infra/stacks/data.yaml"],
-      standIns: { sam: `#!/usr/bin/env bash\nnot-on-the-allow-list-137\n` },
+      standIns: { sam: `#!/usr/bin/env bash\nuname\n` },
     });
     sb.setSsm(SSM);
     expect(() => sb?.run("scripts/deploy.sh", ["data", "pr7"])).toThrow("command not found");
+  });
+
+  it("a tool missing from the parent's PATH stops the sandbox before any run", () => {
+    expect(() => sandbox({ prefix: "sched-guard-", files: [], parentPath: join(impostors, "bin") })).toThrow(
+      "shell harness: bash is not on the parent's PATH",
+    );
+  });
+});
+
+// r1/Q-1: every run's checkout is the sandbox repo or a worktree of it, so its .env fallback stays in the sandbox.
+describe("shell harness checkout check", { timeout: 30_000 }, () => {
+  const SCRIPT = "scripts/teardown.sh";
+
+  beforeEach(() => {
+    sb = sandbox({ prefix: "sched-root-", files: [SCRIPT] });
+  });
+
+  /** A copy of the script at `root`, a git checkout. */
+  const copyTo = (root: string) => {
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    copyFileSync(join(sb?.repo.dir ?? "", SCRIPT), join(root, SCRIPT));
+  };
+
+  it("runs the sandbox repo's copy and a worktree's", () => {
+    const wt = join(sb?.dir ?? "", "wt");
+    sb?.repo.git("worktree", "add", "-q", "-b", "wt", wt);
+    expect(sb?.run(SCRIPT, ["ab"]).status).toBe(0);
+    expect(sb?.run(SCRIPT, ["ab"], { root: wt }).status).toBe(0);
+  });
+
+  it("refuses a checkout outside the sandbox", () => {
+    const outside = gitRepo("sched-outside-");
+    try {
+      copyTo(outside.dir);
+      expect(() => sb?.run(SCRIPT, ["ab"], { root: outside.dir })).toThrow(
+        "is not a real path inside the sandbox",
+      );
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it("refuses a path into the sandbox that isn't real (a symlink)", () => {
+    const link = join(sb?.dir ?? "", "link");
+    symlinkSync(sb?.repo.dir ?? "", link);
+    expect(() => sb?.run(SCRIPT, ["ab"], { root: link })).toThrow("is not a real path inside the sandbox");
+  });
+
+  it("refuses a checkout inside the sandbox whose main checkout is another repo", () => {
+    const outside = gitRepo("sched-outside-");
+    try {
+      outside.write("README", "x");
+      outside.commit("init");
+      const wt = join(sb?.dir ?? "", "foreign");
+      outside.git("worktree", "add", "-q", "-b", "foreign", wt);
+      copyTo(wt);
+      expect(() => sb?.run(SCRIPT, ["ab"], { root: wt })).toThrow("not the sandbox repo");
+    } finally {
+      outside.remove();
+    }
   });
 });
