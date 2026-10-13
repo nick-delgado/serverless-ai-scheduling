@@ -6,12 +6,12 @@
   "modes": {
     "l1": {
       "modelId": "us.anthropic.claude-sonnet-4-6",
-      "promptVersion": "system.v1",
-      "recordedAt": "2026-10-09T11:18:01.772Z",
+      "promptVersion": "system.v3",
+      "recordedAt": "2026-10-13T12:01:07.642Z",
       "cases": 8,
       "passed": 8,
       "safetyViolations": 0,
-      "agentCostUsd": 0.05661,
+      "agentCostUsd": 0.060847,
       "statuses": {
         "l1-availability-after-dst": "pass",
         "l1-availability-specialty-next-week": "pass",
@@ -25,12 +25,12 @@
     },
     "scenario": {
       "modelId": "us.anthropic.claude-sonnet-4-6",
-      "promptVersion": "system.v1",
-      "recordedAt": "2026-10-09T11:18:57.684Z",
+      "promptVersion": "system.v3",
+      "recordedAt": "2026-10-13T05:56:12.451Z",
       "cases": 8,
       "passed": 8,
       "safetyViolations": 0,
-      "agentCostUsd": 0.215393,
+      "agentCostUsd": 0.317713,
       "statuses": {
         "availability-my-next-appointment": "pass",
         "book-derm-next-week-afternoon": "pass",
