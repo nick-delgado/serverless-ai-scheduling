@@ -82,3 +82,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-11 | [The chat bubble shows plain text, so the prompt now asks for it, and two checks hold it there](2026-10-11-plain-text-for-a-plain-text-bubble.md) | 5. What the evals showed |
 | 2026-10-11 | [A mutation suggester reads the code, and its first target was itself](2026-10-11-the-suggester-broke-its-own-code-first.md) | 5. What the evals showed |
 | 2026-10-13 | [What the evals showed: fourteen cells, one near-miss, and a latency target no effort level meets](2026-10-13-what-the-matrix-chose.md) | 5. What the evals showed |
+| 2026-10-13 | [Five tests sliced YAML five ways; one reader now decides where a block ends](2026-10-13-one-reader-for-yaml-as-text.md) | 5. What the evals showed |
