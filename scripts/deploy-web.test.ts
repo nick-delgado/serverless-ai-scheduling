@@ -258,7 +258,10 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     ["no-index", "no apps/web/dist/index.html"],
     ["no-assets", "no files under apps/web/dist/assets/"],
     ["no-pool", "don't contain the 'dev' user pool ID"],
-    ["no-identity-pool", "don't contain the 'dev' Identity Pool ID"],
+    [
+      "no-identity-pool",
+      "don't contain the 'dev' Identity Pool ID; VITE_IDENTITY_POOL_ID didn't reach the build",
+    ],
   ])("refuses to sync when the build output is incomplete (%s)", (build, message) => {
     const { status, out, calls } = run(["dev"], { FAKE_BUILD: build });
     expect(status).toBe(1);
