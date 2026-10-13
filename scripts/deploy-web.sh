@@ -105,9 +105,14 @@ if [[ ! -f "$dist/index.html" ]] || [[ -z "$(find "$dist/assets" -type f 2>/dev/
   echo "refusing: the build produced no ${dist}/index.html or no files under ${dist}/assets/" >&2
   exit 1
 fi
-# The IDs reach the bundle only through Vite's env; a build that lost them would sign nobody in.
+# The IDs reach the bundle only through Vite's env. A build that lost the user pool ID would sign
+# nobody in; one that lost the Identity Pool ID would sign patients in but quietly take voice off.
 if ! grep -rqF -- "$user_pool_id" "$dist/assets"; then
   echo "refusing: the built assets don't contain the '${env}' user pool ID; VITE_USER_POOL_ID didn't reach the build" >&2
+  exit 1
+fi
+if ! grep -rqF -- "$identity_pool_id" "$dist/assets"; then
+  echo "refusing: the built assets don't contain the '${env}' Identity Pool ID; VITE_IDENTITY_POOL_ID didn't reach the build" >&2
   exit 1
 fi
 
