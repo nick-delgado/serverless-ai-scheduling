@@ -9,7 +9,7 @@ import { PutCommand, type QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { createDynamoTurnStore } from "@sched/api/dynamo-turn-store";
 import type { TurnTrace } from "@sched/contracts";
 import { createDocumentClient } from "@sched/tools/dynamo";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   dynamoLocalAvailable,
@@ -17,12 +17,26 @@ import {
   localClient,
   tableFactory,
 } from "../packages/tools/test/dynamo/local";
+import type * as seedData from "./seed-data";
+import { ssmClientFor } from "./seed-data";
 import { type CliDeps, main, parseCliArgs, readTraces, turnLines, turnView } from "./trace";
+
+// The default SSM client, so a test can see main use it without reaching AWS.
+vi.mock("./seed-data", async (importOriginal) => ({
+  ...(await importOriginal<typeof seedData>()),
+  ssmClientFor: vi.fn(),
+}));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const CONV = "c0000000-0000-4000-8000-000000000001";
 const OTHER_CONV = "c0000000-0000-4000-8000-000000000002";
-const TURN_1 = "a0000000-0000-4000-8000-000000000001";
+// The earlier turn's ID sorts after the later one's, so DynamoDB's key order isn't startedAt order.
+const TURN_1 = "b0000000-0000-4000-8000-000000000001";
 const TURN_2 = "a0000000-0000-4000-8000-000000000002";
+const UNKNOWN_CONV = "c0000000-0000-4000-8000-0000000000ff";
 const PATIENT = "3f6c1a2e-8b4d-4c1a-9f2e-6d5b7a8c9e01";
 const SECRET_INPUT = "SECRET_TOOL_INPUT";
 
@@ -150,6 +164,12 @@ describe("main before any AWS call", () => {
     expect(vars.AWS_PROFILE).toBe("other");
   });
 
+  it("reports to console.error by default", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await main(["../x", CONV], {})).toBe(1);
+    expect(error).toHaveBeenCalledWith("invalid env: ../x");
+  });
+
   it("needs --table when DYNAMODB_ENDPOINT is set", async () => {
     const io = capture();
     expect(await main(["dev", CONV], { DYNAMODB_ENDPOINT: ENDPOINT }, io)).toBe(1);
@@ -247,14 +267,12 @@ describe("turnView (--json)", () => {
 // ---------------------------------------------------------------------------------------------
 
 describe("readTraces with an injected client", () => {
-  const item = (t: TurnTrace) => ({
-    SK: `TRACE#${t.turnId}`,
-    startedAt: t.startedAt,
-    trace: JSON.stringify(t),
-  });
+  // No stored startedAt: a readable item sorts by its trace's own.
+  const item = (t: TurnTrace) => ({ SK: `TRACE#${t.turnId}`, trace: JSON.stringify(t) });
 
   it("queries only TRACE# items under CONV#<id>, never patientId, and follows every page", async () => {
     const pages = [
+      { LastEvaluatedKey: { PK: `CONV#${CONV}`, SK: "TRACE#0" } },
       { Items: [item(T2)], LastEvaluatedKey: { PK: `CONV#${CONV}`, SK: `TRACE#${TURN_2}` } },
       { Items: [item(T1)] },
     ];
@@ -267,7 +285,7 @@ describe("readTraces with an injected client", () => {
 
     expect(entries.map((e) => e.turnId)).toEqual([TURN_1, TURN_2]);
     expect(entries[0]?.trace).toEqual(T1);
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(3);
     expect(inputs[0]).toEqual({
       TableName: "t1",
       KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
@@ -277,7 +295,10 @@ describe("readTraces with an injected client", () => {
       ExclusiveStartKey: undefined,
       Limit: 1,
     });
-    expect(inputs[1]?.ExclusiveStartKey).toEqual(pages[0]?.LastEvaluatedKey);
+    expect(inputs.slice(1).map((i) => i.ExclusiveStartKey)).toEqual([
+      pages[0]?.LastEvaluatedKey,
+      pages[1]?.LastEvaluatedKey,
+    ]);
   });
 
   it("keeps an unreadable item, by the turn ID in its key, at its stored startedAt", async () => {
@@ -381,16 +402,41 @@ describe.skipIf(!available)("trace.ts on DynamoDB Local", () => {
       }) as never,
     };
     const io = capture();
-    const deps: CliDeps = { ...io, ssmClient: () => ssm, dynamoClient: () => localClient() };
-    expect(await main(["dev", CONV], {}, deps)).toBe(0);
+    const regions: unknown[] = [];
+    const dynamo = localClient();
+    const destroy = vi.spyOn(dynamo, "destroy");
+    const deps: CliDeps = {
+      ...io,
+      ssmClient: (region) => (regions.push(region), ssm),
+      dynamoClient: (region, endpoint) => (regions.push(region, endpoint), dynamo),
+    };
+    // An empty DYNAMODB_ENDPOINT counts as unset.
+    expect(await main(["dev", CONV], { AWS_REGION: "eu-west-1", DYNAMODB_ENDPOINT: "" }, deps)).toBe(0);
     expect(names).toEqual(["/sched/dev/data/table-name"]);
+    expect(regions).toEqual(["eu-west-1", "eu-west-1", undefined]);
     expect(io.out.filter((l) => l.startsWith("turn "))).toHaveLength(2);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it("uses the default SSM client in us-east-1, and prints to console.log and console.error", async () => {
+    const table = await seededTable();
+    vi.mocked(ssmClientFor).mockReturnValue({
+      send: () => Promise.resolve({ Parameter: { Value: table } }),
+    } as never);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await main(["dev", CONV], {}, { dynamoClient: () => localClient() })).toBe(0);
+    expect(ssmClientFor).toHaveBeenCalledWith("us-east-1");
+    expect(log).toHaveBeenCalledWith(`turn ${TURN_1} 2026-10-13T12:00:00.000Z completed`);
+
+    expect(await main(["dev", UNKNOWN_CONV], {}, { dynamoClient: () => localClient() })).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/^No traces for conversation /));
   });
 
   it("says so on stderr and exits 1 when the conversation has no traces", async () => {
     const table = await seededTable();
     const io = capture();
-    const unknown = "c0000000-0000-4000-8000-0000000000ff";
+    const unknown = UNKNOWN_CONV;
     expect(await main(["dev", unknown, "--table", table], { ...local }, io)).toBe(1);
     expect(io.out).toEqual([]);
     expect(io.err).toEqual([`No traces for conversation ${unknown} in table ${table}`]);
