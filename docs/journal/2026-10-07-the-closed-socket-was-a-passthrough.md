@@ -29,7 +29,7 @@ So the cause lies in third-party code: as far as the reproduction shows, the int
 
 - **A test passed only because its session requests never succeeded.** In "keys the reply with the messageId from done", on Node 26 with the fix, the session effect looped until the test timed out; before the fix, that test's session requests were aborted, or one failed on a passed-through connection, so the loop never started. We measured that in this one test; the other three tests build the api the same way and were changed with it.
 - **The undici package's own `Agent` also passes the reproduction.** A keep-alive `new Agent()` from undici 8.11.2 passes the forced test (though not the "own connection" test). Node 26's bundled Undici 8.10.2 doesn't. We didn't find which change accounts for that.
-- **Our load rounds were killed from inside.** Two attempts at a round died partway, the whole chain at once. With each suite in its own session (`setsid`), only single suites died (`Killed: 9`), three of the 18 in the after rounds. We suspect a process-group kill in `scripts/mutate.test.ts` ("kills a timed-out command's whole process group…") reaching the wrong group under load, but we haven't verified that.
+- **Our load rounds were killed from inside.** Two attempts at a round died partway, the whole chain at once. With each suite in its own session (`setsid`), only single suites died (`Killed: 9`), three of the 18 in the after rounds. We suspect a process-group kill in `scripts/mutate.test.ts` ("kills a timed-out command's whole process group…") reaching the wrong group under load, but we haven't verified that. (Followed up in the [2026-10-13 entry](2026-10-13-an-empty-pid-file-is-pid-zero.md).)
 - **#134's earlier scroll flakes fit this mechanism, but only partly confirmed.** The 2026-10-04 and 2026-10-06 entries saw scroll failures under load. In this issue's before rounds, one of three scroll failures logged `SocketError: closed`. The other two failed with no rejected `fetch` logged: one at the chip step and one at the last step. Their cause is not identified.
 
 ## Evidence
@@ -49,4 +49,4 @@ So the cause lies in third-party code: as far as the reproduction shows, the int
 ## What's next
 
 - `src/auth/session.test.ts` and `src/app/routes.test.tsx` still have fixed-time waits for real I/O (the 2026-10-06 entry).
-- If load measurements continue, find out what SIGKILLs suites mid-round before trusting another round's counts.
+- If load measurements continue, find out what SIGKILLs suites mid-round before trusting another round's counts. (See the [2026-10-13 entry](2026-10-13-an-empty-pid-file-is-pid-zero.md).)

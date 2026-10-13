@@ -96,8 +96,12 @@ const vitest = () => [join(dir, "vitest"), "run"];
 // the runner started would leave the checker running, so only a kill of the whole process group stops it.
 const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
 const target = () => readFileSync(join(dir, "target.txt"), "utf8");
-/** True while the process with this pid runs. */
+/**
+ * True while the process with this pid runs. Only a positive integer names one process: kill(2) reads 0 as the
+ * caller's own process group and a negative number as a group, or as every process the user owns (-1).
+ */
 const alive = (pid: number) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -106,7 +110,16 @@ const alive = (pid: number) => {
   }
 };
 const ran = () => existsSync(join(dir, "ran.log"));
-const checkerPid = () => Number(readFileSync(join(dir, "checker.pid"), "utf8"));
+/**
+ * Whether the checker whose pid file is in `at` still runs. It sends no signal but kill(2)'s existence check: a
+ * checker left running ends on its own within 30 s, and the pid read back may be empty (the checker killed between
+ * creating checker.pid and writing it, read as 0), 0 or reused, which a SIGKILL would turn into a kill of this test
+ * run's own process group or of another process (#215).
+ */
+const checkerLeftRunning = (at: string) => {
+  const pidFile = join(at, "checker.pid");
+  return existsSync(pidFile) && alive(Number(readFileSync(pidFile, "utf8")));
+};
 const editsFile = (edits: unknown[]) => {
   writeFileSync(join(dir, "edits.json"), JSON.stringify(edits));
   return "edits.json";
@@ -122,12 +135,55 @@ beforeEach(() => {
   errors = [];
 });
 afterEach(() => {
-  // A checker still running here was left behind by the code under test: stop it, and fail the test.
-  const pidFile = join(dir, "checker.pid");
-  const left = existsSync(pidFile) && alive(checkerPid());
-  if (left) process.kill(checkerPid(), "SIGKILL");
+  // A checker still running here was left behind by the code under test: fail the test (it ends on its own).
+  const left = checkerLeftRunning(dir);
   rmSync(dir, { recursive: true, force: true });
   expect(left, "a checker process was left running").toBe(false);
+});
+
+describe("checkerLeftRunning, the after-each check for a checker left running", () => {
+  let at: string;
+  beforeEach(() => {
+    at = mkdtempSync(join(tmpdir(), "mutate-pid-"));
+  });
+  afterEach(() => {
+    rmSync(at, { recursive: true, force: true });
+  });
+  // The kill is stubbed, so a check that signalled the pid (0 is this run's own process group) would only be recorded.
+  const withKillSpy = (check: (kill: ReturnType<typeof vi.spyOn>) => void) => {
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
+    try {
+      check(kill);
+    } finally {
+      kill.mockRestore();
+    }
+  };
+
+  it.each(["", "0", "-1", "1.5", "abc"])(
+    "reads a checker.pid of %j as no checker running, and sends it no signal",
+    (text) => {
+      writeFileSync(join(at, "checker.pid"), text);
+      withKillSpy((kill) => {
+        expect(checkerLeftRunning(at)).toBe(false);
+        expect(kill).not.toHaveBeenCalled();
+      });
+    },
+  );
+
+  it("reads a running pid as left running, checked with signal 0 only", () => {
+    writeFileSync(join(at, "checker.pid"), String(process.pid));
+    withKillSpy((kill) => {
+      expect(checkerLeftRunning(at)).toBe(true);
+      expect(kill.mock.calls).toEqual([[process.pid, 0]]);
+    });
+  });
+
+  it("reads no checker.pid as no checker running", () => {
+    withKillSpy((kill) => {
+      expect(checkerLeftRunning(at)).toBe(false);
+      expect(kill).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("occurrences", () => {
@@ -495,7 +551,7 @@ describe("main", () => {
     const code = await main([edits, "--timeout", "1", "--", ...checkerUnderSh()], deps());
     expect(out[0]).toBe("TIMEOUT t target.txt: ok ? 1 → slow ? 1");
     expect(code).toBe(0);
-    await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 50 });
+    await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
   }, 10_000);
 
   it("removes its report directory after each run", async () => {
@@ -707,7 +763,7 @@ describe("main", () => {
       // Killed by a signal, the command exits non-zero, so the edit reads as KILLED; the file is restored.
       expect(out[0]).toBe("KILLED t target.txt: ok ? 1 → slow ? 1");
       // sh can close before the killed checker is gone (not yet torn down, or not yet reaped), so wait for it.
-      await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
+      await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
       expect(target()).toBe(TARGET);
     } finally {
       vi.unstubAllEnvs();
@@ -745,7 +801,7 @@ describe("main", () => {
       interval: 20,
     });
     stopRunning();
-    await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
+    await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
     expect((await next).code).not.toBe(0);
   });
 
@@ -796,7 +852,7 @@ describe("the script", () => {
       expect(target()).toBe(TARGET);
       // The hung checker was killed too, and the report directory removed. The kill is sent before the
       // script exits, but the checker can take a moment longer to be gone, so wait for it.
-      await vi.waitFor(() => expect(alive(checkerPid())).toBe(false), { timeout: 2_000, interval: 20 });
+      await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
       // (tsx keeps its own cache there too.)
       expect(readdirSync(tmp).filter((name) => name.startsWith("mutate-"))).toEqual([]);
     },
