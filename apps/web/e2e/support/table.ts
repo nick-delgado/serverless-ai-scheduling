@@ -1,6 +1,6 @@
 /**
  * Read-only views of the `e2e` table for the journeys' end state (r1/A-2) and the run's cost (r1/A-8). Nothing here
- * writes: the reseed is `reseed.sh`'s, and every other write is the app's.
+ * writes: the reseed is the seed scripts', and every other write is the app's.
  */
 import { paginateQuery } from "@aws-sdk/lib-dynamodb";
 import { type Appointment, type Escalation, TurnTrace } from "@sched/contracts";

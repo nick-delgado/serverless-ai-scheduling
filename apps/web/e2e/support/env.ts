@@ -101,7 +101,7 @@ function password(alias: FixturePatientAlias): string {
 export function patientLogin(env: string, alias: FixturePatientAlias = E2E_PATIENT): PatientLogin {
   const path = mappingPath(env);
   const row = readMapping(path)?.users.find((u) => u.alias === alias);
-  if (!row) throw new Error(`No ${alias} row in ${path}; run apps/web/e2e/reseed.sh first`);
+  if (!row) throw new Error(`No ${alias} row in ${path}; reseed first (scripts/seed-users.ts --env ${env})`);
   return { alias, username: row.username, sub: row.sub, password: password(alias) };
 }
 

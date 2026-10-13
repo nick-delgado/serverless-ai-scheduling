@@ -1,6 +1,7 @@
 /**
- * The end-to-end journeys against the deployed `e2e` env (#40, M3-05): `npm run e2e -w apps/web`, after
- * `apps/web/e2e/reseed.sh`. The runbook's E2E section (docs/runbooks/aws-setup.md) has the whole procedure.
+ * The end-to-end journeys against the deployed `e2e` env (#40, M3-05): `npm run e2e -w apps/web`, after the reseed
+ * (`scripts/seed-users.ts`, then `scripts/seed-data.ts --reset`). The whole procedure: docs/runbooks/aws-setup.md,
+ * "Appendix: end-to-end tests (the e2e env)".
  *
  * - One reseed per run, then the projects one after another (`workers: 1`) and no retries: a retried booking would
  *   find the first attempt's appointment, and FR-031's "repeating a booking confirms it" would let a broken run pass

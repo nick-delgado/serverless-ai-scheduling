@@ -1,7 +1,8 @@
 /**
  * Before the journeys (#40): pick the env and its URL, refuse a shared env, check the patient is seeded, and open a run
  * directory outside the checkout where the specs list the conversations they start (for `cost-reporter.ts`).
- * The reseed itself is `reseed.sh`, run before Playwright (in `e2e.yml`, its own step), so its output is in the log.
+ * The reseed itself (`scripts/seed-users.ts`, then `scripts/seed-data.ts --reset`) runs before Playwright, in `e2e.yml`
+ * as its own steps, so its output is in the log.
  * Environment variables set here reach the test workers.
  */
 import { mkdtempSync } from "node:fs";
