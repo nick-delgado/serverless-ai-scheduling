@@ -60,6 +60,8 @@ The flip side: `dev` is **shared**, and the last deploy wins, whether it's an ag
 
 **Protected envs** (`dev`, `demo`) keep deletion protection on, and `teardown.sh` refuses them. Their list is `PROTECTED_ENVS` in `deploy.sh`, `teardown.sh` and `deploy-web.sh`.
 
+**Tests:** `scripts/deploy.test.ts` and `scripts/teardown.test.ts` run a copy of each script in a throwaway git repo (never your `.env`) against stand-in `aws`, `sam` and `npm` commands, through the shell harness `scripts/test/shell-harness.ts`, which `scripts/deploy-web.test.ts` shares. A run's `PATH` holds only the stand-ins and an allow-list of tools, so a run that would reach a real `aws`, `sam` or `npm` fails its test. Change a script and its tests together.
+
 ## Publishing the SPA (web)
 
 The web stack creates an empty bucket and distribution. The SPA's files are build artifacts, not infrastructure, so they go up through the one documented CLI exception (runbook, ADR-003):
@@ -74,7 +76,7 @@ scripts/deploy-web.sh <env>             # build, sync to the site bucket, invali
 - **Caching:** `assets/*` (content-hashed by Vite) get `public, max-age=31536000, immutable`; everything else (`index.html`) gets `no-cache`. Order: new assets, then `index.html` (tagged with `git-commit` metadata), then stale files are deleted, then the invalidation, so the live `index.html` never points at a missing asset.
 - **Shared `dev`:** the same rule as `deploy.sh`. It prints a note when an unmerged branch publishes to `dev` or `demo`; prefer an ephemeral env for branch work. It runs as `SchedDeployer` (S3 on `sched-*` buckets, `cloudfront:CreateInvalidation`), or in the deploy workflow as the `sched-github-deploy` role; CloudFormation and the exec role aren't involved.
 - **Check it:** `curl -sI https://<domain>/` shows `cache-control: no-cache`; an `/assets/...` file shows the one-year `max-age`. Deep links such as `/chat` return `index.html` (the web stack's `SpaDeepLinkFunction`, #99), while a missing `/assets/...` file is still S3's 403.
-- **Tests:** `scripts/deploy-web.test.ts` runs the script against stand-in `aws` and `npm` commands; change both together.
+- **Tests:** `scripts/deploy-web.test.ts` runs the script against stand-in `aws` and `npm` commands, through the shared shell harness `scripts/test/shell-harness.ts`; change the script and its test together.
 
 ## Rules when editing templates
 
