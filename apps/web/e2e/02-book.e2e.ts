@@ -13,7 +13,7 @@ import { expect, test } from "@playwright/test";
 
 import { bookingProblems, describeAppointments, weekdaysAhead } from "./lib/end-state";
 import { confirmationProblems } from "./lib/turns";
-import { runWriteScript, signIn, watchChips } from "./support/chat";
+import { runWriteScript, signIn, observePage } from "./support/chat";
 import { e2eEnv, patientLogin } from "./support/env";
 import { openTable } from "./support/table";
 
@@ -41,7 +41,7 @@ test("login → book via text: confirmed before it books, then one new appointme
     `${testInfo.project.name}: ${booking.providerId} on ${day.date}; appointments before:\n${describeAppointments(before)}`,
   );
 
-  await watchChips(page);
+  await observePage(page);
   await signIn(page, login, "Sofia");
   const turns = await runWriteScript(
     page,

@@ -9,7 +9,7 @@ import { CLINIC } from "@sched/contracts";
 import { expect, test } from "@playwright/test";
 
 import { escalationProblems } from "./lib/turns";
-import { sendTurn, signIn, watchChips } from "./support/chat";
+import { sendTurn, signIn, observePage } from "./support/chat";
 import { e2eEnv, patientLogin } from "./support/env";
 import { openTable } from "./support/table";
 
@@ -20,7 +20,7 @@ test("escalation: escalated in the request's turn, and the staff email SENT", as
   const login = patientLogin(env);
   const table = await openTable(env);
 
-  await watchChips(page);
+  await observePage(page);
   await signIn(page, login, "Sofia");
   const turn = await sendTurn(page, 0, "I'd like to speak with someone at the front desk, please.");
   expect(escalationProblems(turn, CLINIC.phone)).toEqual([]);

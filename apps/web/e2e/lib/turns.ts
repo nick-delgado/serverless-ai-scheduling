@@ -28,12 +28,14 @@ export interface TurnRecord {
   conversationId?: string;
   /** A turn that ended with an `error` event. */
   errorCode?: ChatErrorCode;
+  /** That error event's `retryable`. */
+  retryable?: boolean;
   /** The reply as the patient saw it. Never printed. */
   text: string;
 }
 
 /** The parts of a turn its `/api/chat` body gives (everything but its index, message and chips). */
-export type StreamedTurn = Pick<TurnRecord, "tools" | "conversationId" | "errorCode" | "text">;
+export type StreamedTurn = Pick<TurnRecord, "tools" | "conversationId" | "errorCode" | "retryable" | "text">;
 
 /** Reads one turn's `/api/chat` body, NDJSON or the buffered array. Throws when the body breaks the contract. */
 export function readTurnBody(body: string): StreamedTurn {
@@ -45,10 +47,35 @@ export function readTurnBody(body: string): StreamedTurn {
       turn.conversationId = event.conversationId;
     else if (event.type === "error") {
       turn.errorCode = event.code;
+      turn.retryable = event.retryable;
       if (event.conversationId !== undefined) turn.conversationId = event.conversationId;
     }
   }
   return turn;
+}
+
+/**
+ * Retries of one patient turn the account's Bedrock quota throttled (a retryable `RATE_LIMITED`, "The assistant is
+ * busy"): `sonnet-4.6` has 10 requests a minute for the whole account, and a booking turn makes several. The daily
+ * turn cap's `RATE_LIMITED` isn't retryable, and nothing else is retried.
+ */
+export const MAX_THROTTLE_RETRIES = 3;
+/** Seconds to wait before retry `n` (1-based): 20, 40, 60, enough for a minute's quota to refill. */
+export const throttleDelayMs = (retry: number): number => 20_000 * retry;
+
+/** Whether a turn's latest attempt, after `retries` retries, is retried (with the app's Retry button). */
+export function shouldRetryTurn(turn: StreamedTurn, retries: number): boolean {
+  return turn.errorCode === "RATE_LIMITED" && turn.retryable === true && retries < MAX_THROTTLE_RETRIES;
+}
+
+/** One patient turn over its attempts: every attempt's tools in order, and the last attempt's outcome and text. */
+export function mergeAttempts(attempts: readonly StreamedTurn[]): StreamedTurn {
+  const last = attempts.at(-1);
+  if (!last) throw new Error("A turn has at least one attempt");
+  const merged: StreamedTurn = { ...last, tools: attempts.flatMap((a) => a.tools) };
+  merged.conversationId = attempts.findLast((a) => a.conversationId !== undefined)?.conversationId;
+  if (merged.conversationId === undefined) delete merged.conversationId;
+  return merged;
 }
 
 /** The turn's tools and chip count for the run log: no reply text, no message text. */

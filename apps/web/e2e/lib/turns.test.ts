@@ -7,8 +7,13 @@ import {
   describeTurn,
   escalationProblems,
   MAX_SCRIPT_TURNS,
+  MAX_THROTTLE_RETRIES,
+  mergeAttempts,
   nextScriptMessage,
   readTurnBody,
+  shouldRetryTurn,
+  throttleDelayMs,
+  type StreamedTurn,
   type TurnRecord,
   type WriteScript,
 } from "./turns";
@@ -60,7 +65,13 @@ describe("readTurnBody", () => {
         { type: "error", code: "AGENT_UNAVAILABLE", message: "Try again.", retryable: true },
       ]),
     );
-    expect(turn).toEqual({ tools: [], conversationId: CONV, errorCode: "AGENT_UNAVAILABLE", text: "" });
+    expect(turn).toEqual({
+      tools: [],
+      conversationId: CONV,
+      errorCode: "AGENT_UNAVAILABLE",
+      retryable: true,
+      text: "",
+    });
   });
 
   it("takes the conversation from an error event that names one", () => {
@@ -77,6 +88,7 @@ describe("readTurnBody", () => {
     );
     expect(turn.conversationId).toBe(CONV);
     expect(turn.errorCode).toBe("RATE_LIMITED");
+    expect(turn.retryable).toBe(false);
   });
 
   it("reads the buffered JSON array form", () => {
@@ -250,5 +262,56 @@ describe("escalationProblems", () => {
         PHONE,
       ),
     ).toEqual(["the turn ended with AGENT_UNAVAILABLE"]);
+  });
+});
+
+describe("shouldRetryTurn", () => {
+  const throttled: StreamedTurn = { tools: [], text: "", errorCode: "RATE_LIMITED", retryable: true };
+
+  it("retries a retryable RATE_LIMITED until the retries run out", () => {
+    expect(MAX_THROTTLE_RETRIES).toBe(3);
+    expect(shouldRetryTurn(throttled, 0)).toBe(true);
+    expect(shouldRetryTurn(throttled, MAX_THROTTLE_RETRIES - 1)).toBe(true);
+    expect(shouldRetryTurn(throttled, MAX_THROTTLE_RETRIES)).toBe(false);
+  });
+
+  it("doesn't retry the daily cap (not retryable), another error, or a completed turn", () => {
+    expect(shouldRetryTurn({ ...throttled, retryable: false }, 0)).toBe(false);
+    expect(shouldRetryTurn({ ...throttled, errorCode: "AGENT_UNAVAILABLE" }, 0)).toBe(false);
+    expect(shouldRetryTurn({ tools: [], text: "" }, 0)).toBe(false);
+  });
+});
+
+describe("throttleDelayMs", () => {
+  it("waits 20 s more for each retry", () => {
+    expect([1, 2, 3].map(throttleDelayMs)).toEqual([20_000, 40_000, 60_000]);
+  });
+});
+
+describe("mergeAttempts", () => {
+  it("keeps every attempt's tools in order and the last attempt's outcome and text", () => {
+    const merged = mergeAttempts([
+      {
+        tools: ["check_availability"],
+        conversationId: CONV,
+        errorCode: "RATE_LIMITED",
+        retryable: true,
+        text: "a",
+      },
+      { tools: ["book_appointment"], text: "b" },
+    ]);
+    expect(merged).toEqual({
+      tools: ["check_availability", "book_appointment"],
+      conversationId: CONV,
+      text: "b",
+    });
+  });
+
+  it("leaves out a conversation no attempt named", () => {
+    expect(mergeAttempts([{ tools: [], text: "" }])).toEqual({ tools: [], text: "" });
+  });
+
+  it("throws without attempts", () => {
+    expect(() => mergeAttempts([])).toThrow("A turn has at least one attempt");
   });
 });

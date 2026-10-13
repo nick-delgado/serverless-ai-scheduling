@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 
 import { describeAppointments, rescheduleProblems, weekdaysAhead } from "./lib/end-state";
 import { confirmationProblems } from "./lib/turns";
-import { runWriteScript, signIn, watchChips } from "./support/chat";
+import { runWriteScript, signIn, observePage } from "./support/chat";
 import { e2eEnv, patientLogin } from "./support/env";
 import { openTable } from "./support/table";
 
@@ -27,7 +27,7 @@ test("reschedule: confirmed before it moves, then the same appointment on a new 
   const before = await table.appointments(login.sub);
   console.log(`prov_alvarez to ${day.date}; appointments before:\n${describeAppointments(before)}`);
 
-  await watchChips(page);
+  await observePage(page);
   await signIn(page, login, "Sofia");
   const turns = await runWriteScript(
     page,
