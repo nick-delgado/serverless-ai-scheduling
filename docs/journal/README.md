@@ -83,3 +83,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-11 | [A mutation suggester reads the code, and its first target was itself](2026-10-11-the-suggester-broke-its-own-code-first.md) | 5. What the evals showed |
 | 2026-10-13 | [What the evals showed: fourteen cells, one near-miss, and a latency target no effort level meets](2026-10-13-what-the-matrix-chose.md) | 5. What the evals showed |
 | 2026-10-13 | [An empty pid file reads as pid 0, and `kill(0)` is the test run's own process group](2026-10-13-an-empty-pid-file-is-pid-zero.md) | 5. What the evals showed |
+| 2026-10-13 | [Five tests sliced YAML five ways; one reader now decides where a block ends](2026-10-13-one-reader-for-yaml-as-text.md) | 5. What the evals showed |

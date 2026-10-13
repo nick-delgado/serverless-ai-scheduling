@@ -1,8 +1,8 @@
 /**
  * The web stack's SPA deep-link function (#99). `infra/` has no Vitest project, so this lives with the
- * other repo-level tests. It reads `infra/stacks/web.yaml` as text, takes `SpaDeepLinkFunction`'s inline
- * `FunctionCode` exactly as CloudFormation will publish it (no copy), runs it in a `node:vm` context and
- * checks which URIs become `/index.html`. It also checks that the function is associated with the
+ * other repo-level tests. It reads `infra/stacks/web.yaml` as text (scripts/test/yaml-text.ts), takes
+ * `SpaDeepLinkFunction`'s inline `FunctionCode` exactly as CloudFormation will publish it (no copy), runs
+ * it in a `node:vm` context and checks which URIs become `/index.html`. It also checks that the function is associated with the
  * default behavior only. It proves the logic, not that CloudFront's `cloudfront-js-2.0` runtime accepts
  * the syntax: the `dev` deploy proves that.
  */
@@ -13,35 +13,20 @@ import { runInNewContext } from "node:vm";
 
 import { describe, expect, it } from "vitest";
 
+import { block, scalar, text } from "./test/yaml-text";
+
 const template = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "stacks", "web.yaml"),
   "utf8",
 );
 const lines = template.split("\n");
 
-const indentOf = (line: string): number => line.length - line.trimStart().length;
-
 /**
- * The lines of the block that starts at the first line of `within` matching `header`: that line and
- * every following line that is blank or indented deeper than it.
+ * The literal block scalar under SpaDeepLinkFunction's `FunctionCode: |`, dedented the way YAML reads it. The search
+ * runs inside that resource's block, so another resource's `FunctionCode` can't be taken.
  */
-function block(header: RegExp, within: string[] = lines): string[] {
-  const start = within.findIndex((line) => header.test(line));
-  if (start === -1) throw new Error(`web.yaml: no line matches ${String(header)}`);
-  const indent = indentOf(within[start] ?? "");
-  const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
-  return within.slice(start, end === -1 ? undefined : end);
-}
-
-/**
- * The literal block scalar under SpaDeepLinkFunction's `FunctionCode: |`, dedented the way YAML reads
- * it. The search runs inside that resource's block, so another resource's `FunctionCode` can't be taken.
- */
-function functionCode(): string {
-  const [, ...body] = block(/^\s+FunctionCode: \|\s*$/, block(/^ {2}SpaDeepLinkFunction:$/));
-  const indent = Math.min(...body.filter((l) => l.trim() !== "").map(indentOf));
-  return body.map((l) => l.slice(indent)).join("\n") + "\n";
-}
+const functionCode = (): string =>
+  scalar(block(/^\s+FunctionCode: \|\s*$/, block(/^ {2}SpaDeepLinkFunction:$/, lines)));
 
 interface Request {
   method: string;
@@ -108,8 +93,8 @@ describe("SpaDeepLinkFunction (web.yaml)", () => {
 });
 
 describe("web.yaml function association", () => {
-  const defaultBehavior = block(/^ {8}DefaultCacheBehavior:$/).join("\n") + "\n";
-  const cacheBehaviors = block(/^ {8}CacheBehaviors:$/).join("\n") + "\n";
+  const defaultBehavior = text(block(/^ {8}DefaultCacheBehavior:$/, lines));
+  const cacheBehaviors = text(block(/^ {8}CacheBehaviors:$/, lines));
 
   it("associates SpaDeepLinkFunction as viewer-request on the default behavior", () => {
     expect(defaultBehavior).toMatch(
@@ -124,7 +109,7 @@ describe("web.yaml function association", () => {
   });
 
   it("publishes the function on the 2.0 runtime under an env-keyed name", () => {
-    const fn = block(/^ {2}SpaDeepLinkFunction:$/).join("\n") + "\n";
+    const fn = text(block(/^ {2}SpaDeepLinkFunction:$/, lines));
     expect(fn).toMatch(/Type: AWS::CloudFront::Function\n/);
     expect(fn).toMatch(/Name: !Sub sched-\$\{Env\}-web-spa-deep-links\n/);
     expect(fn).toMatch(/AutoPublish: true\n/);
