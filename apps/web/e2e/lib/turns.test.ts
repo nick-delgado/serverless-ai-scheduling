@@ -308,7 +308,7 @@ describe("mergeAttempts", () => {
   });
 
   it("leaves out a conversation no attempt named", () => {
-    expect(mergeAttempts([{ tools: [], text: "" }])).toEqual({ tools: [], text: "" });
+    expect(mergeAttempts([{ tools: [], text: "" }])).toStrictEqual({ tools: [], text: "" });
   });
 
   it("throws without attempts", () => {
