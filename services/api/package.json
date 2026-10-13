@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Lambda handlers: POST /api/chat (streaming), POST /api/session.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./dynamo-turn-store": "./src/lib/dynamo-turn-store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
