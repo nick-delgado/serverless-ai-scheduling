@@ -1,0 +1,123 @@
+# E2E (#40, M3-05): the Playwright journeys against the standing `e2e` env. Nick runs it by hand (workflow_dispatch)
+# from a branch the `e2e` GitHub Environment allows (`main`); it never runs on pull requests or pushes and isn't a
+# required check. Each run deploys the dispatched ref (r1/Q-4 (a)), with the escalation email on (r1/Q-5 (b)), reseeds
+# the table once (r1/Q-1 (a)), runs the suite, and ends its log with the run's estimated Bedrock cost (r1/A-8).
+# Credentials: the sched-github-e2e role through GitHub OIDC (no stored keys), whose writes are scoped to `e2e`. Setup,
+# the secrets it reads and the first-run checks: docs/runbooks/aws-setup.md, "End-to-end tests (the e2e env)".
+name: E2E
+
+on:
+  workflow_dispatch:
+
+# One run at a time, and never cancelled mid-run: a second reseed would delete the first run's appointments mid-test
+# (r1/A-9). A local run must not overlap one either (runbook).
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (e2e env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: e2e
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Before anything else, so a run before setup fails with the runbook section's name. Secret values reach the
+      # shell only through the environment, and are never printed.
+      - name: Check the E2E settings
+        env:
+          AWS_E2E_ROLE_ARN: ${{ secrets.AWS_E2E_ROLE_ARN }}
+          DEMO_PASSWORD_SOFIA: ${{ secrets.DEMO_PASSWORD_SOFIA }}
+          SES_SENDER: ${{ secrets.SES_SENDER }}
+          SES_STAFF_RECIPIENT: ${{ secrets.SES_STAFF_RECIPIENT }}
+        run: |
+          missing=()
+          [[ -n "$AWS_E2E_ROLE_ARN" ]] || missing+=("AWS_E2E_ROLE_ARN (e2e environment secret)")
+          [[ -n "$DEMO_PASSWORD_SOFIA" ]] || missing+=("DEMO_PASSWORD_SOFIA (e2e environment secret)")
+          [[ -n "$SES_SENDER" ]] || missing+=("SES_SENDER (repository secret)")
+          [[ -n "$SES_STAFF_RECIPIENT" ]] || missing+=("SES_STAFF_RECIPIENT (repository secret)")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            for name in "${missing[@]}"; do echo "::error::not set: ${name}"; done
+            echo "::error::Set them as docs/runbooks/aws-setup.md, \"End-to-end tests (the e2e env)\", says."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Name the commit under test
+        run: echo "Testing ${GITHUB_REF_NAME}@${GITHUB_SHA}"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install the Playwright browsers
+        run: npx playwright install --with-deps chromium webkit firefox
+      - uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v3
+        with:
+          use-installer: true
+      # Prints the OIDC token's `sub` claim only (never the token), so the role's trust condition can be checked
+      # against what GitHub sends (runbook, "Confirm the subject strings").
+      - name: Show the OIDC subject
+        continue-on-error: true
+        run: |
+          node --input-type=module -e '
+            const url = `${process.env.ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } });
+            const { value } = await res.json();
+            console.log(`OIDC sub: ${JSON.parse(Buffer.from(value.split(".")[1], "base64url")).sub}`);
+          '
+      # mask-aws-account-id: the account ID shows as *** in every later log line.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_E2E_ROLE_ARN }}
+          role-session-name: e2e-${{ github.run_id }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+      # The shell scripts default AWS_PROFILE to sched-dev, a profile the runner doesn't have. A config-only profile
+      # (region, no credentials) outside the checkout gives them one that exists, and the AWS CLI and SAM CLI take the
+      # credentials from the environment. Only the steps that run the CLIs get it, never through $GITHUB_ENV: the
+      # JavaScript SDK steps below run with AWS_PROFILE empty, which the SDK skips and the CLI rejects (r1/A-1).
+      - name: Write a config-only AWS profile
+        run: printf '[profile github-oidc]\nregion = us-east-1\n' > "$RUNNER_TEMP/aws-config"
+      - name: Deploy the stacks
+        run: scripts/deploy.sh all e2e -- DailyTurnCap=500
+        env:
+          AWS_CONFIG_FILE: ${{ runner.temp }}/aws-config
+          AWS_PROFILE: github-oidc
+          SES_SENDER: ${{ secrets.SES_SENDER }}
+          SES_STAFF_RECIPIENT: ${{ secrets.SES_STAFF_RECIPIENT }}
+      - name: Publish the SPA
+        run: scripts/deploy-web.sh e2e
+        env:
+          AWS_CONFIG_FILE: ${{ runner.temp }}/aws-config
+          AWS_PROFILE: github-oidc
+      # seed-users.ts reads the patient's password from a dotenv file; this one holds only the E2E patient's, outside
+      # the checkout, readable by the runner's user only, and is never printed.
+      - name: Write the E2E patient's env file
+        env:
+          DEMO_PASSWORD_SOFIA: ${{ secrets.DEMO_PASSWORD_SOFIA }}
+        run: |
+          umask 077
+          printf 'DEMO_PASSWORD_SOFIA=%s\n' "$DEMO_PASSWORD_SOFIA" > "$RUNNER_TEMP/e2e.env"
+      - name: Reseed the E2E patient's Cognito user
+        run: npx tsx scripts/seed-users.ts --env e2e --env-file "$RUNNER_TEMP/e2e.env"
+        env:
+          AWS_PROFILE: ""
+      - name: Reseed the e2e table
+        run: |
+          table="$(AWS_CONFIG_FILE="$RUNNER_TEMP/aws-config" AWS_PROFILE=github-oidc \
+            aws ssm get-parameter --name /sched/e2e/data/table-name --query Parameter.Value --output text)"
+          npx tsx scripts/seed-data.ts --env e2e --reset --confirm "$table"
+        env:
+          AWS_PROFILE: ""
+      - name: Run the journeys
+        run: npm run e2e -w apps/web
+        env:
+          AWS_PROFILE: ""
+          E2E_ENV: e2e
+          DEMO_PASSWORD_SOFIA: ${{ secrets.DEMO_PASSWORD_SOFIA }}
