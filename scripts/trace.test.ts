@@ -340,6 +340,8 @@ describe("readTraces with an injected client", () => {
 // End to end, on DynamoDB Local
 // ---------------------------------------------------------------------------------------------
 
+// The DynamoDB Local harness every `*.local.test.ts` opens with.
+// jscpd:ignore-start
 const available = await dynamoLocalAvailable();
 const client = localClient();
 const tables = tableFactory(client);
@@ -348,6 +350,7 @@ afterAll(async () => {
   if (available) await tables.dropAll();
   client.destroy();
 });
+// jscpd:ignore-end
 
 /** A table with T2 then T1 saved by the turn store, a message in the same partition, and another conversation's trace. */
 async function seededTable(): Promise<string> {

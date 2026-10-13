@@ -217,6 +217,9 @@ export async function runCli(
 ): Promise<number> {
   const log = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
+  // The operator scripts' shared CLI shape (`retry-escalations.ts` and `seed-data.ts` resolve the table the same
+  // way, and end in the same `main`). A helper for it is a refactor across `scripts/**`, outside #38's paths.
+  // jscpd:ignore-start
   const endpoint = vars.DYNAMODB_ENDPOINT || undefined;
   const region = vars.AWS_REGION ?? "us-east-1";
 
@@ -230,6 +233,7 @@ export async function runCli(
       (await ssmParamFrom((deps.ssmClient ?? ssmClientFor)(region))(args.env, "data/table-name"));
   }
 
+  // jscpd:ignore-end
   const client = (deps.dynamoClient ?? dynamoClientFor)(region, endpoint);
   let entries: TraceEntry[];
   try {
@@ -256,6 +260,8 @@ export async function runCli(
   return unreadable > 0 ? 1 : 0;
 }
 
+// The same entry point as `retry-escalations.ts`'s (see the note in `runCli`).
+// jscpd:ignore-start
 /**
  * The script's entry point; returns the exit code. `vars` is the process environment, and is changed in
  * place: `AWS_PROFILE` defaults to `sched-dev`.
@@ -282,3 +288,4 @@ if (import.meta.main) {
     process.exitCode = code;
   });
 }
+// jscpd:ignore-end
