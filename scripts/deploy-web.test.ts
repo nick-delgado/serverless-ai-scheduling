@@ -2,7 +2,7 @@
  * scripts/deploy-web.sh (#100), run for real against stand-in `aws` and `npm` commands on PATH. Each
  * test copies the script into a throwaway git repo, so its repo_root, working-tree check and build
  * output are that repo's. The stand-ins log every call; `aws ssm get-parameter` answers from a
- * per-test map, and `npm` writes a fake build that embeds the VITE_* values it was given.
+ * per-test map, and `npm` writes a fake build that embeds the user pool and Identity Pool IDs it was given.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -56,7 +56,9 @@ mkdir -p apps/web/dist/assets
 [[ "\${FAKE_BUILD:-}" == "no-assets" ]] && exit 0
 pool="$VITE_USER_POOL_ID"
 [[ "\${FAKE_BUILD:-}" == "no-pool" ]] && pool=""
-echo "const c={userPoolId:\\"$pool\\"}" > apps/web/dist/assets/index-abc123.js
+identity_pool="$VITE_IDENTITY_POOL_ID"
+[[ "\${FAKE_BUILD:-}" == "no-identity-pool" ]] && identity_pool=""
+echo "const c={userPoolId:\\"$pool\\",identityPoolId:\\"$identity_pool\\"}" > apps/web/dist/assets/index-abc123.js
 `;
 
 let dir = "";
@@ -256,6 +258,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     ["no-index", "no apps/web/dist/index.html"],
     ["no-assets", "no files under apps/web/dist/assets/"],
     ["no-pool", "don't contain the 'dev' user pool ID"],
+    ["no-identity-pool", "don't contain the 'dev' Identity Pool ID"],
   ])("refuses to sync when the build output is incomplete (%s)", (build, message) => {
     const { status, out, calls } = run(["dev"], { FAKE_BUILD: build });
     expect(status).toBe(1);
