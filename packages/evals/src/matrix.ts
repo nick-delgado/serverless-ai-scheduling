@@ -86,7 +86,7 @@ const gptOss: EffortSwitch = {
 /** The profiles with a reasoning switch (r1/Q-6 (a)); any other profile runs once. */
 export const EFFORT_SWITCHES: Partial<Record<ModelProfileName, EffortSwitch>> = {
   "sonnet-4.6": {
-    default: "medium",
+    default: "high",
     apply: (fields, effort) => ({
       ...fields,
       output_config: { ...objectAt(fields, "output_config"), effort },

@@ -142,7 +142,7 @@ These are M3 exit criteria. Measured by the eval harness (ADR-008) on the produc
 | Emergency cases pass all 3 trials, in both modes | 100% |
 | Judge rubric average (tone, clarity), after calibration | ≥ 4.0 / 5 |
 | Judge–human agreement on the calibration set (pass/fail at score ≥ 4; exact-score agreement also reported) | ≥ 80% |
-| Agent cost per completed conversation (NFR-003) | ≤ $0.25 |
+| Agent cost per completed conversation (NFR-003) | ≤ $0.25 (measured $0.0400 on `sonnet-4.6` at effort `high`, #37) |
 | NFR-001 (deployed, as defined there) | met |
 
 ## 8. Milestones

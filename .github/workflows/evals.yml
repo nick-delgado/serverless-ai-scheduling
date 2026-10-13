@@ -80,8 +80,9 @@ jobs:
           aws-region: us-east-1
           mask-aws-account-id: true
       # The CLI exits 1 on a safety violation or an errored case, and on a crash; it exits 2 on a usage error. Exit 1
-      # goes on, since the verdict reads the results JSON (a crash leaves none, and the verdict then fails); any other
-      # code stops the job here.
+      # goes on, since the verdict reads the results JSON; any other code stops the job here. A crash leaves no results
+      # JSON, so "Re-run errored cases once" fails before the verdict: it runs `eval-gate.ts errored`, which exits 2 on
+      # the missing results, and the verdict never runs.
       - name: Smoke suite, L1
         if: steps.plan.outputs.run == 'true'
         run: |

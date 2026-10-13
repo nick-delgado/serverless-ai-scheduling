@@ -1,8 +1,8 @@
 # ADR-002: Model selection and Bedrock client
 
-- **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6).
+- **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -44,9 +44,9 @@ Per-model parameter differences are captured in a `ModelProfile` so the loop cod
 ## Decision
 
 - **Client:** `AnthropicBedrockMantle` (TypeScript, `@anthropic-ai/bedrock-sdk`), region `us-east-1`, global routing. It sits behind our `LlmClient` interface (ADR-001), so switching to the `bedrock-runtime` path later is a one-file change. *(Superseded by ADR-010: `ConverseLlmClient` on bedrock-runtime.)*
-- **Default model:** `anthropic.claude-opus-5`, starting at `effort: "medium"` for chat latency. We tune the setting with evals rather than guessing. *(Superseded by the interim decision below: `sonnet-4.6` is the development default until the M3 matrix, #37.)*
-- **The model is configuration.** Environment variable `AGENT_MODEL_PROFILE` selects a `ModelProfile`. The eval harness runs a **model × effort matrix** (Opus 5, Sonnet 5, Haiku 4.5), and the production default is chosen from measured **task success, pass^k reliability, p95 latency, and cost per completed conversation**. That decision gets recorded here when M3 completes. *(Refined by ADR-010, PRD FR-042 and [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123) (#123): the matrix runs the six entitled profiles, and the production-profile selection rule is set there.)*
-- **Refusals:** check `stop_reason === "refusal"` before reading content. Retry once on the fallback profile (the next model in the matrix). If that fails, show a safe message and offer escalation.
+- **Default model:** `anthropic.claude-opus-5`, starting at `effort: "medium"` for chat latency. We tune the setting with evals rather than guessing. *(Superseded by the interim decision below: `sonnet-4.6` is the development default until the M3 matrix, #37.)* *(Decided by the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37): `sonnet-4.6` at effort `high` is the default and the production profile.)*
+- **The model is configuration.** Environment variable `AGENT_MODEL_PROFILE` selects a `ModelProfile`. The eval harness runs a **model × effort matrix** (Opus 5, Sonnet 5, Haiku 4.5), and the production default is chosen from measured **task success, pass^k reliability, p95 latency, and cost per completed conversation**. That decision gets recorded here when M3 completes. *(Refined by ADR-010, PRD FR-042 and [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123) (#123): the matrix runs the six entitled profiles, and the production-profile selection rule is set there.)* *(Recorded in the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37).)*
+- **Refusals:** check `stop_reason === "refusal"` before reading content. Retry once on the fallback profile (the next model in the matrix). If that fails, show a safe message and offer escalation. *(Confirmed live for `sonnet-4.6` → `haiku-4.5` in the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37).)*
 - **Caching:** tools + system prompt are cached (stable prefix). Check `usage.cache_read_input_tokens` in traces to confirm caching works. *(Refined by ADR-010: `TokenUsage.cacheReadTokens` in traces.)*
 
 ## Consequences
@@ -56,7 +56,7 @@ Per-model parameter differences are captured in a `ModelProfile` so the loop cod
 - **Revisit if:**
   - spike S-1 shows Mantle is unavailable or unreliable for a model in `us-east-1`; or
   - AWS invocation logging turns out to be required; or
-  - the eval matrix shows a cheaper model meets every PRD target (then it becomes the default).
+  - the eval matrix shows a cheaper model meets every PRD target (then it becomes the default). *(The M3 matrix found none: see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37).)*
 
 ## Validation (spike S-1, `spikes/s1-bedrock-tool-latency/`)
 
@@ -130,11 +130,90 @@ Agreement status across every Anthropic model on the account:
 ### Interim decision (accepted by Nick, 2026-09-28)
 
 - **Client:** `AnthropicBedrock` from `@anthropic-ai/bedrock-sdk` (bedrock-runtime), behind the `LlmClient` interface. Mantle is unavailable to this account.
-- **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- **Development default profile:** `us.anthropic.claude-sonnet-4-6` (adaptive thinking, effort `medium`). Second profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`. *(Refined by the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37): effort `high`.)*
 - **IAM:** `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` on the US inference-profile ARNs plus the underlying foundation-model ARNs in the US regions they route to.
-- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default. *(Superseded by [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123): Opus 5 and Sonnet 5 aren't entitled and are out of the matrix.)* *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): AWS declined; S-1b (#49) closed as not planned.)*
+- **Target models remain Opus 5 and Sonnet 5.** They'll be measured in follow-up issue "S-1b" when AWS lifts the restriction, and the M3 eval matrix (#37) decides the production default. *(Superseded by [ADR-008's 2026-10-03 amendment](0008-evaluation-strategy.md#amendment-2026-10-03-ci-gate-model-matrix-api-surface-case-judge-agreement-123): Opus 5 and Sonnet 5 aren't entitled and are out of the matrix.)* *(Superseded by the [amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227): AWS declined; S-1b (#49) closed as not planned.)* *(Decided by the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37).)*
 
 ## Amendment (2026-10-09): AWS declined the entitlement and quota increases (#227)
 
 - AWS Support declined to enable Claude Opus 5 and Sonnet 5 on this account, so follow-up spike S-1b (#49) was closed as not planned on 2026-10-09. The target models are not measured; the six entitled profiles of ADR-010 stand, and the M3 matrix (#37) picks the production profile among them. ADR-010's "Revisit if: Opus 5 or Sonnet 5 become entitled" still holds.
 - AWS also declined the on-demand quota increases for Sonnet 4.6 and Haiku 4.5. Both are still 10 requests/min (checked 2026-10-09). The per-model token bucket at 90% of quota (ADR-008) is the standing mitigation, not a stopgap.
+
+## Amendment (2026-10-12): production profile (#37)
+
+**Decision:** the production profile is **`sonnet-4.6` at effort `high`** (`us.anthropic.claude-sonnet-4-6`, adaptive thinking). It is also the development default. `DEFAULT_MODEL_PROFILE` and the api stack's `AgentModelProfile` stay `sonnet-4.6`. The profile's `modelFields` and the matrix's `EFFORT_SWITCHES` default move to `high` together (#37 r1/Q-5 (a)), so every later `sonnet-4.6` run is at `high`, the eval simulator's included. The CI Eval gate keeps measuring `sonnet-4.6`, against a baseline re-recorded at `high`.
+
+**The rule** (drift-audit decision 12, as #37 states it): the production profile is the cheapest profile, by agent cost per completed conversation, that meets every PRD §7 target and NFR-001. If none qualifies, `sonnet-4.6` stays the default. Choices made under the rule:
+- The judge rubric is the average before calibration, and judge–human agreement is pending #159 (#37 r1/Q-6 (a)). If #159's recalibration puts this profile's rubric below 4.0, the choice is revisited there.
+- `haiku-4.5` is the judge for every cell, its own included, so its rubric row is self-judged.
+- A safety violation that is #239's false positive (the patient's own stated or booked time read as a quoted slot) isn't counted. Every other one is (#37 r1/A-4).
+- The safety count may miss hallucinated slots in list offers: `no_hallucinated_slots` can't see a time listed under a date heading (#178), so such slots count neither way.
+
+**The matrix** (`npm run evals:matrix`, run 2026-10-11 23:03Z to 2026-10-12 22:08Z on prompt `system.v3`):
+- The full suite, k=3, both modes, simulator `sonnet-4.6` at effort `medium` (its level at the time), judge `haiku-4.5`.
+- Five `--cells` batches (Sonnet 4.6's three levels; Haiku 4.5 with Nova Pro; Nova 2 Lite's three; each gpt-oss model's three), $57.61 in all against a $75.00 estimate.
+- The rows are as the matrix printed them. The p95 is the harness's, for information only.
+- Raw results (secret gist, synthetic data only): https://gist.github.com/nick-delgado/e66fca6660ee5df0b404ba0d2403a506
+
+| Cell | Task success | Reliability | Safety violations | Emergency | Rubric avg | Agent $ / completed | p95 latency | Wall-clock | Meets §7 | Run cost |
+|---|---|---|---|---|---|---|---|---|---|---|
+| sonnet-4.6@low | 80% | 70% | 8 (l1 0, scenario 8) | l1 2/2, scenario 2/2 | 4.90 / 5 | $0.0319 | 20628 ms | 159.6 min | no | $6.26 |
+| sonnet-4.6 (`medium`, then the default) | 83% | 80% | 3 (l1 0, scenario 3) | l1 2/2, scenario 2/2 | 4.92 / 5 | $0.0348 | 21023 ms | 159.8 min | no | $6.54 |
+| sonnet-4.6@high | 92% | 87% | 1 (l1 0, scenario 1) | l1 2/2, scenario 2/2 | 4.89 / 5 | $0.0400 | 24744 ms | 171.0 min | no | $7.16 |
+| haiku-4.5 | 68% | 47% | 17 (l1 0, scenario 17) | l1 2/2, scenario 2/2 | 4.85 / 5 | $0.0108 | 16517 ms | 115.7 min | no | $3.83 |
+| nova-pro | 54% | 27% | 64 (l1 2, scenario 62) | l1 2/2, scenario 2/2 | 4.51 / 5 | $0.0186 | 7008 ms | 70.2 min | no | $4.44 |
+| nova-2-lite | 28% | 10% | 22 (l1 0, scenario 22) | l1 2/2, scenario 2/2 | 4.76 / 5 | $0.0137 | 13559 ms | 85.1 min | no | $4.11 |
+| nova-2-lite@medium | 31% | 17% | 27 (l1 0, scenario 27) | l1 2/2, scenario 1/2 | 4.72 / 5 | $0.0210 | 27164 ms | 112.5 min | no | $4.98 |
+| nova-2-lite@high | 0% | 0% | 18 (l1 0, scenario 18) | l1 0/2, scenario 0/2 | n/a | n/a | 3507 ms | 18.2 min | no | $0.23 |
+| gpt-oss-120b | 59% | 33% | 48 (l1 1, scenario 47) | l1 2/2, scenario 2/2 | 4.46 / 5 | $0.0060 | 4359 ms | 72.9 min | no | $3.31 |
+| gpt-oss-120b@medium | 70% | 43% | 16 (l1 2, scenario 14) | l1 2/2, scenario 2/2 | 4.85 / 5 | $0.0069 | 6127 ms | 75.2 min | no | $3.55 |
+| gpt-oss-120b@high | 71% | 47% | 11 (l1 1, scenario 10) | l1 2/2, scenario 2/2 | 4.77 / 5 | $0.0095 | 17518 ms | 97.7 min | no | $3.91 |
+| gpt-oss-20b | 33% | 7% | 41 (l1 1, scenario 40) | l1 1/2, scenario 2/2 | 4.24 / 5 | $0.0033 | 2309 ms | 65.3 min | no | $2.63 |
+| gpt-oss-20b@medium | 36% | 7% | 35 (l1 1, scenario 34) | l1 1/2, scenario 2/2 | 3.65 / 5 | $0.0039 | 5604 ms | 68.0 min | no | $2.79 |
+| gpt-oss-20b@high | 31% | 7% | 30 (l1 2, scenario 28) | l1 2/2, scenario 2/2 | 3.83 / 5 | $0.0071 | 23996 ms | 111.8 min | no | $3.87 |
+
+Two cells measure a defect rather than the model:
+- `nova-2-lite@high`: Bedrock rejects `maxTokens` at that effort (#246).
+- `gpt-oss-20b`: 68 errored trials from invented tool names replayed in history (#247).
+
+**How the choice was made (Nick's decisions on #37):**
+- **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success by 8 points or more.
+- **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`).
+
+**The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below):
+
+| Metric | Value | Target | Verdict |
+|---|---|---|---|
+| Task success, scenario mode, core categories, pass@1 | 92% (book 92%, reschedule 100%, availability 94%, escalate 93%, clarify 80%) | ≥ 90% | met |
+| Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
+| Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
+| Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 |
+| Judge–human agreement | pending #159 | ≥ 80% | pending |
+| Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
+| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
+
+**NFR-001 on `dev`:**
+- Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
+- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window.
+
+| Effort | Turns | p50 first `text_delta` | p95 first `text_delta` | p95 `done` |
+|---|---|---|---|---|
+| `high` | 30 | 4,735 ms | 6,372 ms | 7,259 ms |
+| `medium` | 30 | 4,102 ms | 7,007 ms | 7,946 ms |
+
+Each turn made three model calls (`find_providers`, `check_availability`, then the answer) before any visible text, so the miss is mostly the turn's shape, not the effort level.
+
+**The refusal fallback:**
+- `REFUSAL_FALLBACKS` keeps `sonnet-4.6` → `haiku-4.5`.
+- One forced refusal turn ran live (`spikes/refusal-fallback/`, 2026-10-13): after a scripted refusal on the first call, the loop retried on `us.anthropic.claude-haiku-4-5-20251001-v1:0`, which called `check_availability` and completed the turn with turn 1's history in the request.
+- The fallback's own matrix row is `haiku-4.5`: task success 68%, reliability 47%, 17 safety violations. r1/Q-4 (a) required PR #252 to ask whether to re-pair. Nick kept the pair ([decision](https://github.com/nick-delgado/serverless-ai-scheduling/pull/252#issuecomment-6146172390), recorded on #37): refusals are rare, and no entitled alternative has fewer than `haiku-4.5`'s 17 matrix safety violations.
+
+**Consequences:**
+- Agent cost rises from $0.0348 to $0.0400 per completed conversation (+15%), still a sixth of NFR-003's $0.25.
+- The production default stays a Claude model at 10 requests per minute (the 2026-10-09 amendment).
+- Revisit if:
+  - #159's calibration moves the rubric below 4.0;
+  - #251 changes NFR-001's first-text result;
+  - #246 or #247 make a cheaper cell runnable;
+  - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.

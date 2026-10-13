@@ -70,8 +70,8 @@ with the reasons. Judge–human agreement (`--calibrate`) and NFR-001 are measur
 ## 4. Baselines
 
 `packages/evals/baselines/<profile>.json` holds the smoke suite at k=1 in both modes: each case's status,
-the model ID, prompt version, date, passed count, safety violations and agent-share cost. Only
-`sonnet-4.6.json` exists (#34); other profiles' files are #37's.
+the model ID, prompt version, date, passed count, safety violations and agent-share cost. Each entitled
+profile has one (#37); the Eval gate reads `sonnet-4.6.json`.
 
 To update it, run both smoke modes live, then promote the two results files (no model call):
 

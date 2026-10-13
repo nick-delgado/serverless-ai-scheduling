@@ -3,9 +3,10 @@
  * (`scripts/eval-gate.ts`) start from `packages/evals/results/*.json`. The schema checks the fields the exit
  * table, the baseline and the gate's verdict read from a report (the run's identity, the summary's counts,
  * costs and latency, each case's status and rates, and each trial's status, cost, safety count and graders,
- * plus a scenario trial's turns and simulator and judge costs, which the exit table's conversation metrics
- * use). The rest of the file (transcripts, usage, simulator turns) is kept as written, unchecked, and the result
- * is typed as a `RunReport` on that basis.
+ * plus a scenario trial's turns, stop reason and simulator cost, which the exit table's conversation metrics
+ * use). A scenario trial's `judgeCost` and `turnDurationsMs` are checked only as part of the trial's shape; no
+ * reader of the parsed file uses them. The rest of the file (transcripts, usage, simulator turns) is kept as
+ * written, unchecked, and the result is typed as a `RunReport` on that basis.
  */
 import { z } from "zod";
 

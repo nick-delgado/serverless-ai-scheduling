@@ -47,8 +47,8 @@ describe("matrixCells (r1/Q-6 (a))", () => {
   it("covers the six entitled profiles, with effort levels only where a profile has a switch", () => {
     expect(matrixCells().map((c) => c.name)).toEqual([
       "sonnet-4.6@low",
+      "sonnet-4.6@medium",
       "sonnet-4.6",
-      "sonnet-4.6@high",
       "haiku-4.5",
       "nova-2-lite",
       "nova-2-lite@medium",
@@ -77,9 +77,9 @@ describe("matrixCells (r1/Q-6 (a))", () => {
     const fields = (name: string): ModelProfile["modelFields"] =>
       profileRequest(cell(name).profile, interimSystemPrompt(new Date("2026-10-05T13:00:00Z"), "Walter"))
         .modelFields;
-    expect(fields("sonnet-4.6@high")).toEqual({
+    expect(fields("sonnet-4.6@medium")).toEqual({
       thinking: { type: "adaptive" },
-      output_config: { effort: "high" },
+      output_config: { effort: "medium" },
     });
     expect(fields("sonnet-4.6@low")).toEqual({
       thinking: { type: "adaptive" },
@@ -100,7 +100,7 @@ describe("matrixCells (r1/Q-6 (a))", () => {
     // The shared profile objects are untouched, and a cell keeps its model ID (one rate-limit bucket).
     expect(MODEL_PROFILES["sonnet-4.6"].modelFields).toEqual({
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
+      output_config: { effort: "high" },
     });
     expect(cell("gpt-oss-20b@high").profile.modelId).toBe(MODEL_PROFILES["gpt-oss-20b"].modelId);
   });
