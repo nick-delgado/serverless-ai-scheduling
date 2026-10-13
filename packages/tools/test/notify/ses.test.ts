@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { block as yamlBlock, text } from "../../../../scripts/test/yaml-text";
 import { FrozenClock } from "../../src/clock";
 import { renderEscalationEmail } from "../../src/notify/render";
 import {
@@ -198,13 +199,12 @@ describe("failed-notification metric", () => {
 });
 
 describe("infra/stacks/api.yaml", () => {
-  const template = readFileSync(new URL("../../../../infra/stacks/api.yaml", import.meta.url), "utf8");
-  /** The lines of the top-level-indented block that starts with `header`, up to the next one at its indent. */
-  const block = (header: string, indent: number): string => {
-    const pad = " ".repeat(indent);
-    const re = new RegExp(`^${pad}${header}\n(?:(?:${pad} .*)?\n)+`, "m");
-    return re.exec(template)?.[0] ?? "";
-  };
+  const lines = readFileSync(new URL("../../../../infra/stacks/api.yaml", import.meta.url), "utf8").split(
+    "\n",
+  );
+  /** The block whose header is `header` at `indent` spaces, as text (scripts/test/yaml-text.ts; a miss throws). */
+  const block = (header: string, indent: number): string =>
+    text(yamlBlock(new RegExp(`^ {${indent}}${header}$`), lines));
 
   it("has an alarm on the failed-notification metric that fires on one failure in the env", () => {
     const alarm = block("NotificationFailedAlarm:", 2);
@@ -235,8 +235,8 @@ describe("infra/stacks/api.yaml", () => {
   });
 
   it("lets the chat function send only from the sender identity", () => {
-    const chat = block("ChatFunction:", 2);
-    const grant = /^ {14}- Sid: SendEscalationEmail\n(?: {16}.*\n)+/m.exec(chat)?.[0];
+    const chat = yamlBlock(/^ {2}ChatFunction:$/, lines);
+    const grant = text(yamlBlock(/^ {14}- Sid: SendEscalationEmail$/, chat));
     const identity = "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity";
     expect(grant).toBe(
       [

@@ -86,6 +86,7 @@ scripts/deploy-web.sh <env>             # build, sync to the site bucket, invali
 6. **Parameterize by `Env`.** No hard-coded `dev` anywhere.
 7. **Stateful resources are protected.** The table and user pool take a `DeletionProtection` parameter, `enabled` by default.
 8. Lambda defaults: `nodejs24.x`, `arm64`, JSON logs, an explicit log group with 14-day retention. Bundle TypeScript with `Metadata: { BuildMethod: makefile, WorkingDirectory: ../.. }` and a `build-<LogicalId>` target in `services/api/Makefile` (entry points in `services/api/src/handlers/`). **Not** `BuildMethod: esbuild`: it runs `npm install` in an isolated copy of `CodeUri`, which can't resolve workspace packages like `@sched/contracts` (ADR-007, #7).
+9. **Tests that read a SAM template or a workflow file as text use `scripts/test/yaml-text.ts`** (a block by its header, list items, entries, a block scalar's body). A case it lacks is added there, with a test in `scripts/test/yaml-text.test.ts`, not to a new slicer in a test file (#157).
 
 ## Before opening a PR that touches infra
 

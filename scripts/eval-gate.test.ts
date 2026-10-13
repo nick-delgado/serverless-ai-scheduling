@@ -23,6 +23,7 @@ import {
   verdictMarkdown,
 } from "./eval-gate";
 import { gitRepo, logsTo, type TestRepo } from "./test/git-repo";
+import { block, children, credentialsOf, entries, items } from "./test/yaml-text";
 
 describe("isGatedPath (r1/Q-3 (b))", () => {
   it.each([
@@ -433,59 +434,21 @@ describe("main", () => {
   });
 });
 
-// jscpd:ignore-start -- the line slicers copy scripts/bootstrap-template.test.ts's on purpose (decision 91c9fc5/TEST-303
-// (a) on PR #229 asked for this test in that style). #157 owns the shared helper and absorbs this copy too (named there).
-const indentOf = (line: string): number => line.length - line.trimStart().length;
-
-/** The block that starts at the first line of `within` matching `header`: it and every deeper or blank line after. */
-function block(header: RegExp, within: string[]): string[] {
-  const start = within.findIndex((line) => header.test(line));
-  if (start === -1) throw new Error(`no line matches ${String(header)}`);
-  const indent = indentOf(within[start] ?? "");
-  const end = within.findIndex((line, i) => i > start && line.trim() !== "" && indentOf(line) <= indent);
-  return within.slice(start, end === -1 ? undefined : end);
-}
-
-/** The `key: value` entries directly under a block's header line, values unquoted. */
-function entries(lines: string[]): Record<string, string> {
-  const [header, ...body] = lines;
-  const childIndent = indentOf(body.find((l) => l.trim() !== "") ?? "");
-  const out: Record<string, string> = {};
-  for (const line of body) {
-    if (indentOf(line) !== childIndent || indentOf(line) <= indentOf(header ?? "")) continue;
-    const match = /^\s*([^:\s][^\s]*?):\s+(.+)$/.exec(line);
-    if (match?.[1] && match[2]) out[match[1]] = match[2].replace(/^"(.*)"$/, "$1");
-  }
-  return out;
-}
-
-/** The non-blank, non-comment lines directly under a block's header line. */
-function children(lines: string[]): string[] {
-  const body = lines.slice(1).filter((l) => l.trim() !== "" && !l.trimStart().startsWith("#"));
-  const childIndent = indentOf(body[0] ?? "");
-  return body.filter((l) => indentOf(l) === childIndent);
-}
-// jscpd:ignore-end
-
 describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 (a))", () => {
   const workflow = readFileSync(
     join(import.meta.dirname, "..", ".github", "workflows", "evals.yml"),
     "utf8",
   ).split("\n");
   const job = block(/^ {2}gate:$/, workflow);
-  /** Each step as its lines, from its `- ` line to the next. */
-  const steps = (() => {
-    const list = block(/^ {4}steps:$/, job).slice(1);
-    const starts = list.flatMap((l, i) => (/^ {6}- /.test(l) ? [i] : []));
-    return starts.map((start, k) => list.slice(start, starts[k + 1]));
-  })();
+  /** Each step as its lines, whatever its first key (scripts/test/yaml-text.ts reads the workflow, #157). */
+  const steps = items(block(/^ {4}steps:$/, job));
   const named = (name: string) => {
-    const step = steps.find((st) => st.some((l) => l.includes(`name: ${name}`)));
+    const step = steps.find((st) => entries(st).name === name);
     if (step === undefined) throw new Error(`no step named ${name}`);
     return step;
   };
   const PLAN_SAYS_RUN = "steps.plan.outputs.run == 'true'";
-  const RUN_IFS = [`if: ${PLAN_SAYS_RUN}`, `if: always() && ${PLAN_SAYS_RUN}`];
+  const RUN_IFS = [PLAN_SAYS_RUN, `always() && ${PLAN_SAYS_RUN}`];
 
   it("runs on pull_request only, the trigger the eval role trusts", () => {
     expect(children(block(/^on:$/, workflow))).toEqual(["  pull_request:"]);
@@ -498,21 +461,21 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
   });
 
   it("runs every step after the plan that reaches AWS or Bedrock only when the plan says so", () => {
-    const plan = steps.findIndex((st) => st.some((l) => l.includes("scripts/eval-gate.ts plan")));
+    // Each step's `run:` and `if:` are read inside its item.
+    const plan = steps.findIndex((st) => entries(st).run?.includes("scripts/eval-gate.ts plan"));
     expect(plan).toBeGreaterThan(-1);
     // The conditions read `steps.plan`, so the plan step must carry that id.
-    expect(steps[plan]?.map((l) => l.trim())).toContain("id: plan");
+    expect(entries(steps[plan] ?? []).id).toBe("plan");
     const after = steps.slice(plan + 1);
     expect(after.length).toBeGreaterThan(0);
-    for (const step of after) expect(step.some((l) => RUN_IFS.includes(l.trim()))).toBe(true);
+    for (const step of after) expect(RUN_IFS).toContain(entries(step).if);
   });
 
   it("has one credentials step, which takes the eval role and masks the account ID", () => {
-    const anyForm = /^\s+(- )?uses: aws-actions\/configure-aws-credentials@/;
-    expect(job.filter((l) => anyForm.test(l))).toHaveLength(1);
-    expect(
-      entries(block(/^\s+with:$/, block(/^\s+- uses: aws-actions\/configure-aws-credentials@/, job))),
-    ).toMatchObject({
+    // Found as an item in any form (`- uses:` or `uses:` under a `- name:`), and its `with:` read inside it.
+    const credentials = credentialsOf(job);
+    expect([credentials.lines, credentials.steps.length]).toEqual([1, 1]);
+    expect(credentials.settings).toMatchObject({
       "role-to-assume": "${{ secrets.AWS_EVAL_ROLE_ARN }}",
       "mask-aws-account-id": "true",
     });
@@ -529,6 +492,6 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
     for (const call of calls)
       expect(call).toMatch(/^npm run evals -- --mode (l1 \$SMOKE|scenario \$SMOKE \$SCENARIO) /);
     expect(calls.filter((c) => c.includes("--mode l1"))).toHaveLength(2);
-    expect(named("Verdict against the baseline").join("\n")).toContain('--baseline "$BASELINE"');
+    expect(entries(named("Verdict against the baseline")).run).toContain('--baseline "$BASELINE"');
   });
 });
