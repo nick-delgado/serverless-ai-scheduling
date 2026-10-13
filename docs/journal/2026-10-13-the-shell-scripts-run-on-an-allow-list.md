@@ -23,7 +23,7 @@ The three test files now share one harness, `scripts/test/shell-harness.ts`. Eac
 
 ## What surprised us
 
-- **Deleting `deploy.sh`'s missing-target check changes nothing.** An empty target also fails the stack check, which prints the same usage line and exits 2. So the break we recorded makes that check exit 0 instead. Deleting it would have survived, and rightly so.
+- **Deleting `deploy.sh`'s missing-target check changes nothing.** An empty target also fails the stack check, which prints the same usage line with the same exit code. So the break we recorded at `9a2cc46` (`D-missing-target` in the PR's table) makes that check succeed instead. Deleting it would have survived, and rightly so.
 - **The review's guess about `export` and spaces was wrong in the safe direction.** It expected `export SES_SENDER=…` and `SES_SENDER = …` to reach SAM with the extra characters. A run shows `sed`'s `^SES_SENDER=` doesn't match those lines at all, so the value reads as missing: `dev` refuses, and an ephemeral env deploys without the email.
 - **Our first mutate run marked every break KILLED-OTHER.** Vitest's reporter names a test `<file> > <describe> <describe> <test>`, with spaces between the describe blocks rather than ` > `, so none of the `expect` strings matched. The failed tests were the right ones; only the names were wrong.
 
