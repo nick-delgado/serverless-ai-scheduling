@@ -107,10 +107,10 @@ scripts/teardown.sh <name>                        # delete it when done (refuses
 - Deploys run through the CloudFormation execution role (`--role-arn` from SSM `/sched/bootstrap/cfn-exec-role-arn`, published by the bootstrap stack).
 - **Ask before destructive operations:** deleting a stack, deleting or overwriting table data, or anything touching the bootstrap stack.
 - Model profiles (`AGENT_MODEL_PROFILE`, `packages/agent/src/profiles.ts`), all called through Converse:
-  - **Development default:** `sonnet-4.6` (`us.anthropic.claude-sonnet-4-6`).
+  - **Development default and production profile:** `sonnet-4.6` (`us.anthropic.claude-sonnet-4-6`) at effort `high`, chosen by the M3 matrix (ADR-002's 2026-10-12 amendment, #37).
   - Also callable: `haiku-4.5` (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), `nova-2-lite` (`us.amazon.nova-2-lite-v1:0`), `nova-pro` (`us.amazon.nova-pro-v1:0`), `gpt-oss-120b` (`openai.gpt-oss-120b-1:0`), `gpt-oss-20b` (`openai.gpt-oss-20b-1:0`).
   - **Not entitled:** `opus-5` and `sonnet-5` stay defined but resolving them throws; AWS denied access ("not available for this account"), and the proprietary GPT-5.x models are blocked the same way.
-  - Model choice is config, not code (ADR-010); the M3 eval matrix picks the default. Pace bulk calls to each profile's `rpm` (`packages/agent/src/profiles.ts`), the account quota.
+  - Model choice is config, not code (ADR-010); the M3 eval matrix picked the default. Pace bulk calls to each profile's `rpm` (`packages/agent/src/profiles.ts`), the account quota.
 - Eval runs call Bedrock and cost real money. Say what a run will cost before any live run beyond what was approved.
 
 ## How work flows
