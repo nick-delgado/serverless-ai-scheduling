@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { block, children, credentialsOf, entries, items } from "./test/yaml-text";
+import { block, children, credentialsOf, entries, items, stepsOf } from "./test/yaml-text";
 
 const lines = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "bootstrap", "bootstrap.yaml"),
@@ -128,7 +128,7 @@ describe("deploy workflow (.github/workflows/deploy.yml)", () => {
     "utf8",
   ).split("\n");
   const job = block(/^ {2}deploy:$/, workflow);
-  const steps = items(block(/^\s+steps:$/, job));
+  const steps = stepsOf(job);
 
   it("runs only by hand (workflow_dispatch)", () => {
     expect(children(block(/^on:$/, workflow))).toEqual(["  workflow_dispatch:"]);

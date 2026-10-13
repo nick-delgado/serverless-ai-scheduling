@@ -6,14 +6,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   block,
-  credentialsOf,
   bodyLines,
+  childBlocks,
   children,
+  credentialsLines,
+  credentialsOf,
   entries,
   indentOf,
   isCredentialsStep,
   items,
+  member,
+  root,
   scalar,
+  stepsOf,
+  structuralLines,
   text,
 } from "./yaml-text";
 
@@ -138,6 +144,18 @@ describe("items", () => {
     expect(steps[2]?.some((l) => l.includes("- name: Credentials"))).toBe(false);
   });
 
+  it("keeps an item whole when it holds a list deeper than its dash", () => {
+    const statements = [
+      "Statement:",
+      "  - Effect: Allow",
+      "    Action:",
+      "      - sts:AssumeRole",
+      "      - sts:TagSession",
+      "  - Effect: Deny",
+    ];
+    expect(items(statements)).toEqual([statements.slice(1, 5), statements.slice(5)]);
+  });
+
   it("throws when the header's first child isn't a list item", () => {
     expect(() => items(block(/^ {4}permissions:$/, WORKFLOW))).toThrow("no list items under");
   });
@@ -177,6 +195,56 @@ describe("entries", () => {
   });
 });
 
+describe("entries, other forms", () => {
+  it("reads `key: # comment` as a block header with no entry, and unquotes keys and single-quoted values", () => {
+    const lines = ["perms:", "  a: # why", "    b: 1", '  "id-token": write', "  c: 'x # y' # z"];
+    expect(entries(lines)).toEqual({ "id-token": "write", c: "x # y" });
+  });
+
+  it("measures a `- run: |` body from the key, past the dash, so the item's next key isn't body text", () => {
+    const step = ["- run: |", "    echo hi", "  name: After"];
+    expect(entries(step)).toEqual({ run: "echo hi\n", name: "After" });
+    expect(structuralLines(step)).toEqual(["- run: |", "  name: After"]);
+  });
+});
+
+describe("member", () => {
+  const job = [
+    "  a:",
+    '    flow: { contents: read, "id-token": write }',
+    "    inline: write-all # everything",
+    "    nested: # least privilege",
+    "      id-token: write",
+  ];
+
+  it("reads a flow map, a one-line value and a block as their values, and an absent key as undefined", () => {
+    expect(member(job, "flow")).toEqual({ contents: "read", "id-token": "write" });
+    expect(member(job, "inline")).toBe("write-all");
+    expect(member(job, "nested")).toEqual({ "id-token": "write" });
+    expect(member(job, "missing")).toBeUndefined();
+  });
+
+  it("reads a whole file's top level through root", () => {
+    expect(member(root(WORKFLOW), "name")).toBe("Example");
+    expect(member(root(WORKFLOW), "on")).toEqual({});
+  });
+});
+
+describe("childBlocks", () => {
+  it("gives each direct child of a header as its own block", () => {
+    const jobs = childBlocks(block(/^jobs:$/, WORKFLOW));
+    expect(jobs.map((j) => j[0])).toEqual(["  gate:", "  other:"]);
+    expect(jobs[1]).toEqual(block(/^ {2}other:$/, WORKFLOW));
+  });
+});
+
+describe("structuralLines", () => {
+  it("drops blank lines, comments and block-scalar text", () => {
+    const lines = ["a:", "", "  # note", "  run: |", "    # body", "  b: 1"];
+    expect(structuralLines(lines)).toEqual(["a:", "  run: |", "  b: 1"]);
+  });
+});
+
 describe("children", () => {
   it("is the structural lines directly under the header", () => {
     expect(children(block(/^jobs:$/, WORKFLOW))).toEqual(["  gate:", "  other:"]);
@@ -203,6 +271,11 @@ describe("scalar", () => {
 });
 
 describe("bodyLines", () => {
+  it("keeps a block scalar's `#` lines", () => {
+    const lines = ["Fn:", "  Code: |", "    # kept", "    x();", "  # dropped"];
+    expect(bodyLines(lines)).toEqual(["  Code: |", "    # kept", "    x();"]);
+  });
+
   it("drops comment and blank lines and dedents to the header", () => {
     const lines = ["  Policies:", "    - Version: 1", "", "      # why", "      Statement: []", "  Next:"];
     expect(bodyLines(block(/^ {2}Policies:$/, lines))).toEqual(["  - Version: 1", "    Statement: []"]);
@@ -228,5 +301,26 @@ describe("credentialsOf", () => {
     expect([gate.lines, gate.steps.length]).toEqual([2, 2]);
     expect(gate.settings).toEqual({ "role-to-assume": "${{ secrets.ROLE }}", "mask-aws-account-id": "true" });
     expect(credentialsOf(block(/^ {2}other:$/, WORKFLOW))).toEqual({ lines: 0, steps: [], settings: {} });
+  });
+});
+
+describe("stepsOf", () => {
+  it("is the items of a job's steps:", () => {
+    const gate = block(/^ {2}gate:$/, WORKFLOW);
+    expect(stepsOf(gate)).toEqual(items(block(/^\s+steps:$/, gate)));
+    expect(stepsOf(gate)).toHaveLength(4);
+  });
+});
+
+describe("credentialsLines", () => {
+  it("finds the action as a uses: value in either step form, quoted or not, and not in a comment", () => {
+    const lines = [
+      "      # uses: aws-actions/configure-aws-credentials@abc",
+      '      - uses: "aws-actions/configure-aws-credentials@abc"',
+      "      - name: x",
+      "        uses: 'aws-actions/configure-aws-credentials@abc'",
+      "      - uses: actions/checkout@abc",
+    ];
+    expect(credentialsLines(lines)).toEqual([lines[1], lines[3]]);
   });
 });

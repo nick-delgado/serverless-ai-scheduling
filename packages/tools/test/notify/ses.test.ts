@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { block as yamlBlock, text } from "../../../../scripts/test/yaml-text";
+import { block, text } from "../../../../scripts/test/yaml-text";
 import { FrozenClock } from "../../src/clock";
 import { renderEscalationEmail } from "../../src/notify/render";
 import {
@@ -202,12 +202,11 @@ describe("infra/stacks/api.yaml", () => {
   const lines = readFileSync(new URL("../../../../infra/stacks/api.yaml", import.meta.url), "utf8").split(
     "\n",
   );
-  /** The block whose header is `header` at `indent` spaces, as text (scripts/test/yaml-text.ts; a miss throws). */
-  const block = (header: string, indent: number): string =>
-    text(yamlBlock(new RegExp(`^ {${indent}}${header}$`), lines));
+  /** The chat function's block, looked up in each test, so a miss fails that test. */
+  const chatFunction = (): string[] => block(/^ {2}ChatFunction:$/, lines);
 
   it("has an alarm on the failed-notification metric that fires on one failure in the env", () => {
-    const alarm = block("NotificationFailedAlarm:", 2);
+    const alarm = text(block(/^ {2}NotificationFailedAlarm:$/, lines));
     expect(alarm).toContain(`Namespace: ${NOTIFICATION_FAILED_METRIC.namespace}\n`);
     expect(alarm).toContain(`MetricName: ${NOTIFICATION_FAILED_METRIC.name}\n`);
     expect(alarm).toContain(
@@ -219,13 +218,13 @@ describe("infra/stacks/api.yaml", () => {
   });
 
   it("gives every function the env the metric's dimension is read from", () => {
-    expect(block("Globals:", 0)).toContain(
+    expect(text(block(/^Globals:$/, lines))).toContain(
       "    Environment:\n      Variables:\n        SCHED_ENV: !Ref Env\n",
     );
   });
 
   it("passes the SES addresses to the chat function under the names sesNotifierFromEnv reads", () => {
-    const chat = block("ChatFunction:", 2);
+    const chat = text(chatFunction());
     expect(chat).toContain(
       `          ${SES_ENV.sender}: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]\n`,
     );
@@ -235,8 +234,7 @@ describe("infra/stacks/api.yaml", () => {
   });
 
   it("lets the chat function send only from the sender identity", () => {
-    const chat = yamlBlock(/^ {2}ChatFunction:$/, lines);
-    const grant = text(yamlBlock(/^ {14}- Sid: SendEscalationEmail$/, chat));
+    const grant = text(block(/^ {14}- Sid: SendEscalationEmail$/, chatFunction()));
     const identity = "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity";
     expect(grant).toBe(
       [

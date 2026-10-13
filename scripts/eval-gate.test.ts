@@ -23,7 +23,7 @@ import {
   verdictMarkdown,
 } from "./eval-gate";
 import { gitRepo, logsTo, type TestRepo } from "./test/git-repo";
-import { block, children, credentialsOf, entries, items } from "./test/yaml-text";
+import { block, children, credentialsOf, entries, stepsOf } from "./test/yaml-text";
 
 describe("isGatedPath (r1/Q-3 (b))", () => {
   it.each([
@@ -441,7 +441,7 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
   ).split("\n");
   const job = block(/^ {2}gate:$/, workflow);
   /** Each step as its lines, whatever its first key (scripts/test/yaml-text.ts reads the workflow, #157). */
-  const steps = items(block(/^ {4}steps:$/, job));
+  const steps = stepsOf(job);
   const named = (name: string) => {
     const step = steps.find((st) => entries(st).name === name);
     if (step === undefined) throw new Error(`no step named ${name}`);

@@ -21,10 +21,34 @@
 /** A line's indent, in spaces. */
 export const indentOf = (line: string): number => line.length - line.trimStart().length;
 
-/** A key whose value is a block scalar (`key: |`, `key: >-`, `- run: |`), as a trimmed line. */
-const BLOCK_SCALAR_KEY = /^(?:- +)*[^\s#][^#]*?:\s+[|>][-+1-9]*(?:\s+#.*)?$/;
-/** A `key: value` line (the key's dash, if any, already removed). */
-const ENTRY = /^\s*([^:\s#][^\s]*?):(?:\s+(.*))?$/;
+/** A list item's dash at the start of a line: `- `, or a bare `-`. Group 1 is the indent. */
+const DASH = /^(\s*)-(?:\s|$)/;
+/** A block scalar's indicator, as a key's whole value (`|`, `|-`, `>+`, `|2`). */
+const SCALAR_INDICATOR = /^[|>][-+1-9]*$/;
+/** A `key: value` line once its dashes are gone: group 1 the key, group 2 the rest. */
+const ENTRY = /^\s*([^:\s#][^\s]*?|"[^"]*"|'[^']*'):(?:\s+(.*))?$/;
+
+/** A double- or single-quoted scalar without its quotes; anything else as it is. */
+const unquote = (s: string): string =>
+  /^"(.*)"$|^'(.*)'$/
+    .exec(s)
+    ?.slice(1)
+    .find((g) => g !== undefined) ?? s;
+
+/**
+ * A line's `key: value` pair, past any leading `- `: the key unquoted, and the value without a trailing ` # comment`
+ * and unquoted ("" when the key has no inline value, a `key: # comment` included). Undefined when it isn't a pair.
+ */
+function pairOf(line: string): [string, string] | undefined {
+  const match = ENTRY.exec(line.replace(/^\s*(?:-\s+)*/, ""));
+  if (match?.[1] === undefined) return undefined;
+  const raw = (match[2] ?? "").trim();
+  const value = /^["']/.test(raw) ? raw.replace(/(["'])\s+#.*$/, "$1") : raw.replace(/(?:^|\s+)#.*$/, "");
+  return [unquote(match[1]), unquote(value)];
+}
+
+/** Whether a line's value is a block scalar's indicator (`key: |`, `- run: >-`). */
+const isScalarKey = (line: string): boolean => SCALAR_INDICATOR.test(pairOf(line)?.[1] ?? "");
 
 /** The column of a line's key, past any leading `- `: a block scalar's body is indented deeper than this. */
 const keyColumn = (line: string): number => line.length - line.replace(/^\s*(?:-\s+)*/, "").length;
@@ -40,16 +64,22 @@ function scalarBody(lines: string[]): boolean[] {
     }
     scalarKey = undefined;
     body.push(false);
-    if (BLOCK_SCALAR_KEY.test(line.trim())) scalarKey = keyColumn(line);
+    if (!line.trimStart().startsWith("#") && isScalarKey(line)) scalarKey = keyColumn(line);
   }
   return body;
 }
 
-/** The lines YAML reads as structure: not blank, not a comment, not block-scalar text. */
+/** For each line, whether YAML reads it as structure: not blank, not a comment, not block-scalar text. */
 function structural(lines: string[]): boolean[] {
   const body = scalarBody(lines);
   return lines.map((line, i) => !body[i] && line.trim() !== "" && !line.trimStart().startsWith("#"));
 }
+
+/** The lines YAML reads as structure: no blank or comment line, and no block-scalar text. */
+export const structuralLines = (lines: string[]): string[] => {
+  const isStructural = structural(lines);
+  return lines.filter((_, i) => isStructural[i]);
+};
 
 /** `lines` without the blank and comment lines at its end (block-scalar text stays). */
 function trimTail(lines: string[]): string[] {
@@ -62,6 +92,9 @@ function trimTail(lines: string[]): string[] {
   }
   return lines.slice(0, end);
 }
+
+/** A whole file as one block with an empty header, so `entries`, `member`, `children` and `childBlocks` read its top level. */
+export const root = (lines: string[]): string[] => ["", ...lines];
 
 /**
  * The block whose header is the one line of `within` that matches `header`: the header and every line after it up to
@@ -83,29 +116,43 @@ export function block(header: RegExp, within: string[]): string[] {
 }
 
 /**
+ * Splits the lines after a block's header at each structural line indented `at`, for which `starts` holds: each part
+ * runs to the next such line, without the comment and blank lines just before it.
+ */
+function split(lines: string[], from: number, at: number, starts: (line: string) => boolean): string[][] {
+  const isStructural = structural(lines);
+  const heads = lines.flatMap((line, i) =>
+    i >= from && isStructural[i] && indentOf(line) === at && starts(line) ? [i] : [],
+  );
+  return heads.map((head, k) => trimTail(lines.slice(head, heads[k + 1])));
+}
+
+/** The index of the first structural line after a block's header, or -1. */
+const firstChild = (lines: string[]): number => structural(lines).findIndex((s, i) => i > 0 && s);
+
+/**
  * The list items directly under a block's header line, each whole whatever its first key (`- name:` or `- uses:`):
  * from its `- ` line to the next `- ` line at its indent, without the comment and blank lines just before that line.
  * Throws when the header's first child isn't a list item.
  */
 export function items(lines: string[]): string[][] {
-  const isStructural = structural(lines);
-  const first = isStructural.findIndex((s, i) => i > 0 && s);
+  const first = firstChild(lines);
   const firstLine = lines[first] ?? "";
-  if (first === -1 || !/^\s*-(\s|$)/.test(firstLine)) {
+  if (first === -1 || !DASH.test(firstLine))
     throw new Error(`no list items under ${JSON.stringify(lines[0] ?? "")}`);
-  }
-  const dash = indentOf(firstLine);
-  const starts = lines.flatMap((line, i) =>
-    i >= first && isStructural[i] && indentOf(line) === dash && /^\s*-(\s|$)/.test(line) ? [i] : [],
-  );
-  return starts.map((start, k) => trimTail(lines.slice(start, starts[k + 1])));
+  return split(lines, first, indentOf(firstLine), (line) => DASH.test(line));
+}
+
+/** Each direct child of a block's header (a key of a mapping, such as each job under `jobs:`) as its own block. */
+export function childBlocks(lines: string[]): string[][] {
+  const first = firstChild(lines);
+  return first === -1 ? [] : split(lines, first, indentOf(lines[first] ?? ""), () => true);
 }
 
 /** The lines of a block's or an item's direct members: an item's first line counts, with its `- ` blanked. */
 function members(lines: string[]): string[] {
   const [first = "", ...rest] = lines;
-  const dash = /^(\s*)- /.exec(first);
-  return dash ? [first.replace(/^(\s*)- /, "$1  "), ...rest] : rest;
+  return DASH.test(first) ? [first.replace(/^(\s*)-/, "$1 "), ...rest] : rest;
 }
 
 /** A block scalar's body lines, dedented to the least-indented one, as YAML reads it (clip: one final newline). */
@@ -114,40 +161,51 @@ function dedent(body: string[]): string {
   return body.map((l) => l.slice(indent)).join("\n") + "\n";
 }
 
+/** The direct members of a block or an item, each with its key, its inline value and its lines (the key's block). */
+function direct(lines: string[]): { key: string; value: string; lines: string[] }[] {
+  const own = members(lines);
+  const isStructural = structural(own);
+  const first = isStructural.findIndex(Boolean);
+  if (first === -1) return [];
+  const at = indentOf(own[first] ?? "");
+  return split(["", ...own], first + 1, at, () => true).flatMap((part) => {
+    const pair = pairOf(part[0] ?? "");
+    return pair ? [{ key: pair[0], value: pair[1], lines: part }] : [];
+  });
+}
+
 /**
  * The `key: value` entries directly under a block's header line, or directly in a list item (its first key included).
- * A one-line value is unquoted and loses a trailing ` # comment`; a block scalar's value is its body (`scalar`'s
- * text). A key whose value is a nested block has no entry.
+ * Keys and one-line values are unquoted, and a value loses a trailing ` # comment`; a block scalar's value is its body
+ * (`scalar`'s text). A key whose value is a nested block (`key:` or `key: # comment`) has no entry.
  */
 export function entries(lines: string[]): Record<string, string> {
-  const own = members(lines);
-  const body = scalarBody(own);
-  const isStructural = structural(own);
-  const childIndent = indentOf(own.find((_, i) => isStructural[i]) ?? "");
   const out: Record<string, string> = {};
-  own.forEach((line, i) => {
-    if (!isStructural[i] || indentOf(line) !== childIndent) return;
-    const match = ENTRY.exec(line);
-    const key = match?.[1];
-    const value = match?.[2]?.trim();
-    if (key === undefined || value === undefined || value === "") return;
-    if (/^[|>][-+1-9]*(?:\s+#.*)?$/.test(value)) {
-      const end = body.findIndex((b, j) => j > i && !b);
-      const scalarLines = own.slice(i + 1, end === -1 ? undefined : end);
-      while (scalarLines.length > 0 && (scalarLines.at(-1) ?? "").trim() === "") scalarLines.pop();
-      out[key] = dedent(scalarLines);
-      return;
-    }
-    const quoted = /^"(.*)"$|^'(.*)'$/.exec(value);
-    out[key] = quoted ? (quoted[1] ?? quoted[2] ?? "") : value.replace(/\s+#.*$/, "");
-  });
+  for (const { key, value, lines: own } of direct(lines)) {
+    if (value === "") continue;
+    out[key] = SCALAR_INDICATOR.test(value) ? scalar(own) : value;
+  }
   return out;
+}
+
+/**
+ * A direct member's value: undefined when the key is absent, a string for a one-line value, or the pairs of a mapping,
+ * whether written as a flow map (`key: { a: b, c: d }`) or as a block under `key:`.
+ */
+export function member(lines: string[], key: string): string | Record<string, string> | undefined {
+  const found = direct(lines).find((m) => m.key === key);
+  if (found === undefined) return undefined;
+  const flow = /^\{(.*)\}$/.exec(found.value);
+  if (flow) {
+    const pairs = (flow[1] ?? "").split(",").flatMap((p) => (p.trim() === "" ? [] : [pairOf(p.trim())]));
+    return Object.fromEntries(pairs.filter((p) => p !== undefined));
+  }
+  return found.value === "" ? entries(found.lines) : found.value;
 }
 
 /** The structural lines directly under a block's header line (its children, not theirs). */
 export function children(lines: string[]): string[] {
-  const isStructural = structural(lines);
-  const body = lines.filter((_, i) => i > 0 && isStructural[i]);
+  const body = structuralLines(lines.slice(1));
   const childIndent = indentOf(body[0] ?? "");
   return body.filter((l) => indentOf(l) === childIndent);
 }
@@ -155,13 +213,14 @@ export function children(lines: string[]): string[] {
 /** The body of a block scalar whose header is `key: |` (the block from `block`), dedented as YAML reads it. */
 export function scalar(lines: string[]): string {
   const [header = "", ...body] = lines;
-  if (!BLOCK_SCALAR_KEY.test(header.trim())) throw new Error(`not a block scalar: ${JSON.stringify(header)}`);
+  if (!isScalarKey(header)) throw new Error(`not a block scalar: ${JSON.stringify(header)}`);
+  while (body.length > 0 && (body.at(-1) ?? "").trim() === "") body.pop();
   return dedent(body);
 }
 
 /**
- * The lines under a block's header, comment and blank lines dropped, each dedented by the header's indent and trimmed
- * at the end: compared exactly, any added line shows up.
+ * The lines under a block's header, comment and blank lines dropped (a block scalar's `#` lines stay), each dedented
+ * by the header's indent and trimmed at the end: compared exactly, any added line shows up.
  */
 export function bodyLines(lines: string[]): string[] {
   const indent = indentOf(lines[0] ?? "");
@@ -174,30 +233,38 @@ export function bodyLines(lines: string[]): string[] {
 /** Lines back to text, ending in a newline, for `toContain` and `toMatch` checks. */
 export const text = (lines: string[]): string => lines.join("\n") + "\n";
 
-/** The `uses:` of a GitHub workflow step that takes AWS credentials (any version). */
-export const CREDENTIALS_ACTION = "aws-actions/configure-aws-credentials@";
+/** A GitHub workflow job's steps: the items of its `steps:`, each whole. */
+export const stepsOf = (job: string[]): string[][] => items(block(/^\s+steps:$/, job));
 
-/** A line that names the credentials action as a step's `uses:`, in either step form (`- uses:` or `uses:`). */
-export const CREDENTIALS_USES = new RegExp(`^\\s+(- )?uses: ${CREDENTIALS_ACTION.replace(/[./]/g, "\\$&")}`);
+/** The `uses:` of a GitHub workflow step that takes AWS credentials (any version). */
+const CREDENTIALS_ACTION = "aws-actions/configure-aws-credentials@";
+
+/** The structural lines that give the credentials action as a `uses:` value, in any step form, quoted or not. */
+export const credentialsLines = (lines: string[]): string[] =>
+  structuralLines(lines).filter((line) => {
+    const pair = pairOf(line);
+    return pair?.[0] === "uses" && pair[1].startsWith(CREDENTIALS_ACTION);
+  });
 
 /** Whether a workflow step (an item of `steps:`, in any form) is the AWS credentials step. */
 export const isCredentialsStep = (step: string[]): boolean =>
   entries(step).uses?.startsWith(CREDENTIALS_ACTION) ?? false;
 
 /**
- * A workflow job's credentials steps: how many of its lines name the action as a step's `uses:`, the steps that take
- * it (items of `steps:`, in either form), and the first one's `with:` entries (`{}` when there is none). A test pins
- * `lines` and `steps` to one each: the line count also catches a credentials `uses:` that isn't a step's own key.
+ * A workflow job's credentials steps: how many of its lines give the action as a `uses:` value (`credentialsLines`), the
+ * steps that take it (items of `steps:`, in either form), and the first one's `with:` entries (`{}` when there is
+ * none). A test pins `lines` and `steps` to one each: the line count also catches a credentials `uses:` that isn't a
+ * step's own key.
  */
 export function credentialsOf(job: string[]): {
   lines: number;
   steps: string[][];
   settings: Record<string, string>;
 } {
-  const steps = items(block(/^\s+steps:$/, job)).filter(isCredentialsStep);
+  const steps = stepsOf(job).filter(isCredentialsStep);
   const [first] = steps;
   return {
-    lines: job.filter((l) => CREDENTIALS_USES.test(l)).length,
+    lines: credentialsLines(job).length,
     steps,
     settings: first ? entries(block(/^\s+with:$/, first)) : {},
   };
