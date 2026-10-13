@@ -41,7 +41,8 @@ export const SIMULATOR_PROFILE_ENV = "SIMULATOR_MODEL_PROFILE";
 /**
  * The simulator's profile when neither `--simulator-profile` nor `SIMULATOR_MODEL_PROFILE` names one
  * (ADR-008's 2026-10-02 amendment). Its own value, not the agent's `DEFAULT_MODEL_PROFILE`, so the M3
- * matrix (#37) moving the agent's default doesn't move the simulator (#108).
+ * matrix (#37) moving the agent's default doesn't move the simulator (#108). It does use that profile's
+ * `modelFields`, so it runs at the profile's effort: `high` since ADR-002's 2026-10-12 amendment.
  */
 export const DEFAULT_SIMULATOR_PROFILE: ModelProfileName = "sonnet-4.6";
 
