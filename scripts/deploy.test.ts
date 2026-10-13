@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   BAD_ENV_NAMES,
+  BOOTSTRAP_SSM,
   expectArgumentsRefused,
   GOOD_ENV_NAMES,
   sandbox,
@@ -22,10 +23,6 @@ import {
 const STACKS = ["data", "auth", "api", "web"];
 
 // Synthetic values; none of them exists.
-const BOOTSTRAP_SSM = {
-  "/sched/bootstrap/cfn-exec-role-arn": "arn:aws:iam::000000000000:role/sched-cfn-exec-test",
-  "/sched/bootstrap/artifact-bucket": "sched-test-artifacts",
-};
 const SENDER = "env-sender@example.com";
 const RECIPIENT = "env-staff@example.com";
 const SES_ENV = { SES_SENDER: SENDER, SES_STAFF_RECIPIENT: RECIPIENT };
@@ -65,6 +62,10 @@ function overrides(calls: string[]): Record<string, string[]> {
     ]),
   );
 }
+
+/** The `Ses*` overrides one stack's `sam deploy` got. */
+const sesOverrides = (calls: string[], stack: string) =>
+  overrides(calls)[stack]?.filter((kv) => kv.startsWith("Ses"));
 
 /** The run succeeded, and the api stack got exactly these SES values, which the output never shows. */
 function expectSes(r: ShellRun, env: string, sender: string, recipient: string): void {
@@ -121,7 +122,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     it("deploys the sandbox's own copy: repo_root and the main checkout are inside the test's directory", () => {
       const wt = worktree();
       const r = run(["api", "pr7"], SES_ENV, wt);
-      expect(r.status, r.out).toBe(0);
+      expectSes(r, "pr7", SENDER, RECIPIENT);
       expect(r.out).toContain(`(${wt})`);
       const common = sb.repo.git("-C", wt, "rev-parse", "--path-format=absolute", "--git-common-dir").trim();
       expect(join(common, "..")).toBe(sb.repo.dir);
@@ -185,14 +186,14 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const r = run(["api", "dev"]);
       expect(r.status).toBe(1);
       expect(awsOrSam(r.calls)).toEqual([]);
+      expectNotPrinted(r);
     });
 
     it("deploys api to an ephemeral env with neither value, after a note", () => {
       const r = run(["api", "pr7"], { SES_SENDER: SENDER });
       expect(r.status, r.out).toBe(0);
       expect(r.out).toContain("note: SES_SENDER/SES_STAFF_RECIPIENT not set; 'pr7' gets no escalation email");
-      const api = overrides(r.calls)["sched-pr7-api"];
-      expect(api?.filter((kv) => kv.startsWith("Ses"))).toEqual([]);
+      expect(sesOverrides(r.calls, "sched-pr7-api")).toEqual([]);
       expectNotPrinted(r);
     });
 
@@ -202,7 +203,8 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const r = run(["api", "pr7"]);
       expect(r.status, r.out).toBe(0);
       expect(r.out).toContain("note: SES_SENDER/SES_STAFF_RECIPIENT not set");
-      expect(overrides(r.calls)["sched-pr7-api"]?.filter((kv) => kv.startsWith("Ses"))).toEqual([]);
+      expect(sesOverrides(r.calls, "sched-pr7-api")).toEqual([]);
+      expectNotPrinted(r);
     });
 
     it("needs neither value for a target without api", () => {
@@ -210,6 +212,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(r.status, r.out).toBe(0);
       expect(r.out).not.toContain("SES_SENDER");
       expect(Object.keys(overrides(r.calls))).toEqual(["sched-dev-data"]);
+      expectNotPrinted(r);
     });
 
     it.each(["dev", "pr7"])("passes the values to the api stack's sam deploy only (all %s)", (env) => {
@@ -219,7 +222,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const byStack = overrides(r.calls);
       expect(Object.keys(byStack)).toEqual(STACKS.map((s) => `sched-${env}-${s}`));
       for (const stack of ["data", "auth", "web"])
-        expect(byStack[`sched-${env}-${stack}`]?.filter((kv) => kv.startsWith("Ses"))).toEqual([]);
+        expect(sesOverrides(r.calls, `sched-${env}-${stack}`)).toEqual([]);
       for (const call of r.calls.filter((c) => !c.includes(`--stack-name sched-${env}-api `)))
         for (const value of SES_VALUES) expect(call).not.toContain(value);
     });
