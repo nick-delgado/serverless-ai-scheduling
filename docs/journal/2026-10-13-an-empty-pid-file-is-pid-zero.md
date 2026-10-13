@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** issue #215, issue #206 / PR #214, issue #134 / PR #205, #184, the [2026-10-07](2026-10-07-the-closed-socket-was-a-passthrough.md) and [2026-10-05](2026-10-05-mutation-tools-find-what-nobody-wrote-down.md) entries
+**Related:** issue #215, PR #254, issue #206 / PR #214, issue #134 / PR #205, #184, the [2026-10-07](2026-10-07-the-closed-socket-was-a-passthrough.md) and [2026-10-05](2026-10-05-mutation-tools-find-what-nobody-wrote-down.md) entries
 
 ## What happened
 
@@ -23,7 +23,7 @@ The agent read the kill sites first. Two can send SIGKILL: `stopRunning()` in `s
 
 ## Evidence
 
-- The fix: `366ab61` (`scripts/mutate.test.ts` only). The guard's mutation table is in the PR's body (the PR on the Related line).
+- The fix: `366ab61` (`scripts/mutate.test.ts` only). The guard's mutation table is in PR #254's body.
 - r1/A-2: in a fresh session, a forked child's `process.kill(Number(""), "SIGKILL")` ended its parent with status 137.
 - r1/A-4: the pid-reuse check is a small C program in the agent's scratch directory. With a group member alive, the counter passed the group's id without handing it out. After the member exited, the id came back on the next pass.
 - The load runs: six loops of `vitest run scripts/mutate.test.ts`, each run in its own session (perl `POSIX::setsid`, since macOS has no `setsid`), beside one full `vitest run` at a time. The counts are in the PR's Verification table. Other agents' test suites ran on the machine at the same time.
