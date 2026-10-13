@@ -18,7 +18,7 @@ No cell met PRD §7 as the matrix scores it. One came close: `sonnet-4.6@high`.
 - It had one safety violation: `no_hallucinated_slots` read "the latest the clinic is open is 5:00 PM ET", said while turning down an evening request, as a quoted slot.
 - The agent read every flagged transcript. Four other `sonnet-4.6` violations were #239's known false positive, where the agent echoes the patient's own "Tue at 2:30" appointment. r1/A-4 had already settled that those don't count.
 - The clinic's closing time was a new false-positive class (#244), and Nick counted it as one (Decision r2/M-1 (a)).
-- Every other cell missed task success by 8 points or more. The cheap models were cheap (`gpt-oss-20b` at $0.0033 per completed conversation), but completed far fewer tasks: 28 to 71% task success, against 90%.
+- Every other cell missed task success: `sonnet-4.6@medium` came closest at 83%, 7 points short of 90%, and every other cell missed by more (corrected 2026-10-13: 8 → 7 points, #259). The cheap models were cheap (`gpt-oss-20b` at $0.0033 per completed conversation), but completed far fewer tasks: 28 to 71% task success, against 90%.
 
 Then NFR-001, on the deployed stack.
 - **Setup:** the agent deployed the branch to `dev` and drove 30 turns of "Does Dr. Haddad have anything this Thursday afternoon?" through CloudFront with the S-2 driver, then read the handler's own "chat turn" log lines with Logs Insights.
