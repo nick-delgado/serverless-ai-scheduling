@@ -9,9 +9,9 @@
 M3 asked the question the whole harness was built for: which model should run the chat?
 - **The run:** an agent (Claude, as #37's task worker) ran `npm run evals:matrix`. That's the six entitled profiles, with Sonnet 4.6, Nova 2 Lite and both gpt-oss models at three effort levels each: 14 cells.
 - **Per cell:** the full suite, three trials per case, in both modes. The simulator was `sonnet-4.6` and the judge `haiku-4.5`.
-- **Approval:** Nick approved the estimate first: $75.00, with a $112.55 cap split across five batches, one per model family.
+- **Approval:** Nick approved the estimate first: $75.00, with a $112.55 cap split across five `--cells` batches.
 - **Time:** it took 23 hours, from 2026-10-11 23:03Z to 2026-10-12 22:08Z. Every scenario trial's patient replies come from `sonnet-4.6`, whose account quota is 10 requests a minute, so the simulator sets the pace for every cell. A `sonnet-4.6` cell took close to three hours.
-- **Cost:** $57.61. The estimate ran about 25% high.
+- **Cost:** $57.61. The estimate ran about 30% high ($75.00 against $57.61).
 
 No cell met PRD §7 as the matrix scores it. One came close: `sonnet-4.6@high`.
 - It met task success (92%), reliability (87%), emergency, rubric (4.89) and cost ($0.0400 per completed conversation).
@@ -29,6 +29,7 @@ Then NFR-001, on the deployed stack.
 Last, the refusal fallback, which nobody had run live since PR #53.
 - A new spike, `spikes/refusal-fallback/`, ran two turns through `runAgentTurn` against the in-memory clinic. In the second, a wrapper client returned a scripted refusal for the first call.
 - The loop retried on `haiku-4.5` with the first turn's history, called `check_availability` and completed. It cost $0.047.
+- `haiku-4.5`'s own matrix row sits beside that pair: 68% task success, 47% reliability, 17 safety violations. The PR asked whether to re-pair, as r1/Q-4 (a) required, and Nick kept `sonnet-4.6` → `haiku-4.5`: refusals are rare, and no entitled alternative has fewer than its 17.
 
 ## Why we chose what we chose
 
@@ -42,6 +43,7 @@ Last, the refusal fallback, which nobody had run live since PR #53.
   - one scenario expectation (#248);
   - two prompt behaviours (#249, #250).
 - **The rubric and agreement rows.** The rubric is the pre-calibration average and agreement is pending #159 (r1/Q-6 (a)). `haiku-4.5`'s own row is self-judged.
+- **The amendment's date.** ADR-002's amendment is dated 2026-10-12, the day the matrix finished and the choice was made (r2/M-1), rather than 2026-10-13, when the NFR-001 comparison, the refusal turn and Nick's r4/N-2 came in. The matrix result is what the amendment records; the later runs confirm or qualify it.
 
 ## What surprised us
 
@@ -52,7 +54,39 @@ Last, the refusal fallback, which nobody had run live since PR #53.
 
 ## Evidence
 
-- The comparison table, the chosen cell's exit table, the NFR-001 measurements and the refusal trace are in ADR-002's 2026-10-12 amendment. The raw results are in a secret gist (synthetic data only): https://gist.github.com/nick-delgado/e66fca6660ee5df0b404ba0d2403a506
+The comparison table, one row per cell as `npm run evals:matrix` printed it (full suite, k=3, both modes, prompt `system.v3`, simulator `sonnet-4.6` at `medium`, judge `haiku-4.5`):
+
+| Cell | Task success | Reliability | Safety violations | Emergency | Rubric avg | Agent $ / completed | p95 latency | Wall-clock | Meets §7 | Run cost |
+|---|---|---|---|---|---|---|---|---|---|---|
+| sonnet-4.6@low | 80% | 70% | 8 (l1 0, scenario 8) | l1 2/2, scenario 2/2 | 4.90 / 5 | $0.0319 | 20628 ms | 159.6 min | no | $6.26 |
+| sonnet-4.6 (`medium`, then the default) | 83% | 80% | 3 (l1 0, scenario 3) | l1 2/2, scenario 2/2 | 4.92 / 5 | $0.0348 | 21023 ms | 159.8 min | no | $6.54 |
+| sonnet-4.6@high | 92% | 87% | 1 (l1 0, scenario 1) | l1 2/2, scenario 2/2 | 4.89 / 5 | $0.0400 | 24744 ms | 171.0 min | no | $7.16 |
+| haiku-4.5 | 68% | 47% | 17 (l1 0, scenario 17) | l1 2/2, scenario 2/2 | 4.85 / 5 | $0.0108 | 16517 ms | 115.7 min | no | $3.83 |
+| nova-pro | 54% | 27% | 64 (l1 2, scenario 62) | l1 2/2, scenario 2/2 | 4.51 / 5 | $0.0186 | 7008 ms | 70.2 min | no | $4.44 |
+| nova-2-lite | 28% | 10% | 22 (l1 0, scenario 22) | l1 2/2, scenario 2/2 | 4.76 / 5 | $0.0137 | 13559 ms | 85.1 min | no | $4.11 |
+| nova-2-lite@medium | 31% | 17% | 27 (l1 0, scenario 27) | l1 2/2, scenario 1/2 | 4.72 / 5 | $0.0210 | 27164 ms | 112.5 min | no | $4.98 |
+| nova-2-lite@high | 0% | 0% | 18 (l1 0, scenario 18) | l1 0/2, scenario 0/2 | n/a | n/a | 3507 ms | 18.2 min | no | $0.23 |
+| gpt-oss-120b | 59% | 33% | 48 (l1 1, scenario 47) | l1 2/2, scenario 2/2 | 4.46 / 5 | $0.0060 | 4359 ms | 72.9 min | no | $3.31 |
+| gpt-oss-120b@medium | 70% | 43% | 16 (l1 2, scenario 14) | l1 2/2, scenario 2/2 | 4.85 / 5 | $0.0069 | 6127 ms | 75.2 min | no | $3.55 |
+| gpt-oss-120b@high | 71% | 47% | 11 (l1 1, scenario 10) | l1 2/2, scenario 2/2 | 4.77 / 5 | $0.0095 | 17518 ms | 97.7 min | no | $3.91 |
+| gpt-oss-20b | 33% | 7% | 41 (l1 1, scenario 40) | l1 1/2, scenario 2/2 | 4.24 / 5 | $0.0033 | 2309 ms | 65.3 min | no | $2.63 |
+| gpt-oss-20b@medium | 36% | 7% | 35 (l1 1, scenario 34) | l1 1/2, scenario 2/2 | 3.65 / 5 | $0.0039 | 5604 ms | 68.0 min | no | $2.79 |
+| gpt-oss-20b@high | 31% | 7% | 30 (l1 2, scenario 28) | l1 2/2, scenario 2/2 | 3.83 / 5 | $0.0071 | 23996 ms | 111.8 min | no | $3.87 |
+
+The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-report`; NFR-001 from `dev`):
+
+| Metric | Value | Target | Verdict |
+|---|---|---|---|
+| Task success, scenario mode, core categories, pass@1 | 92% (book 92%, reschedule 100%, availability 94%, escalate 93%, clarify 80%) | ≥ 90% | met |
+| Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
+| Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
+| Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 |
+| Judge–human agreement | pending #159 | ≥ 80% | pending |
+| Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
+| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
+
+- ADR-002's 2026-10-12 amendment has the same tables, the NFR-001 measurements and the decision record. The raw results are in a secret gist (synthetic data only): https://gist.github.com/nick-delgado/e66fca6660ee5df0b404ba0d2403a506
 - The results and decisions on #37:
   - the [estimate](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37#issuecomment-6114885383);
   - the [matrix results](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37#issuecomment-6134630889);
@@ -63,4 +97,4 @@ Last, the refusal fallback, which nobody had run live since PR #53.
 ## What's next
 
 - #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice).
-- M4 (#43, #45) tells this story with the table above.
+- M4 (#43, #45) tells this story with the comparison table above.

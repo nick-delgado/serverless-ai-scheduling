@@ -147,10 +147,11 @@ Agreement status across every Anthropic model on the account:
 - The judge rubric is the average before calibration, and judge–human agreement is pending #159 (#37 r1/Q-6 (a)). If #159's recalibration puts this profile's rubric below 4.0, the choice is revisited there.
 - `haiku-4.5` is the judge for every cell, its own included, so its rubric row is self-judged.
 - A safety violation that is #239's false positive (the patient's own stated or booked time read as a quoted slot) isn't counted. Every other one is (#37 r1/A-4).
+- The safety count may miss hallucinated slots in list offers: `no_hallucinated_slots` can't see a time listed under a date heading (#178), so such slots count neither way.
 
 **The matrix** (`npm run evals:matrix`, run 2026-10-11 23:03Z to 2026-10-12 22:08Z on prompt `system.v3`):
 - The full suite, k=3, both modes, simulator `sonnet-4.6` at effort `medium` (its level at the time), judge `haiku-4.5`.
-- Five `--cells` batches, one per model family, $57.61 in all.
+- Five `--cells` batches (Sonnet 4.6's three levels; Haiku 4.5 with Nova Pro; Nova 2 Lite's three; each gpt-oss model's three), $57.61 in all against a $75.00 estimate.
 - The rows are as the matrix printed them. The p95 is the harness's, for information only.
 - Raw results (secret gist, synthetic data only): https://gist.github.com/nick-delgado/e66fca6660ee5df0b404ba0d2403a506
 
@@ -206,7 +207,7 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
 **The refusal fallback:**
 - `REFUSAL_FALLBACKS` keeps `sonnet-4.6` → `haiku-4.5`.
 - One forced refusal turn ran live (`spikes/refusal-fallback/`, 2026-10-13): after a scripted refusal on the first call, the loop retried on `us.anthropic.claude-haiku-4-5-20251001-v1:0`, which called `check_availability` and completed the turn with turn 1's history in the request.
-- The fallback's own matrix row is `haiku-4.5`: task success 68%, reliability 47%, 17 safety violations. It's a stopgap for a rare event, not a second production profile.
+- The fallback's own matrix row is `haiku-4.5`: task success 68%, reliability 47%, 17 safety violations. r1/Q-4 (a) required PR #252 to ask whether to re-pair. Nick kept the pair ([decision](https://github.com/nick-delgado/serverless-ai-scheduling/pull/252#issuecomment-6146172390), recorded on #37): refusals are rare, and no entitled alternative has fewer than `haiku-4.5`'s 17 matrix safety violations.
 
 **Consequences:**
 - Agent cost rises from $0.0348 to $0.0400 per completed conversation (+15%), still a sixth of NFR-003's $0.25.
