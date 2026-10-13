@@ -170,6 +170,15 @@ describe("main before any AWS call", () => {
     expect(error).toHaveBeenCalledWith("invalid env: ../x");
   });
 
+  it("reports a thrown non-Error as its string", async () => {
+    const io = capture();
+    const dynamoClient = () => {
+      throw "no client";
+    };
+    expect(await main(["dev", CONV, "--table", "t1"], {}, { ...io, dynamoClient })).toBe(1);
+    expect(io.err).toEqual(["no client"]);
+  });
+
   it("needs --table when DYNAMODB_ENDPOINT is set", async () => {
     const io = capture();
     expect(await main(["dev", CONV], { DYNAMODB_ENDPOINT: ENDPOINT }, io)).toBe(1);

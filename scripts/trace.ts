@@ -276,6 +276,7 @@ export async function main(
   }
 }
 
+/* v8 ignore next -- CLI entry: tests call main() in-process; a child process records no coverage */
 if (import.meta.main) {
   void main(process.argv.slice(2), process.env).then((code) => {
     process.exitCode = code;
