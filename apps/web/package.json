@@ -8,8 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p e2e",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:fr010": "playwright test -c e2e/fr010.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-transcribe-streaming": "^3.1148.0",
@@ -21,7 +23,13 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@aws-sdk/client-ssm": "^3.1146.0",
     "@aws-sdk/client-transcribe": "^3.1148.0",
+    "@aws-sdk/lib-dynamodb": "^3.1143.0",
+    "@playwright/test": "^1.64.0",
+    "@sched/agent": "*",
+    "@sched/evals": "*",
+    "@sched/tools": "*",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
