@@ -9,6 +9,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -96,10 +97,12 @@ describe("shell harness guard", { timeout: 30_000 }, () => {
     expect(() => sb?.run("scripts/deploy.sh", ["data", "pr7"])).toThrow("command not found");
   });
 
-  it("a tool missing from the parent's PATH stops the sandbox before any run", () => {
-    expect(() => sandbox({ prefix: "sched-guard-", files: [], parentPath: join(impostors, "bin") })).toThrow(
+  it("a tool missing from the parent's PATH stops the sandbox before any run, and leaves no directory behind", () => {
+    const prefix = `sched-missing-tool-${String(process.pid)}-`;
+    expect(() => sandbox({ prefix, files: [], parentPath: join(impostors, "bin") })).toThrow(
       "shell harness: bash is not on the parent's PATH",
     );
+    expect(readdirSync(tmpdir()).filter((name) => name.startsWith(prefix))).toEqual([]);
   });
 });
 
