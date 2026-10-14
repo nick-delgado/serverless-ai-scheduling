@@ -78,8 +78,9 @@ export function envMetrics(env: string): Metrics {
   return metrics;
 }
 
-const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+const isNumber = (v: unknown): v is number => Number.isFinite(v);
+/** An entry's nested object, read field by field: any field of a non-object is undefined. */
+type Fields = { readonly [key: string]: unknown } | null | undefined;
 
 /** An error code as a dimension value; `UNKNOWN` when the entry has none (no path writes one today). */
 const codeOf = (v: unknown): string => (typeof v === "string" ? v : "UNKNOWN");
@@ -121,16 +122,14 @@ export function turnFigures(entry: LogEntry): TurnFigures | { missing: string[] 
     figures.push({ name: METRIC.timeToFirstText, unit: MetricUnit.Milliseconds, value: firstTextMs });
   }
   if (!failed) figures.push({ name: METRIC.turnLatency, unit: MetricUnit.Milliseconds, value: latency });
-  if (isRecord(usage)) {
-    for (const [field, name] of TOKEN_FIGURES) {
-      const value = usage[field];
-      if (isNumber(value)) figures.push({ name, unit: MetricUnit.Count, value });
-    }
+  for (const [field, name] of TOKEN_FIGURES) {
+    const value = (usage as Fields)?.[field];
+    if (isNumber(value)) figures.push({ name, unit: MetricUnit.Count, value });
   }
   if (Array.isArray(tools)) {
     const errors = new Map<string, number>();
-    for (const call of tools as unknown[]) {
-      if (!isRecord(call) || call.ok !== false) continue;
+    for (const call of tools as Fields[]) {
+      if (call?.ok !== false) continue;
       const code = codeOf(call.errorCode);
       errors.set(code, (errors.get(code) ?? 0) + 1);
     }

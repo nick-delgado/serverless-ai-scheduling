@@ -272,7 +272,7 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
      * DynamoDB Local serializes transactions instead, so the cancellations are injected. `retries` counts
      * the `onConflictRetry` calls (`BookingConflictRetries`, #38).
      */
-    function conflictingTwice() {
+    function conflictingTwice(options: { hook: boolean } = { hook: true }) {
       const flaky = localClient();
       const state = { injected: 0, retries: 0 };
       flaky.middlewareStack.add(
@@ -294,7 +294,7 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         client: flaky,
         clock: new FrozenClock(NOW),
         ids: sequentialIds(),
-        onConflictRetry: () => state.retries++,
+        ...(options.hook ? { onConflictRetry: () => state.retries++ } : {}),
       });
       return { repos: flakyRepos, state, destroy: () => flaky.destroy() };
     }
@@ -317,6 +317,19 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       const result = await moveMariaTo(flaky.repos, SLOT.leeTue3pm);
       expect(flaky.state).toEqual({ injected: 2, retries: 2 });
       expect(result).toMatchObject({ ok: true, appointment: { slotId: SLOT.leeTue3pm } });
+      flaky.destroy();
+    });
+
+    it("retries without an onConflictRetry hook (the default is a no-op)", async () => {
+      const flaky = conflictingTwice({ hook: false });
+      const booked = await flaky.repos.appointments.book({
+        patientId: AISHA,
+        slotId: SLOT.leeTue2pm,
+        reason: "Rash",
+      });
+      expect(booked).toMatchObject({ ok: true });
+      expect(await moveMariaTo(flaky.repos, SLOT.leeTue3pm)).toMatchObject({ ok: true });
+      expect(flaky.state).toEqual({ injected: 2, retries: 0 });
       flaky.destroy();
     });
 

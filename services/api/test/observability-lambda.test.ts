@@ -126,7 +126,7 @@ describe("withLambdaContext", () => {
     ]);
   });
 
-  it("runs without a context (a local call), adding none", async () => {
+  it("runs without a context (a local call, or null), adding none", async () => {
     const logger = createPowertoolsLogger("session");
     const log = powertoolsLogger(logger);
     const handler = withLambdaContext(logger, () => {
@@ -135,6 +135,8 @@ describe("withLambdaContext", () => {
     });
 
     await expect(handler("ok")).resolves.toBe(1);
-    expect(parsed(out)[0]).not.toHaveProperty("function_request_id");
+    await expect(handler("ok", null)).resolves.toBe(1);
+    expect(parsed(out)).toHaveLength(2);
+    for (const line of parsed(out)) expect(line).not.toHaveProperty("function_request_id");
   });
 });

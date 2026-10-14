@@ -124,6 +124,17 @@ describe("withTurnMetrics through handleChatTurn (owner decision r1/Q-2 (a))", (
     });
     expect(typeof record?.TimeToFirstTextMs).toBe("number");
     expect(typeof record?.TurnLatencyMs).toBe("number");
+    const units = Object.fromEntries(
+      (record?._aws.CloudWatchMetrics[0] as { Metrics: { Name: string; Unit: string }[] }).Metrics.map(
+        (m) => [m.Name, m.Unit],
+      ),
+    );
+    expect(units).toMatchObject({
+      TimeToFirstTextMs: "Milliseconds",
+      TurnLatencyMs: "Milliseconds",
+      Turns: "Count",
+    });
+    expect(new Set(Object.values(units))).toEqual(new Set(["Milliseconds", "Count"]));
   });
 
   it("counts a replayed turn in Turns only", async () => {
@@ -199,6 +210,11 @@ describe("withTurnMetrics through handleChatTurn (owner decision r1/Q-2 (a))", (
     });
     expect(turn.hasStoredMetrics()).toBe(false);
     expect(records()).toEqual([]);
+
+    // One missing field is enough.
+    log({ msg: "chat turn", replayed: false, terminal: "done" });
+    expect(entries[3]).toMatchObject({ msg: "turn metrics skipped", missing: ["totalMs"] });
+    expect(turn.hasStoredMetrics()).toBe(false);
   });
 });
 
