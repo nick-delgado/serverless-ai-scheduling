@@ -404,6 +404,18 @@ describe.skipIf(!available)("trace.ts on DynamoDB Local", () => {
     expect(withInputs.out.join("\n")).toContain(SECRET_INPUT);
   });
 
+  it("prints each tool input under its call in text with --inputs", async () => {
+    const table = await seededTable();
+    const io = capture();
+    expect(await main(["dev", CONV, "--table", table, "--inputs"], { ...local }, io)).toBe(0);
+    expect(io.out.filter((l) => l.startsWith("    input "))).toEqual([
+      `    input {"note":"${SECRET_INPUT}"}`,
+      '    input {"slot_id":"slot-1"}',
+      `    input {"note":"${SECRET_INPUT}"}`,
+      '    input {"slot_id":"slot-1"}',
+    ]);
+  });
+
   it("reads the table name from SSM /sched/<env>/data/table-name unless --table is given", async () => {
     const table = await seededTable();
     const names: unknown[] = [];

@@ -217,8 +217,9 @@ export async function runCli(
 ): Promise<number> {
   const log = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
-  // The operator scripts' shared CLI shape (`retry-escalations.ts` and `seed-data.ts` resolve the table the same
-  // way, and end in the same `main`). A helper for it is a refactor across `scripts/**`, outside #38's paths.
+  // The operator scripts' shared CLI shape: `retry-escalations.ts` and `seed-data.ts` resolve the table the same
+  // way, and `retry-escalations.ts` ends in the same `main`. A helper for it is a refactor across `scripts/**`,
+  // outside #38's paths.
   // jscpd:ignore-start
   const endpoint = vars.DYNAMODB_ENDPOINT || undefined;
   const region = vars.AWS_REGION ?? "us-east-1";
