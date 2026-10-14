@@ -93,9 +93,10 @@ export interface DynamoRepositoryOptions {
   /** Defaults to `randomIds()`. */
   ids?: IdGenerator;
   /**
-   * Called once each time `book` or `reschedule` is cancelled only by `TransactionConflict` and is about
-   * to be re-attempted (the API counts these as `BookingConflictRetries`, #38). Not called for the
-   * conversation append's conflicts or for `book`'s re-read retry. Must not throw. Defaults to a no-op.
+   * Called once per conflict-only cancellation (`TransactionConflict` alone) of `book` or `reschedule`,
+   * the last one before the call gives up included (the API counts these as `BookingConflictRetries`,
+   * #38). Not called for the conversation append's conflicts or for `book`'s re-read retry. Must not
+   * throw. Defaults to a no-op.
    */
   onConflictRetry?: () => void;
 }

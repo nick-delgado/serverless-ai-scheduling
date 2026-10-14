@@ -310,6 +310,7 @@ describe("handlers/chat", () => {
         }),
       ]);
       expect(logLines("notification status write failed")[0]).not.toHaveProperty("errorName");
+      expect(logLines("notification status write failed")[0]).not.toHaveProperty("patientId");
     });
 
     it("writes no record, and logs the error, when updateNotification throws, leaving the escalation PENDING", async () => {
@@ -330,6 +331,7 @@ describe("handlers/chat", () => {
           errorMessage: "write failed",
         }),
       ]);
+      expect(logLines("notification status write failed")[0]).not.toHaveProperty("patientId");
       // The tool still swallowed the rethrown error: no tool internal error was logged.
       expect(logLines("tool internal error")).toEqual([]);
     });

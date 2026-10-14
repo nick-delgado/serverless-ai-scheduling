@@ -211,10 +211,38 @@ describe("withTurnMetrics through handleChatTurn (owner decision r1/Q-2 (a))", (
     expect(turn.hasStoredMetrics()).toBe(false);
     expect(records()).toEqual([]);
 
-    // One missing field is enough.
+    // Any one missing field is enough.
     log({ msg: "chat turn", replayed: false, terminal: "done" });
-    expect(entries[3]).toMatchObject({ msg: "turn metrics skipped", missing: ["totalMs"] });
+    log({ msg: "chat turn", terminal: "done", totalMs: 5 });
+    log({ msg: "chat turn", replayed: false, terminal: "ended", totalMs: 5 });
+    expect(entries.filter((e) => e.msg === "turn metrics skipped").map((e) => e.missing)).toEqual([
+      ["replayed", "terminal", "totalMs"],
+      ["totalMs"],
+      ["replayed"],
+      ["terminal"],
+    ]);
     expect(turn.hasStoredMetrics()).toBe(false);
+  });
+
+  it("writes one Env+ErrorCode record per error code in one turn, each with its own code", () => {
+    const turn = envMetrics("e");
+    const log = withTurnMetrics(() => undefined, { turn, coded: envMetrics("e") });
+    log({
+      msg: "chat turn",
+      replayed: false,
+      terminal: "error",
+      errorCode: "INTERNAL",
+      totalMs: 10,
+      tools: [
+        { ok: false, errorCode: "NOT_FOUND" },
+        { ok: false, errorCode: "CONFLICT" },
+      ],
+    });
+    expect(records().map((r) => [dimensionsOf(r), r.ErrorCode, r.TurnErrors, r.ToolErrors])).toEqual([
+      [[["Env", "ErrorCode"]], "INTERNAL", 1, undefined],
+      [[["Env", "ErrorCode"]], "NOT_FOUND", undefined, 1],
+      [[["Env", "ErrorCode"]], "CONFLICT", undefined, 1],
+    ]);
   });
 });
 

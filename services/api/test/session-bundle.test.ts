@@ -1,8 +1,8 @@
 /**
  * The session Lambda never calls a model, so its bundle must not carry the agent loop or the Bedrock
- * client (`lib/env.ts`, `handlers/session.ts`), nor the X-Ray SDK, since only the chat function is traced. Bundles each handler with esbuild's JS API, as the
- * Makefile does, and reads the inputs from the metafile. The chat bundle is the control: it does carry
- * both, so the check can see them.
+ * client (`lib/env.ts`, `handlers/session.ts`), nor the X-Ray SDK, since only the chat function is
+ * traced. Bundles each handler with esbuild's JS API, as the Makefile does, and reads the inputs from
+ * the metafile. The chat bundle is the control: it does carry all three, so the check can see them.
  */
 import { fileURLToPath } from "node:url";
 

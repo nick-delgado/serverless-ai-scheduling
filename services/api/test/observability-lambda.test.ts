@@ -64,6 +64,26 @@ describe("powertoolsLogger", () => {
 });
 
 describe("instrumentStreamHandler (A-5)", () => {
+  it("passes the event, the response stream and the Lambda context on unchanged (the turn's deadline reads the context)", async () => {
+    const received: unknown[][] = [];
+    const handler = instrumentStreamHandler<{ body: string }>(
+      (...args) => {
+        received.push(args);
+        return Promise.resolve();
+      },
+      { logger: createPowertoolsLogger("chat"), metrics: envMetrics("test-env") },
+    );
+    const event = { body: "{}" };
+    const stream = new PassThrough();
+
+    await handler(event, stream, context);
+    expect(received).toHaveLength(1);
+    const [got] = received;
+    expect(got?.[0]).toBe(event);
+    expect(got?.[1]).toBe(stream);
+    expect(got?.[2]).toBe(context);
+  });
+
   it("adds the Lambda context from the third argument, then flushes the stored metrics once", async () => {
     const logger = createPowertoolsLogger("chat");
     const metrics = envMetrics("test-env");

@@ -272,7 +272,7 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
      * DynamoDB Local serializes transactions instead, so the cancellations are injected. `retries` counts
      * the `onConflictRetry` calls (`BookingConflictRetries`, #38).
      */
-    function conflictingTwice(options: { hook: boolean } = { hook: true }) {
+    function conflictingTwice(options: { hook: boolean; code?: string } = { hook: true }) {
       const flaky = localClient();
       const state = { injected: 0, retries: 0 };
       flaky.middlewareStack.add(
@@ -282,7 +282,7 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
             throw new TransactionCanceledException({
               message: "Transaction cancelled (injected)",
               $metadata: {},
-              CancellationReasons: [{ Code: "TransactionConflict" }, { Code: "None" }],
+              CancellationReasons: [{ Code: options.code ?? "TransactionConflict" }, { Code: "None" }],
             });
           }
           return next(args);
@@ -329,6 +329,19 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       });
       expect(booked).toMatchObject({ ok: true });
       expect(await moveMariaTo(flaky.repos, SLOT.leeTue3pm)).toMatchObject({ ok: true });
+      expect(flaky.state).toEqual({ injected: 2, retries: 0 });
+      flaky.destroy();
+    });
+
+    it("reports no conflict retry for book's re-read retry (a ConditionalCheckFailed on a slot still OPEN)", async () => {
+      // The slot's condition failed, but the re-read finds it OPEN, so book tries again: not a conflict retry.
+      const flaky = conflictingTwice({ hook: true, code: "ConditionalCheckFailed" });
+      const booked = await flaky.repos.appointments.book({
+        patientId: AISHA,
+        slotId: SLOT.leeTue2pm,
+        reason: "Rash",
+      });
+      expect(booked).toMatchObject({ ok: true, alreadyBooked: false });
       expect(flaky.state).toEqual({ injected: 2, retries: 0 });
       flaky.destroy();
     });

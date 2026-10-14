@@ -195,7 +195,7 @@ Two cells measure a defect rather than the model:
 
 **NFR-001 on `dev`:**
 - Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
-- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window. *(Since #38 the lines are top-level JSON, so the fields lose the `message.` prefix; the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38) has the query, and the dashboard shows the same figures.)*
+- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window. *(Since #38 the lines are top-level JSON, so the fields lose the `message.` prefix; the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38) has the query. The dashboard shows the same timings, and its TTFT also counts error turns that streamed text.)*
 
 | Effort | Turns | p50 first `text_delta` | p95 first `text_delta` | p95 `done` |
 |---|---|---|---|---|
@@ -231,5 +231,5 @@ The decision stands. #38 changed where NFR-001's figures are read, not how they'
   ```
 
   Filtering on `modelProfile` also leaves out replays and turns refused before the model was called, which have none. Don't filter on `replayed`: Logs Insights matched JSON booleans inconsistently in our test on `dev`.
-- **The dashboard.** `sched-<env>-api` charts the same two figures as the metrics `Sched/TimeToFirstTextMs` and `Sched/TurnLatencyMs` (dimension `Env`) at p50 and p95. Each turn writes them as an embedded-metric record. CloudWatch's percentiles come from the metric's samples, so over a short window they can differ from the query's `pct`.
+- **The dashboard.** `sched-<env>-api` charts the same two timings as the metrics `Sched/TimeToFirstTextMs` and `Sched/TurnLatencyMs` (dimension `Env`) at p50 and p95. Each turn writes them as an embedded-metric record. There's one difference from the query: `TimeToFirstTextMs` also counts an error turn that streamed text before it failed (Q-3 on #38), whereas the query reads `done` turns only. CloudWatch's percentiles come from the metric's samples, so over a short window they can differ from the query's `pct`.
 

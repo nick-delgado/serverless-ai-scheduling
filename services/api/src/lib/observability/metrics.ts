@@ -24,7 +24,7 @@ import { NOTIFICATION_FAILED_METRIC } from "@sched/tools/ses";
 import type { LogEntry, Logger } from "../log";
 
 /** Shared with #35's `NotificationFailed`, so the dashboard and the alarm read one namespace. */
-export const METRICS_NAMESPACE = NOTIFICATION_FAILED_METRIC.namespace;
+const METRICS_NAMESPACE = NOTIFICATION_FAILED_METRIC.namespace;
 export const ENV_DIMENSION = NOTIFICATION_FAILED_METRIC.dimension;
 export const ERROR_CODE_DIMENSION = "ErrorCode";
 
@@ -44,7 +44,7 @@ export const METRIC = {
 } as const;
 
 /** The log entry `chat-turn.ts` writes once per turn. */
-export const CHAT_TURN_MSG = "chat turn";
+const CHAT_TURN_MSG = "chat turn";
 
 type Unit = (typeof MetricUnit)[keyof typeof MetricUnit];
 
@@ -98,13 +98,16 @@ const TOKEN_FIGURES = [
  */
 export function turnFigures(entry: LogEntry): TurnFigures | { missing: string[] } {
   const { replayed, terminal, errorCode, firstTextMs, totalMs, usage, tools } = entry;
-  const missing = [
-    ...(typeof replayed === "boolean" ? [] : ["replayed"]),
-    ...(terminal === "done" || terminal === "error" ? [] : ["terminal"]),
-    ...(isNumber(totalMs) ? [] : ["totalMs"]),
-  ];
-  if (missing.length > 0) return { missing };
-  const latency = totalMs as number; // checked above
+  const knownTerminal = terminal === "done" || terminal === "error";
+  if (typeof replayed !== "boolean" || !knownTerminal || !isNumber(totalMs)) {
+    return {
+      missing: [
+        ...(typeof replayed === "boolean" ? [] : ["replayed"]),
+        ...(knownTerminal ? [] : ["terminal"]),
+        ...(isNumber(totalMs) ? [] : ["totalMs"]),
+      ],
+    };
+  }
 
   const ids = Object.fromEntries(
     (["requestId", "conversationId", "turnId"] as const).flatMap((k) =>
@@ -121,7 +124,7 @@ export function turnFigures(entry: LogEntry): TurnFigures | { missing: string[] 
   if (isNumber(firstTextMs)) {
     figures.push({ name: METRIC.timeToFirstText, unit: MetricUnit.Milliseconds, value: firstTextMs });
   }
-  if (!failed) figures.push({ name: METRIC.turnLatency, unit: MetricUnit.Milliseconds, value: latency });
+  if (!failed) figures.push({ name: METRIC.turnLatency, unit: MetricUnit.Milliseconds, value: totalMs });
   for (const [field, name] of TOKEN_FIGURES) {
     const value = (usage as Fields)?.[field];
     if (isNumber(value)) figures.push({ name, unit: MetricUnit.Count, value });
