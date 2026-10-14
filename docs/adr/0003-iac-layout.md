@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
-- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41))
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41)); 2026-10-14 (observability in the api stack, #38; see [Amendment](#amendment-2026-10-14-observability-in-the-api-stack-38))
 
 ## Context
 
@@ -84,7 +84,7 @@ The decision stands. #35 settled the api stack's SES part:
 
 - **No SES identity resource.** The identity is verified by hand (runbook step 7, one of the listed exceptions). The api stack takes its addresses as two `NoEcho` parameters, `SesSender` and `SesStaffRecipient`, which `scripts/deploy.sh` passes from the environment or the git-ignored `.env`. They default to empty, and an env without them gets no SES grant and no notifier. `dev` and `demo` api deploys refuse to run without them.
 - **The chat function's grant** is `ses:SendEmail` on the sender's and the recipient's identity ARNs (the SES sandbox authorizes the recipient identity too), with a `StringEquals` condition on `ses:FromAddress` set to `SesSender`, so the recipient identity can't be used as a sender. ADR-009's [2026-10-04 amendment](0009-safety-and-privacy.md#amendment-2026-10-04-the-ses-grant-as-built-35) has the details.
-- **A `NotificationFailedAlarm`** on `Sched/NotificationFailed` (dimension `Env`) is in the api stack, with no alarm action (#38 decides actions with its dashboard).
+- **A `NotificationFailedAlarm`** on `Sched/NotificationFailed` (dimension `Env`) is in the api stack, with no alarm action (#38 decides actions with its dashboard). *(Settled by the [2026-10-14 amendment](#amendment-2026-10-14-observability-in-the-api-stack-38): still no action.)*
 - **The retry script's Scan** (`scripts/retry-escalations.ts`) runs as the `sched-dev` operator, not as a stack role: the chat function's role still has no Scan.
 
 ## Amendment (2026-10-08): CI roles through GitHub OIDC (#41)
@@ -96,3 +96,12 @@ The decision stands: CloudFormation creates the resources, as `sched-cfn-exec`, 
 - **Trust pins the workflow.** Each role accepts only a token for `sts.amazonaws.com` whose subject names the repository by its immutable owner and repository IDs, the workflow file (`job_workflow_ref`) and its context (the `dev` or `e2e` GitHub Environment, or a pull request). The repository's subject customization is a GitHub setting Nick applies. A probe workflow's tokens confirmed the strings' format before the first apply, and each exact string is confirmed from its workflow's first run (runbook, "CI credentials (GitHub OIDC)").
 - **No permissions boundary on these roles.** The deploy and E2E roles need `iam:PassRole` on `sched-cfn-exec`, which the boundary denies. Instead they're on `sched-cfn-exec`'s `ProtectBootstrapIdentities` deny, since its `ManageWorkloadRoles` grant covers every `role/sched-*`.
 - **Role ARNs live in GitHub secrets, not SSM**, because a workflow can't read SSM before it has credentials. The GitHub-side settings are on the runbook's list of exceptions.
+
+## Amendment (2026-10-14): observability in the api stack (#38)
+
+The decision stands. #38 adds to the api stack, settled on its readiness review (r1/Q-1, Q-3, Q-5):
+
+- **No action on `NotificationFailedAlarm`** (owner decision r1/Q-1 (a)). The alarm only changes state, and the `sched-<env>-api` dashboard shows that state in an alarm widget beside the `Sched/NotificationFailed` chart. There's no SNS topic, no subscription, no bootstrap change and no new manual step. Someone has to look at the dashboard to see a failure.
+- **A CloudWatch dashboard, `sched-<env>-api`**, is a stack resource like the alarm. It charts the chat function's embedded-metric figures (namespace `Sched`, dimension `Env`: TTFT and turn latency at p50 and p95, tokens, turn errors by code, the tool error rate, booking conflict retries), and `AWS/Lambda` `Errors` for both functions.
+- **X-Ray on the chat function only** (`Tracing: Active`, owner decision r1/Q-5 (a)). The permissions boundary already allows the trace writes, so the bootstrap stack is unchanged.
+
