@@ -44,10 +44,8 @@ import {
 import { createDocumentClient, createDynamoRepositories, escalationFrom } from "@sched/tools/dynamo";
 import { SesNotifier } from "@sched/tools/ses";
 
-import { dynamoClientFor, ssmClientFor, ssmParamFrom } from "./seed-data";
+import { dynamoClientFor, ENV_PATTERN, ssmClientFor, ssmParamFrom } from "./seed-data";
 
-// Copied from scripts/seed-data.ts, which doesn't export it.
-const ENV_PATTERN = /^[a-z][a-z0-9-]{1,15}$/;
 export const DEFAULT_MIN_PENDING_AGE_MINUTES = 10;
 
 // ---------------------------------------------------------------------------------------------
