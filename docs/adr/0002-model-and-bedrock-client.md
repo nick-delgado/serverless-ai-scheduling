@@ -195,7 +195,7 @@ Two cells measure a defect rather than the model:
 
 **NFR-001 on `dev`:**
 - Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
-- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window.
+- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window. *(Since #38 the lines are top-level JSON, so the fields lose the `message.` prefix; the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38) has the query, and the dashboard shows the same figures.)*
 
 | Effort | Turns | p50 first `text_delta` | p95 first `text_delta` | p95 `done` |
 |---|---|---|---|---|
@@ -217,3 +217,19 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
   - #251 changes NFR-001's first-text result;
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
+
+## Amendment (2026-10-14): reading NFR-001 after #38
+
+The decision stands. #38 changed where NFR-001's figures are read, not how they're timed:
+
+- **The log line's shape.** The Lambdas now log through a Powertools Logger, which writes each entry as one top-level JSON object (owner decision r1/Q-4 (a) on #38). The "chat turn" entry's `msg` is the line's `message`, and its fields are no longer nested under `message`. The figures are unchanged: `firstTextMs` (to the first `text_delta`) and `totalMs` (to `done`), both from the handler's start.
+- **The query** for the chat function's log group, over a run's window:
+
+  ```
+  filter message = "chat turn" and modelProfile = "sonnet-4.6" and terminal = "done"
+  | stats pct(firstTextMs, 50) as firstTextP50, pct(totalMs, 95) as doneP95, count(*) as turns
+  ```
+
+  Filtering on `modelProfile` also leaves out replays and turns refused before the model was called, which have none. Don't filter on `replayed`: Logs Insights matched JSON booleans inconsistently in our test on `dev`.
+- **The dashboard.** `sched-<env>-api` charts the same two figures as the metrics `Sched/TimeToFirstTextMs` and `Sched/TurnLatencyMs` (dimension `Env`) at p50 and p95. Each turn writes them as an embedded-metric record. CloudWatch's percentiles come from the metric's samples, so over a short window they can differ from the query's `pct`.
+
