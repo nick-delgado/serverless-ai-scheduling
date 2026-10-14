@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 

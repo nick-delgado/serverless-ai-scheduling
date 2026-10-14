@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
-- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41))
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41)); 2026-10-14 (observability in the api stack, #38; see [Amendment](#amendment-2026-10-14-observability-in-the-api-stack-38))
 
 ## Context
 
