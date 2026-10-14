@@ -17,7 +17,8 @@
  * It reads `.github/workflows/e2e.yml` the same way (#40, decision 607c339/TEST-201 (a) on PR #262): its trigger, its
  * concurrency group, its one job and environment, its credentials step, the order of its deploy, reseed and test
  * steps, the deploy's turn cap and SES secrets, which steps get the config-only profile or an empty `AWS_PROFILE`, and
- * the secrets the reseed and the suite read.
+ * the patient's password: from which secret the env-file step writes `$RUNNER_TEMP/e2e.env` (owner-only), which the
+ * Cognito reseed reads, and which the suite's step gets.
  * The files are read with the shared reader, scripts/test/yaml-text.ts (#157).
  * It doesn't check the grants (the PR lists them) or that AWS accepts the subject strings: the format was seen in a
  * probe run's tokens (journal, 2026-10-08), and the first run of each workflow shows the rest (runbook, "CI
@@ -256,6 +257,16 @@ describe("the E2E workflow (.github/workflows/e2e.yml; 607c339/TEST-201 (a) on P
       ).toContain('AWS_PROFILE: ""');
     }
     expect(workflow.filter((l) => !l.trimStart().startsWith("#") && l.includes("GITHUB_ENV"))).toEqual([]);
+  });
+
+  it("writes the E2E patient's env file from its environment secret, outside the checkout, owner-only (r1/A-1)", () => {
+    const write = step("Write the E2E patient's env file");
+    expect(member(write, "env")).toEqual({ DEMO_PASSWORD_SOFIA: "${{ secrets.DEMO_PASSWORD_SOFIA }}" });
+    expect((entries(write).run ?? "").split("\n")).toEqual([
+      "umask 077",
+      `printf 'DEMO_PASSWORD_SOFIA=%s\\n' "$DEMO_PASSWORD_SOFIA" > "$RUNNER_TEMP/e2e.env"`,
+      "",
+    ]);
   });
 
   it("reseeds the E2E patient from the env file, then resets the table with its name (AC2)", () => {
