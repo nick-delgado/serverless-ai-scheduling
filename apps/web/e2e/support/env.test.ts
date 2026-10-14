@@ -21,6 +21,16 @@ import {
 const FROM_ENV = "Synthetic-From-Env-1";
 const FROM_FILE = "Synthetic-From-File-2";
 
+/** The message `fn` throws with, or undefined when it doesn't throw. */
+function messageOf(fn: () => unknown): string | undefined {
+  try {
+    fn();
+  } catch (error) {
+    return (error as Error).message;
+  }
+  return undefined;
+}
+
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sched-e2e-env-test-"));
@@ -138,13 +148,16 @@ describe("logins", () => {
 
   it("names the variable, never a value, when neither source has the password", () => {
     vi.stubEnv("DEMO_PASSWORD_SOFIA", undefined);
-    const empty = join(dir, "empty.env");
-    writeFileSync(empty, "SES_SENDER=x\n");
-    expect(() => patientLogin("e2e", { mapping: mapping("pat-sofia"), envFile: empty })).toThrow(
-      `DEMO_PASSWORD_SOFIA is not set (environment, or ${empty})`,
+    vi.stubEnv("SES_SENDER", undefined);
+    const other = join(dir, "other.env");
+    writeFileSync(other, "SES_SENDER=synthetic-value-must-not-print\n");
+    const missing = join(dir, "missing.env");
+    // The whole message, so one that adds a value (the file's, or anything else) fails.
+    expect(messageOf(() => patientLogin("e2e", { mapping: mapping("pat-sofia"), envFile: other }))).toBe(
+      `DEMO_PASSWORD_SOFIA is not set (environment, or ${other})`,
     );
-    expect(() => fixtureLogin("pat-sofia", { envFile: join(dir, "missing.env") })).toThrow(
-      "DEMO_PASSWORD_SOFIA is not set",
+    expect(messageOf(() => fixtureLogin("pat-sofia", { envFile: missing }))).toBe(
+      `DEMO_PASSWORD_SOFIA is not set (environment, or ${missing})`,
     );
   });
 

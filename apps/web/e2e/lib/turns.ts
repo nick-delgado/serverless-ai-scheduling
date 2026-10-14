@@ -39,8 +39,9 @@ export type StreamedTurn = Pick<TurnRecord, "tools" | "conversationId" | "errorC
 
 /**
  * Reads one turn's `/api/chat` body, NDJSON or the buffered array. Throws when an event breaks the contract, or when
- * the body doesn't end with `done` or `error` (a cut-off stream, an empty body, or a body the page couldn't read): the
- * rule the app's own stream client applies (`streamClient.ts`), so a broken stream never reads as a clean turn.
+ * the body doesn't end with `done` or `error` (a cut-off stream or an empty body): the rule the app's own stream client
+ * applies (`streamClient.ts`), so a broken stream never reads as a clean turn. A body the page couldn't read never
+ * gets here: `turnEnd` (`support/chat.ts`) throws for it first.
  */
 export function readTurnBody(body: string): StreamedTurn {
   const events: ChatStreamEvent[] = parseChatResponseBody(body);
