@@ -14,7 +14,11 @@
  * `id-token: write`, its one credentials step (found as an item of `steps:` whatever its first key, `- uses:` or
  * `- name:`, and read inside that item) masks the account ID (r1/Q-3 (a)), and no line outside a comment names a script
  * under `scripts/` but the two calls with `dev`, which are two steps' `run:` values (one line or a `run: |` body).
- * Both files are read with the shared reader, scripts/test/yaml-text.ts (#157).
+ * It reads `.github/workflows/e2e.yml` the same way (#40, decision 607c339/TEST-201 (a) on PR #262): its trigger, its
+ * concurrency group, its one job and environment, its credentials step, the order of its deploy, reseed and test
+ * steps, the deploy's turn cap and SES secrets, which steps get the config-only profile or an empty `AWS_PROFILE`, and
+ * the secrets the reseed and the suite read.
+ * The files are read with the shared reader, scripts/test/yaml-text.ts (#157).
  * It doesn't check the grants (the PR lists them) or that AWS accepts the subject strings: the format was seen in a
  * probe run's tokens (journal, 2026-10-08), and the first run of each workflow shows the rest (runbook, "CI
  * credentials (GitHub OIDC)").
@@ -25,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { block, children, credentialsOf, entries, items, stepsOf } from "./test/yaml-text";
+import { block, children, credentialsOf, entries, items, member, stepsOf } from "./test/yaml-text";
 
 const lines = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "bootstrap", "bootstrap.yaml"),
@@ -170,5 +174,103 @@ describe("deploy workflow (.github/workflows/deploy.yml)", () => {
       "scripts/deploy.sh all dev",
       "scripts/deploy-web.sh dev",
     ]);
+  });
+});
+
+describe("the E2E workflow (.github/workflows/e2e.yml; 607c339/TEST-201 (a) on PR #262)", () => {
+  const workflow = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", ".github", "workflows", "e2e.yml"),
+    "utf8",
+  ).split("\n");
+  const job = block(/^ {2}e2e:$/, workflow);
+  const steps = stepsOf(job);
+  /** The step named `name`; throws (failing the calling test) when there isn't exactly one. */
+  const step = (name: string): string[] => {
+    const found = steps.filter((s) => entries(s).name === name);
+    if (found.length !== 1) throw new Error(`${String(found.length)} steps named "${name}"`);
+    return found[0] as string[];
+  };
+  const env = (name: string) => member(step(name), "env");
+
+  it("runs only by hand (workflow_dispatch): never on pull requests or pushes (#40 non-goals)", () => {
+    expect(children(block(/^on:$/, workflow))).toEqual(["  workflow_dispatch:"]);
+  });
+
+  it("queues runs in one concurrency group and never cancels one mid-run (r1/A-9)", () => {
+    expect(entries(block(/^concurrency:$/, workflow))).toEqual({
+      group: "e2e",
+      "cancel-in-progress": "false",
+    });
+  });
+
+  it("has one job, in the e2e environment, with an OIDC token and read access to the code (r1/A-10)", () => {
+    expect(children(block(/^jobs:$/, workflow))).toEqual(["  e2e:"]);
+    expect(entries(job)).toMatchObject({ environment: "e2e" });
+    expect(entries(block(/^\s+permissions:$/, job))).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  it("takes the E2E role from its environment secret and masks the account ID (AC8)", () => {
+    const credentials = credentialsOf(job);
+    expect([credentials.lines, credentials.steps.length]).toEqual([1, 1]);
+    expect(credentials.settings).toMatchObject({
+      "role-to-assume": "${{ secrets.AWS_E2E_ROLE_ARN }}",
+      "mask-aws-account-id": "true",
+    });
+  });
+
+  it("deploys, publishes, reseeds once and then runs the suite, in that order (r1/Q-4 (a), AC2)", () => {
+    const names = steps.map((s) => entries(s).name).filter((n) => n !== undefined);
+    const order = [
+      "Deploy the stacks",
+      "Publish the SPA",
+      "Write the E2E patient's env file",
+      "Reseed the E2E patient's Cognito user",
+      "Reseed the e2e table",
+      "Run the journeys",
+    ];
+    expect(names.filter((n) => order.includes(n))).toEqual(order);
+  });
+
+  it("deploys e2e with the turn cap and the escalation email's SES secrets (r1/A-7, r1/Q-5 (b))", () => {
+    expect(entries(step("Deploy the stacks")).run).toBe("scripts/deploy.sh all e2e -- DailyTurnCap=500");
+    expect(env("Deploy the stacks")).toMatchObject({
+      SES_SENDER: "${{ secrets.SES_SENDER }}",
+      SES_STAFF_RECIPIENT: "${{ secrets.SES_STAFF_RECIPIENT }}",
+    });
+    expect(entries(step("Publish the SPA")).run).toBe("scripts/deploy-web.sh e2e");
+  });
+
+  it("gives the config-only profile to the CLI steps and an empty AWS_PROFILE to the SDK steps (r1/A-1)", () => {
+    for (const name of ["Deploy the stacks", "Publish the SPA"]) {
+      expect(env(name), name).toMatchObject({ AWS_PROFILE: "github-oidc" });
+    }
+    for (const name of [
+      "Reseed the E2E patient's Cognito user",
+      "Reseed the e2e table",
+      "Run the journeys",
+    ]) {
+      // The shared reader reads an empty value as a nested block, so the line itself is checked, in the step's env.
+      expect(
+        block(/^\s+env:$/, step(name)).map((l) => l.trim()),
+        name,
+      ).toContain('AWS_PROFILE: ""');
+    }
+    expect(workflow.filter((l) => !l.trimStart().startsWith("#") && l.includes("GITHUB_ENV"))).toEqual([]);
+  });
+
+  it("reseeds the E2E patient from the env file, then resets the table with its name (AC2)", () => {
+    expect(entries(step("Reseed the E2E patient's Cognito user")).run).toBe(
+      'npx tsx scripts/seed-users.ts --env e2e --env-file "$RUNNER_TEMP/e2e.env"',
+    );
+    expect(entries(step("Reseed the e2e table")).run).toContain(
+      'npx tsx scripts/seed-data.ts --env e2e --reset --confirm "$table"',
+    );
+  });
+
+  it("runs the suite with the E2E patient's password from its environment secret (AC8)", () => {
+    expect(entries(step("Run the journeys")).run).toBe("npm run e2e -w apps/web");
+    expect(env("Run the journeys")).toMatchObject({
+      DEMO_PASSWORD_SOFIA: "${{ secrets.DEMO_PASSWORD_SOFIA }}",
+    });
   });
 });
