@@ -41,7 +41,8 @@ import { mappingPath, readMapping, type UserMapping } from "./seed-users";
 /** Slots cover `[today, today + 7 * SEED_WEEKS)` in clinic-local days. */
 export const SEED_WEEKS = 4;
 
-const ENV_PATTERN = /^[a-z][a-z0-9-]{1,15}$/;
+/** A valid `<env>` name: lowercase, 2-16 characters, so it can name stacks and SSM paths. */
+export const ENV_PATTERN = /^[a-z][a-z0-9-]{1,15}$/;
 
 // ---------------------------------------------------------------------------------------------
 // Mapping
