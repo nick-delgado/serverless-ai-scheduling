@@ -133,7 +133,9 @@ describe("infra/stacks/api.yaml: observability (#38)", () => {
   const chat = text(chatLines);
 
   /** The dashboard body as CloudWatch receives it, with each `${...}` replaced by its name in angle brackets. */
-  function dashboard(): { widgets: { type: string; properties: Record<string, unknown> }[] } {
+  function dashboard(): {
+    widgets: { type: string; x: number; width: number; properties: Record<string, unknown> }[];
+  } {
     const body = bodyLines(block(/^\s+DashboardBody: !Sub \|$/, resource("ApiDashboard"))).join("\n");
     return JSON.parse(body.replace(/\$\{([^}]+)\}/g, "<$1>")) as ReturnType<typeof dashboard>;
   }
@@ -217,8 +219,11 @@ describe("infra/stacks/api.yaml: observability (#38)", () => {
   it("shows the failed-notification alarm's state beside its metric", () => {
     const props = titled("Failed staff notifications");
     expect(rows(props)).toEqual([["Sched", NOTIFICATION_FAILED_METRIC.name, "Env", "<Env>"]]);
-    expect(props.annotations).toEqual({ alarms: ["<NotificationFailedAlarm.Arn>"] });
+    // A metric widget can't carry both metrics and an alarm annotation, so the state is its own widget.
+    const metric = widgets.find((w) => w.properties === props);
     const alarm = widgets.find((w) => w.type === "alarm");
     expect(alarm?.properties.alarms).toEqual(["<NotificationFailedAlarm.Arn>"]);
+    expect(widgets.filter((w) => w.type === "alarm")).toHaveLength(1);
+    expect(Number(alarm?.x)).toBe(Number(metric?.x) + Number(metric?.width));
   });
 });

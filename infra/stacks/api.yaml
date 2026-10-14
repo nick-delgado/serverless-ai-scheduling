@@ -272,8 +272,7 @@ Resources:
               "properties": {
                 "title": "Failed staff notifications",
                 "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
-                "metrics": [["Sched", "NotificationFailed", "Env", "${Env}"]],
-                "annotations": {"alarms": ["${NotificationFailedAlarm.Arn}"]}
+                "metrics": [["Sched", "NotificationFailed", "Env", "${Env}"]]
               }
             },
             {
