@@ -28,7 +28,7 @@ The decisions the spec left open, each with the alternative it beat:
 
 ## What surprised us
 
-- **The agent asked again even when the patient said yes early.** To see the confirmation check fail live, the agent changed the booking script's second message to "The earliest of those works for me. Yes, please book it." The edit survived: the agent ran no tool in that turn and booked only after the next "Yes". The traces show the same three-turn shape as the unedited run (`[find_providers, check_availability]`, `[]`, `[book_appointment]`). That's the confirmation rule holding under pressure, but it meant the check needed a deterministic break (the end state's provider) to be seen failing on the live stack.
+- **The agent asked again even when the patient said yes early.** To see the confirmation check fail live, the agent changed the booking script's second message to "The earliest of those works for me. Yes, please book it." The edit survived: the agent ran no tool in that turn and booked only after the next "Yes". The traces show the same three-turn shape as the unedited run (`[find_providers, check_availability]`, `[]`, `[book_appointment]`). That's the confirmation rule holding under pressure. So the live booking spec was seen failing through its end-state check instead (the provider it expects, edit L2b), and the confirmation check was seen failing offline, in Vitest (the PR's T-rows).
 - **The greeting is nowhere near its budget.** FR-010 allows 1.5 s at p95; on `dev` it was 291 ms. A probe run showed the greeting bubble lands about 2 ms after `POST /api/session` returns, so nearly all of it is the session call.
 - **A whole run costs about 12 cents.** The green run was 13 turns for $0.1220 (list prices), throttle retry included.
 
@@ -37,7 +37,7 @@ The decisions the spec left open, each with the alternative it beat:
 - Full local run at `78bf287` against `e2e`, after one reseed: 14 passed in 1.8 min (Chromium, WebKit, Firefox, then `chromium-last`); `Estimated Bedrock cost (list prices): $0.1220 over 13 turns`. The reschedule's first turn was throttled once and passed on Retry after 20 s.
 - Each booking's tools, per turn: `[find_providers, check_availability]` (WebKit and Firefox called `check_availability` twice), `[]`, `[book_appointment]`; each browser's new appointment was the provider's 8:00 AM slot on the booking day. The reschedule kept `appt_01JBXB1F7G8H9J0K1M2N3P4Q5R` and moved it to `slot_alvarez_20261020T1200Z`. The escalation's record was `SENT`.
 - FR-010 on `dev`: n=50, p50 188 ms, p95 291 ms, max 311 ms, 0 discarded.
-- All development runs on `e2e` together: $0.5348 over 52 turns (every `TRACE#` item in `sched-e2e-main`), against the 5 USD cap.
+- All development runs on `e2e` up to `7db07ae`: $0.5348 over 52 turns (every `TRACE#` item in `sched-e2e-main` then), against the 5 USD cap. The PR body has the review round's runs and the running total.
 - Seen failing: the PR's `npm run mutate` tables, for the helpers (Vitest, offline) and for each live spec (Chromium against `e2e`, FR-010 against `dev`).
 
 ## What's next
