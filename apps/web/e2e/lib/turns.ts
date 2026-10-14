@@ -9,6 +9,7 @@
 import {
   type ChatErrorCode,
   type ChatStreamEvent,
+  isTerminalEvent,
   parseChatResponseBody,
   TOOL_STATUS_LABELS,
   type ToolName,
@@ -19,7 +20,6 @@ import {
 export interface TurnRecord {
   /** 0-based position in the conversation's patient turns. */
   index: number;
-  message: string;
   /** The `status` events' tools, in stream order, repeats included (the DOM drops a repeated label; this doesn't). */
   tools: ToolName[];
   /** The chip labels the page showed while the turn streamed, in order of appearance. */
@@ -34,12 +34,17 @@ export interface TurnRecord {
   text: string;
 }
 
-/** The parts of a turn its `/api/chat` body gives (everything but its index, message and chips). */
+/** The parts of a turn its `/api/chat` body gives (everything but its index and chips). */
 export type StreamedTurn = Pick<TurnRecord, "tools" | "conversationId" | "errorCode" | "retryable" | "text">;
 
-/** Reads one turn's `/api/chat` body, NDJSON or the buffered array. Throws when the body breaks the contract. */
+/**
+ * Reads one turn's `/api/chat` body, NDJSON or the buffered array. Throws when an event breaks the contract, or when
+ * the body doesn't end with `done` or `error` (a cut-off stream, an empty body, or a body the page couldn't read): the
+ * rule the app's own stream client applies (`streamClient.ts`), so a broken stream never reads as a clean turn.
+ */
 export function readTurnBody(body: string): StreamedTurn {
   const events: ChatStreamEvent[] = parseChatResponseBody(body);
+  if (!isTerminalEvent(events.at(-1))) throw new Error("The /api/chat stream ended without done or error");
   const turn: StreamedTurn = { tools: [], text: visibleText(events) };
   for (const event of events) {
     if (event.type === "status") turn.tools.push(event.tool);
@@ -96,7 +101,7 @@ export interface WriteScript {
 }
 
 /** The patient turn that carries the first confirmation (0-based): after the request and the choice. */
-export const FIRST_CONFIRM_TURN = 2;
+const FIRST_CONFIRM_TURN = 2;
 /** At most this many patient turns in a scripted write: the three scripted ones and up to 3 repeated confirmations. */
 export const MAX_SCRIPT_TURNS = 6;
 

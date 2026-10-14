@@ -91,6 +91,16 @@ describe("readTurnBody", () => {
     expect(turn.retryable).toBe(false);
   });
 
+  it("rejects an NDJSON body cut off before done or error", () => {
+    expect(() => readTurnBody(ndjson([status("book_appointment")]))).toThrow(
+      "The /api/chat stream ended without done or error",
+    );
+  });
+
+  it("rejects an empty body", () => {
+    expect(() => readTurnBody("")).toThrow("The /api/chat stream ended without done or error");
+  });
+
   it("reads the buffered JSON array form", () => {
     const body = JSON.stringify([
       status("escalate_to_human"),
@@ -102,7 +112,6 @@ describe("readTurnBody", () => {
 
 const turn = (index: number, tools: ToolName[], extra: Partial<TurnRecord> = {}): TurnRecord => ({
   index,
-  message: `message ${String(index)}`,
   tools,
   chips: tools.map((t) => TOOL_STATUS_LABELS[t]),
   text: "",
