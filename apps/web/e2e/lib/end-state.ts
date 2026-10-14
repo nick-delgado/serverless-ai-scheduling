@@ -6,7 +6,7 @@
 import { addDays, type Appointment, type IsoDate, weekdayOf } from "@sched/contracts";
 
 /** An appointment for the run log: its ID, provider, slot, start and status. No reason text. */
-export function describeAppointment(a: Appointment): string {
+function describeAppointment(a: Appointment): string {
   return `${a.appointmentId} ${a.providerId} ${a.slotId} ${a.startUtc} ${a.status}`;
 }
 

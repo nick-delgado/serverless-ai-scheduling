@@ -21,21 +21,17 @@ test("escalation: escalated in the request's turn, and the staff email SENT", as
   const table = await openTable(env);
 
   await observePage(page);
-  await signIn(page, login, "Sofia");
+  await signIn(page, login);
   const turn = await sendTurn(page, 0, "I'd like to speak with someone at the front desk, please.");
   expect(escalationProblems(turn, CLINIC.phone)).toEqual([]);
 
   const conversationId = turn.conversationId;
   if (!conversationId) throw new Error("The turn's stream named no conversation");
-  let status: string | undefined;
   await expect
-    .poll(
-      async () => {
-        status = (await table.escalation(login.sub, conversationId))?.notification.status;
-        return status;
-      },
-      { timeout: NOTIFICATION_DEADLINE_MS, intervals: [1_000, 2_000] },
-    )
+    .poll(async () => (await table.escalation(login.sub, conversationId))?.notification.status, {
+      timeout: NOTIFICATION_DEADLINE_MS,
+      intervals: [1_000, 2_000],
+    })
     .toBe("SENT");
-  console.log(`escalation for conversation ${conversationId}: notification ${String(status)}`);
+  console.log(`escalation for conversation ${conversationId}: notification SENT`);
 });

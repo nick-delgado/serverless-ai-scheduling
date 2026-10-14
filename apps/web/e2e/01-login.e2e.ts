@@ -9,8 +9,6 @@ import { expect, test } from "@playwright/test";
 import { greeting, passwordField, signIn, usernameField } from "./support/chat";
 import { appUrl, e2eEnv, patientLogin } from "./support/env";
 
-const FIRST_NAME = "Sofia";
-
 test("/chat while signed out goes to the sign-in page (FR-003)", async ({ page }) => {
   await page.goto(appUrl("/chat"));
   await expect(page).toHaveURL(/\/login$/);
@@ -30,11 +28,12 @@ test("unknown credentials show an inline error and stay on sign-in (FR-001)", as
 test("valid credentials reach the chat; a reload stays signed in; sign-out returns to login (FR-001, FR-002)", async ({
   page,
 }) => {
-  await signIn(page, patientLogin(e2eEnv()), FIRST_NAME);
+  const login = patientLogin(e2eEnv());
+  await signIn(page, login);
 
   await page.reload();
   await expect(page).toHaveURL(/\/chat$/);
-  await expect(greeting(page, FIRST_NAME)).toBeVisible();
+  await expect(greeting(page, login.firstName)).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);

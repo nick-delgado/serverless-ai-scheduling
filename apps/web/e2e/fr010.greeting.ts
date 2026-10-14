@@ -14,11 +14,11 @@ import { join } from "node:path";
 import { expect, type Page, type Response, test } from "@playwright/test";
 
 import { formatGreeting, summarizeGreeting } from "./lib/stats";
+import { ASSISTANT_BUBBLE, signIn } from "./support/chat";
 import { baseUrlFor, fixtureLogin } from "./support/env";
 
 const WARM_UP = 5;
 const SAMPLES = 50;
-const FIRST_NAME = "Maria";
 
 declare global {
   interface Window {
@@ -38,7 +38,7 @@ async function load(page: Page, url: string): Promise<number | undefined> {
   return (await at.jsonValue()) as number;
 }
 
-test("FR-010: the greeting within 1.5 s of page load at p95 (signed in, warm; read-only)", async ({
+test("FR-010: measures the greeting's p95 against the 1.5 s budget (signed in, warm; read-only)", async ({
   browser,
 }) => {
   const env = process.env.FR010_ENV ?? "dev";
@@ -47,30 +47,28 @@ test("FR-010: the greeting within 1.5 s of page load at p95 (signed in, warm; re
   const stateDir = mkdtempSync(join(tmpdir(), "sched-fr010-"));
   const statePath = join(stateDir, "state.json");
   try {
-    const signIn = await browser.newContext();
-    const first = await signIn.newPage();
-    await first.goto(`${base}/login`);
-    await first.getByLabel("Username").fill(login.username);
-    await first.getByLabel("Password").fill(login.password);
-    await first.getByLabel("Password").press("Enter");
-    await expect(first).toHaveURL(/\/chat$/);
-    await signIn.storageState({ path: statePath });
-    await signIn.close();
+    const signInContext = await browser.newContext();
+    await signIn(await signInContext.newPage(), login, base);
+    await signInContext.storageState({ path: statePath });
+    await signInContext.close();
 
     const context = await browser.newContext({ storageState: statePath });
     const page = await context.newPage();
-    await page.addInitScript((name) => {
-      const observer = new MutationObserver(() => {
-        for (const bubble of document.querySelectorAll(".chat__log > li.bubble--assistant")) {
-          if (bubble.textContent.includes(name)) {
-            window.__greetingAt ??= performance.now();
-            observer.disconnect();
-            return;
+    await page.addInitScript(
+      ({ name, selector }) => {
+        const observer = new MutationObserver(() => {
+          for (const bubble of document.querySelectorAll(selector)) {
+            if (bubble.textContent.includes(name)) {
+              window.__greetingAt ??= performance.now();
+              observer.disconnect();
+              return;
+            }
           }
-        }
-      });
-      observer.observe(document, { childList: true, subtree: true, characterData: true });
-    }, FIRST_NAME);
+        });
+        observer.observe(document, { childList: true, subtree: true, characterData: true });
+      },
+      { name: login.firstName, selector: ASSISTANT_BUBBLE },
+    );
 
     const samples: number[] = [];
     let discarded = 0;

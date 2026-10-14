@@ -24,15 +24,17 @@ import {
   type TurnRecord,
   type WriteScript,
 } from "../lib/turns";
-import { appUrl, type PatientLogin, recordConversation } from "./env";
+import { recordConversation } from "../lib/run-dir";
+import { appUrl, type FixtureLogin } from "./env";
 
 /** A turn takes seconds (#251: `done` p95 7.3–7.9 s on `dev`); this leaves room for a slow one. */
-export const TURN_TIMEOUT_MS = 90_000;
+const TURN_TIMEOUT_MS = 90_000;
 
 declare global {
   interface Window {
     __e2eChips?: string[];
-    __e2eBodies?: string[];
+    /** Each `/api/chat` body the page read, or why it couldn't be read. */
+    __e2eBodies?: ({ body: string } | { readError: string })[];
   }
 }
 
@@ -49,7 +51,7 @@ export async function observePage(page: Page): Promise<void> {
       }
     }).observe(document, { childList: true, subtree: true });
 
-    const bodies: string[] = (window.__e2eBodies = []);
+    const bodies: NonNullable<Window["__e2eBodies"]> = (window.__e2eBodies = []);
     const fetch = window.fetch.bind(window);
     window.fetch = async (input, init) => {
       const response = await fetch(input, init);
@@ -57,8 +59,8 @@ export async function observePage(page: Page): Promise<void> {
       if (url.pathname !== "/api/chat" || !response.body) return response;
       const [ours, theirs] = response.body.tee();
       void new Response(ours).text().then(
-        (text) => bodies.push(text),
-        () => bodies.push(""),
+        (body) => bodies.push({ body }),
+        (error: unknown) => bodies.push({ readError: String(error) }),
       );
       return new Response(theirs, {
         status: response.status,
@@ -69,21 +71,27 @@ export async function observePage(page: Page): Promise<void> {
   });
 }
 
+/** The chat's assistant bubbles, the greeting included (`ChatPage.tsx`). */
+export const ASSISTANT_BUBBLE = ".chat__log > li.bubble--assistant";
+
 /** The greeting bubble that names the patient (the fallback greeting doesn't, r1/Q-6). */
 export const greeting = (page: Page, firstName: string) =>
-  page.locator(".chat__log > li.bubble--assistant", { hasText: firstName }).first();
+  page.locator(ASSISTANT_BUBBLE, { hasText: firstName }).first();
 
 export const usernameField = (page: Page) => page.getByLabel("Username");
 export const passwordField = (page: Page) => page.getByLabel("Password");
 
-/** Signs in on /login, submitting with Enter (FR-001), and waits for the chat's greeting. */
-export async function signIn(page: Page, login: PatientLogin, firstName: string): Promise<void> {
-  await page.goto(appUrl("/login"));
+/**
+ * Signs in on `<base>/login` (default: `E2E_BASE_URL`), submitting with Enter (FR-001), and waits for the chat's
+ * greeting by the patient's first name.
+ */
+export async function signIn(page: Page, login: FixtureLogin, base?: string): Promise<void> {
+  await page.goto(base === undefined ? appUrl("/login") : `${base}/login`);
   await usernameField(page).fill(login.username);
   await passwordField(page).fill(login.password);
   await passwordField(page).press("Enter");
   await expect(page).toHaveURL(/\/chat$/);
-  await expect(greeting(page, firstName)).toBeVisible();
+  await expect(greeting(page, login.firstName)).toBeVisible();
 }
 
 /**
@@ -93,7 +101,7 @@ export async function signIn(page: Page, login: PatientLogin, firstName: string)
  * conversation for the cost estimate, and logs its tools (never its text).
  */
 export async function sendTurn(page: Page, index: number, message: string): Promise<TurnRecord> {
-  const before = await page.locator(".chat__log > li.bubble--assistant:not([aria-busy])").count();
+  const before = await page.locator(`${ASSISTANT_BUBBLE}:not([aria-busy])`).count();
   await page.evaluate(() => {
     window.__e2eChips?.splice(0);
     window.__e2eBodies?.splice(0);
@@ -113,28 +121,27 @@ export async function sendTurn(page: Page, index: number, message: string): Prom
   }
 
   const chips = await page.evaluate(() => window.__e2eChips?.splice(0) ?? []);
-  const turn: TurnRecord = { index, message, chips, ...mergeAttempts(attempts) };
-  recordConversation(turn.conversationId);
+  const turn: TurnRecord = { index, chips, ...mergeAttempts(attempts) };
+  recordConversation(process.env.E2E_RUN_DIR, turn.conversationId);
   console.log(`  ${describeTurn(turn)}`);
   return turn;
 }
 
 /** Waits for one attempt's `/api/chat` body, then for the page to show its end: a new completed reply or the error. */
 async function turnEnd(page: Page, completedBefore: number): Promise<StreamedTurn> {
-  const read = await page.waitForFunction(
-    () => (window.__e2eBodies?.length ? { body: window.__e2eBodies[0] } : undefined),
-    undefined,
-    { timeout: TURN_TIMEOUT_MS },
-  );
-  const { body } = (await read.jsonValue()) as { body: string };
-  const completed = page.locator(".chat__log > li.bubble--assistant:not([aria-busy])");
+  const read = await page.waitForFunction(() => window.__e2eBodies?.[0], undefined, {
+    timeout: TURN_TIMEOUT_MS,
+  });
+  const result = (await read.jsonValue()) as { body: string } | { readError: string };
+  if ("readError" in result) throw new Error(`The /api/chat body couldn't be read: ${result.readError}`);
+  const completed = page.locator(`${ASSISTANT_BUBBLE}:not([aria-busy])`);
   const errors = page.locator(".chat__log > li.bubble--error");
   await expect
     .poll(async () => (await completed.count()) > completedBefore || (await errors.count()) > 0, {
       timeout: TURN_TIMEOUT_MS,
     })
     .toBe(true);
-  return readTurnBody(body);
+  return readTurnBody(result.body);
 }
 
 /** Runs a booking or reschedule script (r1/Q-2 (a)) until the write ran, a turn failed, or the turn cap. */
