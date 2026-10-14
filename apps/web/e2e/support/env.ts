@@ -18,6 +18,7 @@ import { parseEnv } from "node:util";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import type { FixturePatientAlias } from "@sched/tools/fixtures";
 
+import { ENV_PATTERN } from "../../../../scripts/seed-data";
 import { mappingPath, passwordVar, planDemoUsers, readMapping } from "../../../../scripts/seed-users";
 
 /** The patient the journeys sign in as, on `e2e` only (r1/Q-1 (a)); #44 picks its demo patients elsewhere. */
@@ -33,7 +34,7 @@ export function awsDefaults(): void {
 
 export function e2eEnv(): string {
   const env = process.env.E2E_ENV ?? "e2e";
-  if (!/^[a-z][a-z0-9-]{1,15}$/.test(env)) throw new Error(`invalid E2E_ENV: ${env}`);
+  if (!ENV_PATTERN.test(env)) throw new Error(`invalid E2E_ENV: ${env}`);
   return env;
 }
 
