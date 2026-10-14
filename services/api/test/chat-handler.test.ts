@@ -1,11 +1,13 @@
 /**
  * The Lambda entry point's wiring (`handlers/chat.ts`): config from the environment, the AWS stores, the
- * Converse client, the system prompt, the SES notifier, the failed-notification metric and the console
- * logger. The AWS stores, the Converse client and the SES client are replaced with in-memory and scripted
- * stand-ins; everything else is the real module.
+ * Converse client, the system prompt, the SES notifier, the failed-notification metric, and the Powertools
+ * logger, metrics and tracer (#38). The AWS stores, the Converse client, the SES client and the tracer are
+ * replaced with in-memory, scripted and recording stand-ins; everything else is the real module.
  */
 import { PassThrough } from "node:stream";
 
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import type * as Agent from "@sched/agent";
 import type * as Ses from "@aws-sdk/client-sesv2";
 import { parseChatResponseBody } from "@sched/contracts";
@@ -22,7 +24,12 @@ const aws = vi.hoisted(() => ({
   /** Changes the in-memory repos before the handler wraps them. */
   tweak: undefined as ((repos: InMemoryRepositories) => void) | undefined,
 }));
-const llm = vi.hoisted(() => ({ steps: [] as unknown[], requests: [] as { system: unknown[] }[] }));
+const llm = vi.hoisted(() => ({
+  steps: [] as unknown[],
+  requests: [] as { system: unknown[] }[],
+  options: undefined as unknown,
+}));
+const tracing = vi.hoisted(() => ({ options: [] as unknown[], captured: [] as unknown[] }));
 const ses = vi.hoisted(() => ({ send: vi.fn() }));
 
 vi.mock("../src/lib/aws", () => ({
@@ -40,13 +47,26 @@ vi.mock("@sched/agent", async (importOriginal) => {
   return {
     ...agent,
     ConverseLlmClient: class extends agent.ScriptedLlmClient {
-      constructor() {
+      constructor(options: unknown) {
         super(llm.steps as Agent.ScriptedStep[]);
+        llm.options = options;
         llm.requests = this.requests as unknown as { system: unknown[] }[];
       }
     },
   };
 });
+
+vi.mock("@aws-lambda-powertools/tracer", () => ({
+  Tracer: class {
+    constructor(options: unknown) {
+      tracing.options.push(options);
+    }
+    captureAWSv3Client<T>(client: T): T {
+      tracing.captured.push(client);
+      return client;
+    }
+  },
+}));
 
 vi.mock("@aws-sdk/client-sesv2", async (importOriginal) => ({
   ...(await importOriginal<typeof Ses>()),
@@ -61,11 +81,23 @@ const event: RestApiProxyEvent = {
   requestContext: { requestId: "req-1", authorizer: { claims: { sub: MARIA } } },
 };
 
+/** A synthetic Lambda context (no real account). */
+const lambdaContext = { functionName: "sched-test-api-chat", awsRequestId: "lambda-req-1" };
+
 class MessageRejected extends Error {
   override readonly name = "MessageRejected";
 }
 
+/** Every line the Powertools logger and metrics write (stdout and stderr), parsed. */
+let written: Record<string, unknown>[];
+
 beforeEach(async () => {
+  written = [];
+  const capture = (chunk: unknown) => written.push(JSON.parse(String(chunk)) as Record<string, unknown>) > 0;
+  vi.spyOn(process.stdout, "write").mockImplementation(capture);
+  vi.spyOn(process.stderr, "write").mockImplementation(capture);
+  tracing.options.length = 0;
+  tracing.captured.length = 0;
   aws.calls.length = 0;
   aws.tweak = undefined;
   ses.send.mockReset();
@@ -80,7 +112,6 @@ beforeEach(async () => {
   vi.stubEnv("SCHED_ENV", "test-env");
   vi.stubEnv("SES_SENDER", "");
   vi.stubEnv("SES_STAFF_RECIPIENT", "");
-  vi.spyOn(console, "info").mockImplementation(() => undefined);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -92,7 +123,7 @@ async function invoke(handler: awslambda.StreamifyHandler<RestApiProxyEvent>) {
   const stream = new PassThrough();
   const chunks: Buffer[] = [];
   stream.on("data", (c: Buffer) => chunks.push(c));
-  await handler(event, stream, {});
+  await handler(event, stream, lambdaContext);
   return parseChatResponseBody(Buffer.concat(chunks).toString("utf8"));
 }
 
@@ -128,31 +159,64 @@ async function escalatingModel(times: number): Promise<void> {
   ];
 }
 
-/** Runs one escalating turn and returns the stored escalation and every EMF record written to stdout. */
+/** The written lines whose `message` is `message`. */
+const logLines = (message: string) => written.filter((l) => l.message === message);
+
+/** Runs one escalating turn and returns the stored escalation and every NotificationFailed record. */
 async function escalate(times = 1) {
   await escalatingModel(times);
-  const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   const { handler } = await import("../src/handlers/chat");
   const events = await invoke(handler);
-  const emf = write.mock.calls
-    .map(([chunk]) => String(chunk))
-    .filter((line) => line.includes('"_aws"'))
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-  write.mockRestore();
+  const emf = written.filter((line) => "_aws" in line && "NotificationFailed" in line);
   const [escalation] = aws.repos?.snapshot().escalations ?? [];
   return { events, escalation, emf };
 }
 
 describe("handlers/chat", () => {
-  it("builds the stores from TABLE_NAME and logs each turn through the console", async () => {
+  it("builds the stores from TABLE_NAME and logs each turn through Powertools with the Lambda request ID", async () => {
     const { handler } = await import("../src/handlers/chat");
 
     const events = await invoke(handler);
     expect(events.at(-1)?.type).toBe("done");
     expect(aws.calls).toEqual([expect.objectContaining({ tableName: "sched-test-table" })]);
-    expect(console.info).toHaveBeenCalledWith(
-      expect.objectContaining({ msg: "chat turn", terminal: "done" }),
+    expect(logLines("chat turn")).toEqual([
+      expect.objectContaining({
+        level: "INFO",
+        service: "chat",
+        terminal: "done",
+        requestId: "req-1",
+        function_request_id: "lambda-req-1",
+      }),
+    ]);
+  });
+
+  it("writes the turn's metrics, with the conflict retries counted in the turn, once per invocation", async () => {
+    const { handler } = await import("../src/handlers/chat");
+    const options = aws.calls[0] as { onConflictRetry: () => void };
+    options.onConflictRetry();
+
+    await invoke(handler);
+    const records = written.filter((l) => "_aws" in l);
+    expect(records).toEqual([
+      expect.objectContaining({ Env: "test-env", Turns: 1, TurnErrors: 0, BookingConflictRetries: 1 }),
+    ]);
+    // The record follows the turn's log line: it is flushed once the turn is over.
+    expect(written.indexOf(records[0] ?? {})).toBeGreaterThan(
+      written.indexOf(logLines("chat turn")[0] ?? {}),
     );
+  });
+
+  it("traces the Bedrock, DynamoDB and SES clients with X-Ray, and no HTTPS calls", async () => {
+    await import("../src/handlers/chat");
+
+    expect(tracing.options).toEqual([{ serviceName: "chat", captureHTTPsRequests: false }]);
+    const [ses, dynamo, bedrock] = tracing.captured;
+    expect(ses).toBeInstanceOf((await import("@aws-sdk/client-sesv2")).SESv2Client);
+    expect(dynamo).toBeInstanceOf(DynamoDBClient);
+    expect(bedrock).toBeInstanceOf(BedrockRuntimeClient);
+    expect(tracing.captured).toHaveLength(3);
+    expect(aws.calls[0]).toMatchObject({ client: dynamo });
+    expect(llm.options).toEqual({ client: bedrock });
   });
 
   it("applies DAILY_TURN_CAP from the environment", async () => {
@@ -229,7 +293,7 @@ describe("handlers/chat", () => {
       expect(emf).toHaveLength(1);
     });
 
-    it("writes no record when updateNotification finds no escalation to update", async () => {
+    it("writes no record, and logs the failed status write, when updateNotification finds no escalation", async () => {
       aws.tweak = (repos) => {
         repos.escalations.updateNotification = () => Promise.resolve(null);
       };
@@ -237,17 +301,43 @@ describe("handlers/chat", () => {
       const { escalation, emf } = await escalate();
       expect(escalation?.notification.status).toBe("PENDING");
       expect(emf).toEqual([]);
+      expect(logLines("notification status write failed")).toEqual([
+        expect.objectContaining({
+          level: "ERROR",
+          conversationId: escalation?.conversationId,
+          notificationStatus: "FAILED",
+          function_request_id: "lambda-req-1",
+        }),
+      ]);
+      expect(logLines("notification status write failed")[0]).not.toHaveProperty("errorName");
     });
 
-    it("writes no record when updateNotification throws, leaving the escalation PENDING", async () => {
+    it("writes no record, and logs the error, when updateNotification throws, leaving the escalation PENDING", async () => {
       aws.tweak = (repos) => {
-        repos.escalations.updateNotification = () => Promise.reject(new Error("write failed"));
+        repos.escalations.updateNotification = () => Promise.reject(new RangeError("write failed"));
       };
 
       const { events, escalation, emf } = await escalate();
       expect(events.at(-1)?.type).toBe("done");
       expect(escalation?.notification.status).toBe("PENDING");
       expect(emf).toEqual([]);
+      expect(logLines("notification status write failed")).toEqual([
+        expect.objectContaining({
+          level: "ERROR",
+          conversationId: escalation?.conversationId,
+          notificationStatus: "FAILED",
+          errorName: "RangeError",
+          errorMessage: "write failed",
+        }),
+      ]);
+      // The tool still swallowed the rethrown error: no tool internal error was logged.
+      expect(logLines("tool internal error")).toEqual([]);
+    });
+
+    it("logs no failed status write when the status is stored", async () => {
+      const { escalation } = await escalate();
+      expect(escalation?.notification.status).toBe("FAILED");
+      expect(logLines("notification status write failed")).toEqual([]);
     });
 
     it("works with an escalation repo whose methods live on a class prototype", async () => {

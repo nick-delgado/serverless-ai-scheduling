@@ -18,10 +18,24 @@ export interface AwsStores {
   turns: TurnStore;
 }
 
-export function createAwsStores(options: { tableName: string; clock: Clock }): AwsStores {
-  const client = new DynamoDBClient({});
+export interface AwsStoreOptions {
+  tableName: string;
+  clock: Clock;
+  /** The DynamoDB client, e.g. one the X-Ray tracer captures (the chat function, #38). Default a new one. */
+  client?: DynamoDBClient;
+  /** Counts `book` and `reschedule` conflict retries (`BookingConflictRetries`, #38). Default none. */
+  onConflictRetry?: () => void;
+}
+
+export function createAwsStores(options: AwsStoreOptions): AwsStores {
+  const client = options.client ?? new DynamoDBClient({});
   return {
-    repos: createDynamoRepositories({ tableName: options.tableName, client, clock: options.clock }),
+    repos: createDynamoRepositories({
+      tableName: options.tableName,
+      client,
+      clock: options.clock,
+      onConflictRetry: options.onConflictRetry,
+    }),
     turns: createDynamoTurnStore({ tableName: options.tableName, doc: createDocumentClient(client) }),
   };
 }
