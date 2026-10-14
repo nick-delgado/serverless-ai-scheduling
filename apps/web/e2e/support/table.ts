@@ -6,36 +6,45 @@ import type { Appointment, Escalation, TurnTrace } from "@sched/contracts";
 import { SystemClock } from "@sched/tools";
 import { createDocumentClient, createDynamoRepositories } from "@sched/tools/dynamo";
 
+import { dynamoClientFor } from "../../../../scripts/seed-data";
 import { readTraces } from "../../../../scripts/trace";
 import { awsDefaults, ssmParam } from "./env";
 
 export interface E2eTable {
   appointments(sub: string): Promise<Appointment[]>;
   escalation(sub: string, conversationId: string): Promise<Escalation | null>;
-  /**
-   * The turn traces (`CONV#<id>` / `TRACE#<turnId>`) of each conversation, read with `scripts/trace.ts`'s
-   * `readTraces`. Throws on an item whose `trace` isn't a `TurnTrace`, so the cost line never undercounts.
-   */
+  /** The turn traces of each conversation (`tracesOf`). */
   traces(conversationIds: readonly string[]): Promise<TurnTrace[]>;
+}
+
+/**
+ * The turn traces (`CONV#<id>` / `TRACE#<turnId>`) of each conversation, read with `scripts/trace.ts`'s `readTraces`.
+ * Throws on an item whose `trace` isn't a `TurnTrace`, rather than leave its cost out of the estimate.
+ */
+export async function tracesOf(
+  doc: Parameters<typeof readTraces>[0],
+  tableName: string,
+  conversationIds: readonly string[],
+): Promise<TurnTrace[]> {
+  const traces: TurnTrace[] = [];
+  for (const id of conversationIds) {
+    for (const entry of await readTraces(doc, tableName, id)) {
+      if (!entry.trace) throw new Error(`Unreadable trace ${entry.turnId} in conversation ${id}`);
+      traces.push(entry.trace);
+    }
+  }
+  return traces;
 }
 
 export async function openTable(env: string): Promise<E2eTable> {
   awsDefaults();
-  const tableName = await ssmParam(`/sched/${env}/data/table-name`);
-  const repos = createDynamoRepositories({ tableName, clock: new SystemClock() });
-  const doc = createDocumentClient();
+  const tableName = await ssmParam(env, "data/table-name");
+  const client = dynamoClientFor(process.env.AWS_REGION ?? "us-east-1", undefined);
+  const repos = createDynamoRepositories({ tableName, client, clock: new SystemClock() });
+  const doc = createDocumentClient(client);
   return {
     appointments: (sub) => repos.appointments.listForPatient(sub),
     escalation: (sub, conversationId) => repos.escalations.getForConversation(sub, conversationId),
-    async traces(conversationIds) {
-      const traces: TurnTrace[] = [];
-      for (const id of conversationIds) {
-        for (const entry of await readTraces(doc, tableName, id)) {
-          if (!entry.trace) throw new Error(`Unreadable trace ${entry.turnId} in conversation ${id}`);
-          traces.push(entry.trace);
-        }
-      }
-      return traces;
-    },
+    traces: (conversationIds) => tracesOf(doc, tableName, conversationIds),
   };
 }
