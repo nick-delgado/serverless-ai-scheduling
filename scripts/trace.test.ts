@@ -414,6 +414,13 @@ describe.skipIf(!available)("trace.ts on DynamoDB Local", () => {
       `    input {"note":"${SECRET_INPUT}"}`,
       '    input {"slot_id":"slot-1"}',
     ]);
+    // The first turn's tool calls, each followed by its own input.
+    expect(io.out.slice(4, 8)).toEqual([
+      "  tool check_availability ok, 42 ms",
+      `    input {"note":"${SECRET_INPUT}"}`,
+      "  tool book_appointment failed SLOT_UNAVAILABLE, 77 ms",
+      '    input {"slot_id":"slot-1"}',
+    ]);
   });
 
   it("reads the table name from SSM /sched/<env>/data/table-name unless --table is given", async () => {
