@@ -92,6 +92,12 @@ export interface DynamoRepositoryOptions {
   clock: Clock;
   /** Defaults to `randomIds()`. */
   ids?: IdGenerator;
+  /**
+   * Called once each time `book` or `reschedule` is cancelled only by `TransactionConflict` and is about
+   * to be re-attempted (the API counts these as `BookingConflictRetries`, #38). Not called for the
+   * conversation append's conflicts or for `book`'s re-read retry. Must not throw. Defaults to a no-op.
+   */
+  onConflictRetry?: () => void;
 }
 
 /** How many times a transaction cancelled only by `TransactionConflict` is re-attempted. */
@@ -136,6 +142,7 @@ export function createDocumentClient(
 export function createDynamoRepositories(options: DynamoRepositoryOptions): Repositories {
   const { tableName: TableName, clock } = options;
   const ids = options.ids ?? randomIds();
+  const onConflictRetry = options.onConflictRetry ?? (() => undefined);
   const doc = createDocumentClient(options.client);
   const nowIso = (): string => clock.now().toISOString();
 
@@ -334,7 +341,10 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
               if (!current) return { ok: false, reason: "SLOT_NOT_FOUND" };
               return current.status === "OPEN" ? RETRY : heldBy(patientId, current);
             }
-            if (isConflictOnly(codes)) return RETRY;
+            if (isConflictOnly(codes)) {
+              onConflictRetry();
+              return RETRY;
+            }
             throw err;
           }
         },
@@ -465,7 +475,10 @@ export function createDynamoRepositories(options: DynamoRepositoryOptions): Repo
                 { cause: err },
               );
             }
-            if (isConflictOnly(codes)) return RETRY;
+            if (isConflictOnly(codes)) {
+              onConflictRetry();
+              return RETRY;
+            }
             throw err;
           }
         },
