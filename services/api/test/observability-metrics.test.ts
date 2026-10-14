@@ -24,7 +24,9 @@ import {
   withTurnMetrics,
 } from "../src/lib/observability/metrics";
 
-type Record = { _aws: { CloudWatchMetrics: { Dimensions: string[][] }[] } } & { [key: string]: unknown };
+type Record = {
+  _aws: { CloudWatchMetrics: { Dimensions: string[][]; Metrics: { Name: string; Unit: string }[] }[] };
+} & { [key: string]: unknown };
 
 let lines: string[];
 beforeEach(() => {
@@ -125,9 +127,7 @@ describe("withTurnMetrics through handleChatTurn (owner decision r1/Q-2 (a))", (
     expect(typeof record?.TimeToFirstTextMs).toBe("number");
     expect(typeof record?.TurnLatencyMs).toBe("number");
     const units = Object.fromEntries(
-      (record?._aws.CloudWatchMetrics[0] as { Metrics: { Name: string; Unit: string }[] }).Metrics.map(
-        (m) => [m.Name, m.Unit],
-      ),
+      (record?._aws.CloudWatchMetrics[0]?.Metrics ?? []).map((m) => [m.Name, m.Unit]),
     );
     expect(units).toMatchObject({
       TimeToFirstTextMs: "Milliseconds",
