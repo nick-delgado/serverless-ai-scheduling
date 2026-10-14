@@ -12,13 +12,16 @@ A task-worker agent built it to Nick's answer to the readiness review's Q-7, opt
 
 ## Why we chose what we chose
 
+Nick's answer to Q-7 (a) settled the main shape: read only the `TRACE#` items under the conversation and never its messages, print IDs and figures, and print no patient ID. The readiness review's reuse note settled where the key prefixes come from: `turnKeys`, imported through a new `@sched/api/dynamo-turn-store` subpath export, so a copy of `"CONV#"` and `"TRACE#"` can't drift from the store. The script asks `turnKeys` for an empty turn ID's key, and the query uses `begins_with(SK, "TRACE#")`. A test on DynamoDB Local puts a message item in the same partition and checks that its text never reaches the output.
+
 The spec left these open, and the agent settled them:
 
-- **The query never reads a message, or the patient ID.** The traces share their partition (`CONV#<id>`) with the conversation's messages, and each trace item also stores the `patientId`. The query asks for `begins_with(SK, "TRACE#")` with a projection of `SK, startedAt, trace`, so neither ever leaves the table. A test on DynamoDB Local puts a message item in the same partition and checks that its text never reaches the output. The alternative was to filter after reading, which would still carry message text through the script's memory and over the wire.
-- **The key prefixes come from the turn store.** The script imports `turnKeys` from `services/api/src/lib/dynamo-turn-store.ts` through a new `@sched/api/dynamo-turn-store` subpath export (the readiness review's reuse note) and asks it for an empty turn ID's key. A copy of `"CONV#"` and `"TRACE#"` would silently drift if the store's keys ever changed.
-- **The env check is the one the other scripts use.** `seed-data.ts` now exports its `ENV_PATTERN`, and `retry-escalations.ts` imports it in place of its own copy. The script rejects `../x` before any AWS call.
-- **The conversation ID is checked too.** It must be a UUID, as `ConversationId` says, so a typo can't become a query on a malformed key.
-- **The order is the trace's own `startedAt`.** If that doesn't parse, it falls back to the item's stored `startedAt`, and an item with neither sorts first.
+- **The patient ID never leaves the table.** Each trace item stores the `patientId` beside the trace, and the query's projection is `SK, startedAt, trace`. The alternative was to read the whole item and leave the field out when printing, which would still carry it over the wire and through the script's memory.
+- **The env check is the one the other scripts use.** `seed-data.ts` now exports its `ENV_PATTERN`, and `retry-escalations.ts` imports it in place of its own copy. The alternative was a fourth TypeScript copy of the regex, after `seed-data.ts`, `retry-escalations.ts` and `seed-users.ts`. Nick approved both edits on the PR (`e36f1d2/STD-1` (a)).
+- **The conversation ID is checked too.** It must be a UUID, as `ConversationId` says, so a typo exits 1 with "invalid conversationId" before any AWS call. The alternative was to query with the raw argument and end on "No traces". Nick kept the check on the PR (`e36f1d2/SPEC-2` (a)).
+- **The order is the trace's own `startedAt`.** When the trace doesn't parse, the item's stored `startedAt` places it, and an item with neither sorts first. The alternatives were to put unreadable items last, or to leave every item in key order, which is random (see below).
+- **An unreadable item is named on stderr.** That keeps stdout one JSON object per turn under `--json`. The alternative was a placeholder object on stdout.
+- **Two extra figures print.** Each model call shows its index and attempt, and the provider's own stop reason when it differs from the neutral one. Both are IDs or codes, within ADR-009. The alternative was the bare list from Q-7, which can't tell a retried call from the next step.
 
 ## What surprised us
 
