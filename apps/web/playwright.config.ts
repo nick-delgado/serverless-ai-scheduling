@@ -20,26 +20,27 @@ import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 const ci = Boolean(process.env.CI);
-const here = decodeURIComponent(new URL(".", import.meta.url).pathname);
-
 /** Login and login → book: every browser. */
 const EVERY_BROWSER = /\/0[12]-[a-z-]+\.e2e\.ts$/;
 /** Reschedule and escalation: Chromium only, after the bookings. */
 const CHROMIUM_ONLY = /\/0[34]-[a-z-]+\.e2e\.ts$/;
 
 export default defineConfig({
-  testDir: join(here, "e2e"),
+  // Paths are relative to this file.
+  testDir: "./e2e",
   testMatch: "**/*.e2e.ts",
   workers: 1,
   fullyParallel: false,
   retries: 0,
   forbidOnly: ci,
-  // A scripted write is up to six turns of up to 90 s each (support/chat.ts).
+  // A scripted write is up to six turns of up to 90 s each (support/chat.ts), about 9 min at worst. A throttled turn
+  // adds up to three retries after 20, 40 and 60 s, each with its own 90 s wait, so a run with several throttled turns
+  // can reach this limit first; the failure then names the timeout.
   timeout: 10 * 60_000,
   expect: { timeout: 30_000 },
   outputDir: join(process.env.RUNNER_TEMP ?? tmpdir(), "sched-e2e", "test-results"),
-  reporter: [["list"], [join(here, "e2e", "cost-reporter.ts")]],
-  globalSetup: join(here, "e2e", "global-setup.ts"),
+  reporter: [["list"], ["./e2e/cost-reporter.ts"]],
+  globalSetup: "./e2e/global-setup.ts",
   use: {
     trace: ci ? "off" : "retain-on-failure",
     screenshot: ci ? "off" : "only-on-failure",

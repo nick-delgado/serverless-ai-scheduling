@@ -8,10 +8,9 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
-const here = decodeURIComponent(new URL(".", import.meta.url).pathname);
-
 export default defineConfig({
-  testDir: here,
+  // Relative to this file.
+  testDir: ".",
   testMatch: "fr010.greeting.ts",
   workers: 1,
   retries: 0,
