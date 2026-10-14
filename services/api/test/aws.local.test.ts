@@ -73,5 +73,5 @@ describe.skipIf(!available)("createAwsStores (DynamoDB Local)", () => {
       expect.arrayContaining(["GetItemCommand", "UpdateItemCommand", "TransactWriteItemsCommand"]),
     );
     client.destroy();
-  });
+  }, 30_000);
 });
