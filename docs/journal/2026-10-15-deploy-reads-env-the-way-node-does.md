@@ -32,6 +32,8 @@ The quirk decisions and r1's answers are Nick's (#257, "Decisions and clarificat
 - **The parent's `node` runs in the sandbox (r1/A-4, verified first).** Here it's Homebrew's, a symlink to the real binary rather than a version-manager shim, so linking it from the parent's `PATH` works with `HOME` set to the test's directory. `process.execPath` wasn't needed. CI installs a real binary from `.nvmrc`.
 - **A `node` failure inside `$(…)` doesn't stop a `set -e` script.** Bash runs command substitutions without errexit, so a reader without `|| exit 1` skips an unreadable `.env` silently. A probe showed it before the reader was written; the test that chmods `.env` to `000` now pins it, and the mutation that turns `|| exit 1` into `|| true` is how we saw that test fail.
 
+- **Our first inline-comment test couldn't fail.** The review of PR #274 (TEST-1) found that `expectSes` split the stand-in's logged `sam` call on spaces and looked for `SesSender=<address>` among the words, so the old reader's `<address> # sender` matched on its first word. `expectSes` now compares the api stack's whole override list, and a mutate edit that restores the old reader's line-based parsing fails the inline-comment test (the PR's `D-old-reader-comment` row).
+
 ## Evidence
 
 - `npx vitest run --project scripts scripts/deploy.test.ts scripts/teardown.test.ts scripts/deploy-web.test.ts scripts/test/shell-harness.test.ts` passes on Node 26.9.0 and on Node 24.22.0.

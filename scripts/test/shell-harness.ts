@@ -41,7 +41,8 @@ export type StandIn = (typeof STAND_INS)[number];
 
 /**
  * Everything deploy.sh, teardown.sh, deploy-web.sh and the stand-ins call that isn't a bash builtin. `node` is deploy.sh's
- * .env parser (util.parseEnv, #257); it is the parent's own, so a test runs the Node version the tests run on.
+ * .env parser (util.parseEnv, #257): like the other tools, it is the first `node` on the parent's PATH, which need not be
+ * the Node that runs the tests.
  */
 const TOOLS = ["bash", "git", "dirname", "node", "tr", "awk", "cat", "rm", "mkdir", "find", "head", "grep"];
 

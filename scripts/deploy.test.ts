@@ -33,6 +33,8 @@ const MAIN_SENDER = "main-sender@example.com";
 const MAIN_RECIPIENT = "main-staff@example.com";
 const MAIN_DOTENV = `SES_SENDER=${MAIN_SENDER}\nSES_STAFF_RECIPIENT=${MAIN_RECIPIENT}\n`;
 const FIRST_SENDER = "first@example.com";
+/** r1/Q-1: an unmatched quote that the next line's quote closes, so the sender spans two lines. */
+const MULTILINE_DOTENV = `SES_SENDER="${DOTENV_SENDER}'\nSES_STAFF_RECIPIENT="${DOTENV_RECIPIENT}"\n`;
 /** Every SES value any test uses, none of which may appear in the script's output. */
 const SES_VALUES = [
   SENDER,
@@ -76,12 +78,18 @@ function overrides(calls: string[]): Record<string, string[]> {
 const sesOverrides = (calls: string[], stack: string) =>
   overrides(calls)[stack]?.filter((kv) => kv.startsWith("Ses"));
 
-/** The run succeeded, and the api stack got exactly these SES values, which the output never shows. */
+/**
+ * The run succeeded, and the api stack's overrides are exactly Env and these SES values, which the output never shows.
+ * The whole list is compared because the stand-in logs `sam $*`, so a value with a space (` # sender` left on by a
+ * reader) shows up as extra words rather than a different first word.
+ */
 function expectSes(r: ShellRun, env: string, sender: string, recipient: string): void {
   expect(r.status, r.out).toBe(0);
-  const api = overrides(r.calls)[`sched-${env}-api`];
-  expect(api).toContain(`SesSender=${sender}`);
-  expect(api).toContain(`SesStaffRecipient=${recipient}`);
+  expect(overrides(r.calls)[`sched-${env}-api`]).toEqual([
+    `Env=${env}`,
+    `SesSender=${sender}`,
+    `SesStaffRecipient=${recipient}`,
+  ]);
   expectNotPrinted(r);
 }
 
@@ -222,7 +230,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     it.each(["dev", "pr7"])(
       "refuses api to %s when a .env value spans lines, before any ssm or sam call",
       (env) => {
-        writeEnv(sb.repo.dir, `SES_SENDER="${DOTENV_SENDER}'\nSES_STAFF_RECIPIENT="${DOTENV_RECIPIENT}"\n`);
+        writeEnv(sb.repo.dir, MULTILINE_DOTENV);
         const r = run(["api", env]);
         expect(r.status).toBe(1);
         expect(r.out).toContain("SES_SENDER spans more than one line");
@@ -233,17 +241,43 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       },
     );
 
-    it("refuses an environment value with a carriage return, naming only its key", () => {
-      const r = run(["api", "pr7"], { SES_SENDER: SENDER, SES_STAFF_RECIPIENT: `${RECIPIENT}\r` });
+    it.each([
+      ["SES_SENDER", "\r", "SES_STAFF_RECIPIENT"],
+      ["SES_SENDER", "\n", "SES_STAFF_RECIPIENT"],
+      ["SES_STAFF_RECIPIENT", "\r", "SES_SENDER"],
+      ["SES_STAFF_RECIPIENT", "\n", "SES_SENDER"],
+    ])("refuses an environment %s containing %j, naming only that key", (key, char, other) => {
+      const r = run(["api", "pr7"], { ...SES_ENV, [key]: `${SES_ENV[key as keyof typeof SES_ENV]}${char}x` });
       expect(r.status).toBe(1);
-      expect(r.out).toContain("SES_STAFF_RECIPIENT spans more than one line");
-      expect(r.out).not.toContain("SES_SENDER SES_STAFF_RECIPIENT");
+      expect(r.out).toContain(`${key} spans more than one line`);
+      expect(r.out).not.toContain(`${other} spans`);
+      expect(r.out).not.toContain(`${other} ${key}`);
       expect(awsOrSam(r.calls)).toEqual([]);
       expectNotPrinted(r);
     });
 
+    it("refuses a worktree .env value that spans lines rather than falling back to the main checkout's", () => {
+      writeEnv(sb.repo.dir, MAIN_DOTENV);
+      const wt = worktree();
+      writeEnv(wt, MULTILINE_DOTENV);
+      const r = run(["api", "pr7"], {}, wt);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("SES_SENDER spans more than one line");
+      expect(awsOrSam(r.calls)).toEqual([]);
+      expectNotPrinted(r);
+    });
+
+    it("doesn't read or refuse a .env value that spans lines for a target without api", () => {
+      writeEnv(sb.repo.dir, MULTILINE_DOTENV);
+      const r = run(["data", "dev"]);
+      expect(r.status, r.out).toBe(0);
+      expect(r.out).not.toContain("spans more than one line");
+      expect(Object.keys(overrides(r.calls))).toEqual(["sched-dev-data"]);
+      expectNotPrinted(r);
+    });
+
     it("doesn't refuse a .env value that spans lines when the environment overrides it", () => {
-      writeEnv(sb.repo.dir, `SES_SENDER="${DOTENV_SENDER}'\nSES_STAFF_RECIPIENT="${DOTENV_RECIPIENT}"\n`);
+      writeEnv(sb.repo.dir, MULTILINE_DOTENV);
       expectSes(run(["api", "pr7"], SES_ENV), "pr7", SENDER, RECIPIENT);
     });
 

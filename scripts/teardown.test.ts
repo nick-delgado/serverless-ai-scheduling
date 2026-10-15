@@ -94,11 +94,8 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
   });
 
   describe("confirmation", () => {
-    it.each([
-      ["no answer (stdin at end of file)", undefined],
-      ["a wrong answer", "pr8\n"],
-    ])("aborts with exit 1 and no delete on %s", (_, input) => {
-      const r = run(["pr7"], { FAKE_STACKS: ALL }, input);
+    it("aborts with exit 1 and no delete on a wrong answer", () => {
+      const r = run(["pr7"], { FAKE_STACKS: ALL }, "pr8\n");
       expect(r.status).toBe(1);
       expect(deletes(r.calls)).toEqual([]);
       expect(emptied(r.calls)).toEqual([]);
@@ -117,6 +114,7 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
       expect(r.out).toContain("aborted: no confirmation given (stdin closed)");
       expect(r.calls.filter((c) => c.startsWith("aws ssm"))).toEqual([]);
       expect(deletes(r.calls)).toEqual([]);
+      expect(emptied(r.calls)).toEqual([]);
     });
 
     it("deletes when the env name is typed", () => {
