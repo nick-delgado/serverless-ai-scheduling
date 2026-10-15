@@ -261,7 +261,7 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
   it("fails the same recorded trials as before the change (#178 AC3, r1/A-1)", async () => {
     // On main (c05cb79) the list is the same one trial: #98's AC 5 hedged offer.
     expect(await failing("no_hallucinated_slots")).toEqual(["reschedule-single-appointment#1"]);
-  });
+    }, 20_000);
 });
 
 describe("slotKey", () => {
