@@ -52,6 +52,7 @@ describe("killedFiles", () => {
       "|---|---|---|---|---|",
       "| a\\|b | ``scripts/`x`.ts`` | c | KILLED | e |",
       "| a row with no file |",
+      "|",
       "| 2 | | c | KILLED | e |",
       "| 3 | `scripts/no-status.ts` |",
     ].join("\n");

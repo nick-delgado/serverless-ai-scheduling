@@ -130,9 +130,7 @@ describe("problems", () => {
         /^title: "\[M3\] an issue title" isn't .*feat, fix, infra, spike, docs, eval, chore, test/,
       ),
       expect.stringMatching(/^body: says Refs #38 and also has a closing keyword right before #38/),
-      expect.stringMatching(
-        /^body: "## Decisions the spec left open" holds a list \(2 items, first: - one\)/,
-      ),
+      expect.stringMatching(/^body: "## Decisions the spec left open" holds a list \(- one \/ - two\)/),
     ]);
     expect(problems("chore(process): a summary (#265)", "Closes #265\n")).toEqual([]);
   });

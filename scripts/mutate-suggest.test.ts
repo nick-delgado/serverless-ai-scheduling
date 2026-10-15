@@ -206,8 +206,9 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
   });
 
   it("gives no pass-through for a local, an element access, a call, this, a spread, or an unadded argument", () => {
-    const text = 'function f(p, q) {\n  const l = 1;\n  g(l, p["x"], p.x(), this, ...q, h);\n}\n';
+    const text = 'function f(p, [, q]) {\n  const l = 1;\n  g(l, p["x"], p.x(), this, ...q, h);\n}\n';
     expect(only(text, "pass-through")).toEqual([]);
+    expect(all("function f(p) {\n  return new X;\n}\n").edits).toEqual([]);
     const later = "function f(p) {\n  g(1,\n    p);\n}\n";
     expect(suggestEdits("a.ts", later, new Set([2])).edits.map((e) => e.note)).toEqual([
       "number+1",
@@ -247,6 +248,11 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
 
   it("moves a guard at a file's top level and in a case clause, and not the last statement or across a declaration", () => {
     expect(only("setup();\nconst a = 1;\n", "move-guard")).toEqual(["const a = 1;\nsetup();\n"]);
+    expect(only("namespace N {\n  setup();\n  x = 1;\n}\n", "move-guard")).toEqual([
+      "namespace N {\n  x = 1;\n  setup();\n}\n",
+    ]);
+    // A statement that is a branch on its own, not in a list, has nothing to swap with.
+    expect(only("if (a) check();\nx = 1;\n", "move-guard")).toEqual([]);
     const clause = "switch (k) {\n  case 1:\n    new Check(k);\n    x = 1;\n    break;\n}\n";
     expect(only(clause, "move-guard")).toEqual([
       "switch (k) {\n  case 1:\n    x = 1;\n    new Check(k);\n    break;\n}\n",

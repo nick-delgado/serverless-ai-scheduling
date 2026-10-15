@@ -67,7 +67,8 @@ export const uncell = (text: string): string => text.replaceAll("\\|", "|").repl
 export function unspan(text: string): string | undefined {
   const span = /^(`+)(.*?)\1(?!`)/.exec(text);
   if (!span) return undefined;
-  const inner = span[2] ?? "";
+  // The pattern's second group always takes part in a match, if only as "".
+  const inner = span[2] as string;
   const padded = /^ (.*) $/.exec(inner)?.[1];
   return uncell(padded !== undefined && /^`|`$/.test(padded) ? padded : inner);
 }
@@ -90,9 +91,10 @@ export function killedRows(body: string): KilledRow[] {
     // Cells split on pipes that aren't escaped: the Edit cell is the first, File the second, Change the third,
     // Status the fourth.
     const cells = line.split(/(?<!\\)\|/);
-    const file = unspan(cells[2]?.trim() ?? "");
-    if (file && KILLED_CELL.test(cells[4]?.trim() ?? ""))
-      rows.push({ id: uncell(cells[1]?.trim() ?? ""), file, find: unspan(cells[3]?.trim() ?? "") ?? "" });
+    const cell = (i: number) => cells[i]?.trim() ?? "";
+    const file = unspan(cell(2));
+    if (file && KILLED_CELL.test(cell(4)))
+      rows.push({ id: uncell(cell(1)), file, find: unspan(cell(3)) ?? "" });
   }
   return rows;
 }

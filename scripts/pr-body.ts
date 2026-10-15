@@ -47,7 +47,7 @@ export const titleOk = (title: string): boolean => TITLE.test(title);
 
 /** The issue numbers `body` says `Refs #<N>` for and also closes with a keyword right before `#<N>`, in order. */
 export function refsAndCloses(body: string): string[] {
-  const refs = [...body.matchAll(/\brefs:?\s+#(\d+)(?!\d)/gi)].map((m) => m[1] ?? "");
+  const refs = [...body.matchAll(/\brefs:?\s+#(\d+)(?!\d)/gi)].map((m) => m[1] as string); // the group always takes part
   const closes = (n: string) => new RegExp(`\\b(?:${CLOSING_KEYWORDS}):?\\s+#${n}(?!\\d)`, "i").test(body);
   return [...new Set(refs)].filter(closes);
 }
@@ -89,7 +89,7 @@ export function problems(title: string, body: string): string[] {
   const items = decisionItems(body);
   if (items.length > 0)
     found.push(
-      `body: "${DECISIONS_HEADING}" holds a list (${items.length} items, first: ${items[0] ?? ""}); list the ` +
+      `body: "${DECISIONS_HEADING}" holds a list (${items.join(" / ")}); list the ` +
         `decisions once, in the journal entry's "Why we chose", and link it there.`,
     );
   return found;
