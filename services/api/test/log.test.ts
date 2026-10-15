@@ -4,10 +4,15 @@ import { describe, expect, it } from "vitest";
 import { errorSummary } from "../src";
 
 describe("errorSummary", () => {
-  it("keeps the name and clips the message to 200 characters", () => {
-    const summary = errorSummary(new Error("x".repeat(250)));
-    // Strict: an absent code or status must not appear as an undefined field either.
-    expect(summary).toStrictEqual({ errorName: "Error", errorMessage: "x".repeat(200) });
+  it("keeps only the name of an error that isn't an AWS SDK error, never its message (r1/Q-5 (b))", () => {
+    const summary = errorSummary(new Error("Maria Chen, 555-0142"));
+    // Strict: an absent message, code or status must not appear as an undefined field either.
+    expect(summary).toStrictEqual({ errorName: "Error" });
+  });
+
+  it("clips an AWS SDK error's message to 200 characters", () => {
+    const error = Object.assign(new Error("x".repeat(250)), { $metadata: {} });
+    expect(errorSummary(error)).toStrictEqual({ errorName: "Error", errorMessage: "x".repeat(200) });
   });
 
   it("adds the AWS error code and HTTP status when the error has them", () => {
@@ -22,6 +27,11 @@ describe("errorSummary", () => {
       errorCode: "ThrottlingException",
       httpStatus: 429,
     });
+  });
+
+  it("keeps the code of an error that isn't an AWS SDK error, and still drops its message", () => {
+    const error = Object.assign(new Error("Maria Chen"), { code: "ENOTFOUND" });
+    expect(errorSummary(error)).toStrictEqual({ errorName: "Error", errorCode: "ENOTFOUND" });
   });
 
   it("leaves out a code that isn't a string", () => {

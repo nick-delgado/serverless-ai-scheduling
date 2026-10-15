@@ -1,7 +1,7 @@
 # ADR-009: Safety, privacy, and abuse controls
 
 - **Status:** Accepted
-- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123)); 2026-10-04 (the SES grant as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-as-built-35))
+- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123)); 2026-10-04 (the SES grant as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-as-built-35)); 2026-10-15 (the M3 security review, #39; see [Amendment](#amendment-2026-10-15-the-m3-security-review-39))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-035…FR-037, NFR-004, ADR-004, ADR-005, ADR-008
@@ -20,7 +20,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 **Data**
 - **Synthetic data only.** The clinic ("Cedar Ridge Health"), providers, and patients are fictional. The UI shows a "demo, not a real clinic" banner.
 - Conversation messages are kept for 30 days (TTL). No audio is stored (ADR-006).
-- CloudWatch logs carry IDs, timings, and token counts, **not** message text.
+- CloudWatch logs carry IDs, timings, and token counts, **not** message text. *(Refined by the [2026-10-15 amendment](#amendment-2026-10-15-the-m3-security-review-39): an error's message is logged only for AWS SDK errors.)*
 
 **Identity and authorization**
 - The patient ID comes from the JWT only (ADR-005). Tools can reach only that patient's records, so there is no tool that can read another patient's data.
@@ -60,7 +60,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 
 The decision stands. The roles as built in `infra/stacks/api.yaml` settle the details the body left open:
 
-- **The chat function's table access** is item reads and conditional writes only: GetItem, Query, PutItem, UpdateItem and ConditionCheckItem on the base table and its indexes, with no Scan or Delete (#17). `TransactWriteItems` is authorized per item through the Put, Update and ConditionCheck actions.
+- **The chat function's table access** is item reads and conditional writes only: GetItem, Query, PutItem, UpdateItem and ConditionCheckItem on the base table and its indexes, with no Scan or Delete (#17). *(Refined by the [2026-10-15 amendment](#amendment-2026-10-15-the-m3-security-review-39): its one index, `GSI1`, by name.)* `TransactWriteItems` is authorized per item through the Put, Update and ConditionCheck actions.
 - **The chat function's SES grant is deferred.** `ses:SendEmail`, still limited to the verified identity, comes with the escalation notifier (#35). Until then `escalate_to_human` stores the escalation with a `FAILED` notification status and sends no email, as [ADR-003's 2026-10-03 amendment](0003-iac-layout.md#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123) records. *(Superseded by the [2026-10-04 amendment](#amendment-2026-10-04-the-ses-grant-as-built-35): #35 added the grant.)*
 - **The session function** (`POST /api/session`, #18) can only GetItem and Query the base table. It has no Bedrock or SES access.
 
@@ -73,3 +73,12 @@ The decision stands, and "`ses:SendEmail` only from the verified identity" holds
 - **The `SchedDeployer` permission set** (`sched-dev`) has the same grant, on both identities with the same `ses:FromAddress` condition (`SendAsVerifiedIdentity` in `infra/bootstrap/sched-deployer-policy.json`, placeholders substituted by hand), so an operator can run `scripts/retry-escalations.ts` without an admin login. Nick decided this on #35.
 - **The retry script scans the table** for unsent escalations as that operator. The chat function's role still has no Scan.
 - **Logs and metrics stay ID-only.** A failed send writes one EMF record of `Sched/NotificationFailed` with the escalation and conversation IDs and the error's name, never its message. The error text stored on the escalation has email addresses redacted.
+
+## Amendment (2026-10-15): the M3 security review (#39)
+
+The decision stands. The review ([`docs/research/security-review.md`](../research/security-review.md)) checked the "Data", "Identity and authorization" and "Cost and abuse" lines above against `dev` and an ephemeral env, and changed two details:
+
+- **The chat function's table grant names its index.** It covers the base table and `…/index/GSI1`, the table's only index (`infra/stacks/data.yaml`), instead of `…/index/*`. A second index needs a change to `infra/stacks/api.yaml`, and a template test lists the statement exactly. Its Bedrock grant names `foundation-model/anthropic.claude-sonnet-4-6` exactly, without a trailing `*` (owner decision r1/Q-2 (a)).
+- **An error's message is logged only for AWS SDK errors** (those with `$metadata`), clipped to 200 characters. Any other error logs its name and code only, since a tool, a repository or the agent loop can build its message from patient or model text (owner decision r1/Q-5 (b)).
+
+What the review found outside `infra/stacks/api.yaml` and `services/api` is filed: bootstrap and `SchedDeployer` grants (#270), escalation retention (#271), account and repository settings (#272), and abuse limits beyond the four controls above (#273).

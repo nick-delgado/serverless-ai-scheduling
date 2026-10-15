@@ -118,6 +118,7 @@ Resources:
           Statement:
             # The DynamoDB repositories (#13) and the turn store: item reads, conditional writes, and
             # TransactWriteItems (authorized per item as Put/Update/ConditionCheck). No Scan, no Delete.
+            # The base table and its one index, GSI1, by name (#39): a second index needs a change here.
             - Sid: SingleTableItems
               Effect: Allow
               Action:
@@ -128,7 +129,7 @@ Resources:
                 - dynamodb:ConditionCheckItem
               Resource:
                 - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
-                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}/index/*"
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}/index/GSI1"
             # Every entitled profile (ADR-010) and therefore every refusal fallback. The US cross-region
             # inference profiles route to the foundation model in several US regions, hence `bedrock:*`.
             - Sid: InvokeAgentModels
@@ -141,7 +142,7 @@ Resources:
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-2-lite-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0
-                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*
+                - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6
                 - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0
                 - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-pro-v1:0
