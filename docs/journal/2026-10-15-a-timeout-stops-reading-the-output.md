@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** issue #268, follow-up #276, #256 and the [earlier 2026-10-15](2026-10-15-an-empty-process-group-is-not-an-error.md) entry, #215
+**Related:** issue #268, PR #277, follow-up #276, #256 and the [earlier 2026-10-15](2026-10-15-an-empty-process-group-is-not-an-error.md) entry, #215
 
 ## What happened
 
