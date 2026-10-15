@@ -12,8 +12,13 @@
  *     with no `if:` on the credentials step, no later step in its job has one (r1/Q-1 (a)). Steps aren't classified as
  *     calling AWS or not, and a job-level `if:` isn't a step's.
  * `deploy.yml` and `evals.yml` must be among the files checked, so the test fails if either stops being found; a new
- * workflow with a credentials step (#40's `e2e.yml`) is checked without a test edit. The per-workflow tests
- * (scripts/bootstrap-template.test.ts, scripts/eval-gate.test.ts) pin each file's own settings.
+ * workflow with a credentials step is found here without a test edit. Each credentials workflow also gets a test of
+ * its own settings, in its per-workflow test file (decision 607c339/TEST-201 (a) on PR #262): `deploy.yml`'s and
+ * `e2e.yml`'s in scripts/bootstrap-template.test.ts, `evals.yml`'s in scripts/eval-gate.test.ts.
+ *
+ * It also pins `pr-evidence.yml` (#265), which takes no credentials: its runs queue rather than cancel the running
+ * one (`cancel-in-progress: false`, B10-2), and its `PR body` job passes the title and body to scripts/pr-body.ts
+ * through `env:`, never in the `run:` line (r1/A-10).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -97,5 +102,25 @@ describe.each(workflows)("$file (a workflow with a credentials step)", ({ lines 
       const allowed = condition === undefined ? [undefined] : [condition, `always() && ${condition}`];
       for (const step of steps.slice(at + 1)) expect(allowed, step[0]).toContain(entries(step).if);
     }
+  });
+});
+
+describe("pr-evidence.yml (#265)", () => {
+  const lines = readFileSync(join(DIR, "pr-evidence.yml"), "utf8").split("\n");
+
+  it("lets a body edit's run wait for the running one instead of cancelling it (B10-2)", () => {
+    expect(entries(block(/^concurrency:$/, lines))["cancel-in-progress"]).toBe("false");
+  });
+
+  it("runs pr-body.ts as the PR body job, with the title and body only in env: (r1/A-10)", () => {
+    const job = block(/^ {2}pr-body:$/, block(/^jobs:$/, lines));
+    expect(entries(job).name).toBe("PR body");
+    const step = stepsOf(job).find((s) => entries(s).run?.includes("scripts/pr-body.ts"));
+    expect(entries(step ?? []).run).toBe("npx tsx scripts/pr-body.ts");
+    expect(member(step ?? [], "env")).toEqual({
+      PR_TITLE: "${{ github.event.pull_request.title }}",
+      PR_BODY: "${{ github.event.pull_request.body }}",
+    });
+    expect(job.filter((line) => /^\s+-? ?run:/.test(line) && line.includes("${{"))).toEqual([]);
   });
 });

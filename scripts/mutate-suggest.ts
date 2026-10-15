@@ -6,7 +6,8 @@
  *
  * (Without `--silent`, npm's `> … mutate` banner goes to stdout too, and the file isn't JSON.) `scripts/mutate.ts`
  * loads this module only for `--suggest`. The added lines are the committed ones, `git diff -U0 -M <base>...HEAD`, in
- * the files the `Seen-failing evidence` check covers (`EVIDENCE_GLOBS`: non-test `.ts`/`.tsx` sources). Each file is
+ * the files the `Seen-failing evidence` check covers (`EVIDENCE_GLOBS`: non-test `.ts`/`.tsx` sources, the helpers in
+ * `scripts/test/` and `apps/*\/e2e/` included since #265, B10-3, the Playwright specs not). Each file is
  * parsed at HEAD with the TypeScript compiler API, and each of these on an added line gets one edit:
  *   - `drop-operand`: an operand of a `&&`, `||` or `??` chain removed with the operator next to it. A chain of one
  *     operator is flattened (`a && b && c` gives three drops); an operand in parentheses or built with another
@@ -19,9 +20,23 @@
  *   - `regex-lookaround`, `regex-alternative`: in a regex literal, each lookaround removed, and each alternative of
  *     each group (the whole pattern included) removed with one `|` next to it, at any depth (r1/Q-4). The pattern is
  *     read by `regexParts`, a character scanner; a pattern passed to `new RegExp(…)` as a string gets nothing.
+ *   - `pass-through` (#265, B10-4): in a call or `new` expression, each argument that is a parameter of any enclosing
+ *     function (closures included; a destructured name counts), or a property access on one (`p.x`, `p?.x.y`),
+ *     replaced by `undefined` (r1/Q-3 (b)). `p["x"]`, `p.x()`, `this` and a spread get none, and a local that shadows
+ *     a parameter's name isn't told apart: the file is parsed, not type-checked.
+ *   - `flip-argument`: a `true` or `false` argument of a call or `new` expression, negated; one inside an object
+ *     literal or behind `!` gets none (r1/A-13).
+ *   - `extend-message`: the string or template literal message of `throw new Error(…)` with ` [extra]` appended, so a
+ *     test that names the whole message, or says a value never appears in it, has a break to fail on. Only `Error`
+ *     itself, thrown with `new` (r1/A-12).
+ *   - `move-guard`: a statement whose whole expression is a call or `new` expression, or `await` of one, swapped with
+ *     the next statement of its list (a block, a file's top level, a `case`/`default` clause), keeping the text
+ *     between them; not the last statement of a list, nor across a function, class, interface or type declaration
+ *     (r1/Q-2 (a)). The break starts at the moved statement; the others' at the changed argument or literal.
  *
  * Each edit's `find` occurs exactly once in its file (`occurrences`, as the runner counts): the changed text widened
- * by whole tokens, alternately right and left, within the nearest enclosing statement (or class member). A candidate
+ * by whole tokens, alternately right and left, within the nearest enclosing statement (or class member; for
+ * `move-guard`, the statement list the two statements are in). A candidate
  * whose whole statement still occurs more than once is skipped and counted on stderr (r1/Q-5). A file with
  * uncommitted changes is named on stderr and its candidates skipped and counted, since `find` is cut from HEAD (A-1).
  * `expect` is empty for the author to fill in, and `note` names the kind of break (A-7). Edits are ordered by file,
@@ -45,7 +60,11 @@ export type Note =
   | "number+1"
   | "number-1"
   | "regex-lookaround"
-  | "regex-alternative";
+  | "regex-alternative"
+  | "pass-through"
+  | "flip-argument"
+  | "extend-message"
+  | "move-guard";
 
 export type SuggestedEdit = Edit & { expect: string[]; note: Note };
 
@@ -58,6 +77,8 @@ interface Candidate {
   /** Where the break is, for "is it on an added line" and for ordering. */
   at: number;
   node: ts.Node;
+  /** How far the `find` may widen, when not the statement or class member around `node` (`move-guard`). */
+  scope?: ts.Node;
 }
 
 /** A span of a regex pattern, `[start, end)`, as offsets into the pattern. */
@@ -154,6 +175,91 @@ function inValuePosition(node: ts.Node): boolean {
   return true;
 }
 
+/** The names a parameter binds: an identifier, or each name in a destructuring pattern. */
+function boundNames(name: ts.BindingName): string[] {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : boundNames(element.name),
+  );
+}
+
+/** True when `arg` is a parameter of a function around `call`, or a property access on one (`p.x`, `p?.x.y`). */
+function passedThrough(arg: ts.Expression, call: ts.Node): boolean {
+  let root = arg;
+  while (ts.isPropertyAccessExpression(root)) root = root.expression;
+  if (!ts.isIdentifier(root)) return false;
+  for (let up: ts.Node | undefined = call.parent; up !== undefined; up = up.parent)
+    if (ts.isFunctionLike(up) && up.parameters.some((p) => boundNames(p.name).includes(root.text)))
+      return true;
+  return false;
+}
+
+/** The statement lists a `move-guard` swaps within: a block, a file's top level, a `case`/`default` clause. */
+const statementList = (
+  node: ts.Node,
+): node is ts.Block | ts.SourceFile | ts.CaseOrDefaultClause | ts.ModuleBlock =>
+  ts.isBlock(node) || ts.isSourceFile(node) || ts.isCaseOrDefaultClause(node) || ts.isModuleBlock(node);
+
+/** True for a statement a guard moving across changes nothing: a function, class, interface or type declaration. */
+const declaration = (node: ts.Node): boolean =>
+  ts.isFunctionDeclaration(node) ||
+  ts.isClassDeclaration(node) ||
+  ts.isInterfaceDeclaration(node) ||
+  ts.isTypeAliasDeclaration(node);
+
+/** True for a statement whose whole expression is a call or `new` expression, or `await` of one. */
+function discardedCall(node: ts.Node): node is ts.ExpressionStatement {
+  if (!ts.isExpressionStatement(node)) return false;
+  const value = ts.isAwaitExpression(node.expression) ? node.expression.expression : node.expression;
+  return ts.isCallExpression(value) || ts.isNewExpression(value);
+}
+
+/** The `pass-through` and `flip-argument` breaks of one call's arguments. */
+function argumentBreaks(call: ts.CallExpression | ts.NewExpression, source: ts.SourceFile): Candidate[] {
+  return (call.arguments ?? []).flatMap((arg): Candidate[] => {
+    const at = arg.getStart(source);
+    const end = arg.getEnd();
+    if (arg.kind === ts.SyntaxKind.TrueKeyword || arg.kind === ts.SyntaxKind.FalseKeyword) {
+      const text = arg.kind === ts.SyntaxKind.TrueKeyword ? "false" : "true";
+      return [{ start: at, end, text, note: "flip-argument", at, node: call }];
+    }
+    if (passedThrough(arg, call))
+      return [{ start: at, end, text: "undefined", note: "pass-through", at, node: call }];
+    return [];
+  });
+}
+
+/** The `extend-message` break of `throw new Error(<string or template literal>, …)`, if `node` is one. */
+function messageBreak(node: ts.ThrowStatement, source: ts.SourceFile): Candidate[] {
+  const thrown = node.expression;
+  if (
+    !ts.isNewExpression(thrown) ||
+    !ts.isIdentifier(thrown.expression) ||
+    thrown.expression.text !== "Error"
+  )
+    return [];
+  const message = thrown.arguments?.[0];
+  if (message === undefined || !(ts.isStringLiteral(message) || ts.isTemplateLiteral(message))) return [];
+  const at = message.getStart(source);
+  const raw = message.getText(source);
+  const text = `${raw.slice(0, -1)} [extra]${raw.slice(-1)}`;
+  return [{ start: at, end: message.getEnd(), text, note: "extend-message", at, node: message }];
+}
+
+/** The `move-guard` break of a discarded call statement: swapped with the next statement of its list. */
+function guardBreak(node: ts.ExpressionStatement, source: ts.SourceFile): Candidate[] {
+  const list = node.parent;
+  if (!statementList(list)) return [];
+  const statements: readonly ts.Statement[] = list.statements;
+  const next = statements[statements.indexOf(node) + 1];
+  if (next === undefined || declaration(next)) return [];
+  const at = node.getStart(source);
+  const text = source.text;
+  const swapped =
+    next.getText(source) + text.slice(node.getEnd(), next.getStart(source)) + node.getText(source);
+  return [{ start: at, end: next.getEnd(), text: swapped, note: "move-guard", at, node, scope: list }];
+}
+
 /** The candidate breaks in one parsed file, wherever they are. */
 function candidates(source: ts.SourceFile): Candidate[] {
   const found: Candidate[] = [];
@@ -213,7 +319,12 @@ function candidates(source: ts.SourceFile): Candidate[] {
         const at = start + 1 + span.start;
         found.push({ start: at, end: start + 1 + span.end, text: empty ? "(?:)" : "", note, at, node });
       }
+    } else if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      found.push(...argumentBreaks(node, source));
+    } else if (ts.isThrowStatement(node)) {
+      found.push(...messageBreak(node, source));
     }
+    if (discardedCall(node)) found.push(...guardBreak(node, source));
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -243,7 +354,7 @@ function tokens(node: ts.Node, source: ts.SourceFile): { start: number; end: num
 /** The candidate as an edit whose `find` occurs once in the file, or undefined when its whole statement repeats. */
 function unique(candidate: Candidate, file: string, source: ts.SourceFile): SuggestedEdit | undefined {
   const text = source.text;
-  const scope = enclosing(candidate.node);
+  const scope = candidate.scope ?? enclosing(candidate.node);
   const marks = tokens(scope, source);
   let { start, end } = candidate;
   for (let right = true; ; right = !right) {

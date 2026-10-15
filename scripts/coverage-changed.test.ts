@@ -172,7 +172,8 @@ describe("isSourceFile", () => {
 });
 
 describe("the coverage globs in vitest.config.ts (AC 1)", () => {
-  // The expected sets come from the repository's layout: each workspace's `src` tree and `scripts/`.
+  // The expected sets come from the repository's layout: each workspace's `src` tree, `scripts/`, its test helpers
+  // and the E2E support code (#265, B10-3).
   const root = join(import.meta.dirname, "..");
   const list = (pattern: string) => globSync(pattern, { cwd: root }).sort();
   const trees = {
@@ -180,15 +181,36 @@ describe("the coverage globs in vitest.config.ts (AC 1)", () => {
     services: list("services/*/src/**/*.{ts,tsx}"),
     apps: list("apps/*/src/**/*.{ts,tsx}"),
     scripts: list("scripts/*.ts"),
+    "scripts/test": list("scripts/test/*.ts"),
+    "apps/*/e2e": list("apps/*/e2e/**/*.ts"),
   };
   const isTest = (file: string) => /\.test\.tsx?$/.test(file);
+  /** The Playwright specs, which run only against a deployed env (r1/Q-5 (b)). */
+  const SPECS = [
+    "apps/web/e2e/01-login.e2e.ts",
+    "apps/web/e2e/02-book.e2e.ts",
+    "apps/web/e2e/03-reschedule.e2e.ts",
+    "apps/web/e2e/04-escalation.e2e.ts",
+    "apps/web/e2e/fr010.greeting.ts",
+  ];
 
   it.each(Object.entries(trees))("include every non-test source file under %s, and no test", (_, files) => {
-    const sources = files.filter((f) => !isTest(f) && !f.endsWith(".d.ts"));
+    const sources = files.filter((f) => !isTest(f) && !f.endsWith(".d.ts") && !SPECS.includes(f));
     expect(sources.length).toBeGreaterThan(0);
     expect(files.some(isTest)).toBe(true);
     expect(sources.filter((f) => !isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
     expect(files.filter(isTest).filter((f) => isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+  });
+
+  it("leave out each Playwright spec, and keep the FR-010 config and the E2E support code", () => {
+    expect(SPECS.filter((f) => trees["apps/*/e2e"].includes(f))).toEqual(SPECS);
+    expect(SPECS.filter((f) => isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
+    const kept = [
+      "apps/web/e2e/fr010.config.ts",
+      "apps/web/e2e/cost-reporter.ts",
+      "apps/web/e2e/support/chat.ts",
+    ];
+    expect(kept.filter((f) => isSourceFile(f, SOURCE_GLOBS))).toEqual(kept);
   });
 
   it("include the web app's .tsx components", () => {
