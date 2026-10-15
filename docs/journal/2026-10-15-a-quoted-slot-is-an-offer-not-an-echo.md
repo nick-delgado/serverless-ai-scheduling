@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #239, #244, #245, #178, #233, PR #238, #236, #98, #181, ADR-008 ([2026-10-15 amendment](../adr/0008-evaluation-strategy.md#amendment-2026-10-15-what-no_hallucinated_slots-reads-as-a-quoted-slot-239)), PRD §7
+**Related:** #239, PR #278, #244, #245, #178, #233, PR #238, #236, #98, #181, ADR-008 ([2026-10-15 amendment](../adr/0008-evaluation-strategy.md#amendment-2026-10-15-what-no_hallucinated_slots-reads-as-a-quoted-slot-239)), PRD §7
 
 ## What happened
 
