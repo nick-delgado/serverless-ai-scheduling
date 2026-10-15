@@ -39,22 +39,12 @@ const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const STAND_INS = ["aws", "sam", "npm"] as const;
 export type StandIn = (typeof STAND_INS)[number];
 
-/** Everything deploy.sh, teardown.sh, deploy-web.sh and the stand-ins call that isn't a bash builtin. */
-const TOOLS = [
-  "bash",
-  "git",
-  "dirname",
-  "sed",
-  "tail",
-  "tr",
-  "awk",
-  "cat",
-  "rm",
-  "mkdir",
-  "find",
-  "head",
-  "grep",
-];
+/**
+ * Everything deploy.sh, teardown.sh, deploy-web.sh and the stand-ins call that isn't a bash builtin. `node` is deploy.sh's
+ * .env parser (util.parseEnv, #257): like the other tools, it is the first `node` on the parent's PATH, which need not be
+ * the Node that runs the tests.
+ */
+const TOOLS = ["bash", "git", "dirname", "node", "tr", "awk", "cat", "rm", "mkdir", "find", "head", "grep"];
 
 /** Env names every script's check rejects, and the two at its length bounds that it lets past. */
 export const BAD_ENV_NAMES = ["Dev", "dev_x", "d", "a2345678901234567"];
@@ -81,7 +71,8 @@ export function webSsm(env: string): Record<string, string> {
 
 /**
  * Logs each call to $FAKE_LOG. `sts` fails with FAKE_STS_FAIL; `ssm get-parameter` answers from $FAKE_SSM_DIR (one
- * file per name) or fails with FAKE_SSM_ERROR; `cloudformation describe-stacks` finds only the stacks in FAKE_STACKS
+ * file per name) or fails with FAKE_SSM_ERROR, for every name or, when FAKE_SSM_ERROR_NAME is set, for that name only
+ * (the others are answered); `cloudformation describe-stacks` finds only the stacks in FAKE_STACKS
  * (space-separated names); `cloudformation wait` fails for the stack named in FAKE_WAIT_FAIL.
  */
 const FAKE_AWS = `#!/usr/bin/env bash
@@ -89,7 +80,9 @@ echo "aws $*" >> "$FAKE_LOG"
 case "$1 $2" in
   "sts get-caller-identity") echo "identity profile=$AWS_PROFILE region=$AWS_REGION" >> "$FAKE_LOG"; [[ -n "\${FAKE_STS_FAIL:-}" ]] && exit 255; echo '{}' ;;
   "ssm get-parameter")
-    [[ -n "\${FAKE_SSM_ERROR:-}" ]] && { echo "$FAKE_SSM_ERROR" >&2; exit 254; }
+    if [[ -n "\${FAKE_SSM_ERROR:-}" ]]; then
+      [[ -z "\${FAKE_SSM_ERROR_NAME:-}" || "$4" == "$FAKE_SSM_ERROR_NAME" ]] && { echo "$FAKE_SSM_ERROR" >&2; exit 254; }
+    fi
     f="$FAKE_SSM_DIR/$(printf '%s' "$4" | tr / _)"
     [[ -f "$f" ]] || { echo "ParameterNotFound" >&2; exit 254; }
     cat "$f" ;;
