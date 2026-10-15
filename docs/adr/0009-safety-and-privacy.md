@@ -76,7 +76,7 @@ The decision stands, and "`ses:SendEmail` only from the verified identity" holds
 
 ## Amendment (2026-10-15): the M3 security review (#39)
 
-The decision stands. The review ([`docs/research/security-review.md`](../research/security-review.md)) checked every line above against `dev` and an ephemeral env, and changed two details:
+The decision stands. The review ([`docs/research/security-review.md`](../research/security-review.md)) checked the "Data", "Identity and authorization" and "Cost and abuse" lines above against `dev` and an ephemeral env, and changed two details:
 
 - **The chat function's table grant names its index.** It covers the base table and `…/index/GSI1`, the table's only index (`infra/stacks/data.yaml`), instead of `…/index/*`. A second index needs a change to `infra/stacks/api.yaml`, and a template test lists the statement exactly. Its Bedrock grant names `foundation-model/anthropic.claude-sonnet-4-6` exactly, without a trailing `*` (owner decision r1/Q-2 (a)).
 - **An error's message is logged only for AWS SDK errors** (those with `$metadata`), clipped to 200 characters. Any other error logs its name and code only, since a tool, a repository or the agent loop can build its message from patient or model text (owner decision r1/Q-5 (b)).

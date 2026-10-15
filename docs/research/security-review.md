@@ -10,7 +10,7 @@ The M3 security review audits the running system against [ADR-009](../adr/0009-s
 - this checklist shape (Q-7 (a)).
 
 - **Reviewed:** 2026-10-15, against `main` at `c05cb79`, with the fixes in `572297e` on `docs/39-security-review`.
-- **Environments:** read-only checks on `dev`; live checks on the ephemeral env `sched-sec39-*`, deployed from `572297e` with `scripts/deploy.sh all sec39 -- DailyTurnCap=1`. It costs about $0.03 of Bedrock for one turn and is awaiting Nick's approval to tear down.
+- **Environments:** read-only checks on `dev`; live checks on the ephemeral env `sched-sec39-*`, deployed from `572297e` with `scripts/deploy.sh all sec39 -- DailyTurnCap=1`. It cost about $0.03 of Bedrock for one turn. With Nick's approval, it was torn down on 2026-10-15 (all four stacks deleted).
 - **Who:** the `task-worker` agent ran every check below as the `SchedDeployer` SSO role. It made no IAM read calls, by assumption A-2.
 
 Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for values this public repo never holds.
@@ -39,14 +39,14 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 |---|---|---|
 | The patient ID comes from the JWT only; no tool can read another patient's data | holds | `patientIdFromEvent` reads only `requestContext.authorizer.claims.sub` (`services/api/src/lib/request.ts:23-26`). The executor injects it (`packages/tools/src/registry.ts:144`), and no tool input schema has `patientId` (`git grep patientId packages/contracts/src/tools.ts`: no match). A request without a verified `sub` gets 401: tests `chat-turn.test.ts` "refuses a request without a verified patient with 401, before reading anything or checking the body" and `session.test.ts:353`. The evals cover it under `adr9.identity-from-jwt`. |
 | Conversation ownership is checked against the JWT `sub` in the data layer | holds | `packages/tools/src/repos/dynamo/repositories.ts:517` (`ConditionExpression: "patientId = :sub"` on append), `:568` (a read with any foreign item returns nothing), `:599` (escalation). Tests: `services/api/test/chat-turn.test.ts:329` "never reads or extends another patient's conversation: it starts a new one instead" and `:981`. |
-| Lambda roles are least-privilege (ADR-010's `bedrock:InvokeModel*`; the 2026-10-03 and 2026-10-04 amendments) | fixed | The chat role named `index/*` and `anthropic.claude-sonnet-4-6*`. Both are now exact (F-1, F-2, commit `572297e`), with new pins in `services/api/test/api-template.test.ts:236` and `:57`. Tables per principal are in §2. |
+| Lambda roles are least-privilege (ADR-010's `bedrock:InvokeModel*`; the 2026-10-03 and 2026-10-04 amendments) | fixed | The chat role named `index/*` and `anthropic.claude-sonnet-4-6*`. Both are now exact (F-1, F-2, commit `572297e`), with new pins in `services/api/test/api-template.test.ts` ("lets the chat role make item reads and conditional writes on the base table and GSI1 only" and "names every model ARN exactly: no wildcard but the region of a foundation model (#39)"). Tables per principal are in §2. |
 
 ### ADR-009 "Cost and abuse" (`:41-44`)
 
 | Line | Status | Evidence |
 |---|---|---|
-| API Gateway stage throttling | holds, with findings | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:345-349`, pinned by `api-template.test.ts:262`. Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15; follow-ups #273, #272). |
-| A per-patient cap on agent turns per day (50), enforced in the chat handler | holds | `DailyTurnCap` defaults to 50 (`infra/stacks/api.yaml:27-31`) and reaches the function as `DAILY_TURN_CAP` (`:104`), pinned by `api-template.test.ts:271`. Deployed: `dev` 50, `sec39` 1 (`lambda get-function-configuration`). The rules are pinned by the tests in A-5: `turn-store.test.ts:27-29`; `dynamo-turn-store.local.test.ts:52-67` (concurrency); `chat-turn.test.ts:789` (replays don't count); `errors.test.ts:40-44` (429 `RATE_LIMITED`). Live on `sec39`: 200, then 429 `RATE_LIMITED` (§3). |
+| API Gateway stage throttling | follow-up #273, #272 | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:345-349`, pinned by `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10". Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15; follow-ups #273, #272). |
+| A per-patient cap on agent turns per day (50), enforced in the chat handler | holds | `DailyTurnCap` defaults to 50 (`infra/stacks/api.yaml:27-31`) and reaches the function as `DAILY_TURN_CAP` (`:104`), pinned by `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function". Deployed: `dev` 50, `sec39` 1 (`lambda get-function-configuration`). The rules are pinned by the tests in A-5: `turn-store.test.ts:27-29`; `dynamo-turn-store.local.test.ts:52-67` (concurrency); `chat-turn.test.ts:789` (replays don't count); `errors.test.ts:40-44` (the cap's message); `chat-turn.test.ts:436` "enforces the daily turn cap per patient and per clinic day" (429 with `RATE_LIMITED`). Live on `sec39`: 200, then 429 `RATE_LIMITED` (§3). |
 | An agent-loop iteration cap (ADR-001) | holds | `packages/agent/src/loop.ts:71` (`maxIterations: 8`, `maxToolCallsPerTurn: 16`); `packages/agent/test/loop.test.ts:497` "counts retries as iterations, so a retry can't push the turn past the cap". |
 | An AWS Budget alarm (bootstrap stack) | holds | `infra/bootstrap/bootstrap.yaml:229-250` (`sched-monthly`, 80% actual and 100% forecast) and the Bedrock budget (`BedrockBudgetLimitUsd`, `:20`). The deployed bootstrap template matches the repo (§2, A-2). |
 
@@ -55,7 +55,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | Clause | Status | Evidence |
 |---|---|---|
 | Least-privilege IAM | fixed; follow-up #270 | §2. Two avoidable `*` fixed in `api.yaml`. Every `*` in the bootstrap stack and `SchedDeployer` has a class, and the avoidable ones are filed on #270. |
-| JWT on every API | holds | Both methods use the Cognito authorizer (`infra/stacks/api.yaml:364`, `:376`). Pinned by `api-template.test.ts:254` "routes POST /api/chat through the Cognito authorizer to the chat function" (new) and the session route test. The new pin also counts exactly two `security:` blocks. |
+| JWT on every API | holds | Both methods use the Cognito authorizer (`infra/stacks/api.yaml:364`, `:376`). Pinned by `api-template.test.ts` "puts every method of the API behind the Cognito authorizer, which validates this env's user pool" (new: every method under `paths:` must carry `security: - CognitoUserPool: []`, and the authorizer's definition is compared exactly), "routes POST /api/chat through the Cognito authorizer to the chat function" (new) and the session route test. |
 | Patient ID only from the token | holds | See the identity row above. |
 | No secrets in the repo | holds | §4, row "Secrets in tracked files and git history". The commit author email is metadata, not a file: F-18, #272. |
 | Synthetic data only | holds | See the data row above. |
@@ -68,7 +68,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | 30-day message TTL | holds | See the ADR-009 data row. |
 | No message text in logs | fixed | F-21; §3. |
 | Least-privilege IAM | fixed; follow-up #270 | §2 |
-| API throttling | holds, with findings | §3; F-12, F-15 |
+| API throttling | follow-up #273, #272 | §3; F-12, F-15 |
 | Daily turn cap | holds | §3; the A-5 tests |
 | Loop iteration cap | holds | `loop.ts:71`, `loop.test.ts:497` |
 | Budget alarm | holds | `bootstrap.yaml:229-250` |
@@ -88,8 +88,8 @@ Each table lists every statement whose action or resource contains `*`.
 
 | Statement | `*` | Class |
 |---|---|---|
-| `SingleTableItems` | was `…/index/*` | **fixed** (`572297e`): `…/index/GSI1`, the table's only index (`infra/stacks/data.yaml:37`). Live on `sec39`: 4 `Query index=GSI1` calls succeeded under it (X-Ray). Pinned exactly by `api-template.test.ts:236`. |
-| `InvokeAgentModels` | was `foundation-model/anthropic.claude-sonnet-4-6*` | **fixed** (`572297e`): the exact ID, confirmed with `aws bedrock get-foundation-model --model-identifier anthropic.claude-sonnet-4-6` (it returned that ID and ARN). Live: a `sonnet-4.6` turn on `sec39` completed with 2 model calls. Pinned by `api-template.test.ts:38` and `:57`. |
+| `SingleTableItems` | was `…/index/*` | **fixed** (`572297e`): `…/index/GSI1`, the table's only index (`infra/stacks/data.yaml:37`). Live on `sec39`: 4 `Query index=GSI1` calls succeeded under it (X-Ray). Pinned exactly by `api-template.test.ts` "lets the chat role make item reads and conditional writes on the base table and GSI1 only". |
+| `InvokeAgentModels` | was `foundation-model/anthropic.claude-sonnet-4-6*` | **fixed** (`572297e`): the exact ID, confirmed with `aws bedrock get-foundation-model --model-identifier anthropic.claude-sonnet-4-6` (it returned that ID and ARN). Live: a `sonnet-4.6` turn on `sec39` completed with 2 model calls. Pinned by `api-template.test.ts` "lets the chat role invoke every entitled profile's model" and "names every model ARN exactly: no wildcard but the region of a foundation model (#39)". |
 | `InvokeAgentModels` | region `*` on the four `foundation-model/…` ARNs | **justified**: US cross-region inference profiles route to the foundation model in several US regions. |
 | `AWSLambdaBasicExecutionRole` (SAM) | `logs:*` actions on `"*"` | **justified**: SAM's managed policy (Q-2 (a)). The boundary caps it to log writes. |
 | `AWSXrayWriteOnlyAccess` (SAM) | `xray:Put*` on `"*"` | **justified**: X-Ray's write actions have no resource-level permissions. |
@@ -123,32 +123,56 @@ Each table lists every statement whose action or resource contains `*`.
 |---|---|---|
 | `WorkloadServices` | `Resource: "*"` | **justified**: a ceiling, not a grant. |
 | `WorkloadServices` | `bedrock-mantle:CreateInference`, `bedrock-mantle:CountTokens` (no `*`, but unused) | **follow-up #270** (F-4, low): nothing calls Mantle since ADR-010. |
+| `WorkloadServices` | `cloudwatch:PutMetricData`, `dynamodb:DeleteItem`, `BatchGetItem`, `BatchWriteItem`, `DescribeTable`, `ses:SendRawEmail`, `transcribe:StartStreamTranscription`, `ssm:GetParameter`, `GetParameters`, `GetParametersByPath`, `s3:GetObject`, `PutObject`, `lambda:InvokeFunction`, `cognito-identity:GetId`, `GetCredentialsForIdentity` (no `*`; no `sched-*` workload role grants them) | **follow-up #270** (F-23, low): ceiling-only actions. The workload roles grant only the chat role's five DynamoDB item actions, two Bedrock invokes and `ses:SendEmail` (`infra/stacks/api.yaml:122-166`), the session role's two reads (`:329-335`), Transcribe's WebSocket action (`infra/stacks/auth.yaml:117`), and SAM's log and X-Ray writes. |
 | `NeverIamOrAccountLevel` | `iam:*`, `organizations:*`, `account:*`, `sso:*` (Deny) | **justified**: a deny. |
 
-### GitHub OIDC roles (`bootstrap.yaml:309-575`)
+### GitHub OIDC role `sched-github-deploy` (`GitHubDeployRole`, `bootstrap.yaml:309-405`)
 
-| Role / statement | `*` | Class |
+| Statement | `*` | Class |
 |---|---|---|
-| all three trust policies | `sub` patterns | **justified**: exact repo, environment and workflow. `e2e.yml@refs/heads/*` is the one ref wildcard, gated by the `e2e` environment's branch rule. |
-| deploy, e2e / `Identity` | `sts:GetCallerIdentity` on `"*"` | **justified**: no resource-level permissions. |
-| deploy, e2e / `CloudFormationReadAndValidate` | `"*"` | **justified**: `ValidateTemplate`, `GetTemplateSummary`, `ListStacks` and `ListExports` have no resource-level permissions. |
-| deploy, e2e / `CloudFormationDrive{Dev,E2e}Stacks` | `stack/sched-<env>-*/*` | **justified**: env prefix. |
-| deploy, e2e / site buckets | `sched-<env>-web-*` | **justified**: the bucket name ends in a generated suffix. |
-| deploy, e2e / `SpaInvalidation` | `distribution/*` | **justified**: random distribution IDs; invalidation only (recorded in the template). |
-| deploy, e2e / SSM | `/sched/bootstrap/*`, `/sched/<env>/*` | **justified**: path prefixes. |
-| evals / `InvokeEvalModels` | `foundation-model/anthropic.claude-sonnet-4-6*` | **follow-up #270** (F-5, medium): the copy of the suffix #39 fixed in `api.yaml`. |
-| evals / `InvokeEvalModels` | region `*` | **justified**, as for the chat role. |
-| e2e / `SeedE2eData` | `table/sched-e2e-*` | **justified**: env prefix. |
-| e2e / `SeedE2eData` | `table/sched-e2e-*/index/*` | **follow-up #270** (F-13, medium): only `GSI1` exists. |
-| e2e / `SeedE2eUsers` | `userpool/*` | **justified**: random pool IDs, with an `aws:ResourceTag/env: e2e` condition. |
+| trust policy | none: `sub` is matched exactly | `StringEquals` on this repository, the `dev` environment and `deploy.yml@refs/heads/main` (`bootstrap.yaml:325`). |
+| `Identity` | `sts:GetCallerIdentity` on `"*"` | **justified**: no resource-level permissions. |
+| `CloudFormationReadAndValidate` | `ValidateTemplate`, `GetTemplateSummary`, `ListStacks`, `ListExports` on `"*"` | **justified**: these actions have no resource-level permissions. |
+| `CloudFormationReadAndValidate` | `DescribeStacks` on `"*"` | **follow-up #270** (F-22, low): `DescribeStacks` takes a stack ARN, and every call in the repo names its stack (`scripts/teardown.sh:31`; SAM's deploy describes the stack it deploys), so it belongs in the stack-scoped statement. |
+| `CloudFormationDriveDevStacks` | `stack/sched-dev-*/*` | **justified**: env prefix, plus the stack ID CloudFormation appends. |
+| `ArtifactAndDevSiteBuckets` | `${ArtifactBucket.Arn}/*` | **follow-up #270** (F-24, medium): `scripts/deploy.sh:132` uploads under `--s3-prefix <stack name>`, so `/sched-dev-*` would do; `/*` lets the role overwrite other envs' artifacts. |
+| `ArtifactAndDevSiteBuckets` | `sched-dev-web-*`, `sched-dev-web-*/*` | **justified**: the bucket name ends in a generated suffix. |
+| `SpaInvalidation` | `distribution/*` | **justified**: random distribution IDs; invalidation only (recorded in the template). |
+| `SsmBootstrapAndDevParameters` | `/sched/bootstrap/*`, `/sched/dev/*` | **justified**: path prefixes. |
+
+### GitHub OIDC role `sched-github-evals` (`GitHubEvalsRole`, `bootstrap.yaml:410-444`)
+
+| Statement | `*` | Class |
+|---|---|---|
+| trust policy | `sub` ends in `evals.yml@refs/pull/*/merge` (`StringLike`, `bootstrap.yaml:426-427`) | **justified**: this role has no GitHub environment gate, unlike the other two. The subject pins this repository and the `evals.yml` workflow on a `pull_request` event, and PR numbers can't be listed in advance. The merge ref runs the PR's own copy of `evals.yml` (`.github/workflows/evals.yml:10-11`), so anyone who can push a branch to this repository can run code under the role. The role can only invoke the two eval models (`InvokeEvalModels`). A fork's PR gets no OIDC token, so the gate fails closed (CLAUDE.md). |
+| `InvokeEvalModels` | `foundation-model/anthropic.claude-sonnet-4-6*` | **follow-up #270** (F-5, medium): the copy of the suffix #39 fixed in `api.yaml`. |
+| `InvokeEvalModels` | region `*` | **justified**, as for the chat role. |
+
+### GitHub OIDC role `sched-github-e2e` (`GitHubE2eRole`, `bootstrap.yaml:451-572`)
+
+| Statement | `*` | Class |
+|---|---|---|
+| trust policy | `sub` ends in `e2e.yml@refs/heads/*` (`bootstrap.yaml:468`) | **justified**: the subject pins this repository, the `e2e` environment and the `e2e.yml` workflow, and the `e2e` environment's deployment-branch rule decides which branches may run it (r1/Q-2 (b) on #40, recorded at `bootstrap.yaml:446-449`). |
+| `Identity` | `sts:GetCallerIdentity` on `"*"` | **justified**: no resource-level permissions. |
+| `CloudFormationReadAndValidate` | `ValidateTemplate`, `GetTemplateSummary`, `ListStacks`, `ListExports` on `"*"` | **justified**: no resource-level permissions. |
+| `CloudFormationReadAndValidate` | `DescribeStacks` on `"*"` | **follow-up #270** (F-22, low), as for the deploy role. |
+| `CloudFormationDriveE2eStacks` | `stack/sched-e2e-*/*` | **justified**: env prefix. |
+| `ArtifactAndE2eSiteBuckets` | `${ArtifactBucket.Arn}/*` | **follow-up #270** (F-24, medium), as for the deploy role (`/sched-e2e-*` would do). |
+| `ArtifactAndE2eSiteBuckets` | `sched-e2e-web-*`, `sched-e2e-web-*/*` | **justified**: generated bucket-name suffix. |
+| `SpaInvalidation` | `distribution/*` | **justified**, as for the deploy role. |
+| `SsmBootstrapAndE2eParameters` | `/sched/bootstrap/*`, `/sched/e2e/*` | **justified**: path prefixes. |
+| `SeedE2eData` | `table/sched-e2e-*` | **justified**: env prefix. |
+| `SeedE2eData` | `table/sched-e2e-*/index/*` | **follow-up #270** (F-13, medium): only `GSI1` exists. |
+| `SeedE2eUsers` | `userpool/*` | **justified**: random pool IDs, with an `aws:ResourceTag/env: e2e` condition. |
 
 ### `SchedDeployer` permission set (`infra/bootstrap/sched-deployer-policy.json`)
 
 | Statement | `*` | Class |
 |---|---|---|
-| `Identity`, `CloudFormationReadAndValidate` | `"*"` | **justified**, as above. |
+| `Identity`; `CloudFormationReadAndValidate` (`ValidateTemplate`, `GetTemplateSummary`, `ListStacks`, `ListExports`) | `"*"` | **justified**: no resource-level permissions. |
+| `CloudFormationReadAndValidate` | `DescribeStacks` on `"*"` | **follow-up #270** (F-22, low), as for the CI roles. |
 | `CloudFormationDriveSchedStacks` | `stack/sched-*/*` | **justified**: prefix; `DenyTouchingBootstrapStack` carves out the bootstrap stack. It lacks `DetectStackResourceDrift`: F-9 (low), #270. |
-| `ArtifactAndSiteBuckets` | `sched-*` | **justified**: prefix; the operator deploys every env. |
+| `ArtifactAndSiteBuckets` | `sched-*`, `sched-*/*` | **justified**: prefix; the operator deploys every env and publishes every env's site. |
 | `SpaInvalidation` | `"*"` | **justified**: `ListDistributions` has no resource-level permissions, and distribution IDs are random. |
 | `ReadOnlyDebugging` | `"*"` | **justified**: read-only describe, list and get actions for operator debugging, many without resource-level permissions. |
 | `SsmSchedParameters` | `/sched/*` | **justified**: prefix. |
@@ -188,8 +212,8 @@ On `sec39`, Logs Insights reported records skipped by its index for a `like` fil
 
 | Value | In `infra/stacks/api.yaml` | Deployed | Pinned by | Live check (`sec39`, 2026-10-15) |
 |---|---|---|---|---|
-| Stage throttle | rate 5, burst 10, `/*` `*` (`:345-349`) | `dev` and `sec39`: `"*/*": rate 5.0, burst 10` | `api-template.test.ts:262` | See below. |
-| `DailyTurnCap` | default 50, min 1 (`:27-31`), passed as `DAILY_TURN_CAP` (`:104`) | `dev` 50; `sec39` 1 (deploy override) | `api-template.test.ts:271`; the A-5 tests | A first new message got 200 (`turnsUsedToday: 1`, one `check_availability` call). A second new message, with a new `clientMessageId`, the same clinic day, 14:28 ET, got **429**: `{"type":"error","code":"RATE_LIMITED",…,"retryable":false}`. |
+| Stage throttle | rate 5, burst 10, `/*` `*` (`:345-349`) | `dev` and `sec39`: `"*/*": rate 5.0, burst 10` | `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10" | See below. |
+| `DailyTurnCap` | default 50, min 1 (`:27-31`), passed as `DAILY_TURN_CAP` (`:104`) | `dev` 50; `sec39` 1 (deploy override) | `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, …"; the A-5 tests | A first new message got 200 (`turnsUsedToday: 1`, one `check_availability` call). A second new message, with a new `clientMessageId`, the same clinic day, 14:28 ET, got **429**: `{"type":"error","code":"RATE_LIMITED",…,"retryable":false}`. |
 
 The throttle checks, all as `POST /api/session`:
 
@@ -246,5 +270,8 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 | F-19 | low | `docs/runbooks/aws-setup.md:53` says `SchedDeployer` calls `bedrock-mantle:CreateInference`; it's `bedrock:InvokeModel*` since ADR-010 (A-8). | follow-up #42 ([comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/42#issuecomment-6199569446)) |
 | F-20 | low | AWS SDK error messages are still logged, clipped to 200 characters. AWS doesn't document their format, so one could quote a request field. | accepted: owner decision r1/Q-5 (b) keeps them for debugging Bedrock errors |
 | F-21 | high | `errorSummary` logged any error's message, and a tool, a repository or the agent loop can build one from patient or model text. It wasn't observed in `dev`'s logs. | fixed (`572297e`): non-SDK errors log their name and code only, pinned by `services/api/test/log.test.ts:7` and `:32` |
+| F-22 | low | `DescribeStacks` is granted on `"*"` to the deploy and e2e roles and `SchedDeployer`, though it takes a stack ARN and every call in the repo names its stack. | follow-up #270 |
+| F-23 | low | The permissions boundary allows 15 actions that no `sched-*` workload role grants (ceiling-only). | follow-up #270 (owner decision `1517fd9/SPEC-4` (a) on PR #275) |
+| F-24 | medium | The deploy and e2e roles may write any object in the shared artifact bucket (`${ArtifactBucket.Arn}/*`), though SAM uploads under the stack-name prefix. | follow-up #270 |
 
 No finding lets a patient reach another patient's data.
