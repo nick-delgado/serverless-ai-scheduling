@@ -30,7 +30,7 @@ The three test files now share one harness, `scripts/test/shell-harness.ts`. Eac
 
 ## Quirks, filed as #257 (r1/Q-3 (a))
 
-None is fixed or pinned here. Each was seen by running the script through the harness:
+None is fixed or pinned here. Each was seen by running the script through the harness. **Later (2026-10-15):** All ten are fixed, see [deploy.sh reads .env the way Node does](2026-10-15-deploy-reads-env-the-way-node-does.md). The quirks:
 
 - unmatched quotes are stripped one end at a time (`"a@example.com'` → `a@example.com`);
 - a CRLF `.env` passes a trailing `\r`, and an inline `# comment` is passed as part of the value;
@@ -42,7 +42,7 @@ None is fixed or pinned here. Each was seen by running the script through the ha
 - `teardown.sh`'s bucket read discards the CLI's error, so a throttled read skips emptying and the web delete fails later;
 - `deploy.sh`'s missing-target check is redundant (above).
 
-#257 also asks whether `scripts/retry-escalations.ts`'s `parseEnv` should agree with `dotenv_value`.
+#257 also asks whether `scripts/retry-escalations.ts`'s `parseEnv` should agree with `dotenv_value`. **Later (2026-10-15):** they agree: `deploy.sh` now reads `.env` through `util.parseEnv` too, see [deploy.sh reads .env the way Node does](2026-10-15-deploy-reads-env-the-way-node-does.md).
 
 ## Evidence
 
