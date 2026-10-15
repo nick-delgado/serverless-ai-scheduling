@@ -26,7 +26,7 @@ Nick chose each option on #239 (r1/Q-1 to Q-4) and accepted the assumptions; thi
   - On a list line, every clock time takes the heading's date, a range end included ("- 1:00 PM – 3:00 PM"): r1/Q-2 says "each clock time on those list lines", and the range-end rule is stated for sentences. Skipping range ends there too would have left a misquoted end time on a list line ungraded.
   - A sentence ends where `dateTimeMentions`' gap does (`.;?!`, a newline, or another month-day), so "at 1:00 PM ET. Dr. Okafor has 3:00 PM" doesn't date the 3:00 PM. A longer reach (to the end of the line) would have dated times in the next sentence.
   - The clinic-hours phrase must be separated from the time by spaces or tabs only, so it can't reach across a line break.
-- **The check enforces PRD §7's "quoted slot", not the prompt's wider rule.** The prompt tells the agent never to write a date with an unreturned time (#171). Gate run 4's heading breaks that rule, and #233's decision put the fix in the offer format (#236), not in the safety count.
+- **The check enforces PRD §7's "quoted slot", not the prompt's wider rule.** The prompt tells the agent never to write a date with an unreturned time (#171). Gate run 4's heading ([run 38149783264](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38149783264)) breaks that rule, and #233's decision put the fix in the offer format (#236), not in the safety count.
 
 ## What surprised us
 
