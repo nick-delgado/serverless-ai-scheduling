@@ -118,6 +118,12 @@ const monthDay = (capture: boolean): string => {
   return `\\b${open}${MONTH_ALTERNATION})\\.?\\s+${open}\\d{1,2})(?:st|nd|rd|th)?\\b`;
 };
 
+/** The characters that end a sentence for the date readers, as a character-class body: `.;?!` and a newline. */
+const SENTENCE_END = ".;?!\\n";
+
+/** A clock time as `h:mm AM/PM`; hour, minute and the `a`/`p` of the period are capture groups 1 to 3. */
+const CLOCK_TIME_SOURCE = "\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?";
+
 /**
  * "<Month> <day> … <h:mm> AM|PM" pairs, with the time at most 40 characters after the date
  * ("October 15, 2026 at 2:00 PM ET", "Oct 15 at 2:00 PM"). Bare times ("2 PM") and bare dates are ignored.
@@ -126,8 +132,8 @@ const monthDay = (capture: boolean): string => {
  * October 14's), or the word "and" (so "the week of November 2 and 11:30 AM" is no mention; #98).
  */
 export function dateTimeMentions(text: string): DateTimeMention[] {
-  const gap = `(?:(?!${monthDay(false)}|\\band\\b)[^.;\\n?!]){0,40}?`;
-  const re = new RegExp(`${monthDay(true)}${gap}\\b(\\d{1,2}):(\\d{2})\\s*([ap])\\.?\\s?m\\.?`, "gi");
+  const gap = `(?:(?!${monthDay(false)}|\\band\\b)[^${SENTENCE_END}]){0,40}?`;
+  const re = new RegExp(`${monthDay(true)}${gap}${CLOCK_TIME_SOURCE}`, "gi");
   const out: DateTimeMention[] = [];
   for (const m of text.matchAll(re)) {
     const [raw, month = "", day = "", hh = "", mm = "", period = ""] = m;
@@ -216,82 +222,119 @@ export function offeredClockTimes(text: string): { raw: string; index: number }[
 
 /** A dated time the slot check grades (`slotMentions`), with the position of its clock time. */
 export interface SlotMention extends DateTimeMention {
+  /** The clock time, 24-hour `HH:MM` (the time half of `key`). */
+  time: string;
   /** Where the clock time starts in the text (for a `dateTimeMentions` pair, after the date). */
   timeIndex: number;
 }
 
-/** A clock time as `h:mm AM/PM` (the time half of `dateTimeMentions`), with its parts captured. */
-const CLOCK_TIME = /\b(\d{1,2}):(\d{2})\s*([ap])\.?\s?m\.?/gi;
-/** Ends a sentence for `slotMentions`' later times: `.;?!` or a newline (`dateTimeMentions`' gap rule). */
-const SENTENCE_BREAK = /[.;?!\n]/;
+/** A clock time in a text: as written, where it starts, and as 24-hour `HH:MM`. */
+interface ClockTime {
+  raw: string;
+  index: number;
+  time: string;
+}
+
+/** A month-day in a text: month (1-12), day, and as written. */
+interface NamedDate {
+  month: number;
+  day: number;
+  raw: string;
+}
+
+/** Ends a sentence for `slotMentions`' later times: the characters `dateTimeMentions`' gap can't cross. */
+const SENTENCE_BREAK = new RegExp(`[${SENTENCE_END}]`);
 /** A gap that ends in one of these makes the next time a range end, which takes no date (#178, r1/Q-2 edges). */
 const RANGE_END = /(?:\b(?:to|until|till)|[-–])\s*$/i;
 
-/**
- * Every dated clock time in `text`, for `no_hallucinated_slots` only (#178, r1/Q-2 (a), r1/A-1). It adds
- * two readings to `dateTimeMentions`, which stays as it is for its other callers:
- * - within a sentence, every later time after a date-and-time pair takes that date, so "Monday, November
- *   2 at 9:00 AM and 11:30 AM" yields both, except a range end (a time right after "to", "until", "till",
- *   "-" or "–"). The sentence ends at `.;?!`, a newline or another month-day;
- * - a date heading is any line that names a month-day. Each clock time on the list lines
- *   (`LIST_ITEM_PREFIX`) under it, after optional blank lines, takes the heading's date (its last
- *   month-day). The reach ends at the next line that names a month-day, or at the first non-blank line
- *   that isn't a list line, so a weekday-only line ("Tuesday:") ends it and gives no date.
- * Times on the heading line itself are read as `dateTimeMentions` reads them. A derived mention's `raw`
- * is the date and the time as written, joined by " … ". Sorted by `timeIndex`.
- */
-export function slotMentions(text: string): SlotMention[] {
-  const times = [...text.matchAll(CLOCK_TIME)].map((m) => ({
-    raw: m[0],
-    index: m.index,
-    time: to24h(Number(m[1]), Number(m[2]), String(m[3])),
-  }));
-  const monthDays = (s: string) => [...s.matchAll(new RegExp(monthDay(true), "gi"))];
-  const out: SlotMention[] = [];
-  const derived = (date: string, dateRaw: string, t: (typeof times)[number]): SlotMention => ({
-    key: `${date} ${t.time}`,
-    raw: `${dateRaw} … ${t.raw}`,
-    index: t.index,
-    timeIndex: t.index,
+const clockTimesIn = (text: string): ClockTime[] =>
+  [...text.matchAll(new RegExp(CLOCK_TIME_SOURCE, "gi"))].map((match) => {
+    const [raw, h = "", m = "", period = ""] = match;
+    return { raw, index: match.index, time: to24h(Number(h), Number(m), period) };
   });
 
+const datesIn = (text: string): NamedDate[] =>
+  [...text.matchAll(new RegExp(monthDay(true), "gi"))].map(([raw, month = "", day = ""]) => ({
+    month: monthIndex(month) + 1,
+    day: Number(day),
+    raw,
+  }));
+
+/** `t` dated `date`, as the slot check reads it; its `raw` is the date and the time as written, joined by " … ". */
+const dated = (date: NamedDate, t: ClockTime): SlotMention => ({
+  key: slotKey(date.month, date.day, t.time),
+  raw: `${date.raw} … ${t.raw}`,
+  index: t.index,
+  time: t.time,
+  timeIndex: t.index,
+});
+
+/**
+ * The `dateTimeMentions` pairs, each followed by the later times in its sentence, which take its date
+ * (#178, r1/Q-2 (a)): "Monday, November 2 at 9:00 AM and 11:30 AM" yields both. A range end (a time right
+ * after "to", "until", "till", "-" or "–") takes no date. The sentence ends at `SENTENCE_BREAK` or another
+ * month-day.
+ */
+function pairsAndLaterTimes(text: string, times: readonly ClockTime[]): SlotMention[] {
+  const out: SlotMention[] = [];
   for (const pair of dateTimeMentions(text)) {
     const end = pair.index + pair.raw.length;
     // The pair's own time is the last one that starts inside it.
-    out.push({ ...pair, timeIndex: Math.max(...times.filter((t) => t.index < end).map((t) => t.index)) });
-    const date = pair.key.slice(0, 5);
+    const own = times.filter((t) => t.index < end).reduce((_, t) => t);
+    out.push({ ...pair, time: own.time, timeIndex: own.index });
     // A pair holds one month-day: its gap can't cross another.
-    const dateRaw = monthDays(pair.raw)
-      .map((m) => m[0])
-      .join("");
-    let from = end;
-    for (const t of times.filter((x) => x.index >= end)) {
-      const gap = text.slice(from, t.index);
-      if (SENTENCE_BREAK.test(gap) || monthDays(gap).length > 0) break;
-      if (!RANGE_END.test(gap)) out.push(derived(date, dateRaw, t));
-      from = t.index + t.raw.length;
+    for (const date of datesIn(pair.raw)) {
+      let from = end;
+      for (const t of times.filter((x) => x.index >= end)) {
+        const gap = text.slice(from, t.index);
+        if (SENTENCE_BREAK.test(gap) || datesIn(gap).length > 0) break;
+        if (!RANGE_END.test(gap)) out.push(dated(date, t));
+        from = t.index + t.raw.length;
+      }
     }
   }
+  return out;
+}
 
-  let heading: { date: string; raw: string } | undefined;
+/**
+ * The clock times on list lines (`LIST_ITEM_PREFIX`) under a date heading, dated by it (#178, r1/Q-2 (a)). A
+ * date heading is any line that names a month-day, and gives its last one. Its reach runs over blank lines and
+ * list lines, and ends at the next line that names a month-day or at the first other non-blank line, so a
+ * weekday-only line ("Tuesday:") ends it and gives no date. It walks every line, not only `listItemLines`,
+ * because the blank, prose and heading lines decide the reach.
+ */
+function headingListTimes(text: string, times: readonly ClockTime[]): SlotMention[] {
+  const out: SlotMention[] = [];
+  let heading: NamedDate | undefined;
   let lineStart = 0;
   for (const line of text.split("\n")) {
-    const named = monthDays(line).at(-1);
-    if (named !== undefined) {
-      const [raw, month = "", day = ""] = named;
-      heading = { date: dateKey(monthIndex(month) + 1, Number(day)), raw };
-    } else if (LIST_ITEM_PREFIX.test(line)) {
+    const named = datesIn(line).at(-1);
+    if (named !== undefined) heading = named;
+    else if (LIST_ITEM_PREFIX.test(line)) {
       const h = heading;
       if (h !== undefined)
         out.push(
           ...times
             .filter((t) => t.index >= lineStart && t.index < lineStart + line.length)
-            .map((t) => derived(h.date, h.raw, t)),
+            .map((t) => dated(h, t)),
         );
     } else if (line.trim() !== "") heading = undefined;
     lineStart += line.length + 1;
   }
-  return out.sort((a, b) => a.timeIndex - b.timeIndex);
+  return out;
+}
+
+/**
+ * Every dated clock time in `text`, for `no_hallucinated_slots` only (#178, r1/Q-2 (a), r1/A-1): the
+ * `dateTimeMentions` pairs and the later times in their sentence (`pairsAndLaterTimes`), and the list-line
+ * times under a date heading (`headingListTimes`). `dateTimeMentions` stays as it is for its other callers.
+ * Times on a heading line itself are read as `dateTimeMentions` reads them. Sorted by `timeIndex`.
+ */
+export function slotMentions(text: string): SlotMention[] {
+  const times = clockTimesIn(text);
+  return [...pairsAndLaterTimes(text, times), ...headingListTimes(text, times)].sort(
+    (a, b) => a.timeIndex - b.timeIndex,
+  );
 }
 
 /**
@@ -307,7 +350,7 @@ const CLINIC_HOURS_LEAD =
  * sentence, are a `CLINIC_HOURS_LEAD` phrase. "Dr. Lee has Tuesday, October 6 at 5:00 PM ET" stays a slot.
  */
 export function namesClinicHours(text: string, mention: SlotMention): boolean {
-  const bound = [CLINIC.openHour, CLINIC.closeHour].some((h) => mention.key.endsWith(` ${hhmm(h, 0)}`));
+  const bound = [CLINIC.openHour, CLINIC.closeHour].some((h) => mention.time === hhmm(h, 0));
   return bound && CLINIC_HOURS_LEAD.test(text.slice(0, mention.timeIndex));
 }
 
