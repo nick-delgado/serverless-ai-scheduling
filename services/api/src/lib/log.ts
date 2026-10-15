@@ -20,8 +20,10 @@ export const silentLogger: Logger = () => undefined;
 // The Lambdas write entries through a Powertools Logger (`observability/logger.ts`, #38).
 
 /**
- * What to log about an error: its name, its AWS error code and HTTP status if any, and a clipped
- * message. AWS SDK and Bedrock error messages describe the failure, not the conversation.
+ * What to log about an error: its name, its AWS error code and HTTP status if any, and, for an AWS SDK
+ * error only (one with `$metadata`), a clipped message. AWS SDK and Bedrock error messages describe the
+ * failure, not the conversation. Any other error's message is left out (#39, owner decision r1/Q-5 (b)):
+ * a tool, a repository or the agent loop may build it from patient or model text.
  */
 export function errorSummary(error: unknown): Record<string, unknown> {
   if (!(error instanceof Error)) return { errorType: typeof error };
@@ -29,7 +31,7 @@ export function errorSummary(error: unknown): Record<string, unknown> {
   const code = (error as { code?: unknown }).code;
   return {
     errorName: error.name,
-    errorMessage: error.message.slice(0, 200),
+    ...(meta === undefined ? {} : { errorMessage: error.message.slice(0, 200) }),
     ...(typeof code === "string" ? { errorCode: code } : {}),
     ...(meta?.httpStatusCode === undefined ? {} : { httpStatus: meta.httpStatusCode }),
   };
