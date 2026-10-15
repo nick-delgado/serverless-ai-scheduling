@@ -90,4 +90,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-14 | [The dashboard reads the turn's log line, and Powertools' wrappers can't see a streaming handler's context](2026-10-14-the-dashboard-reads-the-log-line.md) | 5. What the evals showed |
 | 2026-10-15 | [A split issue nearly closed early, so the PR body gets a check of its own](2026-10-15-the-pr-body-gets-a-check-of-its-own.md) | 5. What the evals showed |
 | 2026-10-15 | [An empty process group isn't an error, and Vitest won't fail a test for a throw in a timer](2026-10-15-an-empty-process-group-is-not-an-error.md) | 5. What the evals showed |
+| 2026-10-15 | [A timed-out mutate run stops reading the output instead of waiting for a process it can't kill](2026-10-15-a-timeout-stops-reading-the-output.md) | 5. What the evals showed |
 | 2026-10-15 | [A quoted slot is an offer, not an echo: the slot check reads heading lists and lets three non-offers go](2026-10-15-a-quoted-slot-is-an-offer-not-an-echo.md) | 5. What the evals showed |

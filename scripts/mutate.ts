@@ -25,8 +25,9 @@
  * A KILLED edit with an `expect` list whose failed tests include none of them is KILLED-OTHER, and doesn't count as
  * killed: an unrelated test went red (in PR #175 an esbuild syntax error did), or a non-Vitest command named none.
  * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT. The kill reaches
- * every process in the command's process group; a process that left it (setsid, a detached spawn) isn't killed, and
- * the run waits for it to close the output (#256).
+ * every process in the command's process group; a process that left it (setsid, a detached spawn) isn't killed or
+ * waited for: the run stops reading the output and ends once the started process has exited, what that process
+ * prints after the kill is dropped, and it may still run during the next edit's command (#256, #268).
  * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
  * id, file, exact edit, status, failed tests; a KILLED edit with no `expect` list reads `KILLED (no expect)`) and the
  * summary line, both from the same results.
@@ -228,7 +229,10 @@ export function stopRunning(): void {
 
 /**
  * Runs the command in its own process group, adding Vitest's JSON reporter when it is Vitest. A command that can't be
- * started ends with no exit code and no failed tests (ERROR, by `classify`), its error in the output.
+ * started ends with no exit code and no failed tests (ERROR, by `classify`), its error in the output. A timeout kills
+ * the group and stops reading the output, so the run ends once the started process has exited, without waiting for a
+ * process that left the group (#268): that process isn't killed, may still run during the next edit's command, and
+ * what it prints after the kill is dropped.
  */
 export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: string): Promise<RunOutcome> {
   const vitest = isVitest(cmd);
@@ -248,6 +252,10 @@ export function runCommand(cmd: readonly string[], timeoutSeconds: number, cwd: 
     const timer = setTimeout(() => {
       timedOut = true;
       stopRunning();
+      // A process that left the group can hold the pipes open for as long as it runs: stop reading them, so "close"
+      // comes once the started process has exited (#268). What it prints from here on is dropped.
+      child.stdout.destroy();
+      child.stderr.destroy();
     }, timeoutSeconds * 1000);
     // The first of these settles the promise, and only the first: a spawn error is followed by a "close" that would
     // read as an exit, and comes after the next command has started, whose handle it must not clear.
