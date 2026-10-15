@@ -20,7 +20,7 @@ The tests needed a real empty group, so the agent added a stand-in command whose
 
 The readiness review settled the three open questions before work started (r1 on #256, Nick accepted each recommendation):
 
-- **Q-1, the unbounded wait: (a) out of scope.** A timeout whose kill finds an empty group still waits for the escaped process to close the output. Ctrl-C or SIGTERM now restores the edit at once. Option (b), destroying the child's streams after a timeout so `close` comes early, is filed as #268.
+- **Q-1, the unbounded wait: (a) out of scope.** A timeout whose kill finds an empty group still waits for the escaped process to close the output. Ctrl-C or SIGTERM now restores the edit at once. Option (b), destroying the child's streams after a timeout so `close` comes early, is filed as #268. **Later (2026-10-15):** #268 took option (b): a timeout no longer waits for the escaped process; see [A timed-out mutate run stops reading the output](2026-10-15-a-timeout-stops-reading-the-output.md).
 - **Q-2, the evidence: (b)** an in-process test of `stopRunning()` on a real empty group, and one spawned-script test of the timer path. Option (c)'s second spawned test, of the signal path, was left out. The signal path calls the same `stopRunning()`, and its existing SIGINT/SIGTERM tests still pass.
 - **Q-3, other kill errors: (a) treated like ESRCH.** The group holds only processes this runner started, as the same user, so any kill error means nothing is left that it may kill. Option (b) rethrew and logged them, but then macOS and Linux could differ on a zombie-only group, and a log line would have been the only difference.
 
