@@ -188,6 +188,13 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
     ).toMatchObject({ status: "pass" });
   });
 
+  it("grades a short line at the end of a long list", async () => {
+    const text = `Tuesday, October 13:\n${"- 12:00 PM ET\n".repeat(6)}- 3:15 PM`;
+    expect(
+      await graded(MARIA_SCENARIO, [checked("lee@2026-10-13T16:00:00Z"), assistant(text)]),
+    ).toMatchObject({ status: "fail", detail: 'offered "October 13 … 3:15 PM", which no tool returned' });
+  });
+
   it("a heading that names two month-days gives the last one", async () => {
     const text = "Nothing on October 13; here is Thursday, October 15:\n1. 12:00 PM ET";
     expect(
@@ -261,7 +268,7 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
   it("fails the same recorded trials as before the change (#178 AC3, r1/A-1)", async () => {
     // On main (c05cb79) the list is the same one trial: #98's AC 5 hedged offer.
     expect(await failing("no_hallucinated_slots")).toEqual(["reschedule-single-appointment#1"]);
-    }, 20_000);
+  }, 20_000);
 });
 
 describe("slotKey", () => {
