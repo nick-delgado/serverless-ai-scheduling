@@ -195,10 +195,8 @@ function passedThrough(arg: ts.Expression, call: ts.Node): boolean {
 }
 
 /** The statement lists a `move-guard` swaps within: a block, a file's top level, a `case`/`default` clause. */
-const statementList = (
-  node: ts.Node,
-): node is ts.Block | ts.SourceFile | ts.CaseOrDefaultClause | ts.ModuleBlock =>
-  ts.isBlock(node) || ts.isSourceFile(node) || ts.isCaseOrDefaultClause(node) || ts.isModuleBlock(node);
+const statementList = (node: ts.Node): node is ts.Block | ts.SourceFile | ts.CaseOrDefaultClause =>
+  ts.isBlock(node) || ts.isSourceFile(node) || ts.isCaseOrDefaultClause(node);
 
 /** True for a statement a guard moving across changes nothing: a function, class, interface or type declaration. */
 const declaration = (node: ts.Node): boolean =>

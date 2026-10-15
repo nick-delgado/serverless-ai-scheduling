@@ -248,9 +248,6 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
 
   it("moves a guard at a file's top level and in a case clause, and not the last statement or across a declaration", () => {
     expect(only("setup();\nconst a = 1;\n", "move-guard")).toEqual(["const a = 1;\nsetup();\n"]);
-    expect(only("namespace N {\n  setup();\n  x = 1;\n}\n", "move-guard")).toEqual([
-      "namespace N {\n  x = 1;\n  setup();\n}\n",
-    ]);
     // A statement that is a branch on its own, not in a list, has nothing to swap with.
     expect(only("if (a) check();\nx = 1;\n", "move-guard")).toEqual([]);
     const clause = "switch (k) {\n  case 1:\n    new Check(k);\n    x = 1;\n    break;\n}\n";
