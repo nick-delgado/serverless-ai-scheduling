@@ -614,7 +614,10 @@ describe("main", () => {
     // The grandchild (10 s) holds the output long after the timeout (3 s), which comes after the first process has
     // started it and exited (about 1 s at most under load). The run ends at the timeout and leaves it running.
     const edits = editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "escape ? 1" }]);
-    const code = await main([edits, "--timeout", "3", "--json", "out.json", "--", ...escaping(10_000)], deps());
+    const code = await main(
+      [edits, "--timeout", "3", "--json", "out.json", "--", ...escaping(10_000)],
+      deps(),
+    );
     expect(out[0]).toBe("TIMEOUT e target.txt: ok ? 1 → escape ? 1");
     expect(code).toBe(0);
     expect(target()).toBe(TARGET);
