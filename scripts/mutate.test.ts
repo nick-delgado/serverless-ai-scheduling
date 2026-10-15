@@ -1,8 +1,9 @@
 /**
  * scripts/mutate.ts against a throwaway directory: a target file, a small Node checker standing in for a test
  * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes a
- * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; three
- * spawn the script, for its exit code and for the file it restores on SIGINT and SIGTERM. `--suggest` has its own
+ * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; four
+ * spawn the script, for its exit code and for the file it restores on SIGINT, on SIGTERM and after a timeout whose
+ * kill finds the command's process group empty. `--suggest` has its own
  * tests, in mutate-suggest.test.ts.
  */
 import { spawn, spawnSync } from "node:child_process";
@@ -61,6 +62,23 @@ if (text.includes("slow")) {
 }
 `;
 
+// A command whose process escapes its process group (#256): when target.txt says "escape", it starts a grandchild in
+// a session of its own (a detached spawn calls setsid) that holds the output pipes for argv[2] ms, then exits on its
+// own; it writes its own pid to first.pid and exits 0 at once. Once it is gone, the group is empty while the run
+// still waits for the output to close. The grandchild writes no checker.pid, and nothing ever signals it.
+const ESCAPER = `
+const fs = require("node:fs");
+if (fs.readFileSync("target.txt", "utf8").includes("escape")) {
+  const ms = Number(process.argv[2]);
+  const grandchild = require("node:child_process").spawn(process.execPath, ["-e", "setTimeout(() => {}, " + ms + ")"], {
+    detached: true,
+    stdio: "inherit",
+  });
+  grandchild.unref();
+  fs.writeFileSync("first.pid", String(process.pid));
+}
+`;
+
 // A stand-in for Vitest: with --reporter=json, writes a JSON report to --outputFile.json=<path> naming a failed
 // test when target.txt says "bad"; crashes without a report when it says "crash", printing 2,500 characters of
 // filler, then the reporter flags it was given, then why; else passes.
@@ -92,6 +110,7 @@ let errors: string[];
 const deps = () => ({ cwd: dir, ...logsTo(out, errors) });
 const checker = () => ["node", join(dir, "checker.cjs")];
 const vitest = () => [join(dir, "vitest"), "run"];
+const escaping = (ms: number) => ["node", join(dir, "escaper.cjs"), String(ms)];
 // The checker under sh, which stays its parent (the "; true" keeps sh from exec'ing node): killing only the process
 // the runner started would leave the checker running, so only a kill of the whole process group stops it.
 const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
@@ -129,6 +148,7 @@ beforeEach(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mutate-test-")));
   writeFileSync(join(dir, "target.txt"), TARGET);
   writeFileSync(join(dir, "checker.cjs"), CHECKER);
+  writeFileSync(join(dir, "escaper.cjs"), ESCAPER);
   writeFileSync(join(dir, "vitest"), FAKE_VITEST);
   chmodSync(join(dir, "vitest"), 0o755);
   out = [];
@@ -805,6 +825,67 @@ describe("main", () => {
     expect((await next).code).not.toBe(0);
   });
 
+  it("stops a command whose process group is empty before its output closes without throwing, and removes its report directory", async () => {
+    const tmp = join(dir, "tmp");
+    mkdirSync(tmp);
+    vi.stubEnv("TMPDIR", tmp);
+    try {
+      writeFileSync(join(dir, "target.txt"), "escape\n");
+      let settled = false;
+      const run = runCommand(escaping(3_000), 30, dir).then((outcome) => {
+        settled = true;
+        return outcome;
+      });
+      // The first process wrote a whole pid and is gone (exited and reaped): no process is left in its group.
+      await vi.waitFor(
+        () => {
+          const pid = Number(readFileSync(join(dir, "first.pid"), "utf8"));
+          expect(pid > 0 && Number.isInteger(pid) && !alive(pid)).toBe(true);
+        },
+        { timeout: 2_500, interval: 20 },
+      );
+      // The escaped grandchild still holds the output, so the run is still waiting for "close".
+      expect(settled).toBe(false);
+      expect(readdirSync(tmp)).toHaveLength(1);
+      expect(() => stopRunning()).not.toThrow();
+      expect(readdirSync(tmp)).toEqual([]);
+      expect(settled).toBe(false);
+      expect((await run).code).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 10_000);
+
+  it("ignores a kill error other than an empty group (EPERM), and still removes the report directory", async () => {
+    const tmp = join(dir, "tmp");
+    mkdirSync(tmp);
+    vi.stubEnv("TMPDIR", tmp);
+    try {
+      writeFileSync(join(dir, "target.txt"), "slow\n");
+      const run = runCommand(checkerUnderSh(), 30, dir);
+      await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
+        timeout: 5_000,
+        interval: 20,
+      });
+      const kill = vi.spyOn(process, "kill").mockImplementation(() => {
+        throw Object.assign(new Error("kill EPERM"), { code: "EPERM" });
+      });
+      try {
+        expect(() => stopRunning()).not.toThrow();
+        expect(kill).toHaveBeenCalledOnce();
+      } finally {
+        kill.mockRestore();
+      }
+      expect(readdirSync(tmp)).toEqual([]);
+      // The spy killed nothing: stop the command for real.
+      stopRunning();
+      await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
+      expect((await run).code).not.toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("removes its signal handlers when it returns", async () => {
     const before = [process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")];
     editsFile([{ id: "a", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
@@ -826,6 +907,24 @@ describe("the script", () => {
     expect(result.stdout).toContain("SURVIVED s target.txt");
     expect(result.status).toBe(1);
   });
+
+  it("restores the edited file and reads TIMEOUT when the timeout's kill finds the command's process group empty", () => {
+    // The timeout (3 s) comes after the first process has started the grandchild and exited (about 1 s at most under
+    // load), and before the grandchild (6 s) closes the output; the run then waits for it, and the script exits 0.
+    editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "escape ? 1" }]);
+    const tmp = join(dir, "tmp");
+    mkdirSync(tmp);
+    const result = spawnSync(
+      process.execPath,
+      [...tsx, script, "edits.json", "--timeout", "3", "--", ...escaping(6_000)],
+      { cwd: dir, encoding: "utf8", env: { ...process.env, TMPDIR: tmp }, timeout: 25_000 },
+    );
+    expect(result.stdout).toContain("TIMEOUT e target.txt: ok ? 1 → escape ? 1");
+    expect(result.status).toBe(0);
+    expect(target()).toBe(TARGET);
+    // (tsx keeps its own cache there too.)
+    expect(readdirSync(tmp).filter((name) => name.startsWith("mutate-"))).toEqual([]);
+  }, 30_000);
 
   it.each(["SIGINT", "SIGTERM"] as const)(
     "restores the edited file, stops the command and exits 130 on %s",

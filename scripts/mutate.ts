@@ -24,7 +24,9 @@
  * crash, a failed import) is ERROR, not KILLED. Any other command that exits non-zero is KILLED, with no names.
  * A KILLED edit with an `expect` list whose failed tests include none of them is KILLED-OTHER, and doesn't count as
  * killed: an unrelated test went red (in PR #175 an esbuild syntax error did), or a non-Vitest command named none.
- * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT.
+ * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT. The kill reaches
+ * every process in the command's process group; a process that left it (setsid, a detached spawn) isn't killed, and
+ * the run waits for it to close the output (#256).
  * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
  * id, file, exact edit, status, failed tests; a KILLED edit with no `expect` list reads `KILLED (no expect)`) and the
  * summary line, both from the same results.
@@ -207,12 +209,20 @@ export function readEdits(path: string): (Edit & { id: string })[] {
 let running: { pid: number; reportDir: string } | undefined;
 
 /**
- * Kills the running command's whole process group and removes its report directory, for a signal that ends this
- * process mid-run. Between runs it does nothing, since a finished command's process group may be reused.
+ * Kills the running command's whole process group and removes its report directory, for a timeout or a signal that
+ * ends this process mid-run. Between runs it does nothing, since a finished command's process group may be reused.
+ * An empty group isn't an error: the started process can exit while a process that left the group (setsid) keeps
+ * the output open, so `close` hasn't come yet (#256). Any error from the kill is ignored, and the report directory is
+ * removed whatever the kill did: the group holds only processes this runner started, as the same user, so an error
+ * means no process is left that it may kill. A throw here would skip the timer's and the signal handler's restore.
  */
 export function stopRunning(): void {
   if (running === undefined) return;
-  process.kill(-running.pid, "SIGKILL");
+  try {
+    process.kill(-running.pid, "SIGKILL");
+  } catch {
+    // ESRCH (no process left in the group) or any other kill error: nothing left to kill (see above).
+  }
   rmSync(running.reportDir, { recursive: true, force: true });
 }
 
