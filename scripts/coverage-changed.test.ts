@@ -185,7 +185,9 @@ describe("the coverage globs in vitest.config.ts (AC 1)", () => {
     "apps/*/e2e": list("apps/*/e2e/**/*.ts"),
   };
   const isTest = (file: string) => /\.test\.tsx?$/.test(file);
-  /** The Playwright specs, which run only against a deployed env (r1/Q-5 (b)). */
+  /** A Playwright spec, which runs only against a deployed env (r1/Q-5 (b)): `*.e2e.ts`, or the FR-010 measurement. */
+  const isSpec = (file: string) => file.endsWith(".e2e.ts") || file === "apps/web/e2e/fr010.greeting.ts";
+  /** Today's Playwright specs, each named. */
   const SPECS = [
     "apps/web/e2e/01-login.e2e.ts",
     "apps/web/e2e/02-book.e2e.ts",
@@ -195,7 +197,7 @@ describe("the coverage globs in vitest.config.ts (AC 1)", () => {
   ];
 
   it.each(Object.entries(trees))("include every non-test source file under %s, and no test", (_, files) => {
-    const sources = files.filter((f) => !isTest(f) && !f.endsWith(".d.ts") && !SPECS.includes(f));
+    const sources = files.filter((f) => !isTest(f) && !f.endsWith(".d.ts") && !isSpec(f));
     expect(sources.length).toBeGreaterThan(0);
     expect(files.some(isTest)).toBe(true);
     expect(sources.filter((f) => !isSourceFile(f, SOURCE_GLOBS))).toEqual([]);
