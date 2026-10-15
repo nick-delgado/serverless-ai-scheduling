@@ -5,7 +5,7 @@
  * cases add a `git worktree` of that repo. What's checked is the script's exit code, its output, and the stand-in
  * `sam deploy`'s logged arguments. SAM's own NoEcho masking of the SES values is not something these tests can see.
  */
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,8 +32,17 @@ const DOTENV = `SES_SENDER=${DOTENV_SENDER}\nSES_STAFF_RECIPIENT=${DOTENV_RECIPI
 const MAIN_SENDER = "main-sender@example.com";
 const MAIN_RECIPIENT = "main-staff@example.com";
 const MAIN_DOTENV = `SES_SENDER=${MAIN_SENDER}\nSES_STAFF_RECIPIENT=${MAIN_RECIPIENT}\n`;
+const FIRST_SENDER = "first@example.com";
 /** Every SES value any test uses, none of which may appear in the script's output. */
-const SES_VALUES = [SENDER, RECIPIENT, DOTENV_SENDER, DOTENV_RECIPIENT, MAIN_SENDER, MAIN_RECIPIENT];
+const SES_VALUES = [
+  SENDER,
+  RECIPIENT,
+  DOTENV_SENDER,
+  DOTENV_RECIPIENT,
+  MAIN_SENDER,
+  MAIN_RECIPIENT,
+  FIRST_SENDER,
+];
 
 let sb: Sandbox;
 
@@ -150,10 +159,37 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     });
 
     it("takes the last line for a key in one .env", () => {
-      writeEnv(sb.repo.dir, `SES_SENDER=first@example.com\n${DOTENV}SES_STAFF_RECIPIENT=${RECIPIENT}\n`);
-      const r = run(["api", "pr7"]);
-      expectSes(r, "pr7", DOTENV_SENDER, RECIPIENT);
-      expect(r.out).not.toContain("first@example.com");
+      writeEnv(sb.repo.dir, `SES_SENDER=${FIRST_SENDER}\n${DOTENV}SES_STAFF_RECIPIENT=${RECIPIENT}\n`);
+      expectSes(run(["api", "pr7"]), "pr7", DOTENV_SENDER, RECIPIENT);
+    });
+
+    it("falls back to the main checkout's .env for a key the worktree's .env doesn't have", () => {
+      writeEnv(sb.repo.dir, MAIN_DOTENV);
+      const wt = worktree();
+      writeEnv(wt, `SES_STAFF_RECIPIENT=${DOTENV_RECIPIENT}\n`);
+      expectSes(run(["api", "pr7"], {}, wt), "pr7", MAIN_SENDER, DOTENV_RECIPIENT);
+    });
+
+    // #257: the forms util.parseEnv reads as the bare value, which the earlier line-based reader didn't.
+    it.each([
+      ["CRLF line endings", `SES_SENDER=${DOTENV_SENDER}\r\nSES_STAFF_RECIPIENT=${DOTENV_RECIPIENT}\r\n`],
+      [
+        "an inline # comment",
+        `SES_SENDER=${DOTENV_SENDER} # sender\nSES_STAFF_RECIPIENT=${DOTENV_RECIPIENT}\n`,
+      ],
+      [
+        "an export prefix",
+        `export SES_SENDER=${DOTENV_SENDER}\nexport SES_STAFF_RECIPIENT=${DOTENV_RECIPIENT}\n`,
+      ],
+      ["spaces around =", `SES_SENDER = ${DOTENV_SENDER}\nSES_STAFF_RECIPIENT  =  ${DOTENV_RECIPIENT}\n`],
+    ])("reads a .env with %s as the bare values", (_, text) => {
+      writeEnv(sb.repo.dir, text);
+      expectSes(run(["api", "pr7"]), "pr7", DOTENV_SENDER, DOTENV_RECIPIENT);
+    });
+
+    it("passes a value with an unmatched quote on its own line to sam as written", () => {
+      writeEnv(sb.repo.dir, `SES_STAFF_RECIPIENT=${DOTENV_RECIPIENT}\nSES_SENDER="${DOTENV_SENDER}'\n`);
+      expectSes(run(["api", "pr7"]), "pr7", `"${DOTENV_SENDER}'`, DOTENV_RECIPIENT);
     });
 
     it.each([
@@ -178,6 +214,45 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(r.status).toBe(1);
       expect(r.out).toContain(`SES_SENDER and SES_STAFF_RECIPIENT must be set`);
       expect(r.out).toContain(`to '${env}'`);
+      expect(awsOrSam(r.calls)).toEqual([]);
+      expectNotPrinted(r);
+    });
+
+    // r1/Q-1 (a): an unmatched quote that a later line closes swallows that line into a two-line value.
+    it.each(["dev", "pr7"])(
+      "refuses api to %s when a .env value spans lines, before any ssm or sam call",
+      (env) => {
+        writeEnv(sb.repo.dir, `SES_SENDER="${DOTENV_SENDER}'\nSES_STAFF_RECIPIENT="${DOTENV_RECIPIENT}"\n`);
+        const r = run(["api", env]);
+        expect(r.status).toBe(1);
+        expect(r.out).toContain("SES_SENDER spans more than one line");
+        expect(r.out).toContain("an unmatched quote");
+        expect(r.out).not.toContain("must be set");
+        expect(awsOrSam(r.calls)).toEqual([]);
+        expectNotPrinted(r);
+      },
+    );
+
+    it("refuses an environment value with a carriage return, naming only its key", () => {
+      const r = run(["api", "pr7"], { SES_SENDER: SENDER, SES_STAFF_RECIPIENT: `${RECIPIENT}\r` });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("SES_STAFF_RECIPIENT spans more than one line");
+      expect(r.out).not.toContain("SES_SENDER SES_STAFF_RECIPIENT");
+      expect(awsOrSam(r.calls)).toEqual([]);
+      expectNotPrinted(r);
+    });
+
+    it("doesn't refuse a .env value that spans lines when the environment overrides it", () => {
+      writeEnv(sb.repo.dir, `SES_SENDER="${DOTENV_SENDER}'\nSES_STAFF_RECIPIENT="${DOTENV_RECIPIENT}"\n`);
+      expectSes(run(["api", "pr7"], SES_ENV), "pr7", SENDER, RECIPIENT);
+    });
+
+    it("stops with Node's error, naming no value, when a .env can't be read", () => {
+      writeEnv(sb.repo.dir, DOTENV);
+      chmodSync(join(sb.repo.dir, ".env"), 0o000);
+      const r = run(["api", "pr7"]);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("EACCES");
       expect(awsOrSam(r.calls)).toEqual([]);
       expectNotPrinted(r);
     });
@@ -246,12 +321,26 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(Object.keys(overrides(r.calls))).toEqual([`sched-${env}-data`]);
     });
 
-    it.each([[[]], [["lambda", "pr7"]], [["lambda"]]])(
-      "rejects the stack arguments %j with the usage line",
-      (args) => {
-        expectArgumentsRefused(run(args), "<data|auth|api|web|all> [env] [-- Key=Value ...]");
-      },
-    );
+    it.each([
+      [[]],
+      [["lambda", "pr7"]],
+      [["lambda"]],
+      [["data", "pr7", "DeletionProtection=enabled"]],
+      [["data auth", "pr7"]],
+      [[" data", "pr7"]],
+    ])("rejects the stack arguments %j with the usage line", (args) => {
+      expectArgumentsRefused(run(args), "<data|auth|api|web|all> [env] [-- Key=Value ...]");
+    });
+
+    it('still reads an invalid env first: "data auth" Dev is refused as an invalid env', () => {
+      expectArgumentsRefused(run(["data auth", "Dev"]), "invalid env: Dev");
+    });
+
+    it("accepts a bare -- with nothing after it", () => {
+      const r = run(["data", "pr7", "--"]);
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-pr7-data"]).toEqual(["Env=pr7", "DeletionProtection=disabled"]);
+    });
 
     it.each(STACKS)("deploys the one stack %s", (stack) => {
       const r = run([stack, "pr7"], SES_ENV);

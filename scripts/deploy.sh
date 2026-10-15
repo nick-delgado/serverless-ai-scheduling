@@ -7,7 +7,10 @@
 #   scripts/deploy.sh data dev -- DeletionProtection=disabled  # overrides go only to templates that declare them
 #
 # The api stack also takes the escalation email's SES identity from SES_SENDER / SES_STAFF_RECIPIENT
-# (environment or the git-ignored .env); dev and demo refuse to deploy it without them.
+# (environment or the git-ignored .env); dev and demo refuse to deploy it without them, and any env refuses
+# a value that spans lines (see "the escalation email's SES identity" below).
+#
+# Arguments: the target is one stack name or `all`, exactly; anything after the env must start with `--`.
 #
 # Deploys the checkout this script lives in (repo_root below comes from the script's own path), so
 # a worktree deploys its own branch. Every stack is tagged with the git branch and commit it came from.
@@ -23,22 +26,27 @@ ORDER=(data auth api web)
 # Keep in sync with scripts/teardown.sh and scripts/deploy-web.sh.
 PROTECTED_ENVS=(dev demo)
 
+usage() { echo "usage: $0 <data|auth|api|web|all> [env] [-- Key=Value ...]" >&2; exit 2; }
 target="${1:-}"
 env="${2:-dev}"
 shift $(( $# >= 2 ? 2 : $# ))
-[[ "${1:-}" == "--" ]] && shift
-extra_overrides=("$@")
-
-usage() { echo "usage: $0 <data|auth|api|web|all> [env] [-- Key=Value ...]" >&2; exit 2; }
-[[ -z "$target" ]] && usage
 [[ "$env" =~ ^[a-z][a-z0-9-]{1,15}$ ]] || { echo "invalid env: $env (lowercase, 2-16 chars)" >&2; exit 2; }
+# Overrides come only after `--`: `deploy.sh data pr7 DeletionProtection=enabled` is refused.
+if [[ $# -gt 0 ]]; then
+  [[ "$1" == "--" ]] || usage
+  shift
+fi
+extra_overrides=("$@")
+# The target must equal one stack name (or `all`): "data auth" or " data" is refused here, before any AWS call.
+stacks=()
 if [[ "$target" == "all" ]]; then
   stacks=("${ORDER[@]}")
-elif [[ " ${ORDER[*]} " == *" $target "* ]]; then
-  stacks=("$target")
 else
-  usage
+  for stack in "${ORDER[@]}"; do
+    if [[ "$target" == "$stack" ]]; then stacks=("$stack"); fi
+  done
 fi
+[[ ${#stacks[@]} -gt 0 ]] || usage
 is_protected=false
 [[ " ${PROTECTED_ENVS[*]} " == *" $env "* ]] && is_protected=true
 
@@ -67,22 +75,39 @@ fi
 # SES_SENDER and SES_STAFF_RECIPIENT are never committed (public repo): they come from the environment, or
 # else from the git-ignored .env of this checkout or of the main checkout (worktrees share that one). They
 # go to the api stack as NoEcho parameters, which SAM prints as *****. Never echo them here.
+#
+# A non-empty environment variable wins; otherwise the first non-empty value of the worktree's .env, then of the
+# main checkout's. A .env is parsed by Node's util.parseEnv, the parser scripts/retry-escalations.ts uses, so the
+# two read a file the same way (that script still differs in which value it picks: it keeps an environment
+# variable set to "" and reads only the repo root's .env). Read as the bare value: double or single quotes, CRLF
+# line endings, an inline `# comment`, an `export ` prefix, spaces around `=`; the last line for a key wins. An
+# unmatched quote on one line is kept as written (`"a@example.com'` reaches SAM as is). A value that spans lines,
+# which is what an unmatched quote becomes when a later line has the same quote, is refused.
 main_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-dotenv_value() {
+# The value of $1 from the first .env that has a non-empty one; a file is read only if it exists.
+env_file_value() {
   local key="$1" file val=""
   for file in "$repo_root/.env" "$main_checkout/.env"; do
     [[ -f "$file" ]] || continue
-    val="$(sed -n "s/^${key}=//p" "$file" | tail -n 1)"
-    val="${val%\"}"; val="${val#\"}"
-    val="${val%\'}"; val="${val#\'}"
+    val="$(node -e 'const { parseEnv } = require("node:util");
+      const vars = parseEnv(require("node:fs").readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(vars[process.argv[2]] ?? "");' "$file" "$key")" || exit 1
     [[ -n "$val" ]] && break
   done
   printf '%s' "$val"
 }
-ses_sender="${SES_SENDER:-$(dotenv_value SES_SENDER)}"
-ses_recipient="${SES_STAFF_RECIPIENT:-$(dotenv_value SES_STAFF_RECIPIENT)}"
 ses_overrides=()
 if [[ " ${stacks[*]} " == *" api "* ]]; then
+  ses_sender="${SES_SENDER:-$(env_file_value SES_SENDER)}"
+  ses_recipient="${SES_STAFF_RECIPIENT:-$(env_file_value SES_STAFF_RECIPIENT)}"
+  multiline=()
+  [[ "$ses_sender" == *[$'\n\r']* ]] && multiline+=(SES_SENDER)
+  [[ "$ses_recipient" == *[$'\n\r']* ]] && multiline+=(SES_STAFF_RECIPIENT)
+  if [[ ${#multiline[@]} -gt 0 ]]; then
+    echo "${multiline[*]} spans more than one line (in .env, an unmatched quote may have swallowed the" \
+         "lines after it); fix it before deploying the api stack." >&2
+    exit 1
+  fi
   if [[ -n "$ses_sender" && -n "$ses_recipient" ]]; then
     ses_overrides=("SesSender=${ses_sender}" "SesStaffRecipient=${ses_recipient}")
   elif $is_protected; then
