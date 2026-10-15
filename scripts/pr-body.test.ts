@@ -45,6 +45,7 @@ describe("titleOk", () => {
     "feat(api): text after the number group (#38) and more",
     "feat(api):no space after the colon (#38)",
     "feat(api): (#38)",
+    "feat(api):  (#38)",
     "feat(api): no space before the group(#38)",
     "xfeat(api): a prefix before the type (#38)",
   ])("fails %s", (title) => {
@@ -107,6 +108,8 @@ describe("decisionItems", () => {
   });
 
   it("ends the section at **Departs from or the next ## heading, not at a ### subheading", () => {
+    // An item on the line right after the heading, and the section's end right after it.
+    expect(decisionItems("## Decisions the spec left open\n- a\n**Departs from x\n- b")).toEqual(["- a"]);
     expect(decisionItems(body("None.", "**Departs from or questions an owner decision:**", "- a"))).toEqual(
       [],
     );
@@ -133,6 +136,10 @@ describe("problems", () => {
       expect.stringMatching(/^body: "## Decisions the spec left open" holds a list \(- one \/ - two\)/),
     ]);
     expect(problems("chore(process): a summary (#265)", "Closes #265\n")).toEqual([]);
+    expect(problems("fix(x): y (#1)", "## Decisions the spec left open\n- one")).toEqual([
+      'body: "## Decisions the spec left open" holds a list (- one); list the decisions once, in the journal ' +
+        'entry\'s "Why we chose", and link it there.',
+    ]);
   });
 });
 
@@ -158,13 +165,20 @@ describe("main", () => {
     expect(out[0]).toBe("The PR's title or body has 2 problem(s):");
     expect(out.slice(1).map((line) => line.slice(0, 6))).toEqual(["title:", "body: "]);
     expect(errors).toEqual([expect.stringContaining("pr-body: fix the title or body")]);
+    expect(run({ PR_TITLE: "bad" })).toMatchObject({
+      code: 1,
+      out: ["The PR's title or body has 1 problem(s):", expect.any(String)],
+    });
   });
 
   it("exits 2 without PR_TITLE, or for an argument", () => {
-    expect(run({ PR_BODY: "x" })).toMatchObject({
+    expect(run({ PR_BODY: "x" })).toEqual({
       code: 2,
-      errors: [expect.stringContaining("PR_TITLE isn't set")],
+      out: [],
+      errors: ["usage: pr-body (PR_TITLE and PR_BODY in the environment) (PR_TITLE isn't set)"],
     });
+    // An argument is reported first, with or without PR_TITLE.
+    expect(run({}, ["--bogus"]).errors).toEqual([expect.stringContaining("'--bogus'")]);
     expect(run({ PR_TITLE: "fix(x): y (#1)" }, ["--bogus"])).toMatchObject({
       code: 2,
       errors: [expect.stringContaining("usage: pr-body")],

@@ -232,12 +232,7 @@ function argumentBreaks(call: ts.CallExpression | ts.NewExpression, source: ts.S
 /** The `extend-message` break of `throw new Error(<string or template literal>, …)`, if `node` is one. */
 function messageBreak(node: ts.ThrowStatement, source: ts.SourceFile): Candidate[] {
   const thrown = node.expression;
-  if (
-    !ts.isNewExpression(thrown) ||
-    !ts.isIdentifier(thrown.expression) ||
-    thrown.expression.text !== "Error"
-  )
-    return [];
+  if (!ts.isNewExpression(thrown) || thrown.expression.getText(source) !== "Error") return [];
   const message = thrown.arguments?.[0];
   if (message === undefined || !(ts.isStringLiteral(message) || ts.isTemplateLiteral(message))) return [];
   const at = message.getStart(source);

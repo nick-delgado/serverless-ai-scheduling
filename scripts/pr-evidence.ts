@@ -65,12 +65,12 @@ export const uncell = (text: string): string => text.replaceAll("\\|", "|").repl
  * `text` doesn't start with a closed code span.
  */
 export function unspan(text: string): string | undefined {
-  const span = /^(`+)(.*?)\1(?!`)/.exec(text);
+  const span = /^(`+)(.*?)\1/.exec(text);
   if (!span) return undefined;
-  // The pattern's second group always takes part in a match, if only as "".
+  // The groups always take part in a match, if only as "".
   const inner = span[2] as string;
-  const padded = /^ (.*) $/.exec(inner)?.[1];
-  return uncell(padded !== undefined && /^`|`$/.test(padded) ? padded : inner);
+  const padded = /^ (`.*|.*`) $/.exec(inner);
+  return uncell(padded ? (padded[1] as string) : inner);
 }
 
 /** Every KILLED row of every mutate `--markdown` table in `body`, in order. */
@@ -91,7 +91,7 @@ export function killedRows(body: string): KilledRow[] {
     // Cells split on pipes that aren't escaped: the Edit cell is the first, File the second, Change the third,
     // Status the fourth.
     const cells = line.split(/(?<!\\)\|/);
-    const cell = (i: number) => cells[i]?.trim() ?? "";
+    const cell = (i: number) => (cells[i] ?? "").trim();
     const file = unspan(cell(2));
     if (file && KILLED_CELL.test(cell(4)))
       rows.push({ id: uncell(cell(1)), file, find: unspan(cell(3)) ?? "" });

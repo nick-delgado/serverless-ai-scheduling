@@ -230,7 +230,7 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
   it("appends [extra] to a thrown Error's string or template message, and to nothing else", () => {
     const text =
       'function f(x) {\n  if (x) throw new Error("bad x", { cause: x });\n  throw new Error(`bad ${x}`);\n}\n' +
-      'throw new ChatProtocolError("sub");\nthrow Error("no new");\nconst e = new Error("not thrown");\n' +
+      'throw new ChatProtocolError("sub");\nthrow new errors.Error("member");\nthrow new Error();\nthrow Error("no new");\nconst e = new Error("not thrown");\n' +
       'throw new Error(message);\nlogError("logged");\n';
     expect(only(text, "extend-message")).toEqual([
       text.replace('"bad x"', '"bad x [extra]"'),

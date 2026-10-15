@@ -47,7 +47,7 @@ export const titleOk = (title: string): boolean => TITLE.test(title);
 
 /** The issue numbers `body` says `Refs #<N>` for and also closes with a keyword right before `#<N>`, in order. */
 export function refsAndCloses(body: string): string[] {
-  const refs = [...body.matchAll(/\brefs:?\s+#(\d+)(?!\d)/gi)].map((m) => m[1] as string); // the group always takes part
+  const refs = [...body.matchAll(/\brefs:?\s+#(\d+)/gi)].map((m) => m[1] as string); // the group always takes part
   const closes = (n: string) => new RegExp(`\\b(?:${CLOSING_KEYWORDS}):?\\s+#${n}(?!\\d)`, "i").test(body);
   return [...new Set(refs)].filter(closes);
 }

@@ -140,6 +140,9 @@ describe("killedRows", () => {
       result("W2", "`x` | y", "KILLED"),
       result("W3", "gone", "SURVIVED"),
     ]).join("\n");
+    // A hand-edited row whose Change cell holds no code span has an empty find, which no file holds.
+    const bare = `${MARKDOWN_HEADER}\n|---|---|---|---|---|\n| W4 | \`scripts/a.ts\` | a → b | KILLED | — |`;
+    expect(killedRows(bare)).toEqual([{ id: "W4", file: "scripts/a.ts", find: "" }]);
     expect(killedRows(body)).toEqual([
       { id: "W1|a", file: "scripts/a.ts", find: "const a = b ||\n  c;" },
       { id: "W2", file: "scripts/a.ts", find: "`x` | y" },
@@ -298,6 +301,13 @@ describe("main", () => {
       "S2 scripts/gone.ts",
       "S3 .github/workflows/ci.yml",
       "pr-evidence: every changed source file since main has a KILLED row in a mutate table.",
+    ]);
+    out.length = 0;
+    const one = [table("scripts/kept.ts"), row("S1", "scripts/kept.ts", "x = 1")].join("\n");
+    main(["--base", "main"], { PR_BODY: one }, deps());
+    expect(out.slice(0, 2)).toEqual([
+      "KILLED rows whose find no longer occurs in their file at HEAD, not counted (1):",
+      "S1 scripts/kept.ts",
     ]);
     out.length = 0;
     expect(main(["--base", "main"], { PR_BODY: body.replace("x = 2", "x = 3") }, deps())).toBe(1);
