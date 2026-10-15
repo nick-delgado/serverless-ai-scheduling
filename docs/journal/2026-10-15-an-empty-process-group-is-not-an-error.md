@@ -8,7 +8,7 @@
 
 `npm run mutate` writes one edit, runs the test command, and restores the file in a `finally`. A timeout or a SIGINT/SIGTERM first calls `stopRunning()`, which SIGKILLs the command's whole process group. That kill had no `try`. When the group was already empty, it threw `ESRCH`, and `running` was still set because it's cleared only on the child's `close`, which waits for the output pipes. That happens when a process from the command leaves the group (setsid, a detached spawn) and keeps the output open after the group's last member has exited. The throw was uncaught inside the timer's callback, so the runner died before the `finally` could restore anything. In the signal handler, it skipped the restore and the exit code 130. Either way, the source file stayed mutated. The review of PR #254 found this (`d4b0027/STD-4`), and Nick filed it as #256.
 
-The agent put the kill in a `try` that ignores any error, and moved the report directory's removal after it, so it runs whatever the kill did. The timer callback and the signal handler didn't change. The header now says that a process that left the group isn't killed and that the run waits for it to close the output.
+The agent put the kill in a `try` that ignores any error, and moved the report directory's removal after it, so it runs whatever the kill did. The timer callback and the signal handler didn't change. The header now says that a process that left the group isn't killed and that the run waits for it to close the output. **Later (2026-10-15):** after a timeout the run no longer waits for it; see [A timed-out mutate run stops reading the output](2026-10-15-a-timeout-stops-reading-the-output.md).
 
 The tests needed a real empty group, so the agent added a stand-in command whose first process starts a grandchild in a session of its own (`spawn(..., { detached: true, stdio: "inherit" })`), writes its pid and exits. The grandchild holds the output pipes for a few seconds, then exits on its own. Nothing ever signals it. Three new tests use it or a spy:
 
@@ -20,7 +20,7 @@ The tests needed a real empty group, so the agent added a stand-in command whose
 
 The readiness review settled the three open questions before work started (r1 on #256, Nick accepted each recommendation):
 
-- **Q-1, the unbounded wait: (a) out of scope.** A timeout whose kill finds an empty group still waits for the escaped process to close the output. Ctrl-C or SIGTERM now restores the edit at once. Option (b), destroying the child's streams after a timeout so `close` comes early, is filed as #268.
+- **Q-1, the unbounded wait: (a) out of scope.** A timeout whose kill finds an empty group still waits for the escaped process to close the output. Ctrl-C or SIGTERM now restores the edit at once. Option (b), destroying the child's streams after a timeout so `close` comes early, is filed as #268. **Later (2026-10-15):** #268 took option (b): a timeout no longer waits for the escaped process; see [A timed-out mutate run stops reading the output](2026-10-15-a-timeout-stops-reading-the-output.md).
 - **Q-2, the evidence: (b)** an in-process test of `stopRunning()` on a real empty group, and one spawned-script test of the timer path. Option (c)'s second spawned test, of the signal path, was left out. The signal path calls the same `stopRunning()`, and its existing SIGINT/SIGTERM tests still pass.
 - **Q-3, other kill errors: (a) treated like ESRCH.** The group holds only processes this runner started, as the same user, so any kill error means nothing is left that it may kill. Option (b) rethrew and logged them, but then macOS and Linux could differ on a zombie-only group, and a log line would have been the only difference.
 
@@ -39,4 +39,4 @@ The spec left nothing else open.
 
 ## What's next
 
-- #268: decide whether a timeout should settle without waiting for a process that left the command's group.
+- #268: decide whether a timeout should settle without waiting for a process that left the command's group. **Later (2026-10-15):** it does: the timeout stops reading the output, so the run ends once the started process has exited; see [A timed-out mutate run stops reading the output](2026-10-15-a-timeout-stops-reading-the-output.md).

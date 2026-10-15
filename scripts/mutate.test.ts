@@ -63,13 +63,15 @@ if (text.includes("slow")) {
 
 // A command whose process escapes its process group (#256): when target.txt says "escape", it starts a grandchild in
 // a session of its own (a detached spawn calls setsid) that holds the output pipes for argv[2] ms, then exits on its
-// own; it writes its own pid to first.pid and exits 0 at once. Once it is gone, the group is empty while the run
-// still waits for the output to close. The grandchild writes no checker.pid, and nothing ever signals it.
+// own; it writes its own pid to first.pid and exits 0 at once. Once it is gone, the group is empty while the
+// grandchild still holds the output open. The grandchild writes its pid to escaped.pid (not checker.pid, which the
+// after-each check reads), and nothing ever signals it.
 const ESCAPER = `
 const fs = require("node:fs");
 if (fs.readFileSync("target.txt", "utf8").includes("escape")) {
   const ms = Number(process.argv[2]);
-  const grandchild = require("node:child_process").spawn(process.execPath, ["-e", "setTimeout(() => {}, " + ms + ")"], {
+  const code = "require('node:fs').writeFileSync('escaped.pid', String(process.pid)); setTimeout(() => {}, " + ms + ")";
+  const grandchild = require("node:child_process").spawn(process.execPath, ["-e", code], {
     detached: true,
     stdio: "inherit",
   });
@@ -113,6 +115,10 @@ const escaping = (ms: number) => ["node", join(dir, "escaper.cjs"), String(ms)];
 // The checker under sh, which stays its parent (the "; true" keeps sh from exec'ing node): killing only the process
 // the runner started would leave the checker running, so only a kill of the whole process group stops it.
 const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
+// The checker backgrounded by sh, which writes its own pid to sh.pid and exits at once: with no job control the
+// checker stays in sh's process group and holds the output, so the started process is gone before a timeout while
+// the group isn't empty (#215 r1/A-3, #268).
+const checkerAfterSh = () => ["sh", "-c", `echo $$ > sh.pid; node ${join(dir, "checker.cjs")} &`];
 const target = () => readFileSync(join(dir, "target.txt"), "utf8");
 /**
  * True while the process with this pid runs. Only a positive integer names one process: kill(2) reads 0 as the
@@ -584,6 +590,42 @@ describe("main", () => {
     await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
   }, 10_000);
 
+  it("still kills a timed-out command's group after the process it started has exited", async () => {
+    // The output closes only when the checker exits, so a run that stopped reading the output at the timeout without
+    // killing the group would end there and leave the checker running.
+    const edits = editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
+    const run = main([edits, "--timeout", "3", "--", ...checkerAfterSh()], deps());
+    // sh wrote a whole pid and is gone, while the checker it started runs: before any kill, as the timeout is 3 s.
+    await vi.waitFor(
+      () => {
+        const pid = Number(readFileSync(join(dir, "sh.pid"), "utf8"));
+        expect(pid > 0 && Number.isInteger(pid) && !alive(pid) && checkerLeftRunning(dir)).toBe(true);
+      },
+      { timeout: 2_500, interval: 20 },
+    );
+    const code = await run;
+    expect(out[0]).toBe("TIMEOUT t target.txt: ok ? 1 → slow ? 1");
+    expect(code).toBe(0);
+    expect(target()).toBe(TARGET);
+    await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
+  }, 20_000);
+
+  it("ends a timed-out run without waiting for a process that left the command's group and holds its output", async () => {
+    // The grandchild (10 s) holds the output long after the timeout (3 s), which comes after the first process has
+    // started it and exited (about 1 s at most under load). The run ends at the timeout and leaves it running.
+    const edits = editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "escape ? 1" }]);
+    const code = await main(
+      [edits, "--timeout", "3", "--json", "out.json", "--", ...escaping(10_000)],
+      deps(),
+    );
+    expect(out[0]).toBe("TIMEOUT e target.txt: ok ? 1 → escape ? 1");
+    expect(code).toBe(0);
+    expect(target()).toBe(TARGET);
+    const { results } = JSON.parse(readFileSync(join(dir, "out.json"), "utf8")) as { results: EditResult[] };
+    expect(results[0]?.seconds).toBeLessThan(6);
+    expect(alive(Number(readFileSync(join(dir, "escaped.pid"), "utf8")))).toBe(true);
+  }, 20_000);
+
   it("removes its report directory after each run", async () => {
     await withTmpdir(async (tmp) => {
       const edits = editsFile([{ id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
@@ -900,7 +942,7 @@ describe("the script", () => {
 
   it("restores the edited file and reads TIMEOUT when the timeout's kill finds the command's process group empty", () => {
     // The timeout (3 s) comes after the first process has started the grandchild and exited (about 1 s at most under
-    // load), and before the grandchild (6 s) closes the output; the run then waits for it, and the script exits 0.
+    // load), and before the grandchild (6 s) closes the output; the run doesn't wait for it, and the script exits 0.
     editsFile([{ id: "e", file: "target.txt", find: "ok ? 1", replace: "escape ? 1" }]);
     const tmp = join(dir, "tmp");
     mkdirSync(tmp);
