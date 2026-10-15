@@ -1,7 +1,8 @@
 /**
  * scripts/teardown.sh (#137), run for real through the shell harness (scripts/test/shell-harness.ts): each test copies
  * the script into a throwaway git repo and runs the copy against a stand-in `aws` that logs every call, finds only the
- * stacks a test names (FAKE_STACKS), and fails the delete wait for the one in FAKE_WAIT_FAIL.
+ * stacks a test names (FAKE_STACKS), fails the delete wait for the one in FAKE_WAIT_FAIL, and fails the one SSM read named
+ * in FAKE_SSM_ERROR_NAME with FAKE_SSM_ERROR.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -55,6 +56,13 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
       },
     );
 
+    it.each([[["pr7", ""]], [["pr7", "--yse"]], [["pr7", "--yes", "extra"]], [["dev", "--yse"]]])(
+      "rejects %j with the usage line, exit 2 and no aws call",
+      (args) => {
+        expectArgumentsRefused(run(args, { FAKE_STACKS: ALL }), "usage: ");
+      },
+    );
+
     it.each(GOOD_ENV_NAMES)("accepts the env name %s (2 and 16 characters are the length bounds)", (env) => {
       const r = run([env]);
       expect(r.status, r.out).toBe(0);
@@ -86,11 +94,8 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
   });
 
   describe("confirmation", () => {
-    it.each([
-      ["no answer (stdin at end of file)", undefined],
-      ["a wrong answer", "pr8\n"],
-    ])("aborts with exit 1 and no delete on %s", (_, input) => {
-      const r = run(["pr7"], { FAKE_STACKS: ALL }, input);
+    it("aborts with exit 1 and no delete on a wrong answer", () => {
+      const r = run(["pr7"], { FAKE_STACKS: ALL }, "pr8\n");
       expect(r.status).toBe(1);
       expect(deletes(r.calls)).toEqual([]);
       expect(emptied(r.calls)).toEqual([]);
@@ -98,6 +103,18 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
 
     it("prints aborted on a wrong answer", () => {
       expect(run(["pr7"], { FAKE_STACKS: ALL }, "pr8\n").out).toContain("aborted");
+    });
+
+    it.each([
+      ["no answer", undefined],
+      ["the env name without a newline", "pr7"],
+    ])("says no confirmation was given when stdin closes on %s, before any ssm read", (_, input) => {
+      const r = run(["pr7"], { FAKE_STACKS: ALL }, input);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("aborted: no confirmation given (stdin closed)");
+      expect(r.calls.filter((c) => c.startsWith("aws ssm"))).toEqual([]);
+      expect(deletes(r.calls)).toEqual([]);
+      expect(emptied(r.calls)).toEqual([]);
     });
 
     it("deletes when the env name is typed", () => {
@@ -155,6 +172,33 @@ describe("teardown.sh", { timeout: 30_000 }, () => {
         expect(deletes(r.calls)).toEqual([]);
       },
     );
+
+    it("stops with the CLI's error when the bucket read fails for a reason other than not-found", () => {
+      const r = run(["pr7", "--yes"], {
+        FAKE_STACKS: ALL,
+        FAKE_SSM_ERROR:
+          "An error occurred (ThrottlingException) when calling the GetParameter operation: Rate exceeded",
+        FAKE_SSM_ERROR_NAME: "/sched/pr7/web/bucket-name",
+      });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("(ThrottlingException) when calling the GetParameter operation: Rate exceeded");
+      expect(r.out).toContain("could not read /sched/pr7/web/bucket-name; stopping before any delete.");
+      expect(emptied(r.calls)).toEqual([]);
+      expect(deletes(r.calls)).toEqual([]);
+    });
+
+    it("skips emptying on the real CLI's ParameterNotFound error, and still deletes", () => {
+      const r = run(["pr7", "--yes"], {
+        FAKE_STACKS: ALL,
+        FAKE_SSM_ERROR:
+          "An error occurred (ParameterNotFound) when calling the GetParameter operation: Parameter /sched/pr7/web/bucket-name not found.",
+        FAKE_SSM_ERROR_NAME: "/sched/pr7/web/bucket-name",
+      });
+      expect(r.status, r.out).toBe(0);
+      expect(r.out).not.toContain("ParameterNotFound");
+      expect(emptied(r.calls)).toEqual([]);
+      expect(deletes(r.calls)).toEqual(ALL.split(" "));
+    });
 
     it.each([
       ["missing", undefined],
