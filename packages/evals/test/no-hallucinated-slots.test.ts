@@ -195,6 +195,15 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
     ).toMatchObject({ status: "pass" });
   });
 
+  it("grades a range end on a list line (c0d7f56/SPEC-1 (a))", async () => {
+    expect(
+      await graded(MARIA_SCENARIO, [
+        checked("lee@2026-10-13T16:00:00Z"),
+        assistant("Tuesday, October 13:\n- 12:00 PM – 3:15 PM ET"),
+      ]),
+    ).toMatchObject({ status: "fail", detail: 'offered "October 13 … 3:15 PM", which no tool returned' });
+  });
+
   it("grades a short line at the end of a long list", async () => {
     const text = `Tuesday, October 13:\n${"- 12:00 PM ET\n".repeat(6)}- 3:15 PM`;
     expect(
@@ -243,9 +252,12 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
   });
 
   it.each([
-    ["a period", "Dr. Lee has Thursday, October 15 at 1:00 PM ET. Dr. Okafor has 3:00 PM."],
-    ["a semicolon", "Dr. Lee has Thursday, October 15 at 1:00 PM ET; Dr. Okafor has 3:00 PM."],
-    ["a newline", "Dr. Lee has Thursday, October 15 at 1:00 PM ET\nDr. Okafor has 3:00 PM."],
+    // Each gap after "1:00 PM" holds only its own break: no "Dr." after it to supply a period.
+    ["a period", "Dr. Lee has Thursday, October 15 at 1:00 PM ET. Okafor has 3:00 PM"],
+    ["a semicolon", "Dr. Lee has Thursday, October 15 at 1:00 PM ET; Okafor has 3:00 PM"],
+    ["a newline", "Dr. Lee has Thursday, October 15 at 1:00 PM ET\nOkafor has 3:00 PM"],
+    ["a question mark", "Dr. Lee has Thursday, October 15 at 1:00 PM ET? Okafor has 3:00 PM"],
+    ["an exclamation mark", "Dr. Lee has Thursday, October 15 at 1:00 PM ET! Okafor has 3:00 PM"],
     [
       "another month-day",
       "Dr. Lee has Thursday, October 15 at 1:00 PM ET or Friday, October 16 at 3:00 PM ET.",
@@ -311,6 +323,26 @@ describe("Q-3 (b): a restatement checked in the same turn (#245)", () => {
     [
       "the text has no check word",
       () => inTurn(1, ask, assistant(RESTATE.replace(" Let me check if that's available.", "")), at1000()),
+    ],
+    [
+      'the check word is only part of "checked"',
+      () =>
+        inTurn(
+          1,
+          ask,
+          assistant(RESTATE.replace("Let me check if that's available.", "I checked it.")),
+          at1000(),
+        ),
+    ],
+    [
+      'the check word is only part of "recheck"',
+      () =>
+        inTurn(
+          1,
+          ask,
+          assistant(RESTATE.replace("Let me check if that's available.", "I'll recheck it.")),
+          at1000(),
+        ),
     ],
     [
       "the check is in a later turn",
