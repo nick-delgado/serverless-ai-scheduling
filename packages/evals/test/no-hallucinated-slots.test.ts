@@ -71,6 +71,13 @@ const checked = (...slots: string[]) =>
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
+/** `invariant.no_hallucinated_slots` on an L1 reply whose context returned Oct 14 3:00 PM, Oct 15 2:00 PM, Oct 16 1:00 PM. */
+const l1SlotCheck = (text: string) =>
+  byName(
+    gradeL1(l1Case("l1-slot-taken-offer-alternatives"), { stopReason: "end_turn", toolCalls: [], text }),
+    "invariant.no_hallucinated_slots",
+  );
+
 describe("Q-1 (a): the patient's held appointment is no quoted slot (#239)", () => {
   // Gate run 4 on PR #238 (run 38149783264): Maria holds Dr. Lee, Tue Oct 13 at 2:30 PM ET.
   const HEADING = "Tuesday, October 13 (earlier than your 2:30 PM visit):";
@@ -253,11 +260,7 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
   });
 
   it("reaches L1 too: a heading list time the context never returned fails", () => {
-    const grade = (text: string) =>
-      byName(
-        gradeL1(l1Case("l1-slot-taken-offer-alternatives"), { stopReason: "end_turn", toolCalls: [], text }),
-        "invariant.no_hallucinated_slots",
-      );
+    const grade = l1SlotCheck;
     expect(grade("Wednesday, October 14:\n1. 3:00 PM ET")).toMatchObject({ status: "pass" });
     expect(grade("Wednesday, October 14:\n1. 3:00 PM ET\n2. 3:30 PM ET")).toMatchObject({
       status: "fail",
@@ -374,11 +377,7 @@ describe("Q-4 (a): the clinic's hours are no quoted slot (#244)", () => {
   });
 
   it("reaches L1 too", () => {
-    const grade = (text: string) =>
-      byName(
-        gradeL1(l1Case("l1-slot-taken-offer-alternatives"), { stopReason: "end_turn", toolCalls: [], text }),
-        "invariant.no_hallucinated_slots",
-      )?.status;
+    const grade = (text: string) => l1SlotCheck(text)?.status;
     expect(grade("Wednesday, October 14 we're open until 5:00 PM ET.")).toBe("pass");
     expect(grade("Dr. Lee has Wednesday, October 14 at 5:00 PM ET.")).toBe("fail");
   });
