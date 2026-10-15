@@ -267,7 +267,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expectNotPrinted(r);
     });
 
-    it("doesn't read or refuse a .env value that spans lines for a target without api", () => {
+    it("doesn't refuse a .env value that spans lines for a target without api", () => {
       writeEnv(sb.repo.dir, MULTILINE_DOTENV);
       const r = run(["data", "dev"]);
       expect(r.status, r.out).toBe(0);
