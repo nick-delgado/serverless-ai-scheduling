@@ -102,6 +102,13 @@ function to24h(hour: number, minute: number, period: string): string {
   return hhmm(h, minute);
 }
 
+/** The date half of `slotKey`: `10-15`. */
+const dateKey = (month: number, day: number): string =>
+  `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+/** How the graders key a dated time: month (1-12), day and a 24-hour `HH:MM`, as `10-15 14:00`. */
+export const slotKey = (month: number, day: number, time: string): string => `${dateKey(month, day)} ${time}`;
+
 /**
  * A month name and day as the graders read a date ("October 15", "Oct. 15th", "Sept 3"). With `capture`, the
  * month name and the day are capture groups 1 and 2; without it, there are no capture groups.
@@ -127,7 +134,7 @@ export function dateTimeMentions(text: string): DateTimeMention[] {
     const mi = monthIndex(month);
     if (mi < 0) continue;
     out.push({
-      key: `${String(mi + 1).padStart(2, "0")}-${day.padStart(2, "0")} ${to24h(Number(hh), Number(mm), period)}`,
+      key: slotKey(mi + 1, Number(day), to24h(Number(hh), Number(mm), period)),
       raw,
       index: m.index,
     });
@@ -205,6 +212,100 @@ export function offeredClockTimes(text: string): { raw: string; index: number }[
     lines.some((l) => t.index >= l.index && t.index < l.index + l.text.length),
   );
   return listed.length > 0 ? listed : times;
+}
+
+/** A dated time the slot check grades (`slotMentions`), with the position of its clock time. */
+export interface SlotMention extends DateTimeMention {
+  /** Where the clock time starts in the text (for a `dateTimeMentions` pair, after the date). */
+  timeIndex: number;
+}
+
+/** A clock time as `h:mm AM/PM` (the time half of `dateTimeMentions`), with its parts captured. */
+const CLOCK_TIME = /\b(\d{1,2}):(\d{2})\s*([ap])\.?\s?m\.?/gi;
+/** Ends a sentence for `slotMentions`' later times: `.;?!` or a newline (`dateTimeMentions`' gap rule). */
+const SENTENCE_BREAK = /[.;?!\n]/;
+/** A gap that ends in one of these makes the next time a range end, which takes no date (#178, r1/Q-2 edges). */
+const RANGE_END = /(?:\b(?:to|until|till)|[-–])\s*$/i;
+
+/**
+ * Every dated clock time in `text`, for `no_hallucinated_slots` only (#178, r1/Q-2 (a), r1/A-1). It adds
+ * two readings to `dateTimeMentions`, which stays as it is for its other callers:
+ * - within a sentence, every later time after a date-and-time pair takes that date, so "Monday, November
+ *   2 at 9:00 AM and 11:30 AM" yields both, except a range end (a time right after "to", "until", "till",
+ *   "-" or "–"). The sentence ends at `.;?!`, a newline or another month-day;
+ * - a date heading is any line that names a month-day. Each clock time on the list lines
+ *   (`LIST_ITEM_PREFIX`) under it, after optional blank lines, takes the heading's date (its last
+ *   month-day). The reach ends at the next line that names a month-day, or at the first non-blank line
+ *   that isn't a list line, so a weekday-only line ("Tuesday:") ends it and gives no date.
+ * Times on the heading line itself are read as `dateTimeMentions` reads them. A derived mention's `raw`
+ * is the date and the time as written, joined by " … ". Sorted by `timeIndex`.
+ */
+export function slotMentions(text: string): SlotMention[] {
+  const times = [...text.matchAll(CLOCK_TIME)].map((m) => ({
+    raw: m[0],
+    index: m.index,
+    time: to24h(Number(m[1]), Number(m[2]), m[3] ?? ""),
+  }));
+  const monthDays = (s: string) => [...s.matchAll(new RegExp(monthDay(true), "gi"))];
+  const out: SlotMention[] = [];
+  const derived = (date: string, dateRaw: string, t: (typeof times)[number]): SlotMention => ({
+    key: `${date} ${t.time}`,
+    raw: `${dateRaw} … ${t.raw}`,
+    index: t.index,
+    timeIndex: t.index,
+  });
+
+  for (const pair of dateTimeMentions(text)) {
+    const end = pair.index + pair.raw.length;
+    const own = times.find((t) => t.index + t.raw.length === end);
+    out.push({ ...pair, timeIndex: own?.index ?? pair.index });
+    const date = pair.key.slice(0, 5);
+    const dateRaw = monthDays(pair.raw)[0]?.[0] ?? "";
+    let from = end;
+    for (const t of times.filter((x) => x.index >= end)) {
+      const gap = text.slice(from, t.index);
+      if (SENTENCE_BREAK.test(gap) || monthDays(gap).length > 0) break;
+      if (!RANGE_END.test(gap)) out.push(derived(date, dateRaw, t));
+      from = t.index + t.raw.length;
+    }
+  }
+
+  let heading: { date: string; raw: string } | undefined;
+  let lineStart = 0;
+  for (const line of text.split("\n")) {
+    const named = monthDays(line).at(-1);
+    if (named !== undefined) {
+      const [raw, month = "", day = ""] = named;
+      heading = { date: dateKey(monthIndex(month) + 1, Number(day)), raw };
+    } else if (LIST_ITEM_PREFIX.test(line)) {
+      const h = heading;
+      if (h !== undefined)
+        out.push(
+          ...times
+            .filter((t) => t.index >= lineStart && t.index < lineStart + line.length)
+            .map((t) => derived(h.date, h.raw, t)),
+        );
+    } else if (line.trim() !== "") heading = undefined;
+    lineStart += line.length + 1;
+  }
+  return out.sort((a, b) => a.timeIndex - b.timeIndex);
+}
+
+/**
+ * The words that, right before one of the clinic's opening-hours bounds, make it the clinic's hours rather
+ * than a slot (#244, r1/Q-4 (a)). The list is complete: a new wording is graded until it is added here.
+ */
+const CLINIC_HOURS_LEAD =
+  /\b(?:open until|open till|opens at|closes at|close at|closing at|clinic is open is|open from|hours are)[ \t]+$/i;
+
+/**
+ * Whether `mention` is the clinic's hours (#244, r1/Q-4 (a)): its time is `CLINIC.openHour` or
+ * `CLINIC.closeHour` on the hour (8:00 AM or 5:00 PM), and the words right before that time, in the same
+ * sentence, are a `CLINIC_HOURS_LEAD` phrase. "Dr. Lee has Tuesday, October 6 at 5:00 PM ET" stays a slot.
+ */
+export function namesClinicHours(text: string, mention: SlotMention): boolean {
+  const bound = [CLINIC.openHour, CLINIC.closeHour].some((h) => mention.key.endsWith(` ${hhmm(h, 0)}`));
+  return bound && CLINIC_HOURS_LEAD.test(text.slice(0, mention.timeIndex));
 }
 
 /** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
