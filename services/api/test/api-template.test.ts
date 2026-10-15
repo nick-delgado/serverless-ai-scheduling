@@ -8,22 +8,41 @@ import { readFileSync } from "node:fs";
 
 import { MODEL_PROFILES, REFUSAL_FALLBACKS } from "@sched/agent";
 import { ChatErrorCode } from "@sched/contracts";
+import { createTableInput } from "@sched/tools/dynamo";
 import { NOTIFICATION_FAILED_METRIC } from "@sched/tools/ses";
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_DAILY_TURN_CAP } from "../src/lib/chat-turn";
 import { ENV_DIMENSION, ERROR_CODE_DIMENSION, METRIC } from "../src/lib/observability/metrics";
 
-import { block, bodyLines, entries, text } from "../../../scripts/test/yaml-text";
+import { block, bodyLines, childBlocks, entries, items, text } from "../../../scripts/test/yaml-text";
 
 const template = readFileSync(new URL("../../../infra/stacks/api.yaml", import.meta.url), "utf8");
 const lines = template.split("\n");
 
 const entitled = Object.values(MODEL_PROFILES).filter((p) => p.entitled);
 
-/** The resource ARNs the chat role may invoke (the `InvokeAgentModels` statement). */
+/** One top-level resource's YAML lines (a miss throws). */
+const resource = (name: string): string[] => block(new RegExp(`^ {2}${name}:$`), lines);
+const chatLines = resource("ChatFunction");
+
+/** One method's block in the API's OpenAPI body (`post` under `/api/chat`, say). */
+const method = (path: string, verb: string): string[] =>
+  block(new RegExp(`^ {12}${verb}:$`), block(new RegExp(`^ {10}${path.replace(/[/]/g, "\\/")}:$`), lines));
+
+/**
+ * The resources the chat role may invoke (the `InvokeAgentModels` statement): every list item under `Resource:`, whatever
+ * its form (`!Sub`, a plain or quoted string, a trailing comment), so no form escapes the checks (#39).
+ */
 function invokeResources(): string[] {
-  const resources = block(/^\s+Resource:$/, block(/^\s+- Sid: InvokeAgentModels$/, lines));
-  return resources.flatMap((l) => /^\s*- !Sub (\S+)$/.exec(l)?.[1] ?? []);
+  const resources = block(/^\s+Resource:$/, block(/^\s+- Sid: InvokeAgentModels$/, chatLines));
+  return items(resources).map((item) =>
+    (item[0] ?? "")
+      .replace(/^\s*-\s+/, "")
+      .replace(/\s+#.*$/, "")
+      .replace(/^!Sub\s+/, "")
+      .replace(/^(["'])(.*)\1$/, "$2"),
+  );
 }
 
 describe("infra/stacks/api.yaml matches the model profiles", () => {
@@ -66,9 +85,6 @@ describe("infra/stacks/api.yaml matches the model profiles", () => {
     }
   });
 });
-
-/** One top-level resource's YAML lines (a miss throws). */
-const resource = (name: string): string[] => block(new RegExp(`^ {2}${name}:$`), lines);
 
 describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
   const fnLines = resource("SessionFunction");
@@ -114,7 +130,7 @@ describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
   });
 
   it("routes POST /api/session through the Cognito authorizer to the session function", () => {
-    const post = text(block(/^ {12}post:$/, block(/^ {10}\/api\/session:$/, lines)));
+    const post = text(method("/api/session", "post"));
     expect(post).toMatch(/^ {12}post:\n/m);
     expect(post).toMatch(/security:\n\s*- CognitoUserPool: \[\]/);
     expect(post).toContain("type: aws_proxy");
@@ -130,7 +146,6 @@ describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
 });
 
 describe("infra/stacks/api.yaml: observability (#38)", () => {
-  const chatLines = resource("ChatFunction");
   const chat = text(chatLines);
 
   /** The dashboard body as CloudWatch receives it, with each `${...}` replaced by its name in angle brackets. */
@@ -230,11 +245,13 @@ describe("infra/stacks/api.yaml: observability (#38)", () => {
 });
 
 describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)", () => {
-  const chatLines = resource("ChatFunction");
   const dataTemplate = readFileSync(new URL("../../../infra/stacks/data.yaml", import.meta.url), "utf8");
+  /** The table's indexes, from the CreateTable input that `packages/tools` keeps in step with data.yaml. */
+  const indexes = (createTableInput("t").GlobalSecondaryIndexes ?? []).map((i) => i.IndexName);
 
   it("lets the chat role make item reads and conditional writes on the base table and GSI1 only", () => {
     // Compared exactly, so an added action (Scan, DeleteItem), another index or an `index/*` fails here.
+    const table = '"{{resolve:ssm:/sched/${Env}/data/table-arn}}';
     expect(bodyLines(block(/^\s+- Sid: SingleTableItems$/, chatLines))).toEqual([
       "  Effect: Allow",
       "  Action:",
@@ -244,19 +261,35 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
       "    - dynamodb:UpdateItem",
       "    - dynamodb:ConditionCheckItem",
       "  Resource:",
-      '    - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
-      '    - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}/index/GSI1"',
+      `    - !Sub ${table}"`,
+      ...indexes.map((name) => `    - !Sub ${table}/index/${String(name)}"`),
     ]);
-    // GSI1 is the table's only index (infra/stacks/data.yaml), so the grant covers every index query.
-    expect([...dataTemplate.matchAll(/IndexName: (\S+)/g)].map((m) => m[1])).toEqual(["GSI1"]);
+    // GSI1 is the table's only index, in infra/stacks/data.yaml and in createTableInput alike.
+    expect(indexes).toEqual(["GSI1"]);
+    expect([...dataTemplate.matchAll(/IndexName: (\S+)/g)].map((m) => m[1])).toEqual(indexes);
   });
 
   it("routes POST /api/chat through the Cognito authorizer to the chat function", () => {
     // The patient's identity is the verified token's `sub` (ADR-005), so a method without the authorizer has none.
-    const post = text(block(/^ {12}post:$/, block(/^ {10}\/api\/chat:$/, lines)));
+    const post = text(method("/api/chat", "post"));
     expect(post).toMatch(/security:\n\s*- CognitoUserPool: \[\]/);
     expect(post).toContain("/functions/${ChatFunction.Arn}/response-streaming-invocations");
-    expect(template.match(/^ {14}security:$/gm)).toHaveLength(2);
+  });
+
+  it("puts every method of the API behind the Cognito authorizer, which validates this env's user pool", () => {
+    const methods = childBlocks(block(/^ {8}paths:$/, lines)).flatMap((path) => childBlocks(path));
+    expect(methods.length).toBeGreaterThan(0);
+    for (const m of methods) expect(text(m), m[0]).toMatch(/^ {14}security:\n {16}- CognitoUserPool: \[\]$/m);
+    expect(bodyLines(block(/^ {12}CognitoUserPool:$/, lines))).toEqual([
+      "  type: apiKey",
+      "  name: Authorization",
+      "  in: header",
+      "  x-amazon-apigateway-authtype: cognito_user_pools",
+      "  x-amazon-apigateway-authorizer:",
+      "    type: cognito_user_pools",
+      "    providerARNs:",
+      '      - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"',
+    ]);
   });
 
   it("throttles every method of the stage at rate 5 and burst 10", () => {
@@ -268,8 +301,12 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
     ]);
   });
 
-  it("caps each patient at 50 turns a day by default, and passes the cap to the chat function", () => {
-    expect(entries(block(/^ {2}DailyTurnCap:$/, lines))).toMatchObject({ Default: "50", MinValue: "1" });
+  it("caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function", () => {
+    expect(DEFAULT_DAILY_TURN_CAP).toBe(50);
+    expect(entries(block(/^ {2}DailyTurnCap:$/, lines))).toMatchObject({
+      Default: String(DEFAULT_DAILY_TURN_CAP),
+      MinValue: "1",
+    });
     expect(entries(block(/^\s+Variables:$/, chatLines))).toMatchObject({
       DAILY_TURN_CAP: "!Ref DailyTurnCap",
     });
