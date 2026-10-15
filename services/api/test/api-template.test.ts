@@ -40,23 +40,24 @@ describe("infra/stacks/api.yaml matches the model profiles", () => {
     expect(arns.length).toBeGreaterThan(0);
     for (const { modelId } of entitled) {
       if (modelId.startsWith("us.")) {
-        // A US cross-region inference profile, plus the foundation model it routes to in any region.
+        // A US cross-region inference profile, plus the foundation model it routes to in any region: that model's
+        // exact ID, with no trailing `*` that would match other models (#39, r1/Q-2 (a)).
         expect(arns).toContain(
           `arn:\${AWS::Partition}:bedrock:\${AWS::Region}:\${AWS::AccountId}:inference-profile/${modelId}`,
         );
-        const foundation = modelId.slice("us.".length);
-        expect(
-          arns.some((a) =>
-            new RegExp(
-              `^arn:\\$\\{AWS::Partition\\}:bedrock:\\*::foundation-model/${foundation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\*?$`,
-            ).test(a),
-          ),
-          `foundation-model ARN for ${modelId}`,
-        ).toBe(true);
+        expect(arns).toContain(
+          `arn:\${AWS::Partition}:bedrock:*::foundation-model/${modelId.slice("us.".length)}`,
+        );
       } else {
         expect(arns).toContain(`arn:\${AWS::Partition}:bedrock:\${AWS::Region}::foundation-model/${modelId}`);
       }
     }
+  });
+
+  it("names every model ARN exactly: no wildcard but the region of a foundation model (#39)", () => {
+    expect(
+      invokeResources().filter((a) => a.replace(/:bedrock:\*::foundation-model\//, "").includes("*")),
+    ).toEqual([]);
   });
 
   it("only uses entitled profiles as refusal fallbacks for entitled profiles", () => {
@@ -225,5 +226,52 @@ describe("infra/stacks/api.yaml: observability (#38)", () => {
     expect(alarm?.properties.alarms).toEqual(["<NotificationFailedAlarm.Arn>"]);
     expect(widgets.filter((w) => w.type === "alarm")).toHaveLength(1);
     expect(Number(alarm?.x)).toBe(Number(metric?.x) + Number(metric?.width));
+  });
+});
+
+describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)", () => {
+  const chatLines = resource("ChatFunction");
+  const dataTemplate = readFileSync(new URL("../../../infra/stacks/data.yaml", import.meta.url), "utf8");
+
+  it("lets the chat role make item reads and conditional writes on the base table and GSI1 only", () => {
+    // Compared exactly, so an added action (Scan, DeleteItem), another index or an `index/*` fails here.
+    expect(bodyLines(block(/^\s+- Sid: SingleTableItems$/, chatLines))).toEqual([
+      "  Effect: Allow",
+      "  Action:",
+      "    - dynamodb:GetItem",
+      "    - dynamodb:Query",
+      "    - dynamodb:PutItem",
+      "    - dynamodb:UpdateItem",
+      "    - dynamodb:ConditionCheckItem",
+      "  Resource:",
+      '    - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
+      '    - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}/index/GSI1"',
+    ]);
+    // GSI1 is the table's only index (infra/stacks/data.yaml), so the grant covers every index query.
+    expect([...dataTemplate.matchAll(/IndexName: (\S+)/g)].map((m) => m[1])).toEqual(["GSI1"]);
+  });
+
+  it("routes POST /api/chat through the Cognito authorizer to the chat function", () => {
+    // The patient's identity is the verified token's `sub` (ADR-005), so a method without the authorizer has none.
+    const post = text(block(/^ {12}post:$/, block(/^ {10}\/api\/chat:$/, lines)));
+    expect(post).toMatch(/security:\n\s*- CognitoUserPool: \[\]/);
+    expect(post).toContain("/functions/${ChatFunction.Arn}/response-streaming-invocations");
+    expect(template.match(/^ {14}security:$/gm)).toHaveLength(2);
+  });
+
+  it("throttles every method of the stage at rate 5 and burst 10", () => {
+    expect(bodyLines(block(/^\s+MethodSettings:$/, resource("ChatApi")))).toEqual([
+      '  - ResourcePath: "/*"',
+      '    HttpMethod: "*"',
+      "    ThrottlingRateLimit: 5",
+      "    ThrottlingBurstLimit: 10",
+    ]);
+  });
+
+  it("caps each patient at 50 turns a day by default, and passes the cap to the chat function", () => {
+    expect(entries(block(/^ {2}DailyTurnCap:$/, lines))).toMatchObject({ Default: "50", MinValue: "1" });
+    expect(entries(block(/^\s+Variables:$/, chatLines))).toMatchObject({
+      DAILY_TURN_CAP: "!Ref DailyTurnCap",
+    });
   });
 });
