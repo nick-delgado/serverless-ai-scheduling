@@ -13,9 +13,6 @@ import { logsTo, withConsole } from "./test/git-repo";
 /** `.github/pull_request_template.md`, whose decisions section must pass. */
 const TEMPLATE = readFileSync(join(import.meta.dirname, "..", ".github", "pull_request_template.md"), "utf8");
 
-/** `<keyword> #<n>`. */
-const closing = (keyword: string, n: string) => `${keyword} #${n}`;
-
 describe("titleOk", () => {
   it.each([
     "eval: M3 model matrix picks sonnet-4.6 at effort high; ADR-002 amended (#37)",
@@ -26,9 +23,14 @@ describe("titleOk", () => {
     "feat(scripts): trace.ts prints a conversation's turn traces (#38, part 1 of 2)",
     "test(web): Playwright E2E journeys against the e2e env, FR-010 measurement, manual checklist (#40)",
     "feat(api): Powertools logs, per-turn metrics, X-Ray and the chat dashboard (#38)",
+  ])("passes the merged title %s", (title) => {
+    expect(titleOk(title)).toBe(true);
+  });
+
+  it.each([
     "feat(web,api): a scope with a comma (#9)",
     "docs: a summary (with parentheses) before the number (#9)",
-  ])("passes the merged title %s", (title) => {
+  ])("passes the made-up title %s", (title) => {
     expect(titleOk(title)).toBe(true);
   });
 
@@ -57,25 +59,25 @@ describe("refsAndCloses", () => {
   it.each(["close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"])(
     "finds a Refs line beside the keyword %s for the same issue, in any case and with a colon",
     (keyword) => {
-      expect(refsAndCloses(`Refs #38\n\nthe second PR, which ${closing(keyword, "38")}`)).toEqual(["38"]);
-      expect(refsAndCloses(`refs: #38\n${closing(`${keyword.toUpperCase()}:`, "38")}`)).toEqual(["38"]);
+      expect(refsAndCloses(`Refs #38\n\nthe second PR, which ${keyword} #38`)).toEqual(["38"]);
+      expect(refsAndCloses(`refs: #38\n${keyword.toUpperCase()}: #38`)).toEqual(["38"]);
     },
   );
 
   it("reads code spans, fenced blocks and HTML comments, and a line break after the keyword", () => {
-    expect(refsAndCloses(`Refs #38\n\`${closing("closes", "38")}\``)).toEqual(["38"]);
-    expect(refsAndCloses(`Refs #38\n\`\`\`\n${closing("fixes", "38")}\n\`\`\``)).toEqual(["38"]);
-    expect(refsAndCloses(`Refs #38\n<!-- ${closing("resolves", "38")} -->`)).toEqual(["38"]);
+    expect(refsAndCloses(`Refs #38\n\`closes #38\``)).toEqual(["38"]);
+    expect(refsAndCloses(`Refs #38\n\`\`\`\nfixes #38\n\`\`\``)).toEqual(["38"]);
+    expect(refsAndCloses(`Refs #38\n<!-- resolves #38 -->`)).toEqual(["38"]);
     expect(refsAndCloses("Refs #38\nCloses\n#38")).toEqual(["38"]);
-    expect(refsAndCloses(`Refs #38 #40\nRefs #38\n${closing("Closes", "38")}`)).toEqual(["38"]);
+    expect(refsAndCloses(`Refs #38 #40\nRefs #38\nCloses #38`)).toEqual(["38"]);
   });
 
   it("passes Refs or a closing keyword alone, two numbers, a longer number, a word ending in a keyword, and a URL", () => {
     expect(refsAndCloses("Refs #38")).toEqual([]);
-    expect(refsAndCloses(closing("Closes", "38"))).toEqual([]);
-    expect(refsAndCloses(`Refs #38\n${closing("Closes", "40")}`)).toEqual([]);
-    expect(refsAndCloses(`Refs #38\n${closing("Closes", "380")}`)).toEqual([]);
-    expect(refsAndCloses(`Refs #380\n${closing("Closes", "38")}`)).toEqual([]);
+    expect(refsAndCloses("Closes #38")).toEqual([]);
+    expect(refsAndCloses(`Refs #38\nCloses #40`)).toEqual([]);
+    expect(refsAndCloses(`Refs #38\nCloses #380`)).toEqual([]);
+    expect(refsAndCloses(`Refs #380\nCloses #38`)).toEqual([]);
     expect(refsAndCloses("Refs #38\nprefixes #38, unclosed #38")).toEqual([]);
     expect(refsAndCloses("Refs #38\nCloses https://github.com/o/r/issues/38, closes o/r#38")).toEqual([]);
     expect(refsAndCloses("xrefs #38\nCloses #38")).toEqual([]);
@@ -127,7 +129,7 @@ describe("decisionItems", () => {
 
 describe("problems", () => {
   it("names each problem, and none for a good title and body", () => {
-    const body = `Refs #38\n${closing("closes", "38")}\n\n## Decisions the spec left open\n\n- one\n- two\n`;
+    const body = `Refs #38\ncloses #38\n\n## Decisions the spec left open\n\n- one\n- two\n`;
     expect(problems("[M3] an issue title", body)).toEqual([
       expect.stringMatching(
         /^title: "\[M3\] an issue title" isn't .*feat, fix, infra, spike, docs, eval, chore, test/,
@@ -160,7 +162,7 @@ describe("main", () => {
   });
 
   it("exits 1 naming each problem", () => {
-    const { code, out, errors } = run({ PR_TITLE: "bad", PR_BODY: `Refs #2 ${closing("fixes", "2")}` });
+    const { code, out, errors } = run({ PR_TITLE: "bad", PR_BODY: `Refs #2 fixes #2` });
     expect(code).toBe(1);
     expect(out[0]).toBe("The PR's title or body has 2 problem(s):");
     expect(out.slice(1).map((line) => line.slice(0, 6))).toEqual(["title:", "body: "]);
