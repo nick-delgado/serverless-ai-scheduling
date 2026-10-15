@@ -55,7 +55,7 @@ describe("titleOk", () => {
 
 describe("refsAndCloses", () => {
   it.each(["close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"])(
-    "finds Refs #38 beside %s #38, in any case and with a colon",
+    "finds a Refs line beside the keyword %s for the same issue, in any case and with a colon",
     (keyword) => {
       expect(refsAndCloses(`Refs #38\n\nthe second PR, which ${closing(keyword, "38")}`)).toEqual(["38"]);
       expect(refsAndCloses(`refs: #38\n${closing(`${keyword.toUpperCase()}:`, "38")}`)).toEqual(["38"]);
