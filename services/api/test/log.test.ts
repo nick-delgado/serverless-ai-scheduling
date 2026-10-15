@@ -1,9 +1,7 @@
-/** Structured logging helpers (`lib/log.ts`): what an error contributes to a log line, and level routing. */
-import { afterEach, describe, expect, it, vi } from "vitest";
+/** Structured logging helpers (`lib/log.ts`): what an error contributes to a log line. */
+import { describe, expect, it } from "vitest";
 
-import { consoleLogger, errorSummary } from "../src";
-
-afterEach(() => vi.restoreAllMocks());
+import { errorSummary } from "../src";
 
 describe("errorSummary", () => {
   it("keeps the name and clips the message to 200 characters", () => {
@@ -32,22 +30,5 @@ describe("errorSummary", () => {
 
   it("logs only the type of a thrown non-error, never its value", () => {
     expect(errorSummary("the patient said something")).toEqual({ errorType: "string" });
-  });
-});
-
-describe("consoleLogger", () => {
-  it("routes by level and leaves the level out of the entry", () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    consoleLogger({ msg: "a" });
-    consoleLogger({ msg: "b", level: "info" });
-    consoleLogger({ msg: "c", level: "warn" });
-    consoleLogger({ msg: "d", level: "error" });
-
-    expect(info.mock.calls).toEqual([[{ msg: "a" }], [{ msg: "b" }]]);
-    expect(warn.mock.calls).toEqual([[{ msg: "c" }]]);
-    expect(error.mock.calls).toEqual([[{ msg: "d" }]]);
   });
 });

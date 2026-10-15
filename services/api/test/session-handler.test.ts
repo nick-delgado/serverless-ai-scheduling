@@ -1,6 +1,6 @@
 /**
  * The Lambda entry point's wiring (`handlers/session.ts`): TABLE_NAME, the AWS stores, the system clock
- * and the console logger. The AWS stores are replaced with in-memory ones; everything else is real.
+ * and the Powertools logger with the Lambda context (#38, A-7). The AWS stores are replaced with in-memory ones; everything else is real.
  */
 import { SessionResponse } from "@sched/contracts";
 import { createInMemoryRepositories } from "@sched/tools";
@@ -38,21 +38,31 @@ afterEach(() => {
 });
 
 describe("handlers/session", () => {
-  it("builds the stores from TABLE_NAME and logs each call through the console", async () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+  it("builds the stores from TABLE_NAME and logs each call through Powertools with the Lambda request ID", async () => {
+    const out: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => out.push(String(chunk)) > 0);
     const { handler } = await import("../src/handlers/session");
 
-    const res = await handler(event);
+    const res = await handler(event, {
+      functionName: "sched-test-api-session",
+      awsRequestId: "lambda-req-2",
+    });
     expect(res.statusCode).toBe(200);
     expect(SessionResponse.parse(JSON.parse(res.body)).patient.firstName).toBe("Maria");
     expect(aws.calls).toEqual([expect.objectContaining({ tableName: "sched-test-table" })]);
-    expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ msg: "session", requestId: "req-1", status: 200 }),
-    );
+    expect(out.map((l) => JSON.parse(l) as unknown)).toEqual([
+      expect.objectContaining({
+        message: "session",
+        service: "session",
+        requestId: "req-1",
+        status: 200,
+        function_request_id: "lambda-req-2",
+      }),
+    ]);
   });
 
   it("uses the real clock to decide what is upcoming", async () => {
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     vi.useFakeTimers({ toFake: ["Date"] });
     const { handler } = await import("../src/handlers/session");
 

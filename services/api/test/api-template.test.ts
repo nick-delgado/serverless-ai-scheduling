@@ -7,7 +7,11 @@
 import { readFileSync } from "node:fs";
 
 import { MODEL_PROFILES, REFUSAL_FALLBACKS } from "@sched/agent";
+import { ChatErrorCode } from "@sched/contracts";
+import { NOTIFICATION_FAILED_METRIC } from "@sched/tools/ses";
 import { describe, expect, it } from "vitest";
+
+import { ENV_DIMENSION, ERROR_CODE_DIMENSION, METRIC } from "../src/lib/observability/metrics";
 
 import { block, bodyLines, entries, text } from "../../../scripts/test/yaml-text";
 
@@ -121,5 +125,105 @@ describe("infra/stacks/api.yaml: POST /api/session (#18)", () => {
     const permission = text(resource("SessionApiInvokePermission"));
     expect(permission).toContain("FunctionName: !GetAtt SessionFunction.Arn");
     expect(permission).toMatch(/SourceArn: !Sub \S+:\$\{ChatApi\}\/\*\/POST\/api\/session$/m);
+  });
+});
+
+describe("infra/stacks/api.yaml: observability (#38)", () => {
+  const chatLines = resource("ChatFunction");
+  const chat = text(chatLines);
+
+  /** The dashboard body as CloudWatch receives it, with each `${...}` replaced by its name in angle brackets. */
+  function dashboard(): {
+    widgets: { type: string; x: number; width: number; properties: Record<string, unknown> }[];
+  } {
+    const body = bodyLines(block(/^\s+DashboardBody: !Sub \|$/, resource("ApiDashboard"))).join("\n");
+    return JSON.parse(body.replace(/\$\{([^}]+)\}/g, "<$1>")) as ReturnType<typeof dashboard>;
+  }
+  const widgets = dashboard().widgets;
+  const titled = (start: string) => {
+    const found = widgets.filter((w) => String(w.properties.title).startsWith(start));
+    expect(found, start).toHaveLength(1);
+    return found[0]?.properties ?? {};
+  };
+  type Row = (string | Record<string, unknown>)[];
+  const rows = (props: Record<string, unknown>): Row[] => props.metrics as Row[];
+
+  it("traces the chat function with X-Ray, and nothing else, with no response or error capture", () => {
+    expect(chat).toMatch(/^ {6}Tracing: Active$/m);
+    expect(template.match(/Tracing:/g)).toHaveLength(1);
+    const variables = entries(block(/^\s+Variables:$/, chatLines));
+    expect(variables).toMatchObject({
+      POWERTOOLS_TRACER_CAPTURE_RESPONSE: "false",
+      POWERTOOLS_TRACER_CAPTURE_ERROR: "false",
+    });
+  });
+
+  it("gives the failed-notification alarm no action (owner decision r1/Q-1 (a))", () => {
+    expect(text(resource("NotificationFailedAlarm"))).not.toMatch(/Actions:/);
+  });
+
+  it("charts exactly the catalogue's metrics, each under Env, with NotificationFailed", () => {
+    const sched = widgets
+      .flatMap((w) => (w.type === "metric" ? rows(w.properties) : []))
+      .filter((r) => r[0] === "Sched");
+    const names = new Set(sched.map((r) => r[1]));
+    expect([...names].sort()).toEqual([...Object.values(METRIC), NOTIFICATION_FAILED_METRIC.name].sort());
+    for (const row of sched) expect(row.slice(2, 4)).toEqual([ENV_DIMENSION, "<Env>"]);
+    expect(widgets.every((w) => w.type !== "metric" || w.properties.region === "<AWS::Region>")).toBe(true);
+  });
+
+  it("shows TTFT and turn latency at p50 and p95 (NFR-001)", () => {
+    for (const [title, name] of [
+      ["Time to first text_delta", METRIC.timeToFirstText],
+      ["Turn latency to done", METRIC.turnLatency],
+    ] as const) {
+      const stats = rows(titled(title)).map((r) => [r[1], (r[4] as { stat?: string }).stat]);
+      expect(stats).toEqual([
+        [name, "p50"],
+        [name, "p95"],
+      ]);
+    }
+  });
+
+  it("sums the tokens, cache reads included", () => {
+    const props = titled("Tokens");
+    expect(props.stat).toBe("Sum");
+    expect(rows(props).map((r) => r[1])).toEqual([
+      METRIC.inputTokens,
+      METRIC.outputTokens,
+      METRIC.cacheReadTokens,
+      METRIC.cacheWriteTokens,
+    ]);
+  });
+
+  it("shows turn errors by every chat error code beside both functions' Lambda errors", () => {
+    const props = titled("Turns, turn errors");
+    expect(props.stat).toBe("Sum");
+    const all = rows(props);
+    const codes = all.filter((r) => r[1] === METRIC.turnErrors).map((r) => r.slice(4, 6));
+    expect(codes).toEqual(ChatErrorCode.options.map((c) => [ERROR_CODE_DIMENSION, c]));
+    expect(all.filter((r) => r[0] === "AWS/Lambda").map((r) => r.slice(1, 4))).toEqual([
+      ["Errors", "FunctionName", "<ChatFunction>"],
+      ["Errors", "FunctionName", "<SessionFunction>"],
+    ]);
+  });
+
+  it("shows the tool error rate as ToolErrors / ToolCalls", () => {
+    const [expression, ...metrics] = rows(titled("Tool error rate"));
+    const ids = Object.fromEntries(metrics.map((r) => [(r[4] as { id: string }).id, r[1]]));
+    const math = (expression?.[0] as { expression: string }).expression;
+    const [, errors, calls] = /^100 \* (\w+) \/ (\w+)$/.exec(math) ?? [];
+    expect([ids[errors ?? ""], ids[calls ?? ""]]).toEqual([METRIC.toolErrors, METRIC.toolCalls]);
+  });
+
+  it("shows the failed-notification alarm's state beside its metric", () => {
+    const props = titled("Failed staff notifications");
+    expect(rows(props)).toEqual([["Sched", NOTIFICATION_FAILED_METRIC.name, "Env", "<Env>"]]);
+    // A metric widget can't carry both metrics and an alarm annotation, so the state is its own widget.
+    const metric = widgets.find((w) => w.properties === props);
+    const alarm = widgets.find((w) => w.type === "alarm");
+    expect(alarm?.properties.alarms).toEqual(["<NotificationFailedAlarm.Arn>"]);
+    expect(widgets.filter((w) => w.type === "alarm")).toHaveLength(1);
+    expect(Number(alarm?.x)).toBe(Number(metric?.x) + Number(metric?.width));
   });
 });

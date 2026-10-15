@@ -17,16 +17,7 @@ export type Logger = (entry: LogEntry) => void;
 
 export const silentLogger: Logger = () => undefined;
 
-/**
- * Logs one JSON object per entry. With the function's `LogFormat: JSON`, the Lambda runtime nests it
- * under `message` alongside its own `requestId` and `timestamp` fields.
- */
-export const consoleLogger: Logger = (entry) => {
-  const { level = "info", ...rest } = entry;
-  if (level === "error") console.error(rest);
-  else if (level === "warn") console.warn(rest);
-  else console.info(rest);
-};
+// The Lambdas write entries through a Powertools Logger (`observability/logger.ts`, #38).
 
 /**
  * What to log about an error: its name, its AWS error code and HTTP status if any, and a clipped

@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -195,7 +195,7 @@ Two cells measure a defect rather than the model:
 
 **NFR-001 on `dev`:**
 - Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
-- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window.
+- Read with Logs Insights on the chat function's "chat turn" lines, filtered on `message.modelProfile` and each run's window. *(Since #38 the lines are top-level JSON, so the fields lose the `message.` prefix; the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38) has the query. The dashboard shows the same timings, and its TTFT also counts error turns that streamed text.)*
 
 | Effort | Turns | p50 first `text_delta` | p95 first `text_delta` | p95 `done` |
 |---|---|---|---|---|
@@ -217,3 +217,19 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
   - #251 changes NFR-001's first-text result;
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
+
+## Amendment (2026-10-14): reading NFR-001 after #38
+
+The decision stands. #38 changed where NFR-001's figures are read, not how they're timed:
+
+- **The log line's shape.** The Lambdas now log through a Powertools Logger, which writes each entry as one top-level JSON object (owner decision r1/Q-4 (a) on #38). The "chat turn" entry's `msg` is the line's `message`, and its fields are no longer nested under `message`. The figures are unchanged: `firstTextMs` (to the first `text_delta`) and `totalMs` (to `done`), both from the handler's start.
+- **The query** for the chat function's log group, over a run's window:
+
+  ```
+  filter message = "chat turn" and modelProfile = "sonnet-4.6" and terminal = "done"
+  | stats pct(firstTextMs, 50) as firstTextP50, pct(totalMs, 95) as doneP95, count(*) as turns
+  ```
+
+  Filtering on `modelProfile` also leaves out replays and turns refused before the model was called, which have none. Don't filter on `replayed`: Logs Insights matched JSON booleans inconsistently in our test on `dev`.
+- **The dashboard.** `sched-<env>-api` charts the same two timings as the metrics `Sched/TimeToFirstTextMs` and `Sched/TurnLatencyMs` (dimension `Env`) at p50 and p95. Each turn writes them as an embedded-metric record. There's one difference from the query: `TimeToFirstTextMs` also counts an error turn that streamed text before it failed (Q-3 on #38), whereas the query reads `done` turns only. CloudWatch's percentiles come from the metric's samples, so over a short window they can differ from the query's `pct`.
+

@@ -87,3 +87,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-13 | [The deploy scripts' tests run on an allow-listed PATH, so a missing stand-in can't reach AWS](2026-10-13-the-shell-scripts-run-on-an-allow-list.md) | 5. What the evals showed |
 | 2026-10-13 | [The trace viewer prints figures, not words, and can't read the messages next to the traces](2026-10-13-the-trace-viewer-reads-figures-not-words.md) | 5. What the evals showed |
 | 2026-10-13 | [The E2E suite reads the stream, not the reply, and the agent asked again even when told yes](2026-10-13-the-e2e-suite-reads-the-stream-not-the-reply.md) | 5. What the evals showed |
+| 2026-10-14 | [The dashboard reads the turn's log line, and Powertools' wrappers can't see a streaming handler's context](2026-10-14-the-dashboard-reads-the-log-line.md) | 5. What the evals showed |

@@ -18,7 +18,7 @@ export {
 } from "./lib/chat-turn";
 export { classifyAgentError } from "./lib/agent-errors";
 export { FAILURES, type ChatFailure } from "./lib/errors";
-export { consoleLogger, errorSummary, silentLogger, type LogEntry, type Logger } from "./lib/log";
+export { errorSummary, silentLogger, type LogEntry, type Logger } from "./lib/log";
 export { bodyText, parseJsonBody, patientIdFromEvent, type RestApiProxyEvent } from "./lib/request";
 export { EventWriter, NDJSON_HEADERS, memorySink, type CapturedResponse, type EventSink } from "./lib/stream";
 export {

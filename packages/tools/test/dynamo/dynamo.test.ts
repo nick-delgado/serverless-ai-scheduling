@@ -266,19 +266,23 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       });
     });
 
-    it("retries a transaction cancelled only by TransactionConflict (DynamoDB Local never produces one)", async () => {
-      // The real service cancels a transaction that collides with another in-flight transaction on the
-      // same item. DynamoDB Local serializes transactions instead, so inject the first two cancellations.
+    /**
+     * Repositories whose first two `TransactWriteItems` are cancelled with `TransactionConflict` alone. The
+     * real service cancels a transaction that collides with another in-flight transaction on the same item;
+     * DynamoDB Local serializes transactions instead, so the cancellations are injected. `retries` counts
+     * the `onConflictRetry` calls (`BookingConflictRetries`, #38).
+     */
+    function conflictingTwice(options: { hook: boolean; code?: string } = { hook: true }) {
       const flaky = localClient();
-      let injected = 0;
+      const state = { injected: 0, retries: 0 };
       flaky.middlewareStack.add(
         (next, context) => async (args) => {
-          if (context.commandName === "TransactWriteItemsCommand" && injected < 2) {
-            injected++;
+          if (context.commandName === "TransactWriteItemsCommand" && state.injected < 2) {
+            state.injected++;
             throw new TransactionCanceledException({
               message: "Transaction cancelled (injected)",
               $metadata: {},
-              CancellationReasons: [{ Code: "TransactionConflict" }, { Code: "None" }],
+              CancellationReasons: [{ Code: options.code ?? "TransactionConflict" }, { Code: "None" }],
             });
           }
           return next(args);
@@ -290,15 +294,65 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         client: flaky,
         clock: new FrozenClock(NOW),
         ids: sequentialIds(),
+        ...(options.hook ? { onConflictRetry: () => state.retries++ } : {}),
       });
-      const result = await flakyRepos.appointments.book({
+      return { repos: flakyRepos, state, destroy: () => flaky.destroy() };
+    }
+
+    it("book retries a transaction cancelled only by TransactionConflict, reporting each retry", async () => {
+      const flaky = conflictingTwice();
+      const result = await flaky.repos.appointments.book({
         patientId: AISHA,
         slotId: SLOT.leeTue2pm,
         reason: "Rash",
       });
-      expect(injected).toBe(2);
+      expect(flaky.state).toEqual({ injected: 2, retries: 2 });
       expect(result).toMatchObject({ ok: true, alreadyBooked: false });
       expect(await repos.appointments.listForPatient(AISHA)).toHaveLength(1);
+      flaky.destroy();
+    });
+
+    it("reschedule retries a transaction cancelled only by TransactionConflict, reporting each retry", async () => {
+      const flaky = conflictingTwice();
+      const result = await moveMariaTo(flaky.repos, SLOT.leeTue3pm);
+      expect(flaky.state).toEqual({ injected: 2, retries: 2 });
+      expect(result).toMatchObject({ ok: true, appointment: { slotId: SLOT.leeTue3pm } });
+      flaky.destroy();
+    });
+
+    it("retries without an onConflictRetry hook (the default is a no-op)", async () => {
+      const flaky = conflictingTwice({ hook: false });
+      const booked = await flaky.repos.appointments.book({
+        patientId: AISHA,
+        slotId: SLOT.leeTue2pm,
+        reason: "Rash",
+      });
+      expect(booked).toMatchObject({ ok: true });
+      expect(await moveMariaTo(flaky.repos, SLOT.leeTue3pm)).toMatchObject({ ok: true });
+      expect(flaky.state).toEqual({ injected: 2, retries: 0 });
+      flaky.destroy();
+    });
+
+    it("reports no conflict retry for book's re-read retry (a ConditionalCheckFailed on a slot still OPEN)", async () => {
+      // The slot's condition failed, but the re-read finds it OPEN, so book tries again: not a conflict retry.
+      const flaky = conflictingTwice({ hook: true, code: "ConditionalCheckFailed" });
+      const booked = await flaky.repos.appointments.book({
+        patientId: AISHA,
+        slotId: SLOT.leeTue2pm,
+        reason: "Rash",
+      });
+      expect(booked).toMatchObject({ ok: true, alreadyBooked: false });
+      expect(flaky.state).toEqual({ injected: 2, retries: 0 });
+      flaky.destroy();
+    });
+
+    it("reports no conflict retry for a conversation append or a booking that didn't conflict", async () => {
+      const flaky = conflictingTwice();
+      // The conversation append's own conflict retries aren't booking retries (owner decision r1/Q-6 (a)).
+      await flaky.repos.conversations.append(MARIA, [message(CONV_A, 0)]);
+      expect(flaky.state).toEqual({ injected: 2, retries: 0 });
+      await flaky.repos.appointments.book({ patientId: AISHA, slotId: SLOT.leeTue2pm, reason: "Rash" });
+      expect(flaky.state.retries).toBe(0);
       flaky.destroy();
     });
 

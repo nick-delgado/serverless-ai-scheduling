@@ -5,7 +5,8 @@ Description: >-
   Lambda integration for POST /api/chat (ADR-007). The chat function runs the agent loop (S3-03, #17)
   over the single table and Bedrock Converse, and streams NDJSON events. POST /api/session (S3-04, #18)
   returns the templated greeting and the current conversation, read-only, with no model call. The chat
-  function may send the escalation email through SES (#35), and an alarm watches failed sends.
+  function may send the escalation email through SES (#35), and an alarm watches failed sends. A
+  dashboard shows the chat function's metrics, and X-Ray traces the chat function (#38).
 
 Parameters:
   Env:
@@ -90,6 +91,9 @@ Resources:
       CodeUri: ../../services/api
       Handler: index.handler
       MemorySize: 1024
+      # X-Ray on this function only (#38, owner decision r1/Q-5 (a)): the Powertools Tracer captures the
+      # Bedrock, DynamoDB and SES clients (handlers/chat.ts). The permissions boundary allows the writes.
+      Tracing: Active
       # Bounds the whole streamed turn (up to 8 model calls, ADR-001). The handler aborts the agent loop
       # 15 s before this, so it can still store the turn and end the stream with an error event.
       Timeout: 180
@@ -102,6 +106,9 @@ Resources:
           # to the tools.
           SES_SENDER: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]
           SES_STAFF_RECIPIENT: !If [SesConfigured, !Ref SesStaffRecipient, !Ref AWS::NoValue]
+          # No response or error payloads in traces (ADR-009): only IDs and timings leave the function.
+          POWERTOOLS_TRACER_CAPTURE_RESPONSE: "false"
+          POWERTOOLS_TRACER_CAPTURE_ERROR: "false"
           NODE_OPTIONS: --enable-source-maps
       LoggingConfig:
         LogFormat: JSON
@@ -161,7 +168,8 @@ Resources:
   # Failed staff notifications (#35, #36): one EMF record of Sched/NotificationFailed (ids only) per
   # escalation stored FAILED. The SES notifier writes it for a failed send; handlers/chat.ts writes it for
   # every other FAILED (no notifier, an unreadable record). Shared with #38's dashboard. The runbook's
-  # retry section says what to do.
+  # retry section says what to do. No alarm action (#38, owner decision r1/Q-1 (a)): it only changes
+  # state, and the dashboard shows that state beside the metric (ADR-003's 2026-10-14 amendment).
   # ---------------------------------------------------------------------------------------------
   NotificationFailedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -181,6 +189,109 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
+
+  # ---------------------------------------------------------------------------------------------
+  # The chat function's dashboard (#38, NFR-007): the per-turn EMF metrics that handlers/chat.ts writes
+  # (lib/observability/metrics.ts; namespace Sched, dimension Env), Lambda errors for both functions, and
+  # #35's failed-notification metric with its alarm. TTFT and turn latency are NFR-001's figures, timed
+  # from the handler's start to the first text_delta and to done.
+  # ---------------------------------------------------------------------------------------------
+  ApiDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub sched-${Env}-api
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Time to first text_delta (ms, NFR-001: p50 <= 3000)",
+                "region": "${AWS::Region}", "view": "timeSeries", "period": 300,
+                "metrics": [
+                  ["Sched", "TimeToFirstTextMs", "Env", "${Env}", {"stat": "p50", "label": "p50"}],
+                  ["Sched", "TimeToFirstTextMs", "Env", "${Env}", {"stat": "p95", "label": "p95"}]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Turn latency to done (ms, NFR-001: p95 <= 15000)",
+                "region": "${AWS::Region}", "view": "timeSeries", "period": 300,
+                "metrics": [
+                  ["Sched", "TurnLatencyMs", "Env", "${Env}", {"stat": "p50", "label": "p50"}],
+                  ["Sched", "TurnLatencyMs", "Env", "${Env}", {"stat": "p95", "label": "p95"}]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Tokens per period",
+                "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                "metrics": [
+                  ["Sched", "InputTokens", "Env", "${Env}"],
+                  ["Sched", "OutputTokens", "Env", "${Env}"],
+                  ["Sched", "CacheReadTokens", "Env", "${Env}"],
+                  ["Sched", "CacheWriteTokens", "Env", "${Env}"]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Turns, turn errors by code, Lambda errors",
+                "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                "metrics": [
+                  ["Sched", "Turns", "Env", "${Env}"],
+                  ["Sched", "TurnErrors", "Env", "${Env}", "ErrorCode", "BAD_REQUEST"],
+                  ["Sched", "TurnErrors", "Env", "${Env}", "ErrorCode", "UNAUTHORIZED"],
+                  ["Sched", "TurnErrors", "Env", "${Env}", "ErrorCode", "RATE_LIMITED"],
+                  ["Sched", "TurnErrors", "Env", "${Env}", "ErrorCode", "AGENT_UNAVAILABLE"],
+                  ["Sched", "TurnErrors", "Env", "${Env}", "ErrorCode", "INTERNAL"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${ChatFunction}", {"label": "Lambda errors (chat)"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${SessionFunction}", {"label": "Lambda errors (session)"}]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 12, "width": 8, "height": 6,
+              "properties": {
+                "title": "Tool error rate (%)",
+                "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                "metrics": [
+                  [{"expression": "100 * errors / calls", "label": "ToolErrors / ToolCalls", "id": "rate"}],
+                  ["Sched", "ToolCalls", "Env", "${Env}", {"id": "calls", "visible": false}],
+                  ["Sched", "ToolErrors", "Env", "${Env}", {"id": "errors", "visible": false}]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 8, "y": 12, "width": 8, "height": 6,
+              "properties": {
+                "title": "Failed staff notifications",
+                "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                "metrics": [["Sched", "NotificationFailed", "Env", "${Env}"]]
+              }
+            },
+            {
+              "type": "alarm", "x": 16, "y": 12, "width": 8, "height": 3,
+              "properties": {
+                "title": "Failed-notification alarm (no action: watch it here)",
+                "alarms": ["${NotificationFailedAlarm.Arn}"]
+              }
+            },
+            {
+              "type": "metric", "x": 16, "y": 15, "width": 8, "height": 3,
+              "properties": {
+                "title": "Booking conflict retries",
+                "region": "${AWS::Region}", "view": "singleValue", "stat": "Sum", "period": 86400,
+                "metrics": [["Sched", "BookingConflictRetries", "Env", "${Env}"]]
+              }
+            }
+          ]
+        }
 
   # ---------------------------------------------------------------------------------------------
   # POST /api/session: templated greeting + conversation restore (#18). Read-only, no Bedrock.
@@ -345,3 +456,5 @@ Outputs:
     Value: !Ref SessionFunction
   NotificationFailedAlarmName:
     Value: !Ref NotificationFailedAlarm
+  DashboardName:
+    Value: !Ref ApiDashboard
