@@ -1,10 +1,9 @@
 /**
  * scripts/mutate.ts against a throwaway directory: a target file, a small Node checker standing in for a test
- * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes a
- * Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; four
- * spawn the script, for its exit code and for the file it restores on SIGINT, on SIGTERM and after a timeout whose
- * kill finds the command's process group empty. `--suggest` has its own
- * tests, in mutate-suggest.test.ts.
+ * command (it fails when the file says "bad", hangs when it says "slow"), and a stand-in `vitest` that writes
+ * a Vitest JSON report. Most tests call `main` in-process, because a child process records no coverage; four
+ * spawn the script, for its exit code and for the file it restores on SIGINT, on SIGTERM and after a timeout
+ * whose kill finds the command's process group empty. `--suggest` is tested in mutate-suggest.test.ts.
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -142,6 +141,17 @@ const checkerLeftRunning = (at: string) => {
 const editsFile = (edits: unknown[]) => {
   writeFileSync(join(dir, "edits.json"), JSON.stringify(edits));
   return "edits.json";
+};
+/** Runs `check` with TMPDIR stubbed to a new `tmp` directory in the test's directory, and unstubs it after. */
+const withTmpdir = async (check: (tmp: string) => Promise<void>) => {
+  const tmp = join(dir, "tmp");
+  mkdirSync(tmp);
+  vi.stubEnv("TMPDIR", tmp);
+  try {
+    await check(tmp);
+  } finally {
+    vi.unstubAllEnvs();
+  }
 };
 
 beforeEach(() => {
@@ -575,16 +585,11 @@ describe("main", () => {
   }, 10_000);
 
   it("removes its report directory after each run", async () => {
-    const tmp = join(dir, "tmp");
-    mkdirSync(tmp);
-    vi.stubEnv("TMPDIR", tmp);
-    try {
+    await withTmpdir(async (tmp) => {
       const edits = editsFile([{ id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1" }]);
       await main([edits, "--", ...vitest()], deps());
       expect(readdirSync(tmp)).toEqual([]);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    });
   });
 
   it("records how long each run took, and 0 s for a refused edit", async () => {
@@ -766,10 +771,7 @@ describe("main", () => {
   });
 
   it("stops a running command's process group and removes its report directory when asked", async () => {
-    const tmp = join(dir, "tmp");
-    mkdirSync(tmp);
-    vi.stubEnv("TMPDIR", tmp);
-    try {
+    await withTmpdir(async (tmp) => {
       const edits = editsFile([{ id: "t", file: "target.txt", find: "ok ? 1", replace: "slow ? 1" }]);
       const done = main([edits, "--", ...checkerUnderSh()], deps());
       await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
@@ -785,9 +787,7 @@ describe("main", () => {
       // sh can close before the killed checker is gone (not yet torn down, or not yet reaped), so wait for it.
       await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
       expect(target()).toBe(TARGET);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    });
   });
 
   it("forgets the command once it ends, so a later signal kills no process group and removes nothing", async () => {
@@ -826,10 +826,7 @@ describe("main", () => {
   });
 
   it("stops a command whose process group is empty before its output closes without throwing, and removes its report directory", async () => {
-    const tmp = join(dir, "tmp");
-    mkdirSync(tmp);
-    vi.stubEnv("TMPDIR", tmp);
-    try {
+    await withTmpdir(async (tmp) => {
       writeFileSync(join(dir, "target.txt"), "escape\n");
       let settled = false;
       const run = runCommand(escaping(3_000), 30, dir).then((outcome) => {
@@ -851,16 +848,11 @@ describe("main", () => {
       expect(readdirSync(tmp)).toEqual([]);
       expect(settled).toBe(false);
       expect((await run).code).toBe(0);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    });
   }, 10_000);
 
   it("ignores a kill error other than an empty group (EPERM), and still removes the report directory", async () => {
-    const tmp = join(dir, "tmp");
-    mkdirSync(tmp);
-    vi.stubEnv("TMPDIR", tmp);
-    try {
+    await withTmpdir(async (tmp) => {
       writeFileSync(join(dir, "target.txt"), "slow\n");
       const run = runCommand(checkerUnderSh(), 30, dir);
       await vi.waitFor(() => expect(existsSync(join(dir, "checker.pid"))).toBe(true), {
@@ -881,9 +873,7 @@ describe("main", () => {
       stopRunning();
       await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 20 });
       expect((await run).code).not.toBe(0);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    });
   });
 
   it("removes its signal handlers when it returns", async () => {
@@ -919,6 +909,9 @@ describe("the script", () => {
       [...tsx, script, "edits.json", "--timeout", "3", "--", ...escaping(6_000)],
       { cwd: dir, encoding: "utf8", env: { ...process.env, TMPDIR: tmp }, timeout: 25_000 },
     );
+    // The first process wrote its pid, so it had started the grandchild and was exiting before the kill.
+    const firstPid = Number(readFileSync(join(dir, "first.pid"), "utf8"));
+    expect(Number.isInteger(firstPid) && firstPid > 0).toBe(true);
     expect(result.stdout).toContain("TIMEOUT e target.txt: ok ? 1 → escape ? 1");
     expect(result.status).toBe(0);
     expect(target()).toBe(TARGET);
