@@ -1,9 +1,16 @@
 # Seen-failing evidence (#184, B6-5): a PR that changes a source file carries an `npm run mutate -- … --markdown`
-# table with a KILLED row for it. The rule is in scripts/pr-evidence.ts and its tests; this only runs it. A separate workflow
-# because it reruns when the PR body is edited, which ci.yml's checks don't need.
+# table with a KILLED row for it, and a row counts only while its find text still occurs in its file at HEAD (#265,
+# B10-5). The rule is in scripts/pr-evidence.ts and its tests; this only runs it. A separate workflow because it reruns
+# when the PR body is edited, which ci.yml's checks don't need.
 # Journal links (#194, B7-3): a journal entry the PR adds names the PR on its Related line (scripts/journal-links.ts).
 # It needs the PR's number, so it lives here, and it's red on a PR's first push until the "link PR #N" commit. It also
 # fails an added entry's line that states a mutation or gate count without a commit SHA or run link (#240, B9-6).
+# PR body (#265, B10-1): the title's form, no `Refs #N` beside a closing keyword for the same number, and no list in
+# "Decisions the spec left open" (scripts/pr-body.ts). Not a required check.
+# Concurrency (#265, B10-2): a body edit cancelled the running evidence run, and GitHub then refused PR #258's merge on
+# the cancelled required check (2026-10-13). With cancel-in-progress false, a new run no longer cancels the running
+# one; it waits, pending, until that run ends. GitHub's default queue still keeps one pending run per group, so a
+# newer run replaces (cancels) a pending one (docs.github.com, workflow syntax, `concurrency`, `queue: single`).
 name: PR evidence
 
 on:
@@ -12,7 +19,7 @@ on:
 
 concurrency:
   group: pr-evidence-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -54,3 +61,20 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+
+  pr-body:
+    name: PR body
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # The title and body go through the environment, never into the shell command.
+      - run: npx tsx scripts/pr-body.ts
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}

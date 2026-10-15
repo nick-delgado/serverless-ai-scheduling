@@ -104,7 +104,7 @@ describe("suggestEdits", () => {
 
   it("widens a find by whole tokens until it occurs once, and replaces only the break", () => {
     const text = "f(a >= b);\ng(a >= c);\n";
-    expect(all(text).edits).toEqual([
+    expect(all(text).edits.filter((edit) => edit.note !== "move-guard")).toEqual([
       { file: "a.ts", find: ">= b", replace: "> b", expect: [], note: "boundary" },
       { file: "a.ts", find: ">= c", replace: "> c", expect: [], note: "boundary" },
     ]);
@@ -169,6 +169,106 @@ describe("suggestEdits", () => {
       nested("v").replace("|b", ""),
     ]);
     expect(all(nested("")).edits).toHaveLength(3);
+  });
+});
+
+describe("suggestEdits: the #265 kinds (B10-4)", () => {
+  /** Each edit of `note` as the text it leaves. */
+  const only = (text: string, note: string) =>
+    applied(
+      text,
+      all(text).edits.filter((edit) => edit.note === note),
+    ).map(([, out]) => out);
+
+  it("passes undefined for each argument of handler(event, responseStream, context), lambda.ts's shape", () => {
+    const text =
+      "export const h = awslambda.streamifyResponse(async (event, responseStream, context) => {\n" +
+      "  await handler(event, responseStream, context);\n});\n";
+    expect(only(text, "pass-through")).toEqual([
+      text.replace("handler(event,", "handler(undefined,"),
+      text.replace("event, responseStream, context);", "event, undefined, context);"),
+      text.replace("responseStream, context);", "responseStream, undefined);"),
+    ]);
+  });
+
+  it("passes undefined for a parameter of any enclosing function, a destructured one and a property chain", () => {
+    const text =
+      "function f(options, { inputs }) {\n  return (context) => addContext(options.logger, context, inputs?.a.b);\n}\n";
+    expect(
+      all(text)
+        .edits.filter((e) => e.note === "pass-through")
+        .map((e) => [e.find, e.replace]),
+    ).toEqual([
+      ["options.logger", "undefined"],
+      ["context,", "undefined,"],
+      ["inputs?.a.b", "undefined"],
+    ]);
+  });
+
+  it("gives no pass-through for a local, an element access, a call, this, a spread, or an unadded argument", () => {
+    const text = 'function f(p, [, q]) {\n  const l = 1;\n  g(l, p["x"], p.x(), this, ...q, h);\n}\n';
+    expect(only(text, "pass-through")).toEqual([]);
+    expect(all("function f(p) {\n  return new X;\n}\n").edits).toEqual([]);
+    const later = "function f(p) {\n  g(1,\n    p);\n}\n";
+    expect(suggestEdits("a.ts", later, new Set([2])).edits.map((e) => e.note)).toEqual([
+      "number+1",
+      "number-1",
+    ]);
+    expect(only("function f(p) {\n  return new X(p);\n}\n", "pass-through")).toEqual([
+      "function f(p) {\n  return new X(undefined);\n}\n",
+    ]);
+  });
+
+  it("negates a true or false argument of a call or new, and not one in an object or behind !", () => {
+    const text = "f(true, { recursive: true }, !false);\nnew G(false);\n";
+    expect(only(text, "flip-argument")).toEqual([
+      "f(false, { recursive: true }, !false);\nnew G(false);\n",
+      "f(true, { recursive: true }, !false);\nnew G(true);\n",
+    ]);
+  });
+
+  it("appends [extra] to a thrown Error's string or template message, and to nothing else", () => {
+    const text =
+      'function f(x) {\n  if (x) throw new Error("bad x", { cause: x });\n  throw new Error(`bad ${x}`);\n}\n' +
+      'throw new ChatProtocolError("sub");\nthrow new errors.Error("member");\nthrow new Error();\nthrow Error("no new");\nconst e = new Error("not thrown");\n' +
+      'throw new Error(message);\nlogError("logged");\n';
+    expect(only(text, "extend-message")).toEqual([
+      text.replace('"bad x"', '"bad x [extra]"'),
+      text.replace("`bad ${x}`", "`bad ${x} [extra]`"),
+    ]);
+  });
+
+  it("swaps a discarded call or await statement with the next statement of its block, a return included", () => {
+    const text = "async function f(env) {\n  assertWritableEnv(env);\n  await run();\n  return 1;\n}\n";
+    expect(only(text, "move-guard")).toEqual([
+      "async function f(env) {\n  await run();\n  assertWritableEnv(env);\n  return 1;\n}\n",
+      "async function f(env) {\n  assertWritableEnv(env);\n  return 1;\n  await run();\n}\n",
+    ]);
+  });
+
+  it("moves a guard at a file's top level and in a case clause, and not the last statement or across a declaration", () => {
+    expect(only("setup();\nconst a = 1;\n", "move-guard")).toEqual(["const a = 1;\nsetup();\n"]);
+    // A statement that is a branch on its own, not in a list, has nothing to swap with.
+    expect(only("if (a) check();\nx = 1;\n", "move-guard")).toEqual([]);
+    const clause = "switch (k) {\n  case 1:\n    new Check(k);\n    x = 1;\n    break;\n}\n";
+    expect(only(clause, "move-guard")).toEqual([
+      "switch (k) {\n  case 1:\n    x = 1;\n    new Check(k);\n    break;\n}\n",
+    ]);
+    const rest = "g();\nfunction a() {}\nh();\nclass B {}\ni();\ninterface C {}\nj();\ntype D = 1;\nk();\n";
+    expect(only(rest, "move-guard")).toEqual([]);
+    expect(only("const v = f();\nx = g();\nh;\n", "move-guard")).toEqual([]);
+  });
+
+  it("widens a move-guard find within its statement list, and moves only a guard whose first line is added", () => {
+    // "check();\n  go();" occurs twice, and with the block's "}" after it too; widening within the block then
+    // reaches the statement before it.
+    const text =
+      "function f() {\n  a();\n  check();\n  go();\n}\nfunction g() {\n  b();\n  check();\n  go();\n}\n";
+    const edits = suggestEdits("a.ts", text, new Set([3])).edits;
+    expect(edits.map((e) => [e.note, e.find, e.replace])).toEqual([
+      ["move-guard", "a();\n  check();\n  go();\n}", "a();\n  go();\n  check();\n}"],
+    ]);
+    expect(suggestEdits("a.ts", text, new Set([4])).edits).toEqual([]);
   });
 });
 
@@ -252,7 +352,8 @@ describe("mutate --suggest", () => {
       "export const a = (x: number) => x > 1;\nexport const b = (x: number) => x === 2;\n",
     );
     repo.write("scripts/a.test.ts", "expect(a(2) >= 1);\n");
-    repo.write("scripts/test/helper.ts", "export const h = 3;\n");
+    // A src/test/ helper needs no evidence, so it gets no edits.
+    repo.write("apps/web/src/test/setup.ts", "export const h = 3;\n");
     repo.write("docs/notes.ts", "export const n = 4;\n");
     repo.commit("feature");
     out = [];
@@ -272,6 +373,24 @@ describe("mutate --suggest", () => {
     expect(errors).toEqual([
       "mutate --suggest: 3 edits since main; skipped 0 whose statement occurs more than once, and 0 in files with " +
         "uncommitted changes. Fill in each edit's expect.",
+    ]);
+  });
+
+  it("suggests edits for helpers in scripts/test/ and apps/*/e2e/, and none for Playwright specs (#265, B10-3)", async () => {
+    repo.write("scripts/test/helper.ts", "export const h = 5;\n");
+    repo.write("apps/web/e2e/support/helper.ts", "export const s = 6;\n");
+    repo.write("apps/web/e2e/01-login.e2e.ts", "export const l = 7;\n");
+    repo.write("apps/web/e2e/fr010.greeting.ts", "export const g = 8;\n");
+    repo.commit("helpers and specs");
+    expect(await mutate(["--suggest", "--base", "main"], deps())).toBe(0);
+    expect(readEdits(writeOut()).map((edit) => [edit.file, edit.find])).toEqual([
+      ["apps/web/e2e/support/helper.ts", "6"],
+      ["apps/web/e2e/support/helper.ts", "6"],
+      ["scripts/a.ts", "==="],
+      ["scripts/a.ts", "2"],
+      ["scripts/a.ts", "2"],
+      ["scripts/test/helper.ts", "5"],
+      ["scripts/test/helper.ts", "5"],
     ]);
   });
 
