@@ -30,7 +30,7 @@ Nick chose each option on #239 (r1/Q-1 to Q-4) and accepted the assumptions; thi
 
 ## What surprised us
 
-- The recorded 2026-10-05 trials already use the heading format #178 described, and none of their newly graded times is a violation: the check now reads 141 dated times in their 95 assistant texts, 15 more than the 126 it read before, and fails the same single trial it failed before.
+- The recorded 2026-10-05 trials already use the heading format #178 described, and none of their newly graded times is a violation: at `f3cb0ac` the check reads 141 dated times in their 95 assistant texts, 15 more than the 126 `dateTimeMentions` reads in them, and it fails the same single trial it failed before (counted by hand with a throwaway script, not a test).
 - The "and" rule from #98 (a date's first time doesn't pair across "and") was easy to over-read as "times after 'and' don't count". They do now, inside the slot check: "Monday, November 2 at 9:00 AM and 11:30 AM" grades both, while #98's pinned `dateTimeMentions` test still returns only the first.
 
 ## Evidence
