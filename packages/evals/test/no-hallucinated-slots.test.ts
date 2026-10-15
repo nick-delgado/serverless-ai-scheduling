@@ -17,6 +17,7 @@ import {
   createTrialEnvironment,
   gradeInvariants,
   gradeL1,
+  slotKey,
   type GradingInput,
   type TranscriptEvent,
 } from "../src";
@@ -187,6 +188,13 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
     ).toMatchObject({ status: "pass" });
   });
 
+  it("a heading that names two month-days gives the last one", async () => {
+    const text = "Nothing on October 13; here is Thursday, October 15:\n1. 12:00 PM ET";
+    expect(
+      await graded(MARIA_SCENARIO, [checked("lee@2026-10-15T16:00:00Z"), assistant(text)]),
+    ).toMatchObject({ status: "pass" });
+  });
+
   it("a time on the heading line itself is still graded", async () => {
     expect(
       await graded(MARIA_SCENARIO, [
@@ -253,6 +261,13 @@ describe("Q-2 (a): times under a date heading and later in a sentence are graded
   it("fails the same recorded trials as before the change (#178 AC3, r1/A-1)", async () => {
     // On main (c05cb79) the list is the same one trial: #98's AC 5 hedged offer.
     expect(await failing("no_hallucinated_slots")).toEqual(["reschedule-single-appointment#1"]);
+  });
+});
+
+describe("slotKey", () => {
+  it("zero-pads the month and the day", () => {
+    expect(slotKey(3, 5, "09:00")).toBe("03-05 09:00");
+    expect(slotKey(11, 12, "14:30")).toBe("11-12 14:30");
   });
 });
 
