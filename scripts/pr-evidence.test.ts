@@ -6,16 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SOURCE_GLOBS } from "./coverage-changed";
 import { codeSpan, type EditResult, MARKDOWN_HEADER, markdownTable } from "./mutate";
-import {
-  currentRow,
-  EVIDENCE_GLOBS,
-  killedFiles,
-  killedRows,
-  main,
-  missingEvidence,
-  uncell,
-  unspan,
-} from "./pr-evidence";
+import { currentRow, EVIDENCE_GLOBS, killedRows, main, missingEvidence, uncell, unspan } from "./pr-evidence";
 import { gitRepo, logsTo, type TestRepo, withConsole } from "./test/git-repo";
 
 /** A table with a KILLED row per file, each row's find `e`, which every file `main`'s tests write holds. */
@@ -26,7 +17,12 @@ const table = (...files: string[]) =>
     ...files.map((f) => `| 1 | \`${f}\` | \`e\` → \`b\` | KILLED | — |`),
   ].join("\n");
 
-describe("killedFiles", () => {
+/** The File cells of the KILLED rows in `body`, in order. */
+const killedFileCells = (body: string) => killedRows(body).map((row) => row.file);
+/** Counts every row as current. */
+const anyRow = () => true;
+
+describe("killedRows: the File cell", () => {
   it("reads the File cell of every row of every mutate table, CRLF bodies included", () => {
     const body = [
       // Rows outside a table, KILLED status included, name nothing.
@@ -37,12 +33,12 @@ describe("killedFiles", () => {
       "| 2 | `scripts/after-the-table.ts` | c | KILLED | — |",
       table("scripts/c.ts").replaceAll("\n", "\r\n"),
     ].join("\n");
-    expect([...killedFiles(body)]).toEqual(["scripts/a.ts", "packages/x/src/b.ts", "scripts/c.ts"]);
+    expect([...killedFileCells(body)]).toEqual(["scripts/a.ts", "packages/x/src/b.ts", "scripts/c.ts"]);
   });
 
   it("ends a table at the first line that isn't a row", () => {
     expect([
-      ...killedFiles(`${table("scripts/a.ts")}\ntext\n| 2 | \`scripts/b.ts\` | c | KILLED | — |`),
+      ...killedFileCells(`${table("scripts/a.ts")}\ntext\n| 2 | \`scripts/b.ts\` | c | KILLED | — |`),
     ]).toEqual(["scripts/a.ts"]);
   });
 
@@ -56,7 +52,16 @@ describe("killedFiles", () => {
       "| 2 | | c | KILLED | e |",
       "| 3 | `scripts/no-status.ts` |",
     ].join("\n");
-    expect([...killedFiles(body)]).toEqual(["scripts/`x`.ts"]);
+    expect([...killedFileCells(body)]).toEqual(["scripts/`x`.ts"]);
+  });
+
+  it("names no file for a KILLED row whose File cell isn't a code span, as npm run mutate never writes it", () => {
+    const body = [
+      MARKDOWN_HEADER,
+      "|---|---|---|---|---|",
+      "| 1 | scripts/bare.ts | `a` → `b` | KILLED | — |",
+    ];
+    expect(killedFileCells(body.join("\n"))).toEqual([]);
   });
 
   it("counts a file only for a KILLED or KILLED (no expect) row, so one KILLED row among others is enough", () => {
@@ -70,7 +75,7 @@ describe("killedFiles", () => {
       ...rows("scripts/other.ts", "KILLED-OTHER (expected: x)", "SURVIVED", "TIMEOUT", "ERROR"),
       ...rows("scripts/refused.ts", "REFUSED (find occurs 2 times)", "KILLED (expected: x)"),
     ].join("\n");
-    expect([...killedFiles(body)]).toEqual(["scripts/killed.ts", "scripts/no-expect.ts"]);
+    expect([...killedFileCells(body)]).toEqual(["scripts/killed.ts", "scripts/no-expect.ts"]);
   });
 
   it("reads npm run mutate's own --markdown table, a file in a longer fence included", () => {
@@ -89,11 +94,11 @@ describe("killedFiles", () => {
       result("scripts/b.ts`", "KILLED"),
       result("scripts/c.ts", "SURVIVED"),
     ]).join("\n");
-    expect([...killedFiles(body)]).toEqual(["scripts/a.ts", "scripts/b.ts`"]);
+    expect([...killedFileCells(body)]).toEqual(["scripts/a.ts", "scripts/b.ts`"]);
   });
 
   it("finds nothing without the header", () => {
-    expect(killedFiles(table("scripts/a.ts").replace("| Edit |", "| Id |")).size).toBe(0);
+    expect(killedFileCells(table("scripts/a.ts").replace("| Edit |", "| Id |")).length).toBe(0);
   });
 });
 
@@ -185,17 +190,22 @@ describe("missingEvidence", () => {
   const helpers = ["scripts/test/helper.ts", "apps/web/e2e/support/helper.ts"];
 
   it("lists the changed source files no table names, test helpers outside src/test/ included, ignoring tests, Playwright specs, src/test/ helpers, .d.ts, spikes and docs", () => {
-    expect(missingEvidence(changed, table("scripts/a.ts"), EVIDENCE_GLOBS)).toEqual([
+    expect(missingEvidence(changed, table("scripts/a.ts"), EVIDENCE_GLOBS, anyRow)).toEqual([
       "packages/x/src/b.ts",
       ...helpers,
     ]);
-    expect(missingEvidence(changed, "", EVIDENCE_GLOBS)).toEqual([
+    expect(missingEvidence(changed, "", EVIDENCE_GLOBS, anyRow)).toEqual([
       "scripts/a.ts",
       "packages/x/src/b.ts",
       ...helpers,
     ]);
     expect(
-      missingEvidence(changed, table("scripts/a.ts", "packages/x/src/b.ts", ...helpers), EVIDENCE_GLOBS),
+      missingEvidence(
+        changed,
+        table("scripts/a.ts", "packages/x/src/b.ts", ...helpers),
+        EVIDENCE_GLOBS,
+        anyRow,
+      ),
     ).toEqual([]);
   });
 
@@ -214,7 +224,7 @@ describe("missingEvidence", () => {
   });
 
   it("matches a path exactly, not as a suffix", () => {
-    expect(missingEvidence(["packages/x/src/b.ts"], table("src/b.ts"), SOURCE_GLOBS)).toEqual([
+    expect(missingEvidence(["packages/x/src/b.ts"], table("src/b.ts"), SOURCE_GLOBS, anyRow)).toEqual([
       "packages/x/src/b.ts",
     ]);
   });

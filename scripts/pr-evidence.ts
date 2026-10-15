@@ -99,9 +99,6 @@ export function killedRows(body: string): KilledRow[] {
   return rows;
 }
 
-/** The files in the File column of a KILLED row of every mutate `--markdown` table in `body`. */
-export const killedFiles = (body: string): Set<string> => new Set(killedRows(body).map((row) => row.file));
-
 /**
  * Whether each row is current: its `find` occurs in its file's text, which `read` gives (undefined for a file
  * missing at HEAD). Each file is read once.
@@ -120,7 +117,7 @@ export function missingEvidence(
   changed: readonly string[],
   body: string,
   globs: SourceGlobs,
-  current: (row: KilledRow) => boolean = () => true,
+  current: (row: KilledRow) => boolean,
 ): string[] {
   const named = new Set(
     killedRows(body)
