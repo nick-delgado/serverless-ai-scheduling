@@ -244,7 +244,7 @@ export function slotMentions(text: string): SlotMention[] {
   const times = [...text.matchAll(CLOCK_TIME)].map((m) => ({
     raw: m[0],
     index: m.index,
-    time: to24h(Number(m[1]), Number(m[2]), m[3] ?? ""),
+    time: to24h(Number(m[1]), Number(m[2]), String(m[3])),
   }));
   const monthDays = (s: string) => [...s.matchAll(new RegExp(monthDay(true), "gi"))];
   const out: SlotMention[] = [];
@@ -257,10 +257,13 @@ export function slotMentions(text: string): SlotMention[] {
 
   for (const pair of dateTimeMentions(text)) {
     const end = pair.index + pair.raw.length;
-    const own = times.find((t) => t.index + t.raw.length === end);
-    out.push({ ...pair, timeIndex: own?.index ?? pair.index });
+    // The pair's own time is the last one that starts inside it.
+    out.push({ ...pair, timeIndex: Math.max(...times.filter((t) => t.index < end).map((t) => t.index)) });
     const date = pair.key.slice(0, 5);
-    const dateRaw = monthDays(pair.raw)[0]?.[0] ?? "";
+    // A pair holds one month-day: its gap can't cross another.
+    const dateRaw = monthDays(pair.raw)
+      .map((m) => m[0])
+      .join("");
     let from = end;
     for (const t of times.filter((x) => x.index >= end)) {
       const gap = text.slice(from, t.index);
