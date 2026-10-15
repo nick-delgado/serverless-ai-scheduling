@@ -16,7 +16,10 @@
  * - `--verify` signs every seeded user in with USER_SRP_AUTH and checks the ID token's `sub`
  *   matches the mapping. It prints no tokens and no passwords.
  *
- * Runs as the `sched-dev` SSO profile (AWS_PROFILE / AWS_REGION, defaults `sched-dev` / `us-east-1`).
+ * Runs as the `sched-dev` SSO profile (AWS_PROFILE / AWS_REGION, defaults `sched-dev` / `us-east-1`), or, in
+ * `.github/workflows/e2e.yml` (#40), as the `sched-github-e2e` role: credentials from the environment and AWS_PROFILE
+ * set but empty, so the default above doesn't apply and the SDK skips the profile. There `--env-file` names a file
+ * holding only the E2E patient's password.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";

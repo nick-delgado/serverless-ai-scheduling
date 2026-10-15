@@ -21,7 +21,9 @@
  *   `/sched/<env>/auth/user-pool-id`, so subs from a deleted pool are never written.
  * - Local: with `DYNAMODB_ENDPOINT` set (DynamoDB Local), `--table` is required and no SSM call is made.
  *
- * Runs as the `sched-dev` SSO profile (AWS_PROFILE / AWS_REGION, defaults `sched-dev` / `us-east-1`).
+ * Runs as the `sched-dev` SSO profile (AWS_PROFILE / AWS_REGION, defaults `sched-dev` / `us-east-1`), or, in
+ * `.github/workflows/e2e.yml` (#40), as the `sched-github-e2e` role: credentials from the environment and AWS_PROFILE
+ * set but empty, so the default above doesn't apply and the SDK skips the profile.
  */
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";

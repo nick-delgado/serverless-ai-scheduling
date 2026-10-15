@@ -133,7 +133,7 @@ The bootstrap stack gives GitHub Actions short-lived credentials (#41): GitHub's
      --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
    out GitHubDeployRoleArn | gh secret set AWS_DEPLOY_ROLE_ARN --env dev
    ```
-4. **Create the `e2e` GitHub Environment** the same way, with the branch rule #40 needs (`main` only until then), and its secret: `out GitHubE2eRoleArn | gh secret set AWS_E2E_ROLE_ARN --env e2e`. #40 adds its own environment secrets (the demo password).
+4. **Create the `e2e` GitHub Environment** the same way, with deployment branches `main` only (the E2E workflow is dispatched from `main`, #40), and its secrets: `out GitHubE2eRoleArn | gh secret set AWS_E2E_ROLE_ARN --env e2e`, then `gh secret set DEMO_PASSWORD_SOFIA --env e2e`, pasting the E2E patient's password from the main checkout's `.env` at the prompt ("Appendix: end-to-end tests (the e2e env)").
 5. **Add the repository secrets:** `out GitHubEvalsRoleArn | gh secret set AWS_EVAL_ROLE_ARN`, then `gh secret set SES_SENDER` and `gh secret set SES_STAFF_RECIPIENT`, pasting each value from the main checkout's `.env` at the prompt (step 7). `scripts/deploy.sh` refuses to deploy `api` to `dev` without them.
 6. **Merge the PR, then run the deploy workflow** (or disable it with `gh workflow disable deploy.yml` until you want CI deploys): `gh workflow run deploy.yml --ref main`, approve it under the `dev` environment, and watch it with `gh run watch`. A run before steps 3 and 5 stops at its first step with the missing secret's name and this section's name. Then **confirm the subject strings** (below) and post the run's link on #41.
 7. **Require SHA pinning** for actions (Settings → Actions → General), now that every workflow pins its actions to commit SHAs.
@@ -141,8 +141,8 @@ The bootstrap stack gives GitHub Actions short-lived credentials (#41): GitHub's
 **Confirm the subject strings.** On 2026-10-08, with the customization set, a scratch branch's probe workflow printed its tokens' `sub` claims (no AWS step; the branch, its draft PR and its `oidc-probe` environment were deleted afterwards). They have the form of the three strings above, with the same immutable prefix, the context, and `job_workflow_ref` written as `nick-delgado/serverless-ai-scheduling/.github/workflows/<file>@<ref>` (the journal entry quotes them). Only the workflow file and the ref differ, so each role's exact string is still confirmed by its workflow's first run:
 
 - **Deploy:** the deploy workflow's "Show the OIDC subject" step prints the token's `sub` claim and nothing else. It must equal the deploy role's string above, character for character. If it doesn't, the next step fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`; correct the string in `infra/bootstrap/bootstrap.yaml` and `scripts/bootstrap-template.test.ts` in a follow-up PR and re-apply the bootstrap (step 1).
-- **Eval gate and E2E:** #34's and #40's first runs confirm theirs the same way; copy the "Show the OIDC subject" step into those workflows before their first run. `evals.yml` has it, before its credentials step, and runs it only when the gate will call Bedrock (a gated path changed), so the first PR that changes one prints the subject; #34's own PR does. If the next step fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, compare the printed subject with the eval role's string above and correct the bootstrap as for the deploy role. #40's run also confirms that Cognito honours the `env=e2e` tag condition for `AdminCreateUser`, `AdminSetUserPassword` and `AdminGetUser`; if it doesn't, the grant becomes `userpool/*` without the condition, which also reaches `dev`'s pool, and that change needs Nick's approval.
-- **Both scripts under OIDC:** the workflow gives `AWS_PROFILE` a config-only profile (region only), so the AWS CLI and SAM CLI take the role's credentials from the environment (checked locally with both CLIs on 2026-10-08; the first run's log confirms it). The log shows `Deploying data auth api web to env 'dev' from main@<sha>`, the bucket names with `***` for the account ID, and then `published main@<sha>`.
+- **Eval gate and E2E:** #34's and #40's first runs confirm theirs the same way; copy the "Show the OIDC subject" step into those workflows before their first run. `evals.yml` has it, before its credentials step, and runs it only when the gate will call Bedrock (a gated path changed), so the first PR that changes one prints the subject; #34's own PR does. If the next step fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, compare the printed subject with the eval role's string above and correct the bootstrap as for the deploy role. #40's first run ("Appendix: end-to-end tests (the e2e env)", first-run checks) also confirms that Cognito honours the `env=e2e` tag condition for `AdminCreateUser`, `AdminSetUserPassword` and `AdminGetUser`; if it doesn't, the grant becomes `userpool/*` without the condition, which also reaches `dev`'s pool, and that change needs Nick's approval.
+- **Both scripts under OIDC:** the workflow gives `AWS_PROFILE` a config-only profile (region only), so the AWS CLI and SAM CLI take the role's credentials from the environment (checked locally with both CLIs on 2026-10-08; the first run's log confirms it). `e2e.yml` gives that profile only to the steps that run the CLIs, never through `$GITHUB_ENV`: its JavaScript SDK steps (`seed-users.ts`, `seed-data.ts` and Playwright) run with `AWS_PROFILE` set but empty, which the SDK skips and the AWS CLI rejects (`The config profile () could not be found`; both checked locally on 2026-10-13 with exported `sched-dev` credentials, #40). The deploy log shows `Deploying data auth api web to env 'dev' from main@<sha>`, the bucket names with `***` for the account ID, and then `published main@<sha>`.
 - **Bedrock budget:** step 1 set its service names from past Claude spend. After the eval gate's first runs, check in Cost Explorer (group by Service) that its charges fall under those names; if a new one appears, re-apply the bootstrap with `--parameter-overrides BedrockBudgetServices="<name>,<name>"`.
 
 ## 6. Enable Bedrock model access
@@ -192,9 +192,9 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | `sched-bootstrap` stack deploy | It *is* CloudFormation, but deployed with admin rights, once | Nick |
 | Bedrock model access / use-case form | Console-only agreement flow | Nick |
 | SES email verification click | Requires a human to click the email link | Nick |
-| GitHub-side CI settings: the OIDC subject customization, the `dev` and `e2e` Environments, the secrets `AWS_DEPLOY_ROLE_ARN`, `AWS_E2E_ROLE_ARN` (environment), `AWS_EVAL_ROLE_ARN`, `SES_SENDER`, `SES_STAFF_RECIPIENT` (repository), and required SHA pinning | GitHub settings, not AWS resources; a workflow can't read the role ARNs from SSM before it has credentials | Nick ("CI credentials (GitHub OIDC)") |
-| SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh <env>`, after the env's auth and web stacks; builds with the Cognito IDs from SSM, see the `sam-deploy` skill), or the deploy workflow for `dev` |
-| Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`) |
+| GitHub-side CI settings: the OIDC subject customization, the `dev` and `e2e` Environments, the secrets `AWS_DEPLOY_ROLE_ARN`, `AWS_E2E_ROLE_ARN`, `DEMO_PASSWORD_SOFIA` (environment), `AWS_EVAL_ROLE_ARN`, `SES_SENDER`, `SES_STAFF_RECIPIENT` (repository), and required SHA pinning | GitHub settings, not AWS resources; a workflow can't read the role ARNs from SSM before it has credentials | Nick ("CI credentials (GitHub OIDC)") |
+| SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh <env>`, after the env's auth and web stacks; builds with the Cognito IDs from SSM, see the `sam-deploy` skill), or the deploy workflow for `dev` and the E2E workflow for `e2e` |
+| Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`), or the E2E workflow for `e2e` |
 | Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 
 ## Teardown
@@ -205,7 +205,7 @@ Delete workload stacks in reverse order (`web` → `api` → `auth` → `data`) 
 
 ## Appendix: seeding an env's demo data
 
-Two scripts, in this order. Both run as `sched-dev` (`aws sso login --profile sched-dev` first). Everything they write is synthetic (the `clinic-default` fixture).
+Two scripts, in this order. Both run as `sched-dev` (`aws sso login --profile sched-dev` first), or, in the E2E workflow, as the E2E role ("Appendix: end-to-end tests (the e2e env)"). Everything they write is synthetic (the `clinic-default` fixture).
 
 1. **Cognito demo users:** `npx tsx scripts/seed-users.ts --env <env>` (passwords from the git-ignored `.env`). This writes `.seed/cognito-users.<env>.json`, which maps each fixture patient to their Cognito `sub`.
 2. **Table data:** `npm run seed:data -- --env <env>` (or `npx tsx scripts/seed-data.ts --env <env>`).
@@ -265,3 +265,41 @@ DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/retry-escalations.ts dev
 ```
 
 The tests (`scripts/retry-escalations.test.ts`) run against DynamoDB Local with a recording notifier, so they never send email.
+
+---
+
+## Appendix: end-to-end tests (the e2e env)
+
+The Playwright journeys (#40, `apps/web/e2e/`) run against **`e2e`**, a standing env (`sched-e2e-*`) of their own, never the shared `dev`. It isn't in `PROTECTED_ENVS`, and nobody tears it down when a task ends: not CI, not an agent.
+
+- **The patient.** The suite signs in as Sofia Marquez (`pat-sofia`, username `sofia.marquez`). Only #40's suite and its manual pass (`apps/web/e2e/MANUAL.md`) sign in as Sofia on `e2e`; other demos and #44 use other patients or envs. Her password is `DEMO_PASSWORD_SOFIA`: the main checkout's `.env` locally, and the `e2e` environment secret of that name in CI.
+- **What a run does.** Reseed once (`seed-users.ts`, then `seed-data.ts --reset`; resetting `e2e` is pre-approved, unlike `dev` and `demo`), then the projects one after another with no retries: login and login → book on Chromium, WebKit and Firefox (each booking a different provider), then reschedule and escalation on Chromium. A turn the account's Bedrock quota throttles is retried with the app's Retry button. The log names each turn's tools (never its text) and each test's appointment IDs before and after, and ends with `Estimated Bedrock cost (list prices): $<x> over <n> turns`. A full run is about 13 turns, about $0.12.
+- **The escalation email is on.** Each run sends one escalation email to the staff address, and the test waits for its `ESC` record to show `SENT`. Every deploy of `e2e` carries the SES identity: the workflow passes the repository secrets, and a local `scripts/deploy.sh` reads them from the main checkout's `.env`.
+- **The turn cap.** Every deploy of `e2e` passes `-- DailyTurnCap=500`; `--reset` doesn't clear the day's counter.
+- **One run at a time.** A second reseed deletes the first run's appointments mid-test. `e2e.yml` queues runs (`concurrency: e2e`), but it can't see a local run: don't start one while a CI run is in progress, or the other way round.
+
+**In CI** (Nick): `gh workflow run e2e.yml --ref main`, then `gh run watch`. It deploys the dispatched ref (`scripts/deploy.sh all e2e -- DailyTurnCap=500`, `scripts/deploy-web.sh e2e`), reseeds and runs the suite. It uploads no report, trace, video or storage state; read failures from the log. To re-run, dispatch again (it reseeds). A run before the settings are in place stops at its first step with the missing secret's name: `AWS_E2E_ROLE_ARN` and `DEMO_PASSWORD_SOFIA` (`e2e` environment, step 4 of "CI credentials (GitHub OIDC)"), `SES_SENDER` and `SES_STAFF_RECIPIENT` (repository, step 5).
+
+**First-run checks** (post the run's link and both results on #40):
+
+1. "Show the OIDC subject" prints the E2E role's string from "CI credentials (GitHub OIDC)" with `refs/heads/main`. If the credentials step fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, correct the bootstrap as for the deploy role.
+2. "Reseed the E2E patient's Cognito user" prints `created pat-sofia` or `exists pat-sofia`: Cognito honours the `env=e2e` tag condition. An `AccessDeniedException` on `AdminGetUser` or `AdminCreateUser` means it doesn't; the fix widens the grant to `userpool/*`, which also reaches `dev`'s pool and needs Nick's approval.
+
+**Locally** (an agent or Nick, as `sched-dev`, from the checkout to test):
+
+```bash
+scripts/deploy.sh all e2e -- DailyTurnCap=500          # when the app changed since the last deploy
+scripts/deploy-web.sh e2e                               # needs a clean tree
+main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+export DEMO_PASSWORD_SOFIA="$(node -p 'require("node:util").parseEnv(require("node:fs").readFileSync(process.argv[1], "utf8")).DEMO_PASSWORD_SOFIA' "$main/.env")"   # never echo it
+npx tsx scripts/seed-users.ts --env e2e --env-file /dev/null   # Sofia only, as in CI
+npx tsx scripts/seed-data.ts --env e2e --reset --confirm "$(aws ssm get-parameter --profile sched-dev --name /sched/e2e/data/table-name --query Parameter.Value --output text)"
+npx playwright install chromium webkit firefox          # once per machine
+npm run e2e -w apps/web                                 # or: -- --project=chromium 02-book
+```
+
+Playwright's results, traces and screenshots go under the OS temp directory (`sched-e2e/`), outside the checkout, so `scripts/deploy-web.sh` still sees a clean tree.
+
+**FR-010's greeting budget** is measured against `dev`, read-only (page loads call only `POST /api/session`; no turn is sent, nothing is seeded): `npm run e2e:fr010 -w apps/web`, as `sched-dev`, signed in as Maria Santos with her password from the main checkout's `.env`. It prints n, p50, p95, max and the discarded loads. Not part of `e2e.yml`.
+
+**The manual device and voice pass** is a checklist: `apps/web/e2e/MANUAL.md`.
