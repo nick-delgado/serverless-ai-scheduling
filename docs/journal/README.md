@@ -89,3 +89,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-13 | [The E2E suite reads the stream, not the reply, and the agent asked again even when told yes](2026-10-13-the-e2e-suite-reads-the-stream-not-the-reply.md) | 5. What the evals showed |
 | 2026-10-14 | [The dashboard reads the turn's log line, and Powertools' wrappers can't see a streaming handler's context](2026-10-14-the-dashboard-reads-the-log-line.md) | 5. What the evals showed |
 | 2026-10-15 | [A split issue nearly closed early, so the PR body gets a check of its own](2026-10-15-the-pr-body-gets-a-check-of-its-own.md) | 5. What the evals showed |
+| 2026-10-15 | [The security review's burst never reached the throttle: Lambda's concurrency quota of 10 answered first](2026-10-15-the-throttle-never-saw-the-burst.md) | 5. What the evals showed |
