@@ -37,5 +37,5 @@ The agent read the kill sites first. Two can send SIGKILL: `stopRunning()` in `s
 
 ## What's next
 
-- `stopRunning()` throws `ESRCH` when the command's group is empty but `close` hasn't come yet, and on the timer and signal paths that skips restoring the edited file. Nick chose to track it as a follow-up, #256, with no code change here.
+- `stopRunning()` throws `ESRCH` when the command's group is empty but `close` hasn't come yet, and on the timer and signal paths that skips restoring the edited file. Nick chose to track it as a follow-up, #256, with no code change here. **Later (2026-10-15):** #256 fixed it: `stopRunning()` now ignores the kill's error and still removes the report directory, see [An empty process group isn't an error](2026-10-15-an-empty-process-group-is-not-an-error.md).
 - If load rounds like #206's run again, count `Killed: 9` suites with this fix in. A suite still killed with no logged kill and no jetsam event would point somewhere else.
