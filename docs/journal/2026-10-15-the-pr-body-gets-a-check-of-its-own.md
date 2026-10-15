@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #265, #72, PR #252, PR #253, PR #254, PR #255, PR #258, PR #261, PR #262, PR #263, PR #241
+**Related:** #265, PR #266, #72, PR #252, PR #253, PR #254, PR #255, PR #258, PR #261, PR #262, PR #263, PR #241
 
 ## What happened
 
@@ -31,6 +31,7 @@ The issue's "Decisions and clarifications" settled most of it. These are the dec
 ## What surprised us
 
 - **GitHub's concurrency group holds one pending run by default.** A-11 asked us to check this before writing a claim. GitHub's workflow syntax page says that with `cancel-in-progress` off, a run queued behind a running one is `pending`, and that "by default, any existing `pending` job or workflow in the same concurrency group will be canceled and the new queued job or workflow will take its place" (`queue: single`). So the header and `CLAUDE.md` claim only that a body edit no longer cancels the running run, and that the new run waits for it. Two quick edits still cancel the first one's pending run. The same page documents a `queue: max` setting, which keeps up to 100 pending runs and can't be combined with `cancel-in-progress: true`. We didn't adopt it: the issue asked for `cancel-in-progress: false` only.
+- **The new check failed this PR's own body first.** The mutate tables quote the failed tests' names, and one `it.each` name read "finds Refs #38 beside %s #38". Pasted into the body, those names put a `Refs` line and a closing keyword before the same number side by side, so the `PR body` check failed locally before we opened the PR, and GitHub would have linked #38 from them. The test now names no number (`1f197c8`). The rule reads the raw body, tables included (r1/Q-4 (a)), so a test name is body text too.
 - **The suggester's new kinds found an old test's blind spot.** "widens a find by whole tokens" used two top-level calls, `f(a >= b);` and `g(a >= c);`, which `move-guard` now swaps. The test now filters that kind out; the `move-guard` tests cover it.
 - **Most of what `--suggest` proposed on this branch was `pass-through`, and nine of those breaks can't fail.** At `8275523` it proposed 174 edits. The nine that survived all pass `undefined` for a TypeScript `SourceFile` argument to `getStart`, `getText` or a helper that hands it on; the compiler then reads the node's own file, so nothing changes. The first pass, at `e3c2fd0`, left other breaks standing too: a redundant lookahead, a `?? ""` nothing could reach, and tests that never put a list item on the line right after the heading. Those got tests or simpler code in `8275523`.
 
