@@ -4,7 +4,7 @@ description: >-
   The end-to-end workflow for doing a backlog task in this repo. It covers: finding an
   unblocked GitHub issue, claiming it so parallel agents don't collide, working in an
   isolated git worktree, staying inside the issue's owned paths, meeting the CLAUDE.md
-  definition of done, opening a PR that closes the issue, and handing off (journal note,
+  definition of done, opening a PR that closes the issue (or refers to a split issue), and handing off (journal note,
   status labels). Use it whenever you start, resume, or finish work on an issue or task,
   e.g. "pick up the next task", "work on #23", "start S4-03", "what can I work on?",
   "you're the agent for the tools stream", "open a PR for this", "I'm blocked". Use it
@@ -51,7 +51,9 @@ If the issue is already assigned or `status:in-progress`, don't take it over. Pi
 
 ## 3. Work in an isolated worktree
 
+<!-- sync-start:pr-title-types (restated in scripts/pr-body.ts, TITLE_TYPES, which adds `test` for PR titles) -->
 - Branch name: `<type>/<issue#>-<short-slug>`, where `type` is one of `feat`, `fix`, `infra`, `spike`, `docs`, `eval`, `chore`. Example: `feat/23-book-appointment-tool`.
+<!-- sync-end:pr-title-types -->
 
 ```bash
 git fetch origin
@@ -76,7 +78,7 @@ Worktrees let several agents build and test at the same time without stepping on
 - Only modify the paths the issue lists. Shared files (root `package.json`, `tsconfig`, `packages/contracts`) sometimes need small edits. Keep those minimal and **call them out in the PR**. A schema change in `packages/contracts` affects every stream.
 - If the work clearly needs files outside your paths, or beyond a limit the issue puts on a path ("fixtures only"), comment on the issue and ask the user instead of expanding scope. If you can't ask (a delegated task worker), make the smallest change that meets the criterion and list it under "Shared-file or contract changes", naming the criterion that needs it, for the owner to approve.
 - Before adding a constant, type, schema or helper, search for an existing one (`git grep`) and import it. If it lives where you can't import it, prefer the smallest disclosed edit that shares it (an export) to a copy. If you do copy, list each copy and its source under "Shared-file or contract changes".
-- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke. Do the same when a decision, or the work itself, lands in your own PR (a PRD edit, a changed message or rule, a step that was pending): search for the old wording, and run `git grep -n '#<N>\b'` for lines that still call your issue planned or pending. Edit every restatement (journal entry, code comments, docs, diagrams), and list the ones outside your paths under "Shared-file or contract changes".
+- After merging or rebasing on `main`, read what landed (merged PRs, new journal entries, sibling handler headers) and bring your code, tests, stand-ins and PR description in line, even where no test broke. Do the same when a decision, or the work itself, lands in your own PR (a PRD edit, a changed message or rule, a step that was pending): search for the old wording, and run `git grep -n '#<N>\b'` for lines that still call your issue planned or pending. Edit every restatement (journal entry, code comments, docs, diagrams), and list the ones outside your paths under "Shared-file or contract changes". An issue's "makes stale" lists are where that search starts, not all of it. A dated journal entry that describes the old behaviour as current keeps its text and gets a pointer to the new entry at the end of the stale bullet or sentence: `**Later (<date>):** … see [<new entry>](<file>).`
 - Commit in small, meaningful steps using Conventional Commits that reference the issue, e.g. `feat(tools): add book_appointment transaction (#23)`. End commit messages with the attribution lines from the session's system reminder, if there are any.
 
 ## 6. Prove it's done
@@ -85,7 +87,7 @@ Run the issue's verification commands, then the CLAUDE.md **definition of done**
 
 - [ ] Every acceptance criterion is met (check each one explicitly).
 - [ ] `npm run lint && npm run typecheck && npm test` passes.
-- [ ] Seen failing: `npm run mutate` with `expect`, and its `--markdown` table in the PR body (the `Seen-failing evidence` check).
+- [ ] Seen failing: `npm run mutate` with `expect` (Vitest commands only; for another runner, see `CLAUDE.md`'s `mutate` command line), and its `--markdown` table in the PR body (the `Seen-failing evidence` check), re-run after any commit that changes a file it covers, since a row whose `find` is gone no longer counts.
 - [ ] If you touched the agent, prompts, tools, or model config: the smoke suite in both modes (`npm run evals -- --suite smoke --mode l1` and `--mode scenario`, the `run-evals` skill) shows no regression against `packages/evals/baselines/sonnet-4.6.json`, or one the owner accepted (`CLAUDE.md`; a passing `Eval gate` accepts one regressed case per mode, which the PR names, unless the PR's gate runs show more, a safety violation, or the same case on two or more runs). The PR's `Eval gate` check runs the same comparison. Put the numbers in the PR.
 - [ ] If you touched infra: `sam validate --lint` passes, and it's deployed to `dev` (or the PR says why not).
 - [ ] Docs: an ADR for any new or changed significant technical decision, PRD traceability if requirements moved, and a journal entry if something was story-worthy or you decided something the spec left open (see step 8).
@@ -102,12 +104,14 @@ git push -u origin "<branch>"
 gh pr create --base main --title "<type>(<scope>): <summary> (#<N>)" --body-file <tmp-body.md>
 ```
 
+Write the title in that form, not the issue's title (the `PR body` check: `<type>` is a branch type from step 3 or `test`, and the scope is optional).
+
 Use `.github/pull_request_template.md`. The body must include:
-- `Closes #<N>`. It stays even when a criterion needs a step you can't run (a write to `dev`, a live measurement, a browser check, an eval run a rule you were given blocks): mark that step pending in the PR, where its result will go, and report it. It's done before merge;
+- `Closes #<N>`, or `Refs #<N>` for a split issue's earlier parts, where nowhere in the body or commits does a closing keyword (`closes`, `fixes`, `resolves` and their forms) come right before `#<N>`, because GitHub closes on prose too (the `PR body` check reads the body). It stays even when a criterion needs a step you can't run (a write to `dev`, a live measurement, a browser check, an eval run a rule you were given blocks): mark that step pending in the PR, where its result will go, and report it. It's done before merge;
 - the PRD requirement IDs covered;
 - how you verified it (commands and results, eval numbers);
 - any shared-file or contract changes;
-- anything deferred.
+- anything deferred, each with the issue that tracks it: file it from `.github/ISSUE_TEMPLATE/task.yml` and link it here and in the journal entry's "What's next"; if you can't file it, write "to file" and report it, and it's linked before merge.
 
 End it with the PR attribution line from the session's system reminder, if there is one.
 
