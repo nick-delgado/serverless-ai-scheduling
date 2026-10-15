@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** issue #256, follow-up #268, #215 / PR #254, #184, the [2026-10-13](2026-10-13-an-empty-pid-file-is-pid-zero.md) entry
+**Related:** issue #256, PR #269, follow-up #268, #215 / PR #254, #184, the [2026-10-13](2026-10-13-an-empty-pid-file-is-pid-zero.md) entry
 
 ## What happened
 
