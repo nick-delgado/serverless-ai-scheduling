@@ -162,8 +162,10 @@ describe("greeting", () => {
     expect(logs[0]).toMatchObject({
       level: "error",
       requestId: "req-1",
-      errorMessage: "Appointment references unknown provider prov_lee",
+      errorName: "Error",
     });
+    // Not an AWS SDK error, so its message isn't logged (lib/log.ts, #39 r1/Q-5 (b)).
+    expect(logs[0]).not.toHaveProperty("errorMessage");
     expect(logs.at(-1)).toMatchObject({ status: 500, requestId: "req-1" });
   });
 });

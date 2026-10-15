@@ -328,9 +328,10 @@ describe("handlers/chat", () => {
           conversationId: escalation?.conversationId,
           notificationStatus: "FAILED",
           errorName: "RangeError",
-          errorMessage: "write failed",
         }),
       ]);
+      // Not an AWS SDK error, so its message isn't logged (lib/log.ts, #39 r1/Q-5 (b)).
+      expect(logLines("notification status write failed")[0]).not.toHaveProperty("errorMessage");
       expect(logLines("notification status write failed")[0]).not.toHaveProperty("patientId");
       // The tool still swallowed the rethrown error: no tool internal error was logged.
       expect(logLines("tool internal error")).toEqual([]);
