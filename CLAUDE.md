@@ -81,7 +81,7 @@ Toolchain notes:
 - TypeScript is pinned to `~6.0` because typescript-eslint doesn't support TS 7 yet. Revisit when its `typescript` peer range allows it.
 - Internal packages export their TypeScript source (`"exports": "./src/index.ts"`). There's no build step between workspaces; esbuild (Lambdas) and Vite (web) bundle directly.
 
-Infra commands (full guide: the **`sam-deploy` skill**):
+Infra commands (full guide: the **`sam-deploy` skill**; deploying, checking and tearing down a whole env, step by step: `docs/runbooks/deploy-env.md`):
 
 ```bash
 sam validate --lint -t infra/stacks/<stack>.yaml --region us-east-1

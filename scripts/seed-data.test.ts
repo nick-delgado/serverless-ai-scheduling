@@ -15,7 +15,7 @@ import {
   ListTablesCommand,
   waitUntilTableExists,
 } from "@aws-sdk/client-dynamodb";
-import type { SSMClient } from "@aws-sdk/client-ssm";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import {
   type BatchWriteCommandInput,
   DeleteCommand,
@@ -36,6 +36,7 @@ import {
   loadMapping,
   parseCliArgs,
   resetConfirmed,
+  resolveTable,
   runCli,
   seedData,
   ssmClientFor,
@@ -233,6 +234,57 @@ describe("ssmParamFrom", () => {
       "SSM /sched/dev/auth/user-pool-id is empty",
     );
     await expect(param("dev", "none")).rejects.toThrow("SSM /sched/dev/none is empty");
+  });
+});
+
+describe("resolveTable", () => {
+  /** An SSM client factory that records each region it is built for and answers every read with `table`. */
+  const ssmFactory = (table = "sched-pr1-table") => {
+    const regions: string[] = [];
+    const { sent, client } = fakeClient<Pick<SSMClient, "send">>(() => ({ Parameter: { Value: table } }));
+    return { regions, sent, ssmClient: (region: string) => (regions.push(region), client) };
+  };
+
+  it("treats an empty DYNAMODB_ENDPOINT as unset: reads the table name from SSM and returns no endpoint", async () => {
+    const ssm = ssmFactory();
+    await expect(resolveTable({ DYNAMODB_ENDPOINT: "" }, "pr1", undefined, ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "sched-pr1-table",
+      endpoint: undefined,
+    });
+    expect(ssm.sent).toEqual([{ Name: "/sched/pr1/data/table-name" }]);
+    expect(ssm.regions).toEqual(["us-east-1"]);
+  });
+
+  it("builds the SSM client for AWS_REGION and returns that region", async () => {
+    const ssm = ssmFactory();
+    const target = await resolveTable({ AWS_REGION: "eu-west-1" }, "pr1", undefined, ssm.ssmClient);
+    expect(target.region).toBe("eu-west-1");
+    expect(ssm.regions).toEqual(["eu-west-1"]);
+  });
+
+  it("uses --table on AWS without building an SSM client", async () => {
+    const ssm = ssmFactory();
+    await expect(resolveTable({}, "pr1", "sched-other", ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "sched-other",
+      endpoint: undefined,
+    });
+    expect(ssm.regions).toEqual([]);
+  });
+
+  it("with a local endpoint, needs --table, returns the endpoint and never asks SSM", async () => {
+    const ssm = ssmFactory();
+    const local = { DYNAMODB_ENDPOINT: "http://localhost:8001" };
+    await expect(resolveTable(local, "pr1", undefined, ssm.ssmClient)).rejects.toThrow(
+      /^DYNAMODB_ENDPOINT is set: pass --table <name> for the local table$/,
+    );
+    await expect(resolveTable(local, "pr1", "t-local", ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "t-local",
+      endpoint: "http://localhost:8001",
+    });
+    expect(ssm.regions).toEqual([]);
   });
 });
 
@@ -523,6 +575,10 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
         return localClient();
       },
     };
+    /** The SSM reply for a parameter name: the test table for the table-name parameter, `pool` for any other. */
+    const ssmReply = (name: unknown, pool: string) => ({
+      Parameter: { Value: name === "/sched/dev/data/table-name" ? table : pool },
+    });
     /** An SSM client stub: records the region and each parameter name; the pool parameter returns `pool`. */
     const fakeSsm = (pool: string) => {
       const asked: string[] = [];
@@ -531,7 +587,7 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
         regions.push(region);
         return fakeClient<Pick<SSMClient, "send">>((input) => {
           asked.push(String(input.Name));
-          return { Parameter: { Value: input.Name === "/sched/dev/data/table-name" ? table : pool } };
+          return ssmReply(input.Name, pool);
         }).client;
       };
       return { asked, regions, ssmClient };
@@ -576,6 +632,32 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
       );
       expect(ssm.regions).toEqual(["eu-west-1"]);
       expect(clientArgs).toEqual([["eu-west-1", undefined]]);
+    });
+
+    it("with --table on AWS, builds the User Pool's SSM client for AWS_REGION", async () => {
+      const ssm = fakeSsm(POOL);
+      await runCli(
+        ["--env", "dev", "--table", table, "--mapping", mappingFile],
+        { AWS_REGION: "eu-west-1" },
+        { ...deps, ssmClient: ssm.ssmClient },
+      );
+      expect(ssm.regions).toEqual(["eu-west-1"]);
+      expect(ssm.asked).toEqual(["/sched/dev/auth/user-pool-id"]);
+    });
+
+    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
+      const send = vi
+        .spyOn(SSMClient.prototype, "send")
+        .mockImplementation((command) =>
+          Promise.resolve(ssmReply((command.input as { Name?: string }).Name, POOL)),
+        );
+      try {
+        await runCli(["--env", "dev", "--mapping", mappingFile], { AWS_REGION: "eu-west-1" }, deps);
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(await (send.mock.contexts[0] as SSMClient).config.region()).toBe("eu-west-1");
+      } finally {
+        send.mockRestore();
+      }
     });
 
     it("refuses --reset with no terminal and no --confirm, or a wrong --confirm", async () => {

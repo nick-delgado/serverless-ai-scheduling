@@ -267,7 +267,7 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 | F-16 | low | No per-patient cap on Transcribe streaming. | follow-up #273 |
 | F-17 | low | No WAF on CloudFront or the stage. | follow-up #273 |
 | F-18 | low | Commits carry the owner's personal address in author metadata. | follow-up #272 |
-| F-19 | low | `docs/runbooks/aws-setup.md:53` says `SchedDeployer` calls `bedrock-mantle:CreateInference`; it's `bedrock:InvokeModel*` since ADR-010 (A-8). | follow-up #42 ([comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/42#issuecomment-6199569446)) |
+| F-19 | low | `docs/runbooks/aws-setup.md:53` says `SchedDeployer` calls `bedrock-mantle:CreateInference`; it's `bedrock:InvokeModel*` since ADR-010 (A-8). | fixed in the runbook by #42 (PR #285): step 3 names the Bedrock actions `SchedDeployer` grants today; the grant itself narrows in #270 |
 | F-20 | low | AWS SDK error messages are still logged, clipped to 200 characters. AWS doesn't document their format, so one could quote a request field. | accepted: owner decision r1/Q-5 (b) keeps them for debugging Bedrock errors |
 | F-21 | high | `errorSummary` logged any error's message, and a tool, a repository or the agent loop can build one from patient or model text. It wasn't observed in `dev`'s logs. | fixed (`572297e`): non-SDK errors log their name and code only, pinned by `services/api/test/log.test.ts:7` and `:32` |
 | F-22 | low | `DescribeStacks` is granted on `"*"` to the deploy and e2e roles and `SchedDeployer`, though it takes a stack ARN and every call in the repo names its stack. | follow-up #270 |

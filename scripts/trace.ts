@@ -33,7 +33,7 @@ import { turnKeys } from "@sched/api/dynamo-turn-store";
 import { ConversationId, TurnTrace, type TokenUsage } from "@sched/contracts";
 import { createDocumentClient } from "@sched/tools/dynamo";
 
-import { dynamoClientFor, ENV_PATTERN, ssmClientFor, ssmParamFrom } from "./seed-data";
+import { dynamoClientFor, ENV_PATTERN, resolveTable, ssmClientFor } from "./seed-data";
 
 const USAGE = "usage: trace.ts <env> <conversationId> [--table <name>] [--json] [--inputs]";
 
@@ -217,24 +217,12 @@ export async function runCli(
 ): Promise<number> {
   const log = deps.log ?? ((line: string) => console.log(line));
   const logError = deps.logError ?? ((line: string) => console.error(line));
-  // The operator scripts' shared CLI shape: `retry-escalations.ts` and `seed-data.ts` resolve the table the same
-  // way, and `retry-escalations.ts` ends in the same `main`. A helper for it is a refactor across `scripts/**`,
-  // outside #38's paths.
-  // jscpd:ignore-start
-  const endpoint = vars.DYNAMODB_ENDPOINT || undefined;
-  const region = vars.AWS_REGION ?? "us-east-1";
-
-  let tableName: string;
-  if (endpoint) {
-    if (!args.table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
-    tableName = args.table;
-  } else {
-    tableName =
-      args.table ??
-      (await ssmParamFrom((deps.ssmClient ?? ssmClientFor)(region))(args.env, "data/table-name"));
-  }
-
-  // jscpd:ignore-end
+  const { region, tableName, endpoint } = await resolveTable(
+    vars,
+    args.env,
+    args.table,
+    deps.ssmClient ?? ssmClientFor,
+  );
   const client = (deps.dynamoClient ?? dynamoClientFor)(region, endpoint);
   let entries: TraceEntry[];
   try {
@@ -261,7 +249,7 @@ export async function runCli(
   return unreadable > 0 ? 1 : 0;
 }
 
-// The same entry point as `retry-escalations.ts`'s (see the note in `runCli`).
+// The same entry point as `retry-escalations.ts`'s, less its `.env` loading (#42 r1/Q-5 keeps the two).
 // jscpd:ignore-start
 /**
  * The script's entry point; returns the exit code. `vars` is the process environment, and is changed in

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { type SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
-import type { SSMClient } from "@aws-sdk/client-ssm";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { type ConversationMessage, type Escalation, type EscalationReason } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
@@ -513,6 +513,25 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
     const LOCAL = { DYNAMODB_ENDPOINT: ENDPOINT, AWS_REGION: "us-east-1" };
     const SES = { SES_SENDER: "sender@example.com", SES_STAFF_RECIPIENT: "desk@example.com" };
 
+    it("re-sends through the default SES notifier, in AWS_REGION, when none is injected", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      const send = vi
+        .spyOn(SESv2Client.prototype, "send")
+        .mockImplementation(() => Promise.resolve({ MessageId: "m-default" }));
+      try {
+        const summary = await cli(
+          ["dev", "--table", tableName],
+          { ...LOCAL, ...SES, AWS_REGION: "us-west-2" },
+          { now: NOW, dynamoClient: () => localClient(), log: () => undefined },
+        );
+        expect(summary).toMatchObject({ found: 1, sent: 1, failed: 0 });
+        expect(send).toHaveBeenCalledOnce();
+        expect(await (send.mock.contexts[0] as SESv2Client).config.region()).toBe("us-west-2");
+      } finally {
+        send.mockRestore();
+      }
+    });
+
     it("re-sends through the notifier built from the SES settings and the region", async () => {
       await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
       const recording = new RecordingNotifier();
@@ -583,27 +602,53 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       expect(summary.found).toBe(0);
     });
 
-    it("reads the table name from the env's SSM parameter without a local endpoint", async () => {
-      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
-      const send = vi.fn(() => Promise.resolve({ Parameter: { Value: tableName } }));
-      const ssmClient = vi.fn(() => ({ send }) as unknown as Pick<SSMClient, "send">);
+    it.each([
+      ["unset", {}],
+      ["empty", { DYNAMODB_ENDPOINT: "" }],
+    ])(
+      "reads the table name from the env's SSM parameter when DYNAMODB_ENDPOINT is %s, and passes no endpoint on",
+      async (_case, endpointVars) => {
+        await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+        const send = vi.fn(() => Promise.resolve({ Parameter: { Value: tableName } }));
+        const ssmClient = vi.fn(() => ({ send }) as unknown as Pick<SSMClient, "send">);
+        const dynamoClient = vi.fn((_region: string, _endpoint: string | undefined) => localClient());
 
-      const summary = await cli(
-        ["pr52", "--dry-run"],
-        { AWS_REGION: "us-east-2" },
-        {
-          now: NOW,
-          ssmClient,
-          dynamoClient: () => localClient(),
-          log: () => undefined,
-        },
-      );
+        const summary = await cli(
+          ["pr52", "--dry-run"],
+          { AWS_REGION: "us-east-2", ...endpointVars },
+          {
+            now: NOW,
+            ssmClient,
+            dynamoClient,
+            log: () => undefined,
+          },
+        );
 
-      expect(ssmClient).toHaveBeenCalledWith("us-east-2");
-      expect((send.mock.calls[0] as unknown[])[0]).toMatchObject({
-        input: { Name: "/sched/pr52/data/table-name" },
-      });
-      expect(summary.found).toBe(1);
+        expect(ssmClient).toHaveBeenCalledWith("us-east-2");
+        expect(dynamoClient).toHaveBeenCalledWith("us-east-2", undefined);
+        expect((send.mock.calls[0] as unknown[])[0]).toMatchObject({
+          input: { Name: "/sched/pr52/data/table-name" },
+        });
+        expect(summary.found).toBe(1);
+      },
+    );
+
+    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
+      const send = vi
+        .spyOn(SSMClient.prototype, "send")
+        .mockImplementation(() => Promise.resolve({ Parameter: { Value: tableName } }));
+      try {
+        const summary = await cli(
+          ["pr52", "--dry-run"],
+          { AWS_REGION: "us-east-2" },
+          { now: NOW, dynamoClient: () => localClient(), log: () => undefined },
+        );
+        expect(summary.found).toBe(0);
+        expect(send).toHaveBeenCalledOnce();
+        expect(await (send.mock.contexts[0] as SSMClient).config.region()).toBe("us-east-2");
+      } finally {
+        send.mockRestore();
+      }
     });
 
     it("builds no notifier in a dry run, even with the SES settings", async () => {
