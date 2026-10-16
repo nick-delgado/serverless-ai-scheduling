@@ -19,16 +19,16 @@ An agent (Claude, as #282's task worker) built it:
 
 Nick's readiness answers settled the design: separate format keys, not a per-case `safety: false` flag; the opt-in invariants, not ET and count checks on every L1 case; and only `adr9.*` counts as a safety item. The agent decided these points the spec left open:
 
-- **The opt-in invariants read whatever text the model wrote, tool call or not.** They are scenario mode's checks, and scenario mode reads every assistant text, including text written beside a tool call. A `responded` guard like the format keys' would have made L1 read less than scenario mode does. With no text, both pass.
+- **The opt-in invariants read whatever text the model wrote, tool call or not.** They are scenario mode's checks, and scenario mode reads every assistant text, including text written beside a tool call. A `responded` guard like the format keys' would have made L1 read less than scenario mode does. With no text, both pass. The review of `44a2b97` asked Nick to confirm this, and he kept it (decision 44a2b97/SPEC-3 (a): the opt-in L1 invariants read any text the model wrote, including text beside a tool call, as scenario mode and `no_markdown` do). A test in `l1.test.ts` now pins it.
 - **The shared functions take a list of texts**, like `markdownProblem`, not one string. `INVARIANT_SPECS` passes `assistantTexts(events)` and L1 passes `[o.text]`, so the loop over texts lives in the shared code instead of being written again in each caller.
-- **The lint's second test pins the four `adr9.*` cases**, not just the first test's empty list. It checks that all four still load and still pass the lint, and that `l1-medical-advice-decline` still has its `adr9.*` key and its `must_match_none`. An empty flagged list alone would also pass if the lint read nothing.
+- **Each of the lint's tests has its own job.** The first runs it over every L1 case and expects nothing flagged. The second pins the four `adr9.*` cases: all four still load and pass the lint, and `l1-medical-advice-decline` still has its `adr9.*` key and its `must_match_none`. The third (added after the review of `44a2b97`, TEST-1) feeds the lint `l1-offer-single-day` with its pattern put back as `must_match_none` and expects exactly that case and check, so a lint that flags nothing fails it.
 - **The ADR amendment notes a side effect of Q-3 (a) that the review didn't mention.** The #230 markers used to be read beside a tool call too. As format checks they read a text reply only, so an over-refusal written beside a `find_providers` call no longer fails those two cases. `forbid_tools` still catches a write.
 
 ## What surprised us
 
 - **The first live trial showed the exact case #282 was filed for.** `l1-offer-single-day` repeated the date in its lead-in again ("openings on Tuesday, October 13 (and more are available later in the day):", then the day line). On `main` that would have counted as a safety violation. Now it reports as a `format_must_match_none` failure with safety violations 0. #284 owns the prompt side of that miss.
-- **`l1-offer-repeated-question` passed with no separate day line.** Its reply put the date in the lead-in, "Dr. Priya Lee has these openings on Tuesday, October 13:", and then listed the times. The lead-in ends in the same string the case's `contains_all` looks for, so the check can't tell a lead-in from a day line. The new weekday check passed too, because it reads the list under any line with a weekday, a month and a day. We left this as a finding, not a fix (r1/Q-2 (b)).
-- **One mutant can't be killed.** In `timesWithoutWeekdayOrZoneProblem`, passing `undefined` for the text on the heading-list branch changes nothing. `mentionHasWeekdayAndZone` reads a heading-list time's own `heading` and `afterTime`, never the text. The line moved unchanged from `INVARIANT_SPECS`.
+- **`l1-offer-repeated-question` passed with no separate day line.** Its reply put the date in the lead-in, "Dr. Priya Lee has these openings on Tuesday, October 13:", and then listed the times. The lead-in ends in the same string the case's `contains_all` looks for, so the check can't tell a lead-in from a day line. The new weekday check passed too, because it reads the list under any line with a weekday, a month and a day. We left it as a finding: it's a gap in the case's grading, outside what #282 changes, and it isn't #284's scope either (#284 owns `l1-offer-single-day` and the prompt). It's listed below, to file.
+- **Mutant M10 in PR #292's table can't be killed.** In `timesWithoutWeekdayOrZoneProblem`, passing `undefined` for the text on the heading-list branch changes nothing. `mentionHasWeekdayAndZone` reads a heading-list time's own `heading` and `afterTime`, never the text. The line moved unchanged from `INVARIANT_SPECS`.
 
 ## Evidence
 
@@ -39,4 +39,5 @@ Nick's readiness answers settled the design: separate format keys, not a per-cas
 ## What's next
 
 - #284: the prompt side of `l1-offer-single-day`'s repeated date.
+- To file: `l1-offer-repeated-question`'s `contains_all` passes a lead-in that ends in "Tuesday, October 13:" in place of a separate day line.
 - Any new L1 case (#234, #201) puts a format or over-refusal marker in the `format_*` keys, or the lint fails it.
