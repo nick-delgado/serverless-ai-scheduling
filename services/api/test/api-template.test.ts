@@ -302,7 +302,9 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
   });
 
   it("reserves 5 concurrent executions for the chat function (#273, owner decision r1/Q-2 (c))", () => {
-    expect(entries(block(/^ {4}Properties:$/, chatLines))).toMatchObject({ ReservedConcurrentExecutions: "5" });
+    expect(entries(block(/^ {4}Properties:$/, chatLines))).toMatchObject({
+      ReservedConcurrentExecutions: "5",
+    });
   });
 
   it("caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function", () => {
