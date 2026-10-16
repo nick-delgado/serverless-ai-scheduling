@@ -17,7 +17,8 @@
  * `e2e.yml`'s in scripts/bootstrap-template.test.ts, `evals.yml`'s in scripts/eval-gate.test.ts.
  *
  * It also pins `pr-evidence.yml` (#265), which takes no credentials: its runs queue rather than cancel the running
- * one (`cancel-in-progress: false`, B10-2), and its `PR body` job passes the title and body to scripts/pr-body.ts
+ * one (`cancel-in-progress: false`, B10-2), a newer run waits behind earlier pending ones rather than replacing them
+ * (`queue: max`, #267, B10-2a), and its `PR body` job passes the title and body to scripts/pr-body.ts
  * through `env:`, never in the `run:` line (r1/A-10).
  */
 import { readdirSync, readFileSync } from "node:fs";
@@ -110,6 +111,10 @@ describe("pr-evidence.yml (#265)", () => {
 
   it("lets a body edit's run wait for the running one instead of cancelling it (B10-2)", () => {
     expect(entries(block(/^concurrency:$/, lines))["cancel-in-progress"]).toBe("false");
+  });
+
+  it("keeps every pending run in the queue instead of only the newest (B10-2a, #267)", () => {
+    expect(entries(block(/^concurrency:$/, lines)).queue).toBe("max");
   });
 
   it("runs pr-body.ts as the PR body job, with the title and body only in env: (r1/A-10)", () => {
