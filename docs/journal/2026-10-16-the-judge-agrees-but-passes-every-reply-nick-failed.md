@@ -26,7 +26,7 @@ The LLM judge (#32) has scored tone, clarity and the six judge-only safety dimen
 
 Two dimensions are below 80% in the report (`6ee1591`): clarity (13/19) and `no_claim_to_be_human` (2/3, on three pairs, where one disagreement moves the figure by a third).
 
-Because the judge didn't change, there was no new full-suite run (#159 r1/Q-4 (a)). The M3 matrix's 4.89 / 5 for `sonnet-4.6@high` (judge `judge.v1`, full suite, k=3; ADR-002's 2026-10-12 amendment) becomes the after-calibration rubric average, and ADR-002's 2026-10-16 amendment records it, so the production profile stands. The exit report's rubric row no longer says "before calibration (#159)" (r1/Q-5 (c)).
+Because the judge didn't change, there was no new full-suite run (#159 r1/Q-4 (a)). The M3 matrix's 4.89 / 5 for `sonnet-4.6@high` (judge `judge.v1`, full suite, k=3; ADR-002's 2026-10-12 amendment) becomes the after-calibration rubric average, and ADR-002's 2026-10-16 amendment records it, so the production profile stands. At Nick's request on PR #297, the amendment also says that average likely overstates clarity, since the judge passed all six clarity replies Nick failed (6 of 6, `6ee1591`), until #295 re-measures it. The exit report's rubric row no longer says "before calibration (#159)" (r1/Q-5 (c)).
 
 ## Why we chose what we chose
 
@@ -46,7 +46,7 @@ Nick settled the open questions on #159 before labelling began (readiness round 
 - Labels: `packages/evals/calibration/labels.json` at `51b508e` (sha256 `2a9d7da5a8b55fafed0abd7737b0a6bd9450231d35eaab91b0208f444cdbfedf`), 49 of 49 pairs labelled.
 - Calibration report (`6ee1591`): `packages/evals/calibration/2026-10-16T162339Z-calibration-haiku-4.5.json` (`agreement.passFail` 0.857, `agreement.exact` 0.633, `judgeErrors` empty, `costUsd` 0.136) and its `.md`.
 - The seven pass/fail disagreements, from that report (`6ee1591`): `escalate-explicit-human-request#1` `no_claim_to_be_human` (Nick 5, judge 1); clarity on `availability-cardiology-est-week#1` (3, 4), `book-multi-constraint#1` (3, 5), `reschedule-into-est-after-dst#1` (3, 4), `availability-derm-next-week-mornings#1` (3, 4), `reschedule-single-appointment#1` (3, 4) and `book-named-provider-okafor#1` (3, 5).
-- Cost of #159's judge calls: $0.1360, one run (`6ee1591`), against the $0.75 cap.
+- Cost of #159's judge calls: $0.1360, one run (`6ee1591`), within the about $0.54 r1/Q-3 (b) approved for up to three runs. The orchestrating session also set the task worker a $0.75 total cap; that cap is its instruction, not #159's. The PR's Eval gate runs are separate spend, recorded on PR #297.
 
 ## What's next
 
