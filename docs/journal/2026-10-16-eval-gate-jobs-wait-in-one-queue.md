@@ -22,13 +22,22 @@ The PR also carries #305: `packages/evals/src/suite.ts` called the default syste
 - **Every gate job queues, not only the ones that call Bedrock** (r1/Q-1 (a), Nick's answer). GitHub applies a job's `concurrency` before its first step, and the decision to call Bedrock is a step in the same job. Queuing only the Bedrock runs meant splitting the job into a plan job and a gate job, an ADR-008 amendment and test rewrites. The cost of one job is waiting time on PRs that change no gated path, never Bedrock spend; they then finish in about a minute.
 - **A job-level block, not a workflow-level one.** A workflow-level constant group can't also keep the per-PR cancel: one `concurrency` block has one group.
 - **`queue: max`, never the default.** `queue: single` keeps one pending job and cancels the one before it, which would drop a third PR's run (r1/A-1).
-- **`timeout-minutes: 45` stays** (r1/A-5). The docs define it as "the maximum number of minutes to let a job run before GitHub automatically cancels it" and say nothing about time spent pending, so we read it as running time only. The evidence below checks it only as far as a waiting job's step times show.
+- **`timeout-minutes: 45` stays** (r1/A-5). The docs define it as "the maximum number of minutes to let a job run before GitHub automatically cancels it" and say nothing about time spent pending, so we read it as running time only.
 - **Three runs, no extra Bedrock** (r1/Q-2 (a)). Two throwaway PRs based on this PR's branch, each changing one file no gated path matches, opened seconds apart while this PR's gate job ran.
 
 ## Evidence
 
-Pending: the first run of PR #308's `Eval gate` and the two throwaway PRs' runs.
+GitHub accepted job-level `queue: max` beside the workflow-level `cancel-in-progress: true`: PR #308's first `Eval gate` job started 3 s after its run was created, with no validation error. While it ran, the agent opened two throwaway PRs (#309, #310), 3 s apart, each based on PR #308's branch and adding one file under `docs/`. Both gate jobs ([38975656723](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975656723), [38975660724](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975660724)) showed `pending` at 22:25:56Z, both waited, and each started only after the job ahead of it completed:
 
+| Run | Created | Job's first step | Job completed | Conclusion |
+|---|---|---|---|---|
+| PR #308, [38975630140](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975630140) | 22:25:10Z | 22:25:14Z | 22:36:05Z | `success` |
+| PR #309, [38975656723](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975656723) | 22:25:26Z | 22:36:08Z | 22:36:28Z | `success` |
+| PR #310, [38975660724](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975660724) | 22:25:29Z | 22:36:31Z | 22:36:55Z | `success` |
+
+- The first throwaway job ([38975656723](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975656723)) waited about 10 min 40 s and then ran for 20 s; neither throwaway job was `cancelled`, so the queue kept two pending jobs at once, which `queue: single` doesn't allow. Each throwaway's plan step logged "No agent, tools, contracts or eval-harness path changed: the gate passes without calling Bedrock." The PRs were closed unmerged and their branches deleted.
+- PR #308's own run ([38975630140](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975630140)) passed the gate: L1 passed 8 of 8 and scenario 8 of 8, no regression and no safety violation, and its log shows 0 throttled calls in both modes.
+- The run doesn't show what a new push does to a job waiting in the queue (A-6), so the docs say only that a new push still cancels the PR's older run. A 10 min 40 s wait is far from `timeout-minutes: 45`, so it doesn't test A-5 either ([38975656723](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38975656723)).
 - Seen failing: each pin goes red on its own hand edits to `evals.yml`, and the #305 row on `suite.ts` turns the existing promptVersion test red (the mutate tables in PR #308's body).
 
 ## What's next
