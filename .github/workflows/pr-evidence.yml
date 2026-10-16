@@ -10,8 +10,10 @@
 # (scripts/pr-body.ts). Not a required check.
 # Concurrency (#265, B10-2): a body edit cancelled the running evidence run, and GitHub then refused PR #258's merge on
 # the cancelled required check (2026-10-13). With cancel-in-progress false, a new run no longer cancels the running
-# one; it waits, pending, until that run ends. GitHub's default queue still keeps one pending run per group, so a
-# newer run replaces (cancels) a pending one (docs.github.com, workflow syntax, `concurrency`, `queue: single`).
+# one; it waits, pending, until that run ends. With `queue: max` (#267, B10-2a), a newer run waits, pending, behind the
+# running one and any earlier pending ones, up to 100 per PR, first in, first out (GitHub Docs, "Workflow syntax for
+# GitHub Actions", `concurrency`). Each run checks the body of the edit that queued it, so the last run's result is the
+# one for the current body, and each body edit adds one full run of all three jobs.
 name: PR evidence
 
 on:
@@ -21,6 +23,7 @@ on:
 concurrency:
   group: pr-evidence-${{ github.event.pull_request.number }}
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
