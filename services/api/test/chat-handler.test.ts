@@ -231,13 +231,16 @@ describe("handlers/chat", () => {
     });
   });
 
-  it("sends the current system prompt (system.v5) with the patient's first name, and records its version", async () => {
+  it("sends the current system prompt with the patient's first name, and records its version", async () => {
     const { handler } = await import("../src/handlers/chat");
+    const { buildSystemPrompt } = await vi.importActual<typeof Agent>("@sched/agent");
 
     await invoke(handler);
     const system = JSON.stringify(llm.requests[0]?.system);
     expect(system).toContain("The patient's first name, from their profile: Maria.");
-    expect(aws.turns?.traces[0]?.trace.promptVersion).toBe("system.v5");
+    expect(aws.turns?.traces[0]?.trace.promptVersion).toBe(
+      buildSystemPrompt({ now: new Date("2026-10-05T13:00:00Z") }).version,
+    );
   });
 
   it("fails the cold start without SCHED_ENV", async () => {

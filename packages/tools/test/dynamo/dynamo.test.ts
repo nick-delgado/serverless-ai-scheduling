@@ -267,10 +267,11 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
     });
 
     /**
-     * Repositories whose first two `TransactWriteItems` are cancelled with `TransactionConflict` alone. The
-     * real service cancels a transaction that collides with another in-flight transaction on the same item;
-     * DynamoDB Local serializes transactions instead, so the cancellations are injected. `retries` counts
-     * the `onConflictRetry` calls (`BookingConflictRetries`, #38).
+     * Repositories whose first two `TransactWriteItems` are cancelled, each with `TransactionConflict` (the
+     * default) or the reason the `code` option names as the first `CancellationReasons` entry and `None`
+     * second. For the default, the real service cancels a transaction that collides with another in-flight
+     * transaction on the same item; DynamoDB Local serializes transactions instead, so the cancellations are
+     * injected. `retries` counts the `onConflictRetry` calls (`BookingConflictRetries`, #38).
      */
     function conflictingTwice(options: { hook: boolean; code?: string } = { hook: true }) {
       const flaky = localClient();
