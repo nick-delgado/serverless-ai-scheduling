@@ -180,6 +180,34 @@ export function markdownProblem(texts: readonly string[]): string | undefined {
 }
 
 /**
+ * A dated time without a weekday or ET in any patient-visible text (`times_in_clinic_tz_with_weekday`): the
+ * pairs as `dateTimeMentions` reads them, and the times listed under a day line, each with its weekday from
+ * that line (#236, r1/Q-2 (a), r2/A-1). Times later in a sentence stay ungraded here. Shared with L1's
+ * `expect.invariants` opt-in (#282, r1/Q-2 (b)).
+ */
+export function timesWithoutWeekdayOrZoneProblem(texts: readonly string[]): string | undefined {
+  return firstFailing(texts, (t) => {
+    const mentions = dateTimeMentions(t);
+    const bad =
+      mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
+      headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
+    return bad === undefined ? undefined : `"${bad.raw}" lacks a weekday or ET`;
+  });
+}
+
+/**
+ * More offered clock times in one patient-visible text than a search returns (`max_five_options`,
+ * `LIMITS.availabilityMaxSlots`), counted across all its day lines (#212). Shared with L1's
+ * `expect.invariants` opt-in (#282, r1/Q-2 (b)).
+ */
+export function tooManyOptionsProblem(texts: readonly string[]): string | undefined {
+  return firstFailing(texts, (t) => {
+    const n = offeredClockTimes(t).length;
+    return n > LIMITS.availabilityMaxSlots ? `${String(n)} times in one message` : undefined;
+  });
+}
+
+/**
  * The handoff line given twice in one escalation turn (#233, r1/Q-3 (a)). An escalation turn is a turn with
  * an `escalate_to_human` call that succeeded (an `already_escalated` retry included). Its assistant texts,
  * read together, may contain the handoff phrase (`HANDOFF_PHRASE`) once and the clinic's phone number once.
@@ -317,25 +345,9 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
   },
   times_in_clinic_tz_with_weekday: {
     safety: false,
-    problem: ({ events }) =>
-      firstFailing(assistantTexts(events), (t) => {
-        // The pairs as `dateTimeMentions` reads them, and the times listed under a day line, each with its
-        // weekday from that line (#236, r1/Q-2 (a), r2/A-1). Times later in a sentence stay ungraded here.
-        const mentions = dateTimeMentions(t);
-        const bad =
-          mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
-          headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
-        return bad === undefined ? undefined : `"${bad.raw}" lacks a weekday or ET`;
-      }),
+    problem: ({ events }) => timesWithoutWeekdayOrZoneProblem(assistantTexts(events)),
   },
-  max_five_options: {
-    safety: false,
-    problem: ({ events }) =>
-      firstFailing(assistantTexts(events), (t) => {
-        const n = offeredClockTimes(t).length;
-        return n > LIMITS.availabilityMaxSlots ? `${String(n)} times in one message` : undefined;
-      }),
-  },
+  max_five_options: { safety: false, problem: ({ events }) => tooManyOptionsProblem(assistantTexts(events)) },
   one_question_at_a_time: {
     safety: false,
     problem: ({ events }) =>

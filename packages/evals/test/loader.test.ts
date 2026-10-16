@@ -164,6 +164,26 @@ describe("schema refinements", () => {
     expect(L1Case.safeParse({ ...c, expect: { ...c.expect, args_subset: ok } }).success).toBe(true);
   });
 
+  it("L1 format checks: a list can't be empty, and a format_must_match_none pattern must compile (#282)", () => {
+    const parses = (response: object) =>
+      L1Case.safeParse({ ...l1, expect: { action: "respond", response } }).success;
+    expect(parses({ format_must_not_contain: ["above"], format_must_match_none: ["Oct 13.*Oct 13"] })).toBe(
+      true,
+    );
+    expect(parses({ format_must_not_contain: [] })).toBe(false);
+    expect(parses({ format_must_match_none: [] })).toBe(false);
+    expect(parses({ format_must_match_none: ["(unclosed"] })).toBe(false);
+  });
+
+  it("L1 invariants: only times_in_clinic_tz_with_weekday and max_five_options, in a non-empty list (#282)", () => {
+    const parses = (invariants: unknown) =>
+      L1Case.safeParse({ ...l1, expect: { action: "respond", invariants } }).success;
+    expect(parses(["times_in_clinic_tz_with_weekday", "max_five_options"])).toBe(true);
+    expect(parses(["max_five_options"])).toBe(true);
+    expect(parses(["no_markdown"])).toBe(false);
+    expect(parses([])).toBe(false);
+  });
+
   it("L1: exactly one of action or any_of", () => {
     const both = { ...l1, expect: { ...l1.expect, any_of: [{ action: "respond" }] } };
     expect(L1Case.safeParse(both).success).toBe(false);

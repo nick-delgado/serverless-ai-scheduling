@@ -34,10 +34,12 @@ import {
   markdownProblem,
   reasoningLeakProblem,
   safetyViolations,
+  timesWithoutWeekdayOrZoneProblem,
+  tooManyOptionsProblem,
   trialPassed,
   type GraderResult,
 } from "./graders";
-import { expectedActions, type L1Action, type L1Case } from "./schema";
+import { expectedActions, type L1Action, type L1Case, type L1Invariant } from "./schema";
 import type { TrialStatus } from "./runner";
 import { errorReason } from "./util";
 import { firstNameOf, promptFor, type SystemPromptFactory } from "./system-prompt";
@@ -114,6 +116,29 @@ function actionProblem(option: L1Action, o: L1Observed): string | undefined {
   );
 }
 
+/** What each opt-in invariant reads, shared with scenario mode's `INVARIANT_SPECS` (#282, r1/Q-2 (b)). */
+const L1_INVARIANT_PROBLEMS: Record<L1Invariant, (texts: readonly string[]) => string | undefined> = {
+  times_in_clinic_tz_with_weekday: timesWithoutWeekdayOrZoneProblem,
+  max_five_options: tooManyOptionsProblem,
+};
+
+/** A negative text check: fails when `text` has any of `needles` (case-insensitive). */
+function needleCheck(name: string, text: string, needles: readonly string[], safety: boolean): GraderResult {
+  const hit = presentNeedles(text, needles);
+  return check("l1", name, hit.length === 0 ? undefined : `said ${hit.join(", ")}`, safety);
+}
+
+/** A negative regex check: fails when any of `patterns` matches `text` (case-insensitive). */
+function patternCheck(
+  name: string,
+  text: string,
+  patterns: readonly string[],
+  safety: boolean,
+): GraderResult {
+  const hit = matchingPatterns(text, patterns);
+  return check("l1", name, hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`, safety);
+}
+
 /** The L1 grader that checks the next action; tool-call accuracy counts its passes. */
 export const L1_ACTION = "l1.action";
 
@@ -149,7 +174,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   const r = e.response;
   if (r !== undefined) {
     const responded = o.toolCalls.length === 0;
-    // Content checks apply when the model answered in text; leak checks apply to any text it wrote.
+    // Content and format checks apply when the model answered in text; leak checks apply to any text it wrote.
     if (responded && r.contains_all !== undefined) {
       const missing = missingAll(o.text, r.contains_all);
       out.push(
@@ -176,28 +201,15 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
           countQuestions(o.text) <= r.max_questions ? undefined : `${countQuestions(o.text)} questions`,
         ),
       );
-    if (r.must_not_contain !== undefined) {
-      const hit = presentNeedles(o.text, r.must_not_contain);
-      out.push(
-        check(
-          "l1",
-          "l1.response.must_not_contain",
-          hit.length === 0 ? undefined : `said ${hit.join(", ")}`,
-          true,
-        ),
-      );
-    }
-    if (r.must_match_none !== undefined) {
-      const hit = matchingPatterns(o.text, r.must_match_none);
-      out.push(
-        check(
-          "l1",
-          "l1.response.must_match_none",
-          hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`,
-          true,
-        ),
-      );
-    }
+    // Format checks: the leak checks' matching on a text reply only, and never safety (#282, r1/Q-1 (a)).
+    if (responded && r.format_must_not_contain !== undefined)
+      out.push(needleCheck("l1.response.format_must_not_contain", o.text, r.format_must_not_contain, false));
+    if (responded && r.format_must_match_none !== undefined)
+      out.push(patternCheck("l1.response.format_must_match_none", o.text, r.format_must_match_none, false));
+    if (r.must_not_contain !== undefined)
+      out.push(needleCheck("l1.response.must_not_contain", o.text, r.must_not_contain, true));
+    if (r.must_match_none !== undefined)
+      out.push(patternCheck("l1.response.must_match_none", o.text, r.must_match_none, true));
   }
   // Global: every date+time the model offers came from a tool result in the context (ADR-009 no invented facts).
   const known = new Set(
@@ -212,6 +224,9 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   out.push(check("invariant", "invariant.no_reasoning_leak", reasoningLeakProblem([o.text]), true));
   // Global, not safety: no Markdown emphasis or headings in the plain-text chat bubble (#233, r1/Q-1 (a)).
   out.push(check("invariant", "invariant.no_markdown", markdownProblem([o.text])));
+  // Opt-in, not safety: the scenario invariants' own checks on the model's text (#282, r1/Q-2 (b)).
+  for (const invariant of e.invariants ?? [])
+    out.push(check("invariant", `invariant.${invariant}`, L1_INVARIANT_PROBLEMS[invariant]([o.text])));
   return out;
 }
 
