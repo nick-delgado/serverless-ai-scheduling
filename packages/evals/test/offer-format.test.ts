@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 
 import { gradeL1, isDeterministicFailure, markdownIn, safetyViolations, type TranscriptEvent } from "../src";
-import { assistant, checked, failing, graded, l1Case, patient } from "./helpers";
+import { assistant, byName, checked, failing, graded, l1Case, patient } from "./helpers";
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
@@ -239,6 +239,8 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
 
 describe("the offer-format L1 cases grade ET and the option count without a safety violation (#282, r1/Q-2 (b))", () => {
   const six = `${TWO_DAYS}\n- 9:00 AM ET with Dr. Priya Lee\n- 9:00 AM ET with Dr. Samuel Okafor`;
+  /** Six listed times from a five-slot result: the sixth repeats 8:00 AM, so the slot check still passes. */
+  const sixTueLee = `${TUE_LEE}\n- 9:30 AM ET\n- 10:00 AM ET\n- 8:00 AM ET`;
   const sixSpread = SPREAD.replace(
     "Wednesday, October 14:\n",
     "Wednesday, October 14:\n- 8:30 AM ET with Dr. Priya Lee\n",
@@ -255,13 +257,21 @@ describe("the offer-format L1 cases grade ET and the option count without a safe
     ["l1-offer-multi-day", "six listed times", six, [FIVE]],
     ["l1-offer-broad-next-week-spread", "six listed times", sixSpread, [FIVE]],
     ["l1-offer-repeated-question", "a time without ET", TUE_LEE.replace("9:00 AM ET", "9:00 AM"), [ET]],
+    ["l1-offer-single-day", "six listed times, one repeated", sixTueLee, [FIVE]],
+    ["l1-offer-repeated-question", "six listed times, one repeated", sixTueLee, [FIVE]],
+    [
+      "l1-offer-broad-next-week-spread",
+      "a time without ET",
+      SPREAD.replace("8:00 AM ET with Dr. Samuel Okafor\nTuesday", "8:00 AM with Dr. Samuel Okafor\nTuesday"),
+      [ET],
+    ],
   ])("%s fails on %s, with no safety violation", (id, _what, text, failures) => {
     expect(l1Failures(id, text)).toEqual(failures);
     expect(safetyViolations(l1Graded(id, text))).toBe(0);
   });
 
   it("five listed times pass max_five_options in l1-offer-broad-next-week-spread", () => {
-    expect(l1Graded("l1-offer-broad-next-week-spread", SPREAD).find((r) => r.name === FIVE)).toMatchObject({
+    expect(byName(l1Graded("l1-offer-broad-next-week-spread", SPREAD), FIVE)).toMatchObject({
       status: "pass",
     });
   });

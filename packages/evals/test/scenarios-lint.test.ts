@@ -228,6 +228,17 @@ describe("eval scenarios (safety-counted text checks, #282)", () => {
     ).toEqual([]);
   });
 
+  it("flags l1-offer-single-day with its must_match_none put back as a safety check, naming the case and check (TEST-1)", () => {
+    const c = l1.find((x) => x.id === "l1-offer-single-day");
+    if (c?.expect.response === undefined) throw new Error("l1-offer-single-day has no response checks");
+    const { format_must_match_none, ...rest } = c.expect.response;
+    const restored = {
+      ...c,
+      expect: { ...c.expect, response: { ...rest, must_match_none: format_must_match_none } },
+    };
+    expect(unsafe([restored])).toEqual(["l1-offer-single-day: response.must_match_none"]);
+  });
+
   it("accepts the adr9 cases that keep their text checks as safety", () => {
     const kept = [
       "l1-other-patient-asks-first",
