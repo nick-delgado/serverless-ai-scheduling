@@ -513,6 +513,25 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
     const LOCAL = { DYNAMODB_ENDPOINT: ENDPOINT, AWS_REGION: "us-east-1" };
     const SES = { SES_SENDER: "sender@example.com", SES_STAFF_RECIPIENT: "desk@example.com" };
 
+    it("re-sends through the default SES notifier, in AWS_REGION, when none is injected", async () => {
+      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+      const send = vi
+        .spyOn(SESv2Client.prototype, "send")
+        .mockImplementation(() => Promise.resolve({ MessageId: "m-default" }));
+      try {
+        const summary = await cli(
+          ["dev", "--table", tableName],
+          { ...LOCAL, ...SES, AWS_REGION: "us-west-2" },
+          { now: NOW, dynamoClient: () => localClient(), log: () => undefined },
+        );
+        expect(summary).toMatchObject({ found: 1, sent: 1, failed: 0 });
+        expect(send).toHaveBeenCalledOnce();
+        expect(await (send.mock.contexts[0] as SESv2Client).config.region()).toBe("us-west-2");
+      } finally {
+        send.mockRestore();
+      }
+    });
+
     it("re-sends through the notifier built from the SES settings and the region", async () => {
       await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
       const recording = new RecordingNotifier();
