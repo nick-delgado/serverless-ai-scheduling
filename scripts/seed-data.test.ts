@@ -15,7 +15,7 @@ import {
   ListTablesCommand,
   waitUntilTableExists,
 } from "@aws-sdk/client-dynamodb";
-import type { SSMClient } from "@aws-sdk/client-ssm";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import {
   type BatchWriteCommandInput,
   DeleteCommand,
@@ -277,7 +277,7 @@ describe("resolveTable", () => {
     const ssm = ssmFactory();
     const local = { DYNAMODB_ENDPOINT: "http://localhost:8001" };
     await expect(resolveTable(local, "pr1", undefined, ssm.ssmClient)).rejects.toThrow(
-      "DYNAMODB_ENDPOINT is set: pass --table <name> for the local table",
+      /^DYNAMODB_ENDPOINT is set: pass --table <name> for the local table$/,
     );
     await expect(resolveTable(local, "pr1", "t-local", ssm.ssmClient)).resolves.toEqual({
       region: "us-east-1",
@@ -628,6 +628,23 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
       );
       expect(ssm.regions).toEqual(["eu-west-1"]);
       expect(clientArgs).toEqual([["eu-west-1", undefined]]);
+    });
+
+    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
+      const send = vi.spyOn(SSMClient.prototype, "send").mockImplementation((command) =>
+        Promise.resolve({
+          Parameter: {
+            Value: (command.input as { Name?: string }).Name === "/sched/dev/data/table-name" ? table : POOL,
+          },
+        }),
+      );
+      try {
+        await runCli(["--env", "dev", "--mapping", mappingFile], { AWS_REGION: "eu-west-1" }, deps);
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(await (send.mock.contexts[0] as SSMClient).config.region()).toBe("eu-west-1");
+      } finally {
+        send.mockRestore();
+      }
     });
 
     it("refuses --reset with no terminal and no --confirm, or a wrong --confirm", async () => {

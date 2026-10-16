@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { type SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
-import type { SSMClient } from "@aws-sdk/client-ssm";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { type ConversationMessage, type Escalation, type EscalationReason } from "@sched/contracts";
 import { EXAMPLES } from "@sched/contracts/testing";
@@ -606,6 +606,24 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
         input: { Name: "/sched/pr52/data/table-name" },
       });
       expect(summary.found).toBe(1);
+    });
+
+    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
+      const send = vi
+        .spyOn(SSMClient.prototype, "send")
+        .mockImplementation(() => Promise.resolve({ Parameter: { Value: tableName } }));
+      try {
+        const summary = await cli(
+          ["pr52", "--dry-run"],
+          { AWS_REGION: "us-east-2" },
+          { now: NOW, dynamoClient: () => localClient(), log: () => undefined },
+        );
+        expect(summary.found).toBe(0);
+        expect(send).toHaveBeenCalledOnce();
+        expect(await (send.mock.contexts[0] as SSMClient).config.region()).toBe("us-east-2");
+      } finally {
+        send.mockRestore();
+      }
     });
 
     it("builds no notifier in a dry run, even with the SES settings", async () => {
