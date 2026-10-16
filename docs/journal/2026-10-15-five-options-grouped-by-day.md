@@ -22,8 +22,9 @@ Left open by the spec, and decided by the agent:
 
 - **"Five weekdays" is written as a word, not tied to `LIMITS.availabilityMaxSlots`.** The two fives are different quantities (days searched, options shown), and tying them would change the search rule if the option limit ever moved.
 - **The lead-in carries no date, with a worked example in the prompt.** The first wording ("name the provider once, before the list") let the model write "Dr. Priya Lee has these openings on Tuesday, October 13:" and then the day line, so the date appeared twice. Saying "a line before the list that gives no date" alone didn't fix it either. A complete example ("Dr. Lee has these openings:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line) brought `l1-offer-single-day` to 3 of 4 trials. A stronger sentence ("never in the line before the list, even when the patient asked about that day") did no better (2 of 3), so we kept the shorter wording. When the patient names the day, the model still sometimes repeats it in the lead-in. The alternative was to accept the date in the lead-in, which is the form Nick reported.
-- **A broad request's per-day searches set both `start_date` and `end_date` to that day.** r1/Q-1 (a) says "one call per weekday", and this is the call the new searches case expects.
-- **The prompt says which replies keep the full `start_local`** (a restatement, a confirmation, a list of the patient's appointments; non-goal 1), so the format rule doesn't reach the confirmation checks.
+- **A broad request's per-day searches set both `start_date` and `end_date` to that day.** r1/Q-1 (a) says "one call per weekday", and this is the call the new searches case expects. The alternative, leaving the call's shape to the model, would have let a call over the rest of the week count as "that day's" search.
+- **The prompt says which replies keep the full `start_local`** (a restatement, a confirmation, a list of the patient's appointments; non-goal 1), so the format rule doesn't reach the confirmation checks. The alternative, leaving non-goal 1 unsaid, risked the model grouping a confirmation too, which every confirmation case's `contains_all` of the full `start_local` would fail.
+- **The new L1 cases carry only r1/Q-4 (a)'s checks.** The first version added two `must_match_none` patterns of the agent's own (a time without ET, a sixth clock time). L1 counts `must_match_none` as a safety check, so an FR-035 formatting miss would have become a safety violation, which PRD §7 says it isn't. Nick chose to drop them (PR #283's review, decision f399c7f/SPEC-1 (a)), so ET and the option count stay ungraded in these L1 cases until #282. The alternative was keeping both until #282 moves them to a non-safety check.
 - **The slot tests' `graded` and `checked` helpers moved to `packages/evals/test/helpers.ts`**, so the new grader tests share them instead of copying them.
 
 ## What surprised us
@@ -44,5 +45,6 @@ Left open by the spec, and decided by the agent:
 
 ## What's next
 
-- #282: a non-safety negative check for L1 format cases.
+- #282: a non-safety negative check for L1 format cases, which can bring back the ET and option-count checks.
+- #284: the lead-in that repeats the day the patient named (`l1-offer-single-day`, 3 of 4 trials).
 - The baselines still record `system.v3`; the gate only warns about the version until the next re-record (non-goal 2).
