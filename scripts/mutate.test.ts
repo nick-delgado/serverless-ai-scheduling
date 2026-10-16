@@ -794,17 +794,31 @@ describe("main", () => {
 
   // The started process exits 0 at once (sh, the escaper), while what it started outlives the 2 s timeout: the
   // checker in sh's group (killed at the timeout; the after-each check sees it gone), or the escaped grandchild (10 s).
+  // sh first prints a line, which the report shows: the output from before the timeout.
   it.each([
-    { what: "a process left in its group", unedited: "slow\n", cmd: () => checkerAfterSh(), pidFile: "sh.pid" },
-    { what: "a process that left its group", unedited: "escape\n", cmd: () => escaping(10_000), pidFile: "first.pid" },
+    {
+      what: "a process left in its group",
+      unedited: "slow\n",
+      cmd: () => ["sh", "-c", `echo printed before the timeout; ${checkerAfterSh()[2] ?? ""}`],
+      pidFile: "sh.pid",
+      printed: "printed before the timeout",
+    },
+    {
+      what: "a process that left its group",
+      unedited: "escape\n",
+      cmd: () => escaping(10_000),
+      pidFile: "first.pid",
+      printed: "nothing was mutated.",
+    },
   ])(
     "mutates nothing and exits 2 when the unedited run times out after its started process exited 0, with $what",
-    async ({ unedited, cmd, pidFile }) => {
+    async ({ unedited, cmd, pidFile, printed }) => {
       writeFileSync(join(dir, "target.txt"), unedited);
       const edits = editsFile([{ id: "a", file: "target.txt", find: unedited.trim(), replace: "bad" }]);
       const code = await main([edits, "--timeout", "2", "--", ...cmd()], deps());
       expect(errors[0]).toContain("the unedited run timed out after 2 s (--timeout); nothing was mutated");
       expect(errors[0]).not.toContain("failed");
+      expect(errors[0]).toContain(printed);
       expect(code).toBe(2);
       expect(out).toEqual([]);
       expect(target()).toBe(unedited);
