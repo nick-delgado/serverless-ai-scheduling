@@ -13,7 +13,7 @@ An agent (Claude, as #287's task worker) built the ten approved items, after Nic
 - **`PR body` reads the Deferred section.** `scripts/pr-body.ts` fails a list item under `## Deferred / follow-ups` that names no `#<N>` and doesn't say "to file". It shares one section reader with the "Decisions the spec left open" rule, so both skip HTML comments and fenced blocks the same way.
 - **`--suggest` gains three kinds.** `regex-class-member` removes each member of a character class with two or more members, `regex-anchor` removes each `\b`, `^` and `$` outside a class, and `swap-guard` swaps two adjacent guards (an `if` with no `else` that ends in `return` or `throw`, braceless or as a block; r1/Q-1 (b)).
 - **Every `expect` name must go red.** `mutate` reads a KILLED edit as KILLED-OTHER unless each name in its `expect` matches a failed test.
-- **One failed test per table row.** The `--markdown` Failed-tests cell shows the test `expect` matched (else the first failed test) and `(+<n> more)`. The progress lines and `--json` keep them all.
+- **One failed test per table row.** The `--markdown` Failed-tests cell shows the first failed test an `expect` name matches (else the first failed test), with `(+<n> more)` when other tests failed. The progress lines and `--json` keep them all.
 - **The README's coverage rows list their cases.** `scenarios-lint.test.ts` fails when an L1 case that covers one of FR-030…FR-037, or one of the ADR-009 policy keys (Nick's correction to r1/A-12), isn't named as a code span in that row.
 - The docs: a decision's rejected alternative is something to break (`CLAUDE.md`), any count a branch's run produced names its commit (`dev-journal`), building beyond a decision's text is a departure (`task-workflow` step 4 and the PR template's comment, r1/Q-4 (b)), and a browser check is one a session has no browser tool for (`task-worker`, `task-workflow` step 7).
 
@@ -35,7 +35,7 @@ The issue's "Decisions and clarifications" settled the matchers. These are the d
 
 ## Evidence
 
-- Seen failing: the `npm run mutate -- … --markdown` tables in PR #288's body (`--suggest` against `origin/main`, plus hand edits with `-h` ids; the PR body names which decision's rejected alternative each one breaks).
+- Seen failing: the `npm run mutate -- … --markdown` tables in PR #288's body (`--suggest` against `origin/main`, plus hand edits with `-h` ids; the PR body names what each one breaks, a decision's rejected alternative or a rule).
 - The new lint tests, before the README fix (`506bf1c`), reported FR-031 without `l1-book-confirmed-plain-text`, `adr9.confirm-before-write` without the same case, `adr9.no-invented-facts` without `l1-book-after-explicit-yes`, and each `l1-escalate-*` case missing from `adr9.escalation`, whose cell named them by glob.
 
 ## What's next
