@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #159, #32, #37, #295, #296, ADR-002 (amendment 2026-10-16), ADR-008, PRD §7
+**Related:** #159, PR #297, #32, #37, #295, #296, ADR-002 (amendment 2026-10-16), ADR-008, PRD §7
 
 ## What happened
 
