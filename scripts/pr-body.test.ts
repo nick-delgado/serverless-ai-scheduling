@@ -156,13 +156,14 @@ describe("unfiledDeferrals", () => {
     ).toEqual([]);
   });
 
-  it("fails each item without one, None, a URL with no #, to filed and a sub-item under a linked item", () => {
+  it("fails each item without one, None, a URL with no #, a # with no digit, to filed and a sub-item under a linked item", () => {
     expect(
       unfiledDeferrals(
         body(
           "- None",
           "- the ADR rows https://github.com/o/r/issues/284",
           "- one to filed later",
+          "- see #TBD",
           "- #284: x",
           "  - detail",
           "  continued #285",
@@ -173,6 +174,7 @@ describe("unfiledDeferrals", () => {
       "- None",
       "- the ADR rows https://github.com/o/r/issues/284",
       "- one to filed later",
+      "- see #TBD",
       "- detail",
       "12) into file",
     ]);
