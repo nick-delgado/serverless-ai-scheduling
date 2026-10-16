@@ -1,13 +1,14 @@
 /**
- * scripts/pr-body.ts: the title rule against merged PR titles and broken ones, the `Refs`/closing-keyword rule and the
- * decisions-section rule against hand-written bodies (the PR template's own section among them), and `main`'s exit codes.
+ * scripts/pr-body.ts: the title rule against merged PR titles and broken ones, the `Refs`/closing-keyword rule, the
+ * decisions-section rule and the Deferred-section rule (#287, B11-1) against hand-written bodies (the PR template's own
+ * sections among them), and `main`'s exit codes.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { decisionItems, main, problems, refsAndCloses, titleOk } from "./pr-body";
+import { decisionItems, main, problems, refsAndCloses, titleOk, unfiledDeferrals } from "./pr-body";
 import { logsTo, withConsole } from "./test/git-repo";
 
 /** `.github/pull_request_template.md`, whose decisions section must pass. */
@@ -127,6 +128,69 @@ describe("decisionItems", () => {
   });
 });
 
+describe("unfiledDeferrals", () => {
+  const body = (...section: string[]) =>
+    ["## Summary", "", "- a list elsewhere", "", "## Deferred / follow-ups", "", ...section].join("\n");
+
+  it("passes the PR template's own section, None, an empty section, prose and a body without the section", () => {
+    expect(unfiledDeferrals(TEMPLATE)).toEqual([]);
+    expect(unfiledDeferrals(body("None."))).toEqual([]);
+    expect(unfiledDeferrals(body("None"))).toEqual([]);
+    expect(unfiledDeferrals(body())).toEqual([]);
+    expect(unfiledDeferrals(body("We left the README rows for later."))).toEqual([]);
+    expect(unfiledDeferrals("## Summary\n- a list")).toEqual([]);
+  });
+
+  it("passes an item naming #<N> anywhere, a checkbox item, and one that says to file in any case", () => {
+    expect(
+      unfiledDeferrals(
+        body(
+          "- #284: x",
+          "* see PR #283",
+          "+ [o/r#38](https://x)",
+          "1. a b #7",
+          "- [ ] #12 y",
+          "- To file: z",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails each item without one, None, a URL with no #, to filed and a sub-item under a linked item", () => {
+    expect(
+      unfiledDeferrals(
+        body(
+          "- None",
+          "- the ADR rows https://github.com/o/r/issues/284",
+          "- one to filed later",
+          "- #284: x",
+          "  - detail",
+          "  continued #285",
+          "12) into file",
+        ),
+      ),
+    ).toEqual([
+      "- None",
+      "- the ADR rows https://github.com/o/r/issues/284",
+      "- one to filed later",
+      "- detail",
+      "12) into file",
+    ]);
+  });
+
+  it("ends the section at the next ## heading, not ### or **Departs from, and runs to the end, footer included", () => {
+    expect(unfiledDeferrals(body("None.", "## Docs", "- [ ] ADR"))).toEqual([]);
+    expect(unfiledDeferrals(body("### More", "**Departs from x", "- a"))).toEqual(["- a"]);
+    expect(unfiledDeferrals(body("- #1 x", "", "- footer"))).toEqual(["- footer"]);
+  });
+
+  it("skips lines in an HTML comment and a fenced block, CRLF bodies included", () => {
+    const section = ["<!-- - a -->", "<!--", "- b", "-->", "```", "- c", "```", "- e"];
+    expect(unfiledDeferrals(body(...section))).toEqual(["- e"]);
+    expect(unfiledDeferrals(body(...section).replaceAll("\n", "\r\n"))).toEqual(["- e"]);
+  });
+});
+
 describe("problems", () => {
   it("names each problem, and none for a good title and body", () => {
     const body = `Refs #38\ncloses #38\n\n## Decisions the spec left open\n\n- one\n- two\n`;
@@ -141,6 +205,14 @@ describe("problems", () => {
     expect(problems("fix(x): y (#1)", "## Decisions the spec left open\n- one")).toEqual([
       'body: "## Decisions the spec left open" holds a list (- one); list the decisions once, in the journal ' +
         'entry\'s "Why we chose", and link it there.',
+    ]);
+  });
+
+  it("names each Deferred item with no issue", () => {
+    expect(problems("fix(x): y (#1)", "## Deferred / follow-ups\n- a\n- #2 b\n- c")).toEqual([
+      'body: "## Deferred / follow-ups" item "- a" names no issue; file one and link its #<N>, or write "to file" ' +
+        "and report it (task-workflow step 7).",
+      expect.stringMatching(/^body: "## Deferred \/ follow-ups" item "- c" names no issue/),
     ]);
   });
 });

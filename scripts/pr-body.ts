@@ -1,6 +1,7 @@
 /**
- * PR body check (#265, B10-1; from the reviews of PRs #253 and #255, STD-1, #261, VER-1, and #254 and #258, STD-2): the
- * PR's title and body follow `task-workflow` step 7 and `.github/pull_request_template.md`.
+ * PR body check (#265, B10-1; from the reviews of PRs #253 and #255, STD-1, #261, VER-1, and #254 and #258, STD-2; the
+ * Deferred rule from #287, B11-1, after #266 STD-3, #283 STD-1 and #285 STD-3): the PR's title and body follow
+ * `task-workflow` step 7 and `.github/pull_request_template.md`.
  *
  *   tsx scripts/pr-body.ts      (the title comes from PR_TITLE, the body from PR_BODY)
  *
@@ -16,7 +17,13 @@
  *   - the `## Decisions the spec left open` section, from that exact line to a line starting `**Departs from` or the
  *     next line starting `## `, holds a list item: a line starting, after any indentation, with `- `, `* `, `+ `, or
  *     digits followed by `. ` or `) `, outside an HTML comment and a fenced code block (r1/Q-6 (a)). The template asks
- *     for one list, in the journal entry, linked from here ("a second list drifts"); `None` or a link passes.
+ *     for one list, in the journal entry, linked from here ("a second list drifts"); `None` or a link passes;
+ *   - the `## Deferred / follow-ups` section, from that exact line to the next line starting `## ` (or the body's end,
+ *     footer included), holds a list item, read the same way, that names no `#<N>` and doesn't say `to file`
+ *     (`task-workflow` step 7). Each marker line is tested on its own text (r1/Q-3 (a)): a continuation line is no
+ *     item, and a sub-item needs its own number. `#` and a digit anywhere in the item count (`PR #283`, `o/r#38`, a
+ *     link's text), while a URL ending `/issues/284` without one doesn't, a gap (r1/A-3); `to file` matches in any
+ *     case as whole words (r1/A-2). `- None` fails, bare `None` passes (r1/A-4), and prose isn't read (r1/A-5).
  * It doesn't read commit messages, and doesn't require a `Closes` or `Refs` line. GitHub sends no body for an empty
  * description, so an unset `PR_BODY` is an empty body.
  *
@@ -53,16 +60,22 @@ export function refsAndCloses(body: string): string[] {
 }
 
 const DECISIONS_HEADING = "## Decisions the spec left open";
+const DEFERRED_HEADING = "## Deferred / follow-ups";
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)]) /;
 const FENCE = /^\s*(?:```|~~~)/;
+/** What passes a Deferred item: an issue number, or the words "to file". */
+const NAMES_ISSUE = /#\d|\bto file\b/i;
 
-/** The list items in `body`'s "Decisions the spec left open" section, outside HTML comments and fenced blocks. */
-export function decisionItems(body: string): string[] {
+/**
+ * The list items in `body`'s section that starts at the exact line `heading` and ends before the first later line
+ * `isEnd` accepts (or at the body's end), outside HTML comments and fenced blocks.
+ */
+function sectionItems(body: string, heading: string, isEnd: (line: string) => boolean): string[] {
   const lines = body.split(/\r?\n/);
-  const start = lines.indexOf(DECISIONS_HEADING);
+  const start = lines.indexOf(heading);
   if (start === -1) return [];
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => line.startsWith("**Departs from") || line.startsWith("## "));
+  const end = rest.findIndex(isEnd);
   const section = (end === -1 ? rest : rest.slice(0, end)).join("\n").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
   const items: string[] = [];
   let fenced = false;
@@ -72,6 +85,20 @@ export function decisionItems(body: string): string[] {
   }
   return items;
 }
+
+/** The list items in `body`'s "Decisions the spec left open" section, outside HTML comments and fenced blocks. */
+export const decisionItems = (body: string): string[] =>
+  sectionItems(
+    body,
+    DECISIONS_HEADING,
+    (line) => line.startsWith("**Departs from") || line.startsWith("## "),
+  );
+
+/** The list items in `body`'s "Deferred / follow-ups" section that name no `#<N>` and don't say "to file". */
+export const unfiledDeferrals = (body: string): string[] =>
+  sectionItems(body, DEFERRED_HEADING, (line) => line.startsWith("## ")).filter(
+    (item) => !NAMES_ISSUE.test(item),
+  );
 
 /** Each problem with `title` and `body`, as a line to print; empty when both pass. */
 export function problems(title: string, body: string): string[] {
@@ -91,6 +118,11 @@ export function problems(title: string, body: string): string[] {
     found.push(
       `body: "${DECISIONS_HEADING}" holds a list (${items.join(" / ")}); list the ` +
         `decisions once, in the journal entry's "Why we chose", and link it there.`,
+    );
+  for (const item of unfiledDeferrals(body))
+    found.push(
+      `body: "${DEFERRED_HEADING}" item "${item}" names no issue; file one and link its #<N>, or write ` +
+        `"to file" and report it (task-workflow step 7).`,
     );
   return found;
 }
