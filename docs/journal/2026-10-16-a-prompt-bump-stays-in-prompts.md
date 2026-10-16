@@ -6,7 +6,7 @@
 
 ## What happened
 
-The v3→v4 bump (`1a2bb07`) and PR #294's v4→v5 bump each edited the same eight files. Three were in `packages/agent/src/prompts/`; the other five were outside it, and none of those five changed behaviour. They renamed version-suffixed re-exports that nothing imported, and rewrote the literal `"system.vN"` pins and comments in two evals tests, the chat-handler test and the evals harness's header. Four more bumps are queued (#234, #251, #284, #293). Each would have repeated that work and conflicted with the others on the same lines. PR #294's review flagged it, and Nick filed #299.
+The v3→v4 bump (`1a2bb07`) and PR #294's v4→v5 bump each edited the same eight files. Three were in `packages/agent/src/prompts/`: the two version files, and `index.ts`, which renamed version-suffixed re-exports that nothing imported. The other five were outside `prompts/`, and none of their edits changed behaviour. Each rewrote a literal `"system.vN"` pin, a comment or a test name: `packages/evals/test/suite.test.ts`, `packages/evals/test/system-prompt.test.ts`, `packages/evals/test/calibration.test.ts`, `services/api/test/chat-handler.test.ts` and the harness's header in `packages/evals/src/system-prompt.ts`. Four more bumps are queued (#234, #251, #284, #293). Each would have repeated that work and conflicted with the others on the same lines. PR #294's review flagged it, and Nick filed #299.
 
 The agent made three changes in `d8bcbf8`:
 - `prompts/index.ts` drops the four re-exports nothing imports (`ESCALATION_MESSAGE`, `SYSTEM_PROMPT_V5_VERSION`, `renderSystemPromptV5Dynamic`, `systemPromptV5`). It keeps `buildSystemPrompt` and `type SystemPromptContext`, and its header now says a bump changes only files in that directory.
@@ -23,6 +23,7 @@ The readiness review settled most of it. Nick took no guard test (r1/Q-1 (a)), s
 
 - **Which date the derived pins pass.** A-3 says to build the prompt with "the file's date", but `suite.test.ts` and `chat-handler.test.ts` have no date constant. The agent passes `2026-10-05T13:00:00Z`, the date `calibration.test.ts` and `system-prompt.test.ts` already use. The version doesn't depend on the date. A new shared constant was the alternative, and it was rejected because the only shared helper file (`packages/evals/test/helpers.ts`) belongs to #296.
 - **`export type { SystemPromptContext }` rather than a one-item `export { type … }` block.** It is the shorter form of the same re-export, and lint accepts both.
+- **The harness header drops `#249` too (Nick's decision on PR #302's review, `fd7c85b/SPEC-1` (b)).** r1/A-4 dropped only "currently `system.v5`," from `packages/evals/src/system-prompt.ts`'s header, and the agent kept "#249". The review found that every bump had rewritten that issue number along with the version, and #284's owned paths won't let the next bump touch the line. The parenthesis now reads "(`buildSystemPrompt`, #16)", like `calibration.test.ts`'s comment. Keeping `#249` as a historical citation was the alternative.
 - **The header sentence (r1/A-7 suggested it).** It names `system.vN.test.ts` as the home of the one literal pin, so the next bump's agent knows which test should go red.
 
 ## What surprised us
