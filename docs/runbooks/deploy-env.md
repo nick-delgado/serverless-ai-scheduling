@@ -2,7 +2,7 @@
 
 This deploys a complete environment, `sched-<env>-*`, in an AWS account that is already set up (`aws-setup.md`, steps 1–8), checks that it works, and tears it down when it's no longer needed. It's the procedure FR-050 asks for: a new environment from this runbook alone. An agent or Nick runs it, as `sched-dev`.
 
-Region: **us-east-1** throughout. Every command runs from the root of the checkout you deploy (the main checkout or a worktree under `.worktrees/`); `scripts/deploy.sh` and `scripts/deploy-web.sh` deploy the checkout they live in.
+Region: **us-east-1** throughout. The commands are for bash or zsh (the macOS default shell). Every command runs from the root of the checkout you deploy (the main checkout or a worktree under `.worktrees/`); `scripts/deploy.sh` and `scripts/deploy-web.sh` deploy the checkout they live in.
 
 ## Which env
 
@@ -24,7 +24,7 @@ If it prints stacks you didn't create in this task, stop and ask Nick. For `dev`
 
 ## Prerequisites
 
-1. **Tools:** the AWS CLI, the SAM CLI and `cfn-lint` (`aws-setup.md`, step 1), Node 24 (`nvm use`, from `.nvmrc`), `jq` and `curl`.
+1. **Tools:** the AWS CLI, the SAM CLI and `cfn-lint` (`aws-setup.md`, step 1), `curl`, and Node 24 or later on the machine (`node --version`). `.nvmrc` says 24, the version CI uses, so with a version manager run `nvm use`; without one, Homebrew's current Node (26 on 2026-10-16) runs every step here. The Lambda runtime doesn't depend on it: the templates pin `nodejs24.x`, and esbuild bundles for `node24`.
 2. **Dependencies:** `npm ci` in the checkout.
 3. **Credentials:** `aws sso login --profile sched-dev`, then `aws sts get-caller-identity --profile sched-dev`. A session lasts 8 hours; every script stops with "missing or expired" when it ends.
 4. **The main checkout's git-ignored `.env`** (`.env.example` lists the keys; values never go in a commit, an issue or a PR):
@@ -67,16 +67,16 @@ date -u +%FT%TZ
 aws cloudformation describe-stacks --profile sched-dev --region us-east-1 \
   --query "Stacks[?starts_with(StackName, 'sched-$env-')].[StackName,StackStatus]" --output text   # four rows: CREATE_COMPLETE (or UPDATE_COMPLETE)
 domain="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/$env/web/domain" --query Parameter.Value --output text)"
-for path in chat login; do curl -sI "https://$domain/$path" | grep -iE '^(HTTP/|content-type)'; done   # 200, text/html
+for page in chat login; do curl -sI "https://$domain/$page" | grep -iE '^(HTTP/|content-type)'; done   # 200, text/html
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "https://$domain/api/chat" -H 'content-type: application/json' -d '{}'   # 401
 npx tsx scripts/seed-users.ts --env "$env" --env-file "$main/.env" --verify    # one "verified" line per patient (.env.demo for demo)
 ```
 
 - `/chat` and `/login` must be `200` with `content-type: text/html`. S3's `403` means the SPA's deep-link function or the publish failed.
 - `POST /api/chat` without a token must be `401`. Anything else means the authorizer isn't in front of the function.
-- `--verify` signs each seeded patient in with SRP and checks the token's `sub` against the mapping. It prints no token and no password.
+- `--verify` first runs the seed again (the patients print as `exists`, and their passwords are set to the file's again), then signs each one in with SRP and checks the token's `sub` against the mapping. It prints no token and no password.
 
-Then **one signed-in turn**: open `https://<domain>/login` in a browser, sign in as a seeded patient, and send "What appointments are available next week?" (any availability request). The reply must offer at least one slot on a date inside the seed window (the 4 weeks from the seed day). A reply that ends in an error message, or offers no slot, fails the check. The account's Lambda concurrency quota is shared by every `sched-*` env, so a throttled turn or a 500 while another env is busy is retried once with the Retry button; a second failure is a defect. This is one Bedrock turn, a few cents. Stamp the time when the reply has arrived (`date -u +%FT%TZ`): that ends the time-to-deploy.
+Then **one signed-in turn**: open `https://<domain>/login` in a browser, sign in as a seeded patient, and send "What times does Dr. Priya Lee have open next week?". Name a provider (or a specialty) and a week: an open question such as "What appointments are available next week?" gets a clarifying question back ("What kind of visit are you looking for?"), which offers no slot. The reply must offer at least one slot on a date inside the seed window (the 4 weeks from the seed day). A reply that ends in an error message, or offers no slot, fails the check. The account's Lambda concurrency quota is shared by every `sched-*` env, so a throttled turn or a 500 while another env is busy is retried once with the Retry button; a second failure is a defect. This is one Bedrock turn, a few cents. Stamp the time when the reply has arrived (`date -u +%FT%TZ`): that ends the time-to-deploy.
 
 Record the result without passwords, tokens, email addresses or the domain: the stack statuses, the HTTP status lines, the `verified` lines and the reply's first line.
 
