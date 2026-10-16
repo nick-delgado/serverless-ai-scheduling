@@ -10,15 +10,13 @@ PR #266 (#265, B10-2) set `cancel-in-progress: false` on `.github/workflows/pr-e
 
 An agent (Claude, as #267's task worker) added `queue: max` as a third key under the workflow-level `concurrency:`, after `cancel-in-progress: false`, and pinned it in `scripts/workflows.test.ts` beside the B10-2 pin. GitHub's "Workflow syntax for GitHub Actions" page, under `concurrency`, says that with `queue: max` "up to 100 jobs or workflow runs can be `pending` in the concurrency group", in first-in, first-out order, and that `queue: max` with `cancel-in-progress: true` is a validation error. So a newer run now waits, pending, behind the running one and any earlier pending ones, up to 100 per PR. Each run checks the body of the edit that queued it, so the last run's result is the one for the current body, and each body edit adds one full run of all three jobs. The workflow header and `CLAUDE.md`'s `Seen-failing evidence` bullet now say that, and no longer that a newer run replaces a pending one.
 
+GitHub accepted the key on PR #291's first run ([38921494047](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38921494047)). Two body edits three seconds apart, made while that run was in progress, both queued and both ran to `success` ([38921536064](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38921536064), [38921541156](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/38921541156)). Under `queue: single` the first edit's run would have been cancelled when the second arrived.
+
 ## Why we chose what we chose
 
 - **Claim nothing about merge blocking** (r1/Q-1 (a), Nick's answer). Whether a cancelled or failed earlier check can block a merge isn't in GitHub's docs. The other option was a throwaway PR on `queue: single` to read `mergeStateStatus` after a cancelled pending run; Nick chose not to add a second PR, since the queueing alone justifies `queue: max`. The one observed case stays one case: on PR #258, check run `115525859567` was cancelled at 20:34:43Z, check run `115525867658` succeeded at 20:35:00Z in another check suite, and the merge at 20:40:17Z came only after the re-run.
 - **Workflow level only.** No job-level `concurrency`, and `deploy.yml` and `e2e.yml` keep the default queue (r1/A-1).
 - **A new test, not a wider B10-2 test** (r1/A-2), so each setting fails under its own name.
-
-## What surprised us
-
-- **Nothing, which is the point.** GitHub accepted the key on the PR's first run, and two body edits three seconds apart, made while that run was in progress, both queued and both ran. Under `queue: single` the first edit's run would have been cancelled when the second arrived.
 
 ## Evidence
 
