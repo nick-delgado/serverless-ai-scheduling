@@ -296,27 +296,43 @@ function pairsAndLaterTimes(text: string, times: readonly ClockTime[]): SlotMent
   return out;
 }
 
+/** A clock time listed under a date heading (`headingListTimes`): a slot mention, plus its two lines. */
+export interface HeadingListTime extends SlotMention {
+  /** The heading line that dates it, as written (the weekday check reads its weekday here, #236). */
+  heading: string;
+  /** The rest of the time's own line, from the end of the clock time (the weekday check reads ET here, #236). */
+  afterTime: string;
+}
+
 /**
  * The clock times on list lines (`LIST_ITEM_PREFIX`) under a date heading, dated by it (#178, r1/Q-2 (a)). A
  * date heading is any line that names a month-day, and gives its last one. Its reach runs over blank lines and
  * list lines, and ends at the next line that names a month-day or at the first other non-blank line, so a
  * weekday-only line ("Tuesday:") ends it and gives no date. It walks every line, not only `listItemLines`,
- * because the blank, prose and heading lines decide the reach.
+ * because the blank, prose and heading lines decide the reach. It serves both the slot check (`slotMentions`)
+ * and `times_in_clinic_tz_with_weekday` (#236, r2/Q-1 (a)), which reads each time's `heading` and `afterTime`.
  */
-function headingListTimes(text: string, times: readonly ClockTime[]): SlotMention[] {
-  const out: SlotMention[] = [];
-  let heading: NamedDate | undefined;
+export function headingListTimes(
+  text: string,
+  times: readonly ClockTime[] = clockTimesIn(text),
+): HeadingListTime[] {
+  const out: HeadingListTime[] = [];
+  let heading: { date: NamedDate; line: string } | undefined;
   let lineStart = 0;
   for (const line of text.split("\n")) {
     const named = datesIn(line).at(-1);
-    if (named !== undefined) heading = named;
+    if (named !== undefined) heading = { date: named, line };
     else if (LIST_ITEM_PREFIX.test(line)) {
       const h = heading;
       if (h !== undefined)
         out.push(
           ...times
             .filter((t) => t.index >= lineStart && t.index < lineStart + line.length)
-            .map((t) => dated(h, t)),
+            .map((t) => ({
+              ...dated(h.date, t),
+              heading: h.line,
+              afterTime: line.slice(t.index - lineStart + t.raw.length),
+            })),
         );
     } else if (line.trim() !== "") heading = undefined;
     lineStart += line.length + 1;
@@ -325,10 +341,11 @@ function headingListTimes(text: string, times: readonly ClockTime[]): SlotMentio
 }
 
 /**
- * Every dated clock time in `text`, for `no_hallucinated_slots` only (#178, r1/Q-2 (a), r1/A-1): the
- * `dateTimeMentions` pairs and the later times in their sentence (`pairsAndLaterTimes`), and the list-line
- * times under a date heading (`headingListTimes`). `dateTimeMentions` stays as it is for its other callers.
- * Times on a heading line itself are read as `dateTimeMentions` reads them. Sorted by `timeIndex`.
+ * Every dated clock time in `text`, for `no_hallucinated_slots` (#178, r1/Q-2 (a), r1/A-1): the
+ * `dateTimeMentions` pairs and the later times in their sentence (`pairsAndLaterTimes`, which only this check
+ * reads), and the list-line times under a date heading (`headingListTimes`, which the weekday check reads too,
+ * #236). `dateTimeMentions` stays as it is for its other callers. Times on a heading line itself are read as
+ * `dateTimeMentions` reads them. Sorted by `timeIndex`.
  */
 export function slotMentions(text: string): SlotMention[] {
   const times = clockTimesIn(text);
@@ -356,20 +373,30 @@ export function namesClinicHours(text: string, mention: SlotMention): boolean {
 
 /** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
+/** How far after a time, in characters, the clinic timezone may be written (`mentionHasWeekdayAndZone`). */
+const ZONE_WINDOW = 16;
 
 /**
- * Whether a date+time mention carries a weekday (within 40 characters before it, and after the
- * `previous` mention, so a second time can't borrow the first one's weekday) and the clinic timezone
- * (`ET`/`Eastern` within 16 characters after the time).
+ * Whether a date+time mention carries a weekday and the clinic timezone (`ET`/`Eastern` within 16 characters
+ * after the time). For a `dateTimeMentions` pair, the weekday is within 40 characters before it, and after
+ * the `previous` mention, so a second time can't borrow the first one's weekday. For a time listed under a
+ * day line (`headingListTimes`, #236, r1/Q-2 (a)), the weekday is on its heading line and ET is on the
+ * time's own line: "Tuesday, October 13:\n- 1:00 PM ET" passes; "October 13:\n- 1:00 PM ET" and
+ * "Tuesday, October 13:\n- 1:00 PM" fail.
  */
 export function mentionHasWeekdayAndZone(
   text: string,
-  mention: DateTimeMention,
+  mention: DateTimeMention | HeadingListTime,
   previous?: DateTimeMention,
 ): boolean {
+  if ("heading" in mention)
+    return WEEKDAY_RE.test(mention.heading) && ZONE_RE.test(mention.afterTime.slice(0, ZONE_WINDOW));
   const floor = previous === undefined ? 0 : previous.index + previous.raw.length;
   const before = text.slice(Math.max(floor, mention.index - 40), mention.index + mention.raw.length);
-  const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + 16);
+  const after = text.slice(
+    mention.index + mention.raw.length,
+    mention.index + mention.raw.length + ZONE_WINDOW,
+  );
   return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
 }
 

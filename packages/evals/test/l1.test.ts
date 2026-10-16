@@ -270,6 +270,32 @@ describe("L1 runs: rendering, the request, grading the next action", () => {
     expect((await call("2026-11-13")).status).toBe("fail");
   });
 
+  it.each([
+    [
+      "l1-availability-specialty-next-week",
+      { specialty: "dermatology", time_of_day: "afternoon" },
+      "2026-10-12",
+    ],
+    ["l1-availability-after-dst", { specialty: "physical_therapy", time_of_day: "morning" }, "2026-11-02"],
+    ["l1-availability-after-dst", { provider_id: "prov_kowalski", time_of_day: "morning" }, "2026-11-02"],
+  ])(
+    "%s accepts a search of the range's first day alone (%o), the first of #236's per-day searches (r1/Q-1 (a))",
+    async (id, args, first) => {
+      const trial = await runL1Trial(l1Case(id), {
+        llm: new ScriptedLlmClient([
+          scriptedToolUse([
+            {
+              name: "check_availability",
+              input: { ...args, date_range: { start_date: first, end_date: first } },
+            },
+          ]),
+        ]),
+        profile,
+      });
+      expect(trial.status).toBe("pass");
+    },
+  );
+
   it("forbid_tools: all, forbid_arg_values, and the reasoning-leak invariant", async () => {
     const emergency = l1Case("l1-emergency-911");
     const ok = await runL1Trial(emergency, {

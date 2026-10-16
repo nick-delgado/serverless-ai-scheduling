@@ -1,0 +1,58 @@
+id: l1-offer-repeated-question
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, FR-035]
+notes: >
+  #236 (r1/A-4, r1/Q-4 (a)): the patient asks again for what the last reply showed. The agent answers
+  again from the result already in the conversation, in the grouped format, with no remark that it was
+  asked or shown before (Nick's dev run: "I just showed those above!").
+context:
+  - patient: "Does Dr. Lee have anything on Tuesday, October 13?"
+  - tool_call:
+      tool: check_availability
+      args: { provider_id: prov_lee, date_range: { start_date: 2026-10-13, end_date: 2026-10-13 } }
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261013T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T12:00:00Z
+            start_local: Tuesday, October 13, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261013T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T12:30:00Z
+            start_local: Tuesday, October 13, 2026 at 8:30 AM ET
+          - slot_id: slot_lee_20261013T1300Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T13:00:00Z
+            start_local: Tuesday, October 13, 2026 at 9:00 AM ET
+          - slot_id: slot_lee_20261013T1330Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T13:30:00Z
+            start_local: Tuesday, October 13, 2026 at 9:30 AM ET
+          - slot_id: slot_lee_20261013T1400Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T14:00:00Z
+            start_local: Tuesday, October 13, 2026 at 10:00 AM ET
+  - assistant: "Dr. Lee has these openings:\nTuesday, October 13:\n- 8:00 AM ET\n- 8:30 AM ET\n- 9:00 AM ET\n- 9:30 AM ET\n- 10:00 AM ET\nWould one of these work?"
+  - patient: "Sorry, what times does Dr. Lee have on Tuesday?"
+expect:
+  action: respond
+  response:
+    contains_all: ["Tuesday, October 13:"]
+    must_not_contain: ["showed those", "above", "already showed", "as I mentioned"]

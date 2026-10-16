@@ -10,64 +10,10 @@
  * The evidence replies (gate run 4's heading, #37's hours sentence and restatement) aren't committed, so these
  * are minimal copies (r1/A-5); they pass, so they live here and not in `grader-fail-cases.test.ts`.
  */
-import { formatClinicDateTime } from "@sched/tools";
 import { describe, expect, it } from "vitest";
 
-import {
-  createTrialEnvironment,
-  gradeInvariants,
-  gradeL1,
-  slotKey,
-  type GradingInput,
-  type TranscriptEvent,
-} from "../src";
-import { assistant, byName, call, failing, inTurn, l1Case, patient, recorded, scenario } from "./helpers";
-
-type Snapshot = GradingInput["before"];
-
-/** `invariant.<name>` on `events`, graded on scenario `id`'s seeded state (edited by `edit`, when given). */
-async function graded(
-  id: string,
-  events: readonly TranscriptEvent[],
-  name = "no_hallucinated_slots",
-  edit: (before: Snapshot) => Snapshot = (b) => b,
-) {
-  const s = scenario(id);
-  const env = await createTrialEnvironment(s);
-  const before = edit(env.before);
-  const results = gradeInvariants({ scenario: s, events, before, after: before, patientId: env.patientId });
-  return byName(results, `invariant.${name}`);
-}
-
-const PROVIDERS: Record<string, [name: string, specialty: "dermatology" | "cardiology"]> = {
-  lee: ["Dr. Priya Lee", "dermatology"],
-  okafor: ["Dr. Samuel Okafor", "dermatology"],
-  haddad: ["Dr. Omar Haddad", "cardiology"],
-};
-
-/** A `check_availability` result that parses as `CheckAvailabilityOutput`, one slot per `provider@startUtc`. */
-const checked = (...slots: string[]) =>
-  call(
-    "check_availability",
-    {},
-    {
-      output: {
-        truncated: false,
-        slots: slots.map((s) => {
-          const [provider = "", startUtc = ""] = s.split("@");
-          const [providerName = "", specialty = "dermatology"] = PROVIDERS[provider] ?? [];
-          return {
-            slot_id: `slot_${provider}_${startUtc.replace(/[-:]/g, "").slice(0, 13)}Z`,
-            provider_id: `prov_${provider}`,
-            provider_name: providerName,
-            specialty,
-            start_utc: startUtc,
-            start_local: formatClinicDateTime(startUtc),
-          };
-        }),
-      },
-    },
-  );
+import { gradeL1, slotKey, type TranscriptEvent } from "../src";
+import { assistant, byName, checked, failing, graded, inTurn, l1Case, patient, recorded } from "./helpers";
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
@@ -94,7 +40,7 @@ describe("Q-1 (a): the patient's held appointment is no quoted slot (#239)", () 
     ),
   ];
 
-  it("passes gate run 4's heading, and times_in_clinic_tz_with_weekday still fails on its 2:30 PM (#236's)", async () => {
+  it("passes gate run 4's heading, and times_in_clinic_tz_with_weekday still fails on its 2:30 PM, a time a day line must not carry (#236)", async () => {
     expect(await graded(MARIA_SCENARIO, GATE_RUN_4)).toMatchObject({ status: "pass" });
     expect(await graded(MARIA_SCENARIO, GATE_RUN_4, "times_in_clinic_tz_with_weekday")).toMatchObject({
       status: "fail",

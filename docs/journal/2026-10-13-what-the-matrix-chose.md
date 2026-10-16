@@ -96,5 +96,5 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 
 ## What's next
 
-- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice).
+- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice).
 - M4 (#43, #45) tells this story with the comparison table above.
