@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #304, #305, PR #308, #267, PR #291, #301, ADR-008, FR-041
+**Related:** #304, #305, PR #308, #312, #267, PR #291, #301, ADR-008, FR-041
 
 ## What happened
 
@@ -43,4 +43,4 @@ GitHub accepted job-level `queue: max` beside the workflow-level `cancel-in-prog
 ## What's next
 
 - Other Bedrock callers on the same quota (`e2e.yml`, local `npm run evals` and `evals:matrix` runs, `dev` chat traffic) don't join the queue (#304's non-goals).
-- `packages/evals/src/runner.ts` still calls its default "the interim prompt until #16 lands". That fix is to file.
+- `packages/evals/src/runner.ts` still calls its default "the interim prompt until #16 lands". #312 tracks that fix, and #284's PR #311 carries it.
