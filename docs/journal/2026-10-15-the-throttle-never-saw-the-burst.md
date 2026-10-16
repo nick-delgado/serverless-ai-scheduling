@@ -53,4 +53,4 @@ One step departs from r1/Q-3, which named Logs Insights for the marker search:
 - #272: Nick decides on the Lambda concurrency quota and the commit-email setting.
 - #273: per-client limits, WAF, a Transcribe cap, and the misleading "10 req/min" throttle comment.
 - #270 (the bootstrap and `SchedDeployer` grants, applied by Nick) and #271 (escalation retention).
-- #42: the runbook still says `SchedDeployer` calls `bedrock-mantle:CreateInference` (F-19).
+- #42: the runbook still says `SchedDeployer` calls `bedrock-mantle:CreateInference` (F-19). **Later (2026-10-16):** step 3 now names the four Bedrock actions the policy grants, and step 6 says to leave model invocation logging off; see [A new env from the runbook alone](2026-10-16-a-new-env-from-the-runbook-alone.md).

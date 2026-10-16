@@ -37,4 +37,4 @@ The spec left these open, and the agent settled them:
 ## What's next
 
 - #38's second PR: Powertools logging, metrics and tracing, the dashboard, the conflict-retry metric and the notification-status report.
-- Operator documentation for the script belongs in `docs/runbooks/` beside `retry-escalations.ts`. That's #42's path.
+- Operator documentation for the script belongs in `docs/runbooks/` beside `retry-escalations.ts`. That's #42's path. **Later (2026-10-16):** `aws-setup.md` has "Appendix: reading a conversation's agent traces", and the three scripts share one table lookup; see [A new env from the runbook alone](2026-10-16-a-new-env-from-the-runbook-alone.md).
