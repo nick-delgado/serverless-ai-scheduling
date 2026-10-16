@@ -131,7 +131,10 @@ export interface RunSuiteOptions {
   llmName: string;
   profile: ModelProfile;
   trials: number;
-  /** Default: the interim prompt. The report's `promptVersion` comes from the prompt it builds. */
+  /**
+   * Default: the current system prompt, `buildSystemPrompt` from `@sched/agent`. The report's `promptVersion` comes
+   * from the prompt it builds.
+   */
   systemPrompt?: SystemPromptFactory;
   registry?: ToolRegistry;
   simulator?: PatientSimulator;
