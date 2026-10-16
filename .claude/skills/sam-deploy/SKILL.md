@@ -121,7 +121,4 @@ aws cloudformation describe-stack-events --stack-name sched-dev-<stack> \
 
 Deleting stacks and data is destructive, so confirm with Nick first, every time.
 
-1. Turn protection off: `scripts/deploy.sh data <env> -- DeletionProtection=disabled`, and the same for `auth`.
-2. Delete in **reverse** order: web → api → auth → data:
-   `aws cloudformation delete-stack --stack-name sched-<env>-<stack>` then `aws cloudformation wait stack-delete-complete --stack-name …`.
-3. Leave `sched-bootstrap` alone. It's admin-only.
+The steps (protection off, empty the site bucket, delete web → api → auth → data) are in `docs/runbooks/deploy-env.md`, "Teardown". Leave `sched-bootstrap` alone. It's admin-only.
