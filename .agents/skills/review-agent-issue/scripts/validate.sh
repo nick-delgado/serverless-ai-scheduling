@@ -53,12 +53,13 @@ case "$stage" in
       for s in "$run"/spec/*.md; do
         [ -f "$s" ] || continue
         rel="spec/$(basename "$s")"; lines="$(awk 'END { print NR }' "$s")"
+        upper=$((lines + 1))   # some readers show a line after the final newline
         lastnb="$(awk 'NF { l = NR } END { print l + 0 }' "$s")"   # counts from here to $lines are all the end
         row="$(awk '/^## Sources read/ { on = 1; next } on && /^## / { exit } on' "$run/analysis/spec.md" | grep -F "$rel" | head -n 1 || true)"
         to="$(printf '%s' "$row" | sed -n 's/.*read to line \([0-9][0-9]*\) of \([0-9][0-9]*\).*/\1 \2/p')"
         if [ -z "$to" ]; then
           problem "spec.md: list $rel under Sources read as \"(read to line $lines of $lines)\", after reading it to its end"
-        elif [ "${to% *}" -lt "$lastnb" ] || [ "${to% *}" -gt "$lines" ] || [ "${to#* }" -lt "$lastnb" ] || [ "${to#* }" -gt "$lines" ]; then
+        elif [ "${to% *}" -lt "$lastnb" ] || [ "${to% *}" -gt "$upper" ] || [ "${to#* }" -lt "$lastnb" ] || [ "${to#* }" -gt "$upper" ]; then
           problem "spec.md: $rel was read to line ${to% *} of ${to#* }, but it has $lines lines: read the rest from the file itself, in line ranges"
         fi
       done
@@ -98,7 +99,7 @@ case "$stage" in
     while IFS= read -r l; do [ -n "$l" ] && problem "readiness.md: $l"; done < "$run/.validate-q"
     rm -f "$run/.validate-q"
     # Assumption rows: an ID, a basis, a Makes stale cell.
-    awk '/^\| A-[0-9]+ \|/ { l = $0; gsub(/\\\|/, "", l); n = split(l, c, "|"); id = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", id); if (n != 7) print id ": assumption row needs exactly ID, Assumption, Basis, Makes stale and To correct (write a pipe inside a cell as \\|)" }' "$f" > "$run/.validate-a" || true
+    awk '/^\| A-[0-9]+([ \t][^|]*)? \|/ { l = $0; gsub(/\\\|/, "", l); n = split(l, c, "|"); id = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", id); if (n != 7) print id ": assumption row needs exactly ID, Assumption, Basis, Makes stale and To correct (write a pipe inside a cell as \\|)" }' "$f" > "$run/.validate-a" || true
     while IFS= read -r l; do [ -n "$l" ] && problem "readiness.md: $l"; done < "$run/.validate-a"
     rm -f "$run/.validate-a"
     # "Like X" pointers are not allowed: reuse says import, move and share, or ask.

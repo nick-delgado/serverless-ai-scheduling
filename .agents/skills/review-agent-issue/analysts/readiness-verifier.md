@@ -69,8 +69,11 @@ resource: a review that asks twenty questions is not read.
    edit to the format's rules on owned paths (whole files, with their follow-on edits),
    prescribed checks (an input they must reject), "stays as is" (the search that shows
    it) and measured criteria (where the number is seen). Give each question its own "Makes
-   stale" line. Where they disagree, fix the draft or turn the disagreement into a
-   question. Where an assumption's basis shows an issue line is wrong, add an edit
+   stale" line. Check each option's summary against its own Edges line, against the
+   criteria it narrows or replaces, and against the tools it prescribes (their real flags,
+   defaults and output): an option whose summary says more or less than its edges and
+   criteria, or names a tool for something the tool does not do, is rewritten. Where they
+   disagree, fix the draft or turn the disagreement into a question. Where an assumption's basis shows an issue line is wrong, add an edit
    for that line. Cite a stale line the same way everywhere it appears.
 10. **Choose the verdict** by the table in the format reference. "Not ready" says what to do
    instead (split along these criteria; rewrite the goal).

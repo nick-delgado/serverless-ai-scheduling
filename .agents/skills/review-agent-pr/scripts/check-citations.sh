@@ -54,6 +54,7 @@ while IFS="$(printf '\t')" read -r source citation; do
   path="${path#./}"
 
   target=""
+  matches=""
   if [ -f "$tree/$path" ]; then
     target="$tree/$path"
   elif [ -f "$run/$path" ]; then
@@ -73,8 +74,15 @@ while IFS="$(printf '\t')" read -r source citation; do
 
   if [ -z "$target" ]; then
     unresolved=$((unresolved + 1))
+    hint=""
+    if [ -n "${matches:-}" ]; then
+      # A short path that more than one file ends with: name them, so it is fixed in one pass.
+      more=""
+      [ "$(printf '%s\n' "$matches" | wc -l | tr -d ' ')" -le 5 ] || more=", ..."
+      hint=" (ambiguous: $(printf '%s\n' "$matches" | head -n 5 | tr '\n' ',' | sed 's/,$//; s/,/, /g')$more)"
+    fi
     unresolved_list="$unresolved_list
-  $source: $citation"
+  $source: $citation$hint"
     continue
   fi
 
@@ -92,7 +100,11 @@ if [ "$invalid" -gt 0 ]; then
   echo "invalid citations (line numbers must be lines of the file at the PR head, not positions in diff.patch):$report"
 fi
 if [ "$unresolved" -gt 0 ]; then
-  echo "not resolvable (not checked):$unresolved_list"
+  if [ "$strict" = "yes" ]; then
+    echo "not resolvable to one file (write each as its full path from the repository root):$unresolved_list"
+  else
+    echo "not resolvable (not checked):$unresolved_list"
+  fi
 fi
 
 [ "$invalid" -eq 0 ] || exit 1

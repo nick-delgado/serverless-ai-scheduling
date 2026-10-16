@@ -2,7 +2,7 @@
 name: address-pr-review
 description: Fix the code findings of an agent PR review. Reads the review report that the review-agent-pr skill posted as a comment on a GitHub pull request, fixes the findings marked "Fix now" on the PR branch, applies the owner's decisions, asks the owner once about anything it could not do within the PR's scope, and replies on the PR with what was done for each finding. Use when asked to address, fix, resolve or respond to the review report or review findings on a PR.
 metadata:
-  harness-version: "2026.10.11.1"
+  harness-version: "2026.10.15"
 ---
 
 # Address a PR review
@@ -149,7 +149,10 @@ Take them in order (blockers and majors first). For each finding:
      codebase for an existing one and import it. If you cannot (it is outside the task's
      scope, or not exported), say so in the response instead of copying it.
    - **Claim only what you did.** In commit messages, test names and headers, and the PR
-     description, name what you covered. Before a comment or doc names who uses something
+     description, name what you covered. Before pushing, run
+     `<SKILL_DIR>/scripts/broad-test-names.sh <reviewed sha> HEAD`: narrow every name it
+     lists to what its test checks, or keep it and back it in the response;
+     `post-response.sh` refuses a response that leaves one out. Before a comment or doc names who uses something
      ("used by the scheduler"), search for every caller and name them all, or none. Never write "every", "all" or "each … has a test
      that fails": a broad claim the tests do not fully back becomes a major finding in the
      next review.
@@ -346,6 +349,7 @@ conversation shows each round in order. Format:
 - **On GitHub:** <mergeable state>; CI <started, [checks](<URL>) | finished: passing / failing: names | not started: why> on `<new head>`
 - **Harness version:** <`metadata.harness-version` from this skill's frontmatter>
 - **PR description:** <updated (what changed) | no change needed>
+- **Broad test names:** <each test name your fixes added or changed that says "every", "all", "always", "never" and the like (`scripts/broad-test-names.sh <reviewed> HEAD` lists them), quoted, with the check that backs it; or "none">
 - **Waiting for the owner:** <every `waiting for decision` and `not fixed: needs owner` finding, one line each with its question; or "nothing">
 
 | Finding | Status | Decision | Commit | Note |

@@ -300,7 +300,9 @@ agents_tsv() {
         k = $i; v = $i; sub(/=.*/, "", k); sub(/^[^=]*=/, "", v)
         if (k == "phase") ph = v; else if (k == "name") nm = v; else if (k == "model") md = v
         else if (k == "effort") ef = v; else if (k == "tokens") tk = v; else if (k == "seconds") sc = v
+        else if (k == "resend") rs = v
       }
+      if (rs != "") nm = nm " (resend " rs ")"; rs = ""
       print ph "\t" nm "\t" md "\t" ef "\t" tk "\t" sc; next
     }
     /^cost=/ { l = $0; sub(/^cost=/, "", l); split(l, c, ":"); print c[1] "\t" c[2] "\t?\t?\t" c[3] "\t" c[4] }

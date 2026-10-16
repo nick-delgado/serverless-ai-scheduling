@@ -8,9 +8,10 @@
 # sections; a part's finding IDs must be numbered from k*100+1 so that parts never share an
 # ID.
 #
-# Every spec file (<run-dir>/spec/*.md) a reviewer lists under "Sources read" must say it
-# was read to its last line, as "(read to line <n> of <n>)" with the file's real length;
-# the spec-alignment reviewer must list every spec file. A long file comes back from a read
+# The reviewers that work from the spec (spec alignment, test adequacy) say how far they
+# read each spec file (<run-dir>/spec/*.md) they list under "Sources read", as "(read to
+# line <n> of <n>)", and must have reached its end; the spec-alignment reviewer must list
+# every spec file. Other reviewers may list a spec file without an extent. A long file comes back from a read
 # cut short, and a reviewer that stops there misses the rest of the spec without noticing.
 #
 # Prints one line per output file: ok, or what is wrong. Exits 1 when anything is missing
@@ -42,15 +43,17 @@ check_file() {
     grep -qxF "$heading" "$file" || problems="$problems
   missing section: $heading"
   done < <(required "$reviewer")
-  # Spec files read to the end.
+  # Spec files read to the end, by the reviewers that work from the spec.
   local spec rel lines row to of
   for spec in "$run"/spec/*.md; do
+    case "$reviewer" in spec-alignment | test-adequacy) ;; *) break ;; esac
     [ -f "$spec" ] || continue
     rel="spec/$(basename "$spec")"
     # Tools count a file's length differently: wc -l misses a last line without a newline,
-    # and a reader may not show trailing blank lines. Accept any count from the last
-    # non-blank line to the full length.
+    # a reader may hide trailing blank lines, or show one more after the final newline.
+    # Accept any count from the last non-blank line to one past the full length.
     lines="$(awk 'END { print NR }' "$spec")"
+    upper=$((lines + 1))
     lastnb="$(awk 'NF { l = NR } END { print l + 0 }' "$spec")"
     row="$(awk '/^### Sources read/ { on = 1; next } on && /^#/ { exit } on' "$file" | grep -F "$rel" | head -n 1 || true)"
     if [ -z "$row" ]; then
@@ -63,7 +66,7 @@ check_file() {
     if [ -z "$to" ]; then
       problems="$problems
   $rel under Sources read does not say how far it was read: \"(read to line <n> of $lines)\""
-    elif [ "$of" -lt "$lastnb" ] || [ "$of" -gt "$lines" ] || [ "$to" -lt "$lastnb" ] || [ "$to" -gt "$lines" ]; then
+    elif [ "$of" -lt "$lastnb" ] || [ "$of" -gt "$upper" ] || [ "$to" -lt "$lastnb" ] || [ "$to" -gt "$upper" ]; then
       problems="$problems
   $rel was read to line $to of ${of}, but it has $lines lines: read the rest from the file itself, in line ranges"
     fi

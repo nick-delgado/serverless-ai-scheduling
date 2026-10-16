@@ -40,7 +40,7 @@ field names below, and the scripts that check them.
 |---|---|---|---|
 | Review report (one per run, possibly in parts) | `post-report.sh` | `<!-- agent-pr-review:report sha=<commit> run=<id> part=<k>/<n> -->`; its run metadata ends with `<!-- agent-pr-review:run <run.json> -->` | `post-report.sh` |
 | Process findings (one per round, on the tracking issue) | `post-process-findings.sh` | `<!-- agent-pr-review:process pr=<n> sha=<commit> -->`, then a data line | `post-process-findings.sh` |
-| Fixing agent's response | `address-pr-review` | `<!-- agent-pr-review:response review=<commit> head=<commit> -->` | its `post-response.sh` |
+| Fixing agent's response | `address-pr-review` | `<!-- agent-pr-review:response review=<commit> head=<commit> -->`; quotes every broad test name the fixes added | its `post-response.sh` (with `broad-test-names.sh`) |
 | Owner decision | the owner | `Decision <commit>/<ID>: <answer>` lines | `get-decisions.sh` |
 | Deferral note (on the target issue) | `address-pr-review` | `<!-- agent-pr-review:deferred pr=<n> review=<commit> finding=<ID> -->` | its `post-deferral.sh` |
 

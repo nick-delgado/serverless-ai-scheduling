@@ -63,6 +63,8 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
   sed 's/^/BODY\t/' "$body"
 } | awk -F'\t' -v k="$k" -v out_body="$run/issue-body.new.md" -v out_log="$run/applied.md" '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+  # Continuation lines of a field, one level deeper under the sub-bullet that carries it.
+  function nest(s) { gsub(/\n/, "\n  ", s); return s }
   function staled(x) { return (x in stale) ? " (makes stale: " stale[x] ")" : "" }
   # The earlier entries a line says it replaces or reopens, as " r1/A-11 r1/Q-2".
   function reopened(s,   out, m) {
@@ -121,14 +123,20 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
     if (line ~ /^#### E-[0-9]+:/) { cur = line; sub(/^#### /, "", cur); eid = cur; sub(/:.*/, "", eid); etitle[eid] = trim(substr(cur, length(eid) + 2)); eorder[++ne] = eid; mode = "e"; part = ""; next }
     if (line ~ /^#{2,4} /) { mode = ""; next }
     if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); letters[qid] = letters[qid] letter; next }
-    if (mode == "q" && line ~ /^- \*\*Makes stale:\*\* /) { l = line; sub(/^- \*\*Makes stale:\*\* */, "", l); qstale[qid] = l; next }
-    if (mode == "q" && line ~ /^- \*\*Edges:\*\* /) { l = line; sub(/^- \*\*Edges:\*\* */, "", l); edges[qid] = l; inedges = qid; next }
-    if (mode == "q" && inedges != "" && line ~ /^[ \t]+[^ \t-]/) { edges[inedges] = edges[inedges] " " trim(line); next }
-    inedges = ""
+    # The "Makes stale" and "Edges" fields of a question: the first line and every indented line
+    # after it, nested bullets included ("each case below:" followed by "  - ...").
+    if (mode == "q" && field != "" && line ~ /^[ \t]+[^ \t]/) { if (field == "edges") edges[qid] = edges[qid] "\n" line; else qstale[qid] = qstale[qid] "\n" line; next }
+    field = ""
+    if (mode == "q" && line ~ /^- \*\*Makes stale:\*\* /) { l = line; sub(/^- \*\*Makes stale:\*\* */, "", l); qstale[qid] = l; field = "stale"; next }
+    if (mode == "q" && line ~ /^- \*\*Edges:\*\* /) { l = line; sub(/^- \*\*Edges:\*\* */, "", l); edges[qid] = l; field = "edges"; next }
     if (mode == "q" && line ~ /^- \*\*Recommendation:\*\* \([a-z]\)/) { l = line; sub(/^- \*\*Recommendation:\*\* \(/, "", l); rec[qid] = substr(l, 1, 1); next }
-    if (line ~ /^\| A-[0-9]+ \|/) {
+    if (line ~ /^\| A-[0-9]+([ \t][^|]*)? \|/) {
       l = line; gsub(/\\\|/, "\034", l); split(l, c, "|")
-      aid = trim(c[2]); atext[aid] = trim(c[3]); gsub(/\034/, "|", atext[aid]); aorder[++na] = aid
+      # The ID cell may carry the marker too ("A-4 (verify first)"): the ID is "A-4", and the
+      # marker moves to the front of the assumption, where the rules below look for it.
+      idcell = trim(c[2]); match(idcell, /A-[0-9]+/); aid = substr(idcell, RSTART, RLENGTH)
+      mark = idcell; sub(/^A-[0-9]+[ \t]*/, "", mark)
+      atext[aid] = trim((mark != "" ? mark " " : "") trim(c[3])); gsub(/\034/, "|", atext[aid]); aorder[++na] = aid
       st = trim(c[5]); gsub(/\034/, "|", st); gsub(/ *<br *\/?> */, "; ", st)
       if (!nothing(st)) stale[aid] = st
       if (atext[aid] ~ /\(verify first\)|\(would have asked\)/) aflag[aid] = 1
@@ -194,9 +202,9 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       link = (q in url) ? " ([answer](" url[q] "))" : " (accept all" ((("ALL" in url) ? ", [answer](" url["ALL"] ")" : "")) ")"
       entries = entries "- **r" k "/" q "** (settled against `" spec "`): " qtext[q] " → " text link "\n"
       chosenq[q] = chosen
-      if (qstale[q] != "" && !nothing(qstale[q])) entries = entries "  - makes stale: " qstale[q] "\n"
+      if (qstale[q] != "" && !nothing(qstale[q])) entries = entries "  - makes stale: " nest(qstale[q]) "\n"
       m2 = split(qsup[q], olds, " "); for (z = 1; z <= m2; z++) if (olds[z] != "") sup[olds[z]] = "r" k "/" q
-      if (edges[q] != "" && tolower(edges[q]) !~ /^none/) entries = entries "  - edges: " edges[q] "\n"
+      if (edges[q] != "" && tolower(edges[q]) !~ /^none/) entries = entries "  - edges: " nest(edges[q]) "\n"
       # The options not chosen, so the agent and the reviewer know what was ruled out.
       for (z = 1; z <= length(letters[q]); z++) { l = substr(letters[q], z, 1); if (l != chosen) entries = entries "  - not chosen: (" l ") " opt[q, l] "\n" }
       log_applied = log_applied "- " q ": " how ", " text "\n"

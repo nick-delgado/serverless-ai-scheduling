@@ -192,9 +192,11 @@ failed: the reader uses this section to decide how far to trust the review.
 | `spec/issue-19.md` (read to line 412 of 412) | the spec |
 | `src/billing/invoice.ts` (full file) | changed file |
 
-Each spec file (`spec/*.md`) you read is listed with how far you read it, "(read to line
-<n> of <n>)", and read to its last line: a script checks this against the file's length.
-The spec-alignment reviewer lists every spec file.
+The spec-alignment and test-adequacy reviewers, which work from the spec, list each spec
+file (`spec/*.md`) they read with how far they read it, "(read to line <n> of <n>)", and
+read it to its last line: a script checks this against the file's length. The
+spec-alignment reviewer lists every spec file. Other reviewers list a spec file without an
+extent if they used it.
 
 ### Checks performed
 | # | Check | Scope | Result |
