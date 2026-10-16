@@ -18,16 +18,18 @@ The agent deployed the api stack to `dev`, then deployed a fresh ephemeral env, 
 
 The spec left these to us:
 - **"Per method", not "one bucket".** Before rewriting the comment we checked API Gateway's throttling docs: stage-level limits "are applied at the API method level for a stage", and `/*` `*` configures "the same settings for all methods". So the comment says each method has its own bucket, shared by every client, rather than calling it one stage-wide bucket.
-- **The reservation's evidence on `dev`.** The issue names `aws lambda get-function-concurrency`, and `SchedDeployer` is denied it. `aws lambda get-function` is allowed, and its `Concurrency` field read `ReservedConcurrentExecutions: 5`. We didn't look for another way past the denial.
 - **The minimum Lambda keeps unreserved.** `SchedDeployer` can't call `lambda:GetAccountSettings`, so Nick corrected r1/A-5 to use Service Quotas and the docs. `aws service-quotas get-service-quota --service-code lambda --quota-code L-B99A9384` read 1000.0, and the Lambda docs ("Configuring reserved concurrency") say "You can reserve up to the Unreserved account concurrency value minus 100". So the standing envs' 3 × 5, plus 5 for each ephemeral env, fit easily in 900.
 - **How the bursts ran.** A throwaway script outside the repo (no burst script is committed, per the readiness notes) signed in as one seeded patient with SRP and held the ID token in memory. It sent each run through the env's CloudFront domain, as the SPA does, with 3 s between runs. It printed only status codes and response bodies.
 - **What we didn't run.** The runbook's smoke check ends with one signed-in turn, which calls Bedrock. We skipped it, because the chat burst had to be the env's first chat call and this issue approves no Bedrock calls. Every other smoke check passed. CloudWatch's `GetMetricStatistics` is denied to `SchedDeployer`, so the invocation counts below come from the function log groups' `platform.start` and `platform.initStart` lines, as #39's did.
 
+One step departs from an owner decision:
+- **The reservation's evidence on `dev` (r1/Q-2 (c)).** Q-2 (c)'s edges name `aws lambda get-function-concurrency` on `dev` as the evidence, and `SchedDeployer` is denied it (`AccessDeniedException`). As the orchestrating session's instructions allowed, the agent read `aws lambda get-function` instead, whose `Concurrency` field read `ReservedConcurrentExecutions: 5`. We didn't look for another way past the denial.
+
 ## What surprised us
 
 - **The reservation is what produced the 500s.** Of 30 simultaneous chat calls, exactly 5 reached the function and got the handler's 400. The other 25 got API Gateway's 500 with the body `{"message": "Internal server error"}` and no event. The chat log group shows 5 invocations and 5 cold starts, so Lambda refused the rest at the reservation. That answers AC3 for chat: a throttled response-streaming invocation is a plain 500, and the SPA already offers Retry for any 5xx without an event (`apps/web/src/chat/useChat.ts:114-118`). It also means each env now serves at most 5 turns at once, and the sixth patient sees "try again" (PR Verification; `ab273` deployed from `7edb209`).
-- **The cold burst no longer fails.** With the quota at 1000, all 30 cold session calls got 200, against #39's 10 × 200 and 20 × 500 at a quota of 10. The session log group shows 30 cold starts (PR Verification).
-- **The paced runs throttled far more than #39's.** One call every 80 ms got 8 × 200 and 32 × 429, where #39 got 1 × 429 of 40. One every 40 ms got 29 × 200 and 31 × 429, against 14 of 60 (PR Verification). We don't know why. API Gateway calls its limits targets "applied on a best-effort basis", and we don't know what gaps #39 left between runs. Either way, the throttle still answers sustained load and still lets a simultaneous burst of 30 through.
+- **The cold burst no longer fails.** With the quota at 1000, all 30 cold session calls got 200, against #39's 10 × 200 and 20 × 500 at a quota of 10. The session log group shows 30 cold starts (PR Verification; `ab273` deployed from `7edb209`).
+- **The paced runs throttled far more than #39's.** One call every 80 ms got 8 × 200 and 32 × 429, where #39 got 1 × 429 of 40. One every 40 ms got 29 × 200 and 31 × 429, against 14 of 60 (PR Verification; `ab273` deployed from `7edb209`). We don't know why. API Gateway calls its limits targets "applied on a best-effort basis", and we don't know what gaps #39 left between runs. Either way, the throttle still answers sustained load and still lets a simultaneous burst of 30 through.
 - **Lambda keeps 100 unreserved, not 10.** #39's entry said a reservation was impossible "because Lambda keeps 10 unreserved". The conclusion held at a quota of 10, but the figure was wrong.
 
 ## Evidence
@@ -36,8 +38,8 @@ The spec left these to us:
 - `dev`: `scripts/deploy.sh api dev` completed (`UPDATE_COMPLETE`, stack tag `git-commit` `7edb209`). `aws lambda get-function --function-name sched-dev-api-chat --query Concurrency` returned `{"ReservedConcurrentExecutions": 5}`.
 - `git grep -n "10 req/min" -- infra` prints nothing.
 - The security review's status rows for F-11, F-12 and F-14 to F-17, and its §1 and §2 rows that cited #273, now carry these outcomes ([`docs/research/security-review.md`](../research/security-review.md)).
+- Teardown: with Nick's approval, `scripts/teardown.sh ab273 --yes` deleted the four `sched-ab273-*` stacks on 2026-10-16. Afterwards the runbook's describe command printed nothing, `/sched/ab273` held no SSM parameters, no `sched-ab273-*` Lambda function or log group was left, and `head-bucket` on the env's site bucket returned 404 (the PR's description lists the checks).
 
 ## What's next
 
 - #272 holds the rest of F-15 (the account quota) and F-18.
-- Nick approves the teardown of `sched-ab273-*`, which stays up until then.
