@@ -11,36 +11,12 @@ import { describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "@sched/agent";
 
 import { gradeL1, handoffCounts, markdownIn, type TranscriptEvent } from "../src";
-import {
-  assistant,
-  byName,
-  call,
-  invariants,
-  l1Case,
-  patient,
-  recorded,
-  recordedIds,
-  scenarioOf,
-} from "./helpers";
+import { assistant, byName, call, failing, inTurn, invariants, l1Case, patient, recorded } from "./helpers";
 
 async function graded(name: string, events: TranscriptEvent[], id = "escalate-explicit-human-request") {
   const { results } = await invariants(id, events);
   return byName(results, `invariant.${name}`);
 }
-
-const RECORDED = recordedIds();
-
-/** The recorded trials whose status under `name` is `fail`. */
-async function failing(name: string): Promise<string[]> {
-  const out: string[] = [];
-  for (const id of RECORDED)
-    if ((await graded(name, recorded(id), scenarioOf(id)))?.status === "fail") out.push(id);
-  return out.sort();
-}
-
-/** A turn of events, with `turn` set (the builders fix turn 1). */
-const inTurn = (turn: number, ...events: TranscriptEvent[]): TranscriptEvent[] =>
-  events.map((e) => ({ ...e, turn }));
 
 const HANDOFF = "I'll connect you with our front desk. Please call 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET).";
 const escalate = (ok = true) =>

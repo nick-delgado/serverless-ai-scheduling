@@ -84,6 +84,16 @@ export async function invariants(id: string, events: TranscriptEvent[], list?: I
   };
 }
 
+/** The recorded trials (`recordedIds()`) whose `invariant.<name>` is `fail`, graded on their own scenario. */
+export async function failing(name: Invariant): Promise<string[]> {
+  const out: string[] = [];
+  for (const id of recordedIds()) {
+    const { results } = await invariants(scenarioOf(id), recorded(id));
+    if (byName(results, `invariant.${name}`)?.status === "fail") out.push(id);
+  }
+  return out.sort();
+}
+
 /** A grader result by name, from a list or a trial. */
 export const byName = (
   results: readonly GraderResult[] | { graders: readonly GraderResult[] },
@@ -118,6 +128,10 @@ export const patient = (text: string, scriptStep?: number): TranscriptEvent => (
 });
 
 export const assistant = (text: string): TranscriptEvent => ({ kind: "assistant", turn: 1, text });
+
+/** A turn of events, with `turn` set (the builders fix turn 1). */
+export const inTurn = (turn: number, ...events: TranscriptEvent[]): TranscriptEvent[] =>
+  events.map((e) => ({ ...e, turn }));
 
 /** What the production executor answers when a handler throws (`registry.ts`'s INTERNAL error). */
 export async function productionInternalError(): Promise<ToolError["error"]> {

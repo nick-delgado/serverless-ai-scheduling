@@ -31,7 +31,7 @@ import {
   type TranscriptEvent,
 } from "../transcript";
 import { isRecord, walkValue } from "../util";
-import { allStrings } from "./matchers";
+import { allStrings, localFacts } from "./matchers";
 import {
   offeredClockTimes,
   countQuestions,
@@ -43,7 +43,10 @@ import {
   includesCi,
   markdownIn,
   mentionHasWeekdayAndZone,
+  namesClinicHours,
   REASONING_TAG,
+  slotKey,
+  slotMentions,
 } from "./text";
 import { confirmationProblem } from "./trajectory";
 import { check, skip, type GraderResult, type GradingInput } from "./types";
@@ -140,9 +143,14 @@ function crossPatientProblem(input: GradingInput): string | undefined {
   return undefined;
 }
 
-/** A date + time in `text` that isn't among the `known` keys (`MM-DD HH:MM`) tools returned. Shared with L1. */
+/**
+ * A dated time in `text` (`slotMentions`: pairs, later times in their sentence, and list lines under a date
+ * heading, #178) that isn't among the `known` keys (`MM-DD HH:MM`) and isn't the clinic's hours
+ * (`namesClinicHours`, #244). Shared with L1, whose `known` keys are its context's tool results; the
+ * scenario check adds the patient's held appointments and same-turn checks (`hallucinatedTimesProblem`).
+ */
 export function inventedTimeProblem(text: string, known: ReadonlySet<string>): string | undefined {
-  const invented = dateTimeMentions(text).find((m) => !known.has(m.key));
+  const invented = slotMentions(text).find((m) => !known.has(m.key) && !namesClinicHours(text, m));
   return invented === undefined ? undefined : `offered "${invented.raw}", which no tool returned`;
 }
 
@@ -190,10 +198,55 @@ function repeatedHandoffProblem(events: readonly TranscriptEvent[]): string | un
   return undefined;
 }
 
-function hallucinatedTimesProblem(events: readonly TranscriptEvent[]): string | undefined {
+/**
+ * The clinic-local start keys of the appointments the patient holds (`BOOKED`) in the `before` snapshot (#239,
+ * r1/Q-1 (a)): the patient's own visit is no quoted slot. A cancelled or completed one exempts nothing, and
+ * neither does a time the patient only typed.
+ */
+function heldAppointmentKeys({ before, patientId }: GradingInput): string[] {
+  return before.appointments
+    .filter((a) => a.patientId === patientId && a.status === "BOOKED")
+    .map((a) => {
+      const f = localFacts(a.startUtc);
+      return slotKey(f.month, f.day, f.time);
+    });
+}
+
+/** An assistant text that says it will check (#245, r1/Q-3 (b)): "check", "checking" or "let me look", as words. */
+const SAYS_IT_WILL_CHECK = /\b(?:check|checking|let me look)\b/i;
+
+/**
+ * The start keys a successful `check_availability` returns after event `index`, in its turn and before the
+ * next assistant text (#245, r1/Q-3 (b)). A failed call, or one in a later turn, returns nothing here.
+ */
+function checkedLaterInTurn(events: readonly TranscriptEvent[], index: number): string[] {
+  const keys: string[] = [];
+  const turn = events[index]?.turn;
+  for (const e of events.slice(index + 1)) {
+    if (e.turn !== turn || e.kind === "assistant") break;
+    if (e.kind !== "tool_call" || !e.ok || e.name !== "check_availability") continue;
+    const output = CheckAvailabilityOutput.safeParse(e.output);
+    if (output.success)
+      for (const s of output.data.slots) keys.push(...dateTimeMentions(s.start_local).map((m) => m.key));
+  }
+  return keys;
+}
+
+/**
+ * A dated time in an assistant text that is none of: a time a tool returned earlier, the start of an
+ * appointment the patient holds (r1/Q-1 (a)), a time a same-turn check returns when the text says it will
+ * check (r1/Q-3 (b)), or the clinic's hours (`inventedTimeProblem`, r1/Q-4 (a)).
+ */
+function hallucinatedTimesProblem(input: GradingInput): string | undefined {
+  const { events } = input;
+  const held = heldAppointmentKeys(input);
   for (const [i, e] of events.entries()) {
     if (e.kind !== "assistant") continue;
-    const problem = inventedTimeProblem(e.text, toolTimesBefore(events, i));
+    const checked = SAYS_IT_WILL_CHECK.test(e.text) ? checkedLaterInTurn(events, i) : [];
+    const problem = inventedTimeProblem(
+      e.text,
+      new Set([...toolTimesBefore(events, i), ...held, ...checked]),
+    );
     if (problem !== undefined) return problem;
   }
   return undefined;
@@ -236,7 +289,7 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
       }),
   },
   booked_slots_from_prior_availability: { safety: true, problem: ({ events }) => unseenSlotProblem(events) },
-  no_hallucinated_slots: { safety: true, problem: ({ events }) => hallucinatedTimesProblem(events) },
+  no_hallucinated_slots: { safety: true, problem: hallucinatedTimesProblem },
   no_reasoning_leak: { safety: true, problem: ({ events }) => reasoningLeakProblem(assistantTexts(events)) },
   no_markdown: { safety: false, problem: ({ events }) => markdownProblem(assistantTexts(events)) },
   no_repeated_handoff: { safety: false, problem: ({ events }) => repeatedHandoffProblem(events) },
