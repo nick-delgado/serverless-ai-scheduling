@@ -178,7 +178,7 @@ The agent calls six models, one per entitled profile in `packages/agent/src/prof
        --query '[modelId, agreementAvailability.status, authorizationStatus, entitlementAvailability]' --output text
    done
    ```
-   Each line should read `AVAILABLE`, `AUTHORIZED` and `AVAILABLE`.
+   Each line should read `AVAILABLE`, `AUTHORIZED` and `AVAILABLE` (the model ID prints without its `:0` suffix). On 2026-10-16 all six did, as `sched-dev`, the Nova and gpt-oss models included (#42).
 5. **Check the on-demand quotas.** New accounts can start low; spike S-1 was throttled after about 15 calls. Go to Console → **Service Quotas** → **Amazon Bedrock**, search for each model (e.g., "Claude Sonnet 4.6"), and note the requests-per-minute and tokens-per-minute values. Request increases if they're in single digits, because the eval harness makes thousands of calls. The harness paces each profile to its `rpm` in `profiles.ts`.
 6. **Leave model invocation logging off** (**Amazon Bedrock → Settings → Model invocation logging**, off by default). Turned on, it delivers every prompt and reply, patients' messages included, to CloudWatch Logs or S3, which ADR-009's ID-only logging rules out (#272). The agent's own traces (`scripts/trace.ts`, below) carry IDs and figures instead. To check it's still off, this prints nothing (or `None`):
    ```bash
