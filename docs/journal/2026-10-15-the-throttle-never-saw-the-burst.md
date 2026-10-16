@@ -32,7 +32,7 @@ One step departs from r1/Q-3, which named Logs Insights for the marker search:
 
 ## What surprised us
 
-- **The burst never met the throttle.** On a cold env, 30 simultaneous session calls got 10 × 200 and 20 × 500, with no 429. The session log group showed exactly 10 cold starts: the account's Lambda concurrent-executions quota is **10**, against an AWS default of 1000. Lambda refused the rest, and API Gateway turned that into a 500. Warm, all 30 got 200. Only paced load got API Gateway's 429: 1 of 40 calls at about 12 a second, and 14 of 60 at about 25 a second. The quota is account-wide, so a burst in one env can starve chat turns in `dev`. It also makes reserved concurrency impossible, because Lambda keeps 10 unreserved.
+- **The burst never met the throttle.** On a cold env, 30 simultaneous session calls got 10 × 200 and 20 × 500, with no 429. The session log group showed exactly 10 cold starts: the account's Lambda concurrent-executions quota is **10**, against an AWS default of 1000. Lambda refused the rest, and API Gateway turned that into a 500. Warm, all 30 got 200. Only paced load got API Gateway's 429: 1 of 40 calls at about 12 a second, and 14 of 60 at about 25 a second. The quota is account-wide, so a burst in one env can starve chat turns in `dev`. It also makes reserved concurrency impossible, because Lambda keeps 10 unreserved. **Later (2026-10-16):** Lambda keeps 100 unreserved, not 10 (the Lambda docs, "Configuring reserved concurrency"); see [Five chat turns at once per env](2026-10-16-five-chat-turns-at-once.md).
 - **The same regex trap, twice.** Our redaction of 12-digit account IDs mangled 13-digit millisecond timestamps in the log exports. The [2026-10-08](2026-10-08-voice-streams-pass-but-the-sdk-hangs-up-early.md) entry describes the same trap. Bounding the pattern to exactly 12 digits fixed it.
 - **Drift detection needs a second permission.** `SchedDeployer` has `cloudformation:DetectStackDrift` but not `DetectStackResourceDrift`, so `detect-stack-drift` is denied. We read the processed templates instead. The deployed bootstrap template matches the repo's, apart from one em dash stored as `?`.
 
@@ -51,6 +51,6 @@ One step departs from r1/Q-3, which named Logs Insights for the marker search:
 ## What's next
 
 - #272: Nick decides on the Lambda concurrency quota and the commit-email setting.
-- #273: per-client limits, WAF, a Transcribe cap, and the misleading "10 req/min" throttle comment.
+- #273: per-client limits, WAF, a Transcribe cap, and the misleading "10 req/min" throttle comment. **Later (2026-10-16):** the comment is fixed, the chat function reserves 5, and Nick accepted the rest; see [Five chat turns at once per env](2026-10-16-five-chat-turns-at-once.md).
 - #270 (the bootstrap and `SchedDeployer` grants, applied by Nick) and #271 (escalation retention).
 - #42: the runbook still says `SchedDeployer` calls `bedrock-mantle:CreateInference` (F-19). **Later (2026-10-16):** step 3 now names the four Bedrock actions the policy grants, and step 6 says to leave model invocation logging off; see [A new env from the runbook alone](2026-10-16-a-new-env-from-the-runbook-alone.md).

@@ -45,7 +45,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 
 | Line | Status | Evidence |
 |---|---|---|
-| API Gateway stage throttling | follow-up #273, #272 | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:345-349`, pinned by `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10". Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15; follow-ups #273, #272). |
+| API Gateway stage throttling | accepted: owner decision r1/Q-1 (a) on #273 (F-12) | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:345-349`, pinned by `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10". Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15). #273's re-check on `ab273`, after #272 raised the Lambda quota to 1000, got the same shape: no 429 for either simultaneous burst of 30, 429s for paced load ([journal 2026-10-16](../journal/2026-10-16-five-chat-turns-at-once.md)). |
 | A per-patient cap on agent turns per day (50), enforced in the chat handler | holds | `DailyTurnCap` defaults to 50 (`infra/stacks/api.yaml:27-31`) and reaches the function as `DAILY_TURN_CAP` (`:104`), pinned by `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function". Deployed: `dev` 50, `sec39` 1 (`lambda get-function-configuration`). The rules are pinned by the tests in A-5: `turn-store.test.ts:27-29`; `dynamo-turn-store.local.test.ts:52-67` (concurrency); `chat-turn.test.ts:789` (replays don't count); `errors.test.ts:40-44` (the cap's message); `chat-turn.test.ts:436` "enforces the daily turn cap per patient and per clinic day" (429 with `RATE_LIMITED`). Live on `sec39`: 200, then 429 `RATE_LIMITED` (§3). |
 | An agent-loop iteration cap (ADR-001) | holds | `packages/agent/src/loop.ts:71` (`maxIterations: 8`, `maxToolCallsPerTurn: 16`); `packages/agent/test/loop.test.ts:497` "counts retries as iterations, so a retry can't push the turn past the cap". |
 | An AWS Budget alarm (bootstrap stack) | holds | `infra/bootstrap/bootstrap.yaml:229-250` (`sched-monthly`, 80% actual and 100% forecast) and the Bedrock budget (`BedrockBudgetLimitUsd`, `:20`). The deployed bootstrap template matches the repo (§2, A-2). |
@@ -68,7 +68,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | 30-day message TTL | holds | See the ADR-009 data row. |
 | No message text in logs | fixed | F-21; §3. |
 | Least-privilege IAM | fixed; follow-up #270 | §2 |
-| API throttling | follow-up #273, #272 | §3; F-12, F-15 |
+| API throttling | accepted: owner decision r1/Q-1 (a) on #273 (F-12) | §3; F-12, F-15 |
 | Daily turn cap | holds | §3; the A-5 tests |
 | Loop iteration cap | holds | `loop.ts:71`, `loop.test.ts:497` |
 | Budget alarm | holds | `bootstrap.yaml:229-250` |
@@ -105,7 +105,7 @@ Each table lists every statement whose action or resource contains `*`.
 
 | Statement | `*` | Class |
 |---|---|---|
-| `transcribe-streaming-only` | `Resource: "*"` | **justified**: Transcribe streaming has no resource-level permissions. Only authenticated identities of this env's pool can assume the role (`amr: authenticated`, `aud` = the pool). There is no per-patient cap: F-16, #273. |
+| `transcribe-streaming-only` | `Resource: "*"` | **justified**: Transcribe streaming has no resource-level permissions. Only authenticated identities of this env's pool can assume the role (`amr: authenticated`, `aud` = the pool). There is no per-patient cap: F-16, accepted (owner decision r1/Q-3 (a) on #273). |
 
 ### CloudFormation execution role (`CfnExecutionRole`, `infra/bootstrap/bootstrap.yaml:94-178`)
 
@@ -259,13 +259,13 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 | F-8 | medium | `SchedDeployer`'s `SeedAndEvalData` grants `index/*`. | follow-up #270 |
 | F-9 | low | `SchedDeployer` can't run drift detection (no `DetectStackResourceDrift`), so the review couldn't check drift (A-2). | follow-up #270 |
 | F-10 | medium | Escalation items have no TTL. The patient's `reason` and the model's `summary` stay indefinitely, PITR keeps expired items restorable for its window, and the staff email holds the transcript (Q-4 (a)). | follow-up #271 |
-| F-11 | low | The stage throttle's comment cites "the account quota is 10 req/min". That is `sonnet-4.6`'s Bedrock RPM (`packages/agent/src/profiles.ts:121`), which a rate of 5 per second doesn't bound. | follow-up #273 |
-| F-12 | medium | The throttle is stage-wide, not per client, and a simultaneous burst of 30 gets no 429 (§3). | follow-up #273 |
+| F-11 | low | The stage throttle's comment cites "the account quota is 10 req/min". That is `sonnet-4.6`'s Bedrock RPM (`packages/agent/src/profiles.ts:121`), which a rate of 5 per second doesn't bound. | fixed by #273 (`7edb209`): the comment says what the throttle bounds (the sustained rate, per method) and what it doesn't (a simultaneous warm burst, Bedrock requests, Lambda concurrency, one patient's use) |
+| F-12 | medium | The throttle is stage-wide, not per client, and a simultaneous burst of 30 gets no 429 (§3). | accepted: owner decision r1/Q-1 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`); each patient is capped at 50 turns a day (`DailyTurnCap`, `infra/stacks/api.yaml:27-31`); the stage throttle rejects sustained load (§3); and the `sched-monthly` budget alarm reports spend. WAF would add a web ACL and its rules to every standing env, and the exec role has no `wafv2` grant |
 | F-13 | medium | The e2e role's `SeedE2eData` grants `index/*`. | follow-up #270 |
-| F-14 | medium | No reserved concurrency for the chat function (impossible while the quota is 10). | follow-up #273 |
-| F-15 | medium | The account's Lambda concurrency quota is 10, shared by every env. A burst of one env's calls throttles the others, and the client sees a 500. | follow-up #272 (quota), #273 (the 500) |
-| F-16 | low | No per-patient cap on Transcribe streaming. | follow-up #273 |
-| F-17 | low | No WAF on CloudFront or the stage. | follow-up #273 |
+| F-14 | medium | No reserved concurrency for the chat function (impossible while the quota is 10). | fixed by #273 (`7edb209`, owner decision r1/Q-2 (c)): `ReservedConcurrentExecutions: 5` on `ChatFunction`, pinned by `api-template.test.ts` "reserves 5 concurrent executions for the chat function …", deployed on `dev` (`aws lambda get-function` `Concurrency`: 5). Lambda keeps 100 of the account's 1000 unreserved, so each env's 5 fits |
+| F-15 | medium | The account's Lambda concurrency quota is 10, shared by every env. A burst of one env's calls throttles the others, and the client sees a 500. | follow-up #272 (quota; raised to 1000 on 2026-10-16); the 500 holds: on `ab273`, 25 of 30 simultaneous `POST /api/chat` calls beyond the chat function's reservation of 5 got API Gateway's 500 with no event body, which the SPA offers Retry for (`apps/web/src/chat/useChat.ts:114-118`) (#273, [journal 2026-10-16](../journal/2026-10-16-five-chat-turns-at-once.md)) |
+| F-16 | low | No per-patient cap on Transcribe streaming. | accepted: owner decision r1/Q-3 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`), and the role allows `transcribe:StartStreamTranscriptionWebSocket` only (`:111-119`). The SPA stops a recording at 60 seconds (`apps/web/src/voice/useRecording.ts:25`), but that cap is client-side and per recording, and nothing caps minutes per patient or per day, so a patient's credentials can stream for longer within their lifetime. The `sched-monthly` budget alarm reports the spend |
+| F-17 | low | No WAF on CloudFront or the stage. | accepted: owner decision r1/Q-1 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`); each patient is capped at 50 turns a day (`DailyTurnCap`, `infra/stacks/api.yaml:27-31`); the stage throttle rejects sustained load (§3); and the `sched-monthly` budget alarm reports spend. WAF would add a web ACL and its rules to every standing env, and the exec role has no `wafv2` grant |
 | F-18 | low | Commits carry the owner's personal address in author metadata. | follow-up #272 |
 | F-19 | low | `docs/runbooks/aws-setup.md:53` says `SchedDeployer` calls `bedrock-mantle:CreateInference`; it's `bedrock:InvokeModel*` since ADR-010 (A-8). | fixed in the runbook by #42 (PR #285): step 3 names the Bedrock actions `SchedDeployer` grants today; the grant itself narrows in #270 |
 | F-20 | low | AWS SDK error messages are still logged, clipped to 200 characters. AWS doesn't document their format, so one could quote a request field. | accepted: owner decision r1/Q-5 (b) keeps them for debugging Bedrock errors |
