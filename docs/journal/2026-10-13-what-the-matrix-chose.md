@@ -42,7 +42,7 @@ Last, the refusal fallback, which nobody had run live since PR #53.
   - two harness and adapter defects that made whole cells meaningless (#246, where Nova 2 Lite rejects `maxTokens` at `high`; #247, where `gpt-oss-20b`'s invented tool names break every later call);
   - one scenario expectation (#248);
   - two prompt behaviours (#249, #250).
-- **The rubric and agreement rows.** The rubric is the pre-calibration average and agreement is pending #159 (r1/Q-6 (a)). `haiku-4.5`'s own row is self-judged.
+- **The rubric and agreement rows.** The rubric is the pre-calibration average and agreement is pending #159 (r1/Q-6 (a)). `haiku-4.5`'s own row is self-judged. **Later (2026-10-16):** #159 measured agreement at 42/49 on `judge.v1` (`6ee1591`), so 4.89 is the after-calibration figure; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).
 - **The amendment's date.** ADR-002's amendment is dated 2026-10-12, the day the matrix finished and the choice was made (r2/M-1), rather than 2026-10-13, when the NFR-001 comparison, the refusal turn and Nick's r4/N-2 came in. The matrix result is what the amendment records; the later runs confirm or qualify it.
 
 ## What surprised us
@@ -81,8 +81,8 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 | Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
 | Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
 | Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
-| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 |
-| Judge–human agreement | pending #159 | ≥ 80% | pending |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(**Later (2026-10-16):** met after calibration, on `judge.v1`; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md))* |
+| Judge–human agreement | pending #159 *(**Later (2026-10-16):** 42/49, 86%, `6ee1591`; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md))* | ≥ 80% | pending *(met)* |
 | Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
 | NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
 
@@ -96,5 +96,5 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 
 ## What's next
 
-- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md); **Later (2026-10-16):** #249 and #250 landed together as `system.v5`, prompt only, see [The handoff rule we tightened already held](2026-10-16-the-handoff-rule-already-held.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice).
+- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md); **Later (2026-10-16):** #249 and #250 landed together as `system.v5`, prompt only, see [The handoff rule we tightened already held](2026-10-16-the-handoff-rule-already-held.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice; **Later (2026-10-16):** it didn't, see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md)).
 - M4 (#43, #45) tells this story with the comparison table above.

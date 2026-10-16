@@ -53,5 +53,5 @@ All runs were on `sonnet-4.6` with the `sched-dev` profile: the first four on 20
 ## What's next
 
 - #37 re-records the baselines on `system.v2`. Until then, every gated PR's Eval gate warns that the prompt version differs from the baseline's `system.v1`.
-- #159: `--export-calibration` now refuses `system.v1` results files, so the next calibration export needs a v2 scenario run.
+- #159: `--export-calibration` now refuses `system.v1` results files, so the next calibration export needs a v2 scenario run. **Later (2026-10-16):** #159 labelled the committed `system.v1` set instead (r1/Q-1 (a)), so no export was needed; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).
 - #212 now edits `system.v2.ts` and `system.v2.test.ts`. **Later (2026-10-15):** #212 landed with #236 in `system.v4.ts`; see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md).

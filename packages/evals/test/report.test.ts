@@ -222,7 +222,7 @@ describe("exitReport (r1/Q-4 (a))", () => {
     });
     expect(r.rows.find((x) => x.metric.startsWith("Judge–human"))?.verdict).toBe("measured elsewhere");
     expect(r.rows.find((x) => x.metric.startsWith("Judge rubric"))?.metric).toBe(
-      "Judge rubric average (tone, clarity), before calibration (#159)",
+      "Judge rubric average (tone, clarity)",
     );
     expect(r.rows.find((x) => x.metric.startsWith("NFR-001"))).toMatchObject({
       verdict: "measured elsewhere",

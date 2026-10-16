@@ -43,4 +43,4 @@ The PR review found a hole in the containment check (d43a881/SPEC-1). The agent 
 ## What's next
 
 - #34's eval gate decides whether CI keeps results by uploading them as an artifact; the CLI writes the copy in CI like anywhere else (A-8).
-- `--calibrate`'s report still goes only to `--out`, so #159's live calibration run loses its report the same way if it runs in a worktree (A-6).
+- `--calibrate`'s report still goes only to `--out`, so #159's live calibration run loses its report the same way if it runs in a worktree (A-6). **Later (2026-10-16):** #159 ran it with `--out packages/evals/calibration` and committed the report (r1/A-3); see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).

@@ -165,8 +165,10 @@ describe("prompt", () => {
  * message, on fixed placeholder inputs, renders its wrapping of the agent's prompt, the transcript and a
  * rejected reply. The transcript goes in as the placeholder `"<transcript>"`, so `renderJudgeTranscript`'s
  * format is not in the hash: the `prompt` block's exact-string tests pin it. A recalibration that revises a
- * rubric or the prompt (#159) bumps the version, adds an entry here and re-exports `calibration/*.json`; an
- * old entry is never edited.
+ * rubric or the prompt bumps the version and adds an entry here; an old entry is never edited. It doesn't
+ * re-export the calibration set: it hand-edits `rubricVersion` in `calibration/transcripts.json` and
+ * `calibration/labels.json`, and `instructions` in `labels.json` to the text `LABEL_INSTRUCTIONS` renders,
+ * and leaves the transcripts, their order and Nick's scores unchanged (#159 r1/Q-2 (a)).
  */
 const JUDGE_PROMPT_HASHES: Readonly<Record<string, string>> = {
   "judge.v1": "0cebbfd53fbd2e0140a66218bdc38ceffa50fdebb9e5e1541b78d3a8f74f1505",
