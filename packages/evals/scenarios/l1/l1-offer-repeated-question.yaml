@@ -10,7 +10,9 @@ notes: >
   again from the result already in the conversation, in the grouped format, with no remark that it was
   asked or shown before (Nick's dev run: "I just showed those above!"). Its r1/Q-4 (a) negative check is
   a non-safety `format_must_not_contain`, and ET after each time and the five-option limit are graded by the
-  invariants it opts into, also non-safety (#282, r1/Q-1 (a), r1/Q-2 (b)).
+  invariants it opts into, also non-safety (#282, r1/Q-1 (a), r1/Q-2 (b)). #300 (r1/Q-1 (a)): the
+  non-safety `format_must_match_none` fails text before or after "Tuesday, October 13" on its line, so the
+  day line must stand alone and a lead-in ending with the date doesn't count as one.
 context:
   - patient: "Does Dr. Lee have anything on Tuesday, October 13?"
   - tool_call:
@@ -58,4 +60,5 @@ expect:
   response:
     contains_all: ["Tuesday, October 13:"]
     format_must_not_contain: ["showed those", "above", "already showed", "as I mentioned"]
+    format_must_match_none: ["\\S[^\\n]*Tuesday, October 13", "Tuesday, October 13:[ \\t]*\\S"]
   invariants: [times_in_clinic_tz_with_weekday, max_five_options]
