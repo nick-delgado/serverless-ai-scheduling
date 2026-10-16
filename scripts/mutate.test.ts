@@ -792,6 +792,29 @@ describe("main", () => {
     expect(errors[0]).toContain("checker: bad");
   });
 
+  // The started process exits 0 at once (sh, the escaper), while what it started outlives the 2 s timeout: the
+  // checker in sh's group (killed at the timeout; the after-each check sees it gone), or the escaped grandchild (10 s).
+  it.each([
+    { what: "a process left in its group", unedited: "slow\n", cmd: () => checkerAfterSh(), pidFile: "sh.pid" },
+    { what: "a process that left its group", unedited: "escape\n", cmd: () => escaping(10_000), pidFile: "first.pid" },
+  ])(
+    "mutates nothing and exits 2 when the unedited run times out after its started process exited 0, with $what",
+    async ({ unedited, cmd, pidFile }) => {
+      writeFileSync(join(dir, "target.txt"), unedited);
+      const edits = editsFile([{ id: "a", file: "target.txt", find: unedited.trim(), replace: "bad" }]);
+      const code = await main([edits, "--timeout", "2", "--", ...cmd()], deps());
+      expect(errors[0]).toContain("the unedited run timed out after 2 s (--timeout); nothing was mutated");
+      expect(errors[0]).not.toContain("failed");
+      expect(code).toBe(2);
+      expect(out).toEqual([]);
+      expect(target()).toBe(unedited);
+      // The started process had exited before the timeout: the run's exit code was 0.
+      expect(alive(Number(readFileSync(join(dir, pidFile), "utf8")))).toBe(false);
+      await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
+    },
+    10_000,
+  );
+
   it("reports wrong arguments with the usage and exits 2", async () => {
     expect(await main(["edits.json"], deps())).toBe(2);
     expect(errors[0]).toContain("usage: mutate");

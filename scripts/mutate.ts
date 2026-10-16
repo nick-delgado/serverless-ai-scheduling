@@ -31,12 +31,14 @@
  * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
  * id, file, exact edit, status, failed tests; a KILLED edit with no `expect` list reads `KILLED (no expect)`) and the
  * summary line, both from the same results.
- * The command first runs once unedited; if that run fails, nothing is mutated.
+ * The command first runs once unedited; if that run fails or times out, nothing is mutated: a timed-out unedited run
+ * fails whatever its exit code, since the started process can exit 0 while a process it started outlives the timeout
+ * (#276), and its printed output holds only what came before the timeout.
  *
  * An edit whose file can't be read is REFUSED; a command that can't be started is ERROR (or, unedited, a failed run).
  *
  * Exit codes: 0 every edit was killed or timed out; 1 an edit survived or was KILLED-OTHER; 2 an edit was refused or errored, the
- * unedited run failed, or the arguments were wrong (including an edits file that can't be read or isn't a list of
+ * unedited run failed or timed out, or the arguments were wrong (including an edits file that can't be read or isn't a list of
  * edits, an `--only` id no edit has, and `--suggest` with a run's arguments).
  */
 import { spawn } from "node:child_process";
@@ -405,6 +407,14 @@ export async function main(argv: readonly string[], deps: MutateDeps = {}): Prom
   const edits = only ? all.filter((edit) => only.includes(edit.id)) : all;
 
   const baseline = await runCommand(args.cmd, args.timeout, cwd);
+  // A timed-out unedited run is no clean baseline, whatever its exit code: the started process can exit 0 while a
+  // process it left behind outlives the timeout, and the output stops at the timeout (#276).
+  if (baseline.timedOut) {
+    logError(
+      `mutate: the unedited run timed out after ${String(args.timeout)} s (--timeout); nothing was mutated.\n${baseline.output}`,
+    );
+    return 2;
+  }
   if (baseline.code !== 0) {
     logError(
       `mutate: the unedited run failed (exit ${String(baseline.code)}); nothing was mutated.\n${baseline.output}`,
