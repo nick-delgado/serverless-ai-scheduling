@@ -2,12 +2,13 @@
  * Scenario lint (#33, replaced by the real schema in #30). Structure is the loader's job: every file must
  * parse and satisfy the Zod schema (`src/schema.ts`), id = file name, category = folder. On top of that,
  * this checks what a schema can't: ids that exist in the `clinic-default` fixture, the ADR-008 budget,
- * the coverage the scenarios README promises, and that an L1 case whose context ends with a successful
+ * the coverage the scenarios README promises (and that its FR-030…FR-037 and ADR-009 rows name, as a code span, every
+ * L1 case whose `covers` has that key; #287, B11-6), and that an L1 case whose context ends with a successful
  * write result expects the reply to quote that result's `start_local` in full (#216, decision #202
  * `779e407/SPEC-1`). It also warns, without failing, about judge dimensions
  * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,7 @@ import {
   CONVERSATION_OWNERSHIP_TEST,
   isWriteTool,
   loadScenarios,
+  SCENARIOS_DIR,
   selectSuite,
   unrubricedInUse,
   type L1Case,
@@ -127,6 +129,30 @@ describe("eval scenarios (coverage)", () => {
 
   it("covers every ADR-009 agent-behavior policy line", () => {
     expect(REQUIRED_POLICIES.filter((p) => !covered.has(p))).toEqual([]);
+  });
+
+  /** The README's coverage rows: the L1 cell's code spans (FR rows), or the "Covered by" cell's (ADR-009 rows), by key. */
+  const readmeRows = new Map<string, Set<string>>();
+  for (const line of readFileSync(join(SCENARIOS_DIR, "README.md"), "utf8").split("\n")) {
+    const cells = line.split("|").map((c) => c.trim());
+    const key = /^FR-\d+/.exec(cells[1] ?? "")?.[0] ?? /^`(adr9\.[\w-]+)`$/.exec(cells[2] ?? "")?.[1];
+    if (line.startsWith("| ") && key !== undefined)
+      readmeRows.set(key, new Set([...(cells[3] ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1] as string)));
+  }
+  /** Each `<key>: <case>` pair where an L1 case covers the key and the key's README row doesn't name it. */
+  const unnamed = (keys: readonly string[]) =>
+    keys.flatMap((key) =>
+      l1
+        .filter((c) => c.covers.includes(key) && !readmeRows.get(key)?.has(c.id))
+        .map((c) => `${key}: ${c.id}`),
+    );
+
+  it("names in each FR-030…FR-037 row of the README every L1 case that covers that FR", () => {
+    expect(unnamed(REQUIRED_FRS)).toEqual([]);
+  });
+
+  it("names in each ADR-009 policy row of the README every L1 case that covers that policy", () => {
+    expect(unnamed(REQUIRED_POLICIES)).toEqual([]);
   });
 
   it("includes the required red-team cases", () => {
