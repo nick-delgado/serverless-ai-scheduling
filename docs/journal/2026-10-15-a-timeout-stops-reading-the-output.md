@@ -23,7 +23,7 @@ The readiness review (r1 on #268) settled the open questions, and Nick accepted 
 - **Q-2: an in-process test with a pid file for the grandchild,** rather than reworking the spawned-script test (which records no coverage) or timing alone (which can't show the process still runs).
 - **Q-3: the `sh.pid` wait,** so the test can't pass without `sh` having exited before the kill.
 - **A-5:** the runner prints nothing new when it leaves an escaped process running. The header is where a user learns it.
-- **A-6:** the unedited run's check reads only the exit code, so a timed-out unedited run whose started process exited 0 passes it, now at the timeout. We left it as is and filed #276 for the owner to decide.
+- **A-6:** the unedited run's check reads only the exit code, so a timed-out unedited run whose started process exited 0 passes it, now at the timeout. We left it as is and filed #276 for the owner to decide. **Later (2026-10-15):** Nick decided it fails the check; see [A timed-out unedited run is no baseline](2026-10-15-a-timed-out-unedited-run-is-no-baseline.md).
 - **A-7:** a timed-out unedited run that fails prints its output, which now holds only what came before the timeout's kill. Neither the header nor this entry claims the destroy "loses nothing".
 
 The spec left nothing else open. `--suggest` offered one edit, swapping the two destroy calls. Both run in the same synchronous callback, so the swap changes nothing (A-8), and it gets no row in the PR's table.
@@ -42,4 +42,4 @@ The spec left nothing else open. `--suggest` offered one edit, swapping the two 
 
 ## What's next
 
-- #276: decide whether a timed-out unedited run should fail the unedited-run check.
+- #276: decide whether a timed-out unedited run should fail the unedited-run check. **Later (2026-10-15):** Nick decided it fails the check; see [A timed-out unedited run is no baseline](2026-10-15-a-timed-out-unedited-run-is-no-baseline.md).
