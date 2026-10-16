@@ -42,7 +42,7 @@ Last, the refusal fallback, which nobody had run live since PR #53.
   - two harness and adapter defects that made whole cells meaningless (#246, where Nova 2 Lite rejects `maxTokens` at `high`; #247, where `gpt-oss-20b`'s invented tool names break every later call);
   - one scenario expectation (#248);
   - two prompt behaviours (#249, #250).
-- **The rubric and agreement rows.** The rubric is the pre-calibration average and agreement is pending #159 (r1/Q-6 (a)). `haiku-4.5`'s own row is self-judged.
+- **The rubric and agreement rows.** The rubric is the pre-calibration average and agreement is pending #159 (r1/Q-6 (a)). `haiku-4.5`'s own row is self-judged. **Later (2026-10-16):** #159 measured agreement at 42/49 on `judge.v1` (`6ee1591`), so 4.89 is the after-calibration figure; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).
 - **The amendment's date.** ADR-002's amendment is dated 2026-10-12, the day the matrix finished and the choice was made (r2/M-1), rather than 2026-10-13, when the NFR-001 comparison, the refusal turn and Nick's r4/N-2 came in. The matrix result is what the amendment records; the later runs confirm or qualify it.
 
 ## What surprised us

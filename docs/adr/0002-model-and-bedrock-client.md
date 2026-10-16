@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -144,7 +144,7 @@ Agreement status across every Anthropic model on the account:
 **Decision:** the production profile is **`sonnet-4.6` at effort `high`** (`us.anthropic.claude-sonnet-4-6`, adaptive thinking). It is also the development default. `DEFAULT_MODEL_PROFILE` and the api stack's `AgentModelProfile` stay `sonnet-4.6`. The profile's `modelFields` and the matrix's `EFFORT_SWITCHES` default move to `high` together (#37 r1/Q-5 (a)), so every later `sonnet-4.6` run is at `high`, the eval simulator's included. The CI Eval gate keeps measuring `sonnet-4.6`, against a baseline re-recorded at `high`.
 
 **The rule** (drift-audit decision 12, as #37 states it): the production profile is the cheapest profile, by agent cost per completed conversation, that meets every PRD §7 target and NFR-001. If none qualifies, `sonnet-4.6` stays the default. Choices made under the rule:
-- The judge rubric is the average before calibration, and judge–human agreement is pending #159 (#37 r1/Q-6 (a)). If #159's recalibration puts this profile's rubric below 4.0, the choice is revisited there.
+- The judge rubric is the average before calibration, and judge–human agreement is pending #159 (#37 r1/Q-6 (a)). If #159's recalibration puts this profile's rubric below 4.0, the choice is revisited there. *(Settled by the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159): `judge.v1` agrees with Nick on 42/49 pairs, so 4.89 is the after-calibration figure and the choice stands.)*
 - `haiku-4.5` is the judge for every cell, its own included, so its rubric row is self-judged.
 - A safety violation that is #239's false positive (the patient's own stated or booked time read as a quoted slot) isn't counted. Every other one is (#37 r1/A-4).
 - The safety count may miss hallucinated slots in list offers: `no_hallucinated_slots` can't see a time listed under a date heading (#178), so such slots count neither way.
@@ -188,8 +188,8 @@ Two cells measure a defect rather than the model:
 | Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
 | Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
 | Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
-| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 |
-| Judge–human agreement | pending #159 | ≥ 80% | pending |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(met: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* |
+| Judge–human agreement | pending #159 *(42/49, 86%: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* | ≥ 80% | pending *(met)* |
 | Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
 | NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
 
@@ -213,7 +213,7 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
 - Agent cost rises from $0.0348 to $0.0400 per completed conversation (+15%), still a sixth of NFR-003's $0.25.
 - The production default stays a Claude model at 10 requests per minute (the 2026-10-09 amendment).
 - Revisit if:
-  - #159's calibration moves the rubric below 4.0;
+  - #159's calibration moves the rubric below 4.0; *(it didn't: the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))*
   - #251 changes NFR-001's first-text result;
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
@@ -233,3 +233,11 @@ The decision stands. #38 changed where NFR-001's figures are read, not how they'
   Filtering on `modelProfile` also leaves out replays and turns refused before the model was called, which have none. Don't filter on `replayed`: Logs Insights matched JSON booleans inconsistently in our test on `dev`.
 - **The dashboard.** `sched-<env>-api` charts the same two timings as the metrics `Sched/TimeToFirstTextMs` and `Sched/TurnLatencyMs` (dimension `Env`) at p50 and p95. Each turn writes them as an embedded-metric record. There's one difference from the query: `TimeToFirstTextMs` also counts an error turn that streamed text before it failed (Q-3 on #38), whereas the query reads `done` turns only. CloudWatch's percentiles come from the metric's samples, so over a short window they can differ from the query's `pct`.
 
+## Amendment (2026-10-16): judge calibration (#159)
+
+The production profile stands. #37 r1/Q-6 (a) left the rubric row's calibration to #159; #159 measured it:
+
+- **The measurement.** Nick labelled the 20 committed calibration transcripts (`packages/evals/calibration/transcripts.json`, exported from the 2026-10-05 full scenario run on `sonnet-4.6`, prompt `system.v1`), all 49 transcript–dimension pairs. `npm run evals -- --calibrate` ran the judge `llm:haiku-4.5:judge.v1` (`us.anthropic.claude-haiku-4-5-20251001-v1:0`) on them: **pass/fail agreement 42/49 (86%)**, exact-score agreement 31/49 (63%), no judge errors, $0.1360. Report: `packages/evals/calibration/2026-10-16T162339Z-calibration-haiku-4.5.{json,md}`.
+- **The rubric outcome** (#159 r1/Q-4 (a)). The judge reached PRD §7's ≥ 80% on its first run, so it wasn't revised and stays `judge.v1`, the version the matrix used. The matrix's **4.89 / 5** for `sonnet-4.6@high` (full suite, k=3) is therefore the after-calibration rubric average, and it meets ≥ 4.0. No new run was needed.
+- **The table above,** updated: "Judge rubric average (tone, clarity)" 4.89 / 5, met; "Judge–human agreement" 42/49 (86%), met. The exit report's row no longer says "before calibration" (#159 r1/Q-5 (c)).
+- **The caveat.** The 42 agreements are almost all passes. Nick failed six replies, all on clarity, and the judge passed all six; its one fail (`no_claim_to_be_human` on `escalate-explicit-human-request#1`) is a reply Nick scored 5. The judge stays report-only (ADR-008), and the rubric average is at best an upper bound on clarity. Details: [the journal entry](../journal/2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).

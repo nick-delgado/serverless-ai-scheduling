@@ -66,5 +66,5 @@ The rubric anchors themselves were written by the agent and haven't been reviewe
 
 ## What's next
 
-- #159: Nick labels the 20 exported transcripts, and we measure agreement against the 80% target. With every judge score at 4 or 5, this run can't yet show whether the judge would catch a bad reply.
+- #159: Nick labels the 20 exported transcripts, and we measure agreement against the 80% target. With every judge score at 4 or 5, this run can't yet show whether the judge would catch a bad reply. **Later (2026-10-16):** Nick's labels put agreement at 42/49, and the judge passed all six replies he failed (`6ee1591`); see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md).
 - #34 builds baselines and the CI gate on the deterministic status, with the judge's scores reported beside it.
