@@ -393,7 +393,10 @@ export function mentionHasWeekdayAndZone(
     return WEEKDAY_RE.test(mention.heading) && ZONE_RE.test(mention.afterTime.slice(0, ZONE_WINDOW));
   const floor = previous === undefined ? 0 : previous.index + previous.raw.length;
   const before = text.slice(Math.max(floor, mention.index - 40), mention.index + mention.raw.length);
-  const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + ZONE_WINDOW);
+  const after = text.slice(
+    mention.index + mention.raw.length,
+    mention.index + mention.raw.length + ZONE_WINDOW,
+  );
   return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
 }
 
