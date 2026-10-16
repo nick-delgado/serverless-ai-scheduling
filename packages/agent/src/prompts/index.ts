@@ -3,15 +3,15 @@
  * handler, #36; the eval harness) pick up a new version without code changes. Each prompt's `version`
  * is recorded in every turn trace as `promptVersion`.
  */
-import { systemPromptV4 } from "./system.v4";
+import { systemPromptV5 } from "./system.v5";
 
 export {
   ESCALATION_MESSAGE,
-  SYSTEM_PROMPT_V4_VERSION,
-  renderSystemPromptV4Dynamic,
-  systemPromptV4,
+  SYSTEM_PROMPT_V5_VERSION,
+  renderSystemPromptV5Dynamic,
+  systemPromptV5,
   type SystemPromptContext,
-} from "./system.v4";
+} from "./system.v5";
 
-/** The current system prompt (v4, #236). */
-export const buildSystemPrompt = systemPromptV4;
+/** The current system prompt (v5, #249 with #250). */
+export const buildSystemPrompt = systemPromptV5;

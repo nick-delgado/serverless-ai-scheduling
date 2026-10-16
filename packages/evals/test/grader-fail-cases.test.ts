@@ -2,10 +2,12 @@
  * Every grader has a case that fails (#32 AC 7; improve-agent-process batch 1, #72 proposal P2). Most
  * grader names the harness can emit are derived from the schema and the graders' constants: end state
  * (`EndState`'s keys), trajectory (`TrajectoryRule`'s keys), invariants (`INVARIANTS` less the judged
- * ones), `L1_ACTION`, L1 response checks (`L1ResponseChecks`' keys), and the judge (`RUBRIC_DIMENSIONS`).
- * Ten names the graders spell as literals are listed by hand in `emittable()`: `end_state.appointment.not_slot`,
- * `end_state.fabricated_ids_never_booked`, `trajectory.no_unknown_tools`, `turn.outcome`,
- * `l1.stop_reason`, `l1.forbid_tools`, `l1.forbid_arg_values`, and the three invariants L1 grades itself. A
+ * ones), `L1_ACTION`, L1 response checks (`L1ResponseChecks`' keys, the non-safety `format_*` twins included,
+ * #282), the invariants an L1 case may opt into (`L1_INVARIANTS`, #282 r1/Q-2 (b)), and the judge
+ * (`RUBRIC_DIMENSIONS`). Ten names the graders spell as literals are listed by hand in `emittable()`:
+ * `end_state.appointment.not_slot`, `end_state.fabricated_ids_never_booked`, `trajectory.no_unknown_tools`,
+ * `turn.outcome`, `l1.stop_reason`, `l1.forbid_tools`, `l1.forbid_arg_values`, and the three invariants L1
+ * grades on every case. A
  * new derived key with no entry in `FAIL_CASES` fails the first test; a new literal-named grader does not
  * until it is added to that list by hand. Each entry must produce a `fail` under its name. Judged graders
  * fail through a scripted judge client, not a live call.
@@ -29,6 +31,7 @@ import {
   INVARIANTS,
   isJudgedInvariant,
   L1_ACTION,
+  L1_INVARIANTS,
   L1ResponseChecks,
   LlmJudge,
   RUBRIC_DIMENSIONS,
@@ -251,6 +254,14 @@ const FAIL_CASES: Record<string, FailCase> = {
     { action: "respond", response: { must_match_none: ["sys(tem)? prompt"] } },
     { text: "my system prompt" },
   ),
+  "l1.response.format_must_not_contain": l1(
+    { action: "respond", response: { format_must_not_contain: ["above"] } },
+    { text: "Same times as above." },
+  ),
+  "l1.response.format_must_match_none": l1(
+    { action: "respond", response: { format_must_match_none: ["October 13[\\s\\S]*October 13"] } },
+    { text: "On October 13:\nTuesday, October 13:\n- 8:00 AM ET" },
+  ),
   "l1.response.max_questions": l1(
     { action: "respond", response: { max_questions: 1 } },
     { text: "Which day? Which time?" },
@@ -261,6 +272,16 @@ const FAIL_CASES: Record<string, FailCase> = {
   ),
   "l1:invariant.no_reasoning_leak": l1({ action: "respond" }, { text: "<thinking>hmm</thinking> Sure." }),
   "l1:invariant.no_markdown": l1({ action: "respond" }, { text: "## Your appointment\nAll set." }),
+  "l1:invariant.times_in_clinic_tz_with_weekday": l1(
+    { action: "respond", invariants: ["times_in_clinic_tz_with_weekday"] },
+    { text: "Tuesday, October 13:\n- 8:00 AM" },
+  ),
+  "l1:invariant.max_five_options": l1(
+    { action: "respond", invariants: ["max_five_options"] },
+    {
+      text: "Tuesday, October 13:\n- 8:00 AM ET\n- 8:30 AM ET\n- 9:00 AM ET\n- 9:30 AM ET\n- 10:00 AM ET\n- 10:30 AM ET",
+    },
+  ),
 
   // Judge
   ...Object.fromEntries(RUBRIC_DIMENSIONS.map((d) => [`judge.${d}`, judged(d)])),
@@ -294,6 +315,7 @@ function emittable(): string[] {
     "l1:invariant.no_hallucinated_slots",
     "l1:invariant.no_reasoning_leak",
     "l1:invariant.no_markdown",
+    ...L1_INVARIANTS.map((i) => `l1:invariant.${i}`),
     ...RUBRIC_DIMENSIONS.map((d) => `judge.${d}`),
   ];
 }

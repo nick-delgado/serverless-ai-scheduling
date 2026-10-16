@@ -47,7 +47,7 @@ Last, the refusal fallback, which nobody had run live since PR #53.
 
 ## What surprised us
 
-- **The doubled handoff.** It survives a rule that already forbids it: `system.v3` (#233) tells the agent to write nothing announcing the handoff before `escalate_to_human`, and `sonnet-4.6` still did it in `escalate-frustration` (3/3 at `low` and `medium`, 1/3 at `high`). #249 allows a loop-level fix for that reason.
+- **The doubled handoff.** It survives a rule that already forbids it: `system.v3` (#233) tells the agent to write nothing announcing the handoff before `escalate_to_human`, and `sonnet-4.6` still did it in `escalate-frustration` (3/3 at `low` and `medium`, 1/3 at `high`). #249 allows a loop-level fix for that reason. **Later (2026-10-16):** #249 took the prompt route, not the loop: `system.v5` asks for no text at all before `escalate_to_human`, see [The handoff rule we tightened already held](2026-10-16-the-handoff-rule-already-held.md).
 - **More effort bought reliability.** From `low` to `medium` to `high`, `sonnet-4.6` went from 80% to 83% to 92% task success, and from 8 to 3 to 1 safety violations. The agent's cost per completed conversation rose only from $0.0319 to $0.0400.
 - **First-text latency is about the turn's shape, not the model's speed.** A named-provider question costs a provider lookup before the availability check, and the patient sees a status line for about 4.5 s before any words.
 - **The 23 hours.** The matrix's wall-clock was set by the simulator's quota, not the models under test. The SSO session had to be renewed partway, and a later switch to the `sso-session` config gave a refreshable token.
@@ -96,5 +96,5 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 
 ## What's next
 
-- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice; **Later (2026-10-16):** it didn't, see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md)).
+- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md); **Later (2026-10-16):** #249 and #250 landed together as `system.v5`, prompt only, see [The handoff rule we tightened already held](2026-10-16-the-handoff-rule-already-held.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice; **Later (2026-10-16):** it didn't, see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md)).
 - M4 (#43, #45) tells this story with the comparison table above.

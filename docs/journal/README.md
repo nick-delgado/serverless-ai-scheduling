@@ -99,4 +99,7 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-16 | [A new env from the runbook alone: five friction points, then 7 min 45 s from deploy to a signed-in turn](2026-10-16-a-new-env-from-the-runbook-alone.md) | 5. What the evals showed |
 | 2026-10-16 | [Every expected test goes red: batch 11 closes four gaps the suggester and the PR body left open](2026-10-16-every-expected-test-goes-red.md) | 5. What the evals showed |
 | 2026-10-16 | [A second quick body edit now waits its turn instead of cancelling the first one's run](2026-10-16-a-second-body-edit-waits-its-turn.md) | 5. What the evals showed |
+| 2026-10-16 | [A format miss is not a leak: L1 gets non-safety text checks, and a lint keeps them apart](2026-10-16-a-format-miss-is-not-a-leak.md) | 5. What the evals showed |
+| 2026-10-16 | [The handoff rule we tightened already held, and the two-request case now fails on "ET", not on questions](2026-10-16-the-handoff-rule-already-held.md) | 5. What the evals showed |
+| 2026-10-16 | [Five chat turns at once per env: the reservation turns the sixth into a 500 the SPA already retries](2026-10-16-five-chat-turns-at-once.md) | 5. What the evals showed |
 | 2026-10-16 | [The judge agrees with Nick on 42 of 49 calls, and passes every reply he failed](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md) | 5. What the evals showed |
