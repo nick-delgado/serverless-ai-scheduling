@@ -27,12 +27,12 @@ The check itself is Nick's (Q-1 (a), Q-2 (a)). The agent decided these points th
 ## What surprised us
 
 - **The weekday check isn't the gap, and stays as it is.** `times_in_clinic_tz_with_weekday` reads a list under any line with a weekday, a month and a day, so a dated lead-in works as a heading for it. That's #236 r2/Q-1 (a)'s reader, and #300's non-goals keep it: the case's own check closes the gap.
-- **Nothing for `--suggest` to suggest.** `npm run mutate -- --suggest` returned 0 edits at `e008113`, since the change is YAML and a test file, which the coverage gate doesn't count as source. Every edit in the PR's table is handwritten: one per pattern per case that removes it, and, for `l1-offer-repeated-question`, one per regex part.
+- **Nothing for `--suggest` to suggest.** `npm run mutate -- --suggest` returned 0 edits at `e008113`, since the change is YAML and a test file, which the coverage gate doesn't count as source. Every edit in the PR's table is handwritten: one per pattern per case that removes it; for `l1-offer-repeated-question`, one per regex part; and, after the review of `fd49963`, four per day line in the other two cases (`\S` to `.` before the date, `\S` to `[^\n]` after the colon, and the space or the tab dropped from `[ \t]`).
 
 ## Evidence
 
-- The seen-failing table in PR #303 lists each edit, its `expect` and the test that went red. Its summary line, at `e008113`'s test file and case files, reads 23 edits, 23 killed, 0 killed other tests, 0 survived.
-- `npm run lint && npm run typecheck && npm run test:coverage && npm run coverage:changed` passed locally on the branch (163 test files, 3971 tests, at `e008113`); `coverage:changed` had no added source line to check.
+- The seen-failing table in PR #303 lists each edit, its `expect` and the test that went red. Its first summary line, at `e008113`'s test file and case files, read 23 edits, 23 killed, 0 killed other tests, 0 survived. After the review fixes, at `6d6f892`'s test file and case files, it reads 43 edits, 43 killed, 0 killed other tests, 0 survived.
+- `npm run lint && npm run typecheck && npm run test:coverage && npm run coverage:changed` passed locally on the branch (163 test files, 3971 tests, at `e008113`; 163 test files, 3984 tests, at `0a262f9`, after the review fixes and the merge of `main`); `coverage:changed` had no added source line to check.
 - No smoke case changed, so the smoke suite and `packages/evals/baselines/sonnet-4.6.json` stay the same. PR #303's `Eval gate` gives the numbers. We made no live run of the changed cases (optional in the issue, and skipped).
 
 ## What's next
