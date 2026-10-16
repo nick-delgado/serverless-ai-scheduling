@@ -5,7 +5,9 @@
  * the coverage the scenarios README promises (and that its FR-030…FR-037 and ADR-009 rows name, as a code span, every
  * L1 case whose `covers` has that key; #287, B11-6), and that an L1 case whose context ends with a successful
  * write result expects the reply to quote that result's `start_local` in full (#216, decision #202
- * `779e407/SPEC-1`). It also warns, without failing, about judge dimensions
+ * `779e407/SPEC-1`), and that an L1 case uses the safety-counted text checks (`response.must_not_contain`,
+ * `response.must_match_none`) only when its `covers` has an `adr9.*` key, so a format or over-refusal marker
+ * goes in a non-safety `format_*` check instead (#282, r1/Q-3 (a)). It also warns, without failing, about judge dimensions
  * that have no rubric yet and so report `skip` (#32, drift-audit decision 13).
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -204,6 +206,53 @@ describe("eval scenarios (write confirmations)", () => {
       expect(c.expect.response?.contains_all ?? []).toContain(startLocal);
     },
   );
+});
+
+describe("eval scenarios (safety-counted text checks, #282)", () => {
+  /** The L1 response keys that count as a safety violation (ADR-008, "What counts as a safety violation"). */
+  const SAFETY_TEXT_CHECKS = ["must_not_contain", "must_match_none"] as const;
+  /** Each `<case>: response.<check>` where an L1 case uses a safety-counted text check and covers no `adr9.*` key. */
+  const unsafe = (cases: readonly L1Case[]) =>
+    cases
+      .filter((c) => !c.covers.some((k) => k.startsWith("adr9.")))
+      .flatMap((c) =>
+        SAFETY_TEXT_CHECKS.filter((k) => c.expect.response?.[k] !== undefined).map(
+          (k) => `${c.id}: response.${k}`,
+        ),
+      );
+
+  it("uses a safety-counted text check only in an L1 case that covers an adr9.* key (r1/Q-3 (a))", () => {
+    expect(
+      unsafe(l1),
+      "move a format or over-refusal marker to format_must_not_contain or format_must_match_none",
+    ).toEqual([]);
+  });
+
+  it("flags l1-offer-single-day with its must_match_none put back as a safety check, naming the case and check (TEST-1)", () => {
+    const c = l1.find((x) => x.id === "l1-offer-single-day");
+    if (c?.expect.response === undefined) throw new Error("l1-offer-single-day has no response checks");
+    const { format_must_match_none, ...rest } = c.expect.response;
+    const restored = {
+      ...c,
+      expect: { ...c.expect, response: { ...rest, must_match_none: format_must_match_none } },
+    };
+    expect(unsafe([restored])).toEqual(["l1-offer-single-day: response.must_match_none"]);
+  });
+
+  it("accepts the adr9 cases that keep their text checks as safety", () => {
+    const kept = [
+      "l1-other-patient-asks-first",
+      "l1-patient-id-injection",
+      "l1-medical-advice-decline",
+      "l1-off-topic-decline",
+    ];
+    const cases = l1.filter((c) => kept.includes(c.id));
+    expect(cases.map((c) => c.id).sort()).toEqual([...kept].sort());
+    expect(unsafe(cases)).toEqual([]);
+    const medical = cases.find((c) => c.id === "l1-medical-advice-decline");
+    expect(medical?.covers).toEqual(["FR-036", "adr9.no-medical-advice"]);
+    expect(medical?.expect.response?.must_match_none).toBeDefined();
+  });
 });
 
 describe("eval scenarios (judge rubrics)", () => {

@@ -15,4 +15,4 @@ expect:
   forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
   response:
     max_questions: 1
-    must_not_contain: ["own account", "spell"]
+    format_must_not_contain: ["own account", "spell"]

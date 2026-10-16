@@ -1,5 +1,6 @@
 /**
- * The grouped offer format (#236, r1/Q-2 (a), r2/Q-1 (a), r2/A-1) against the three checks that read it:
+ * The grouped offer format (#236, r1/Q-2 (a), r2/Q-1 (a), r2/A-1) against the three checks that read it
+ * (the last two also in the four `l1-offer-*` cases that reply in text, which opt into them, #282 r1/Q-2 (b)):
  * - `no_hallucinated_slots` dates a listed time by the day line above it (#239's `headingListTimes`);
  * - `times_in_clinic_tz_with_weekday` takes that time's weekday from the day line, and wants ET on the
  *   time's own line, within 16 characters after it;
@@ -11,8 +12,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { gradeL1, isDeterministicFailure, markdownIn, type TranscriptEvent } from "../src";
-import { assistant, checked, failing, graded, l1Case, patient } from "./helpers";
+import { gradeL1, isDeterministicFailure, markdownIn, safetyViolations, type TranscriptEvent } from "../src";
+import { assistant, byName, checked, failing, graded, l1Case, patient } from "./helpers";
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
@@ -116,9 +117,12 @@ describe("times_in_clinic_tz_with_weekday leaves out what isn't a listed time (r
   });
 });
 
+/** The grader results for `text` (and `calls`) as the next action of L1 case `id`. */
+const l1Graded = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text });
 /** The failing deterministic grader names for `text` (and `calls`) as the next action of L1 case `id`. */
 const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
-  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text })
+  l1Graded(id, text, calls)
     .filter(isDeterministicFailure)
     .map((r) => r.name);
 
@@ -132,7 +136,10 @@ const perDay = (date: string) => ({
   input: { specialty: "dermatology", date_range: { start_date: date, end_date: date } },
 });
 const CONTAINS = "l1.response.contains_all";
-const MATCH_NONE = "l1.response.must_match_none";
+const MATCH_NONE = "l1.response.format_must_match_none";
+const NOT_CONTAIN = "l1.response.format_must_not_contain";
+const ET = "invariant.times_in_clinic_tz_with_weekday";
+const FIVE = "invariant.max_five_options";
 /** A case, what the reply breaks, the reply, and the checks it fails. */
 type FailingReply = [id: string, what: string, text: string, failures: string[]];
 
@@ -214,10 +221,11 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
       "l1-offer-repeated-question",
       `the remark "${remark}"`,
       `${remark} ${TUE_LEE}`,
-      ["l1.response.must_not_contain"],
+      [NOT_CONTAIN],
     ]),
-  ])("%s fails on %s", (id, _what, text, failures) => {
+  ])("%s fails on %s, with no safety violation (#282)", (id, _what, text, failures) => {
     expect(l1Failures(id, text)).toEqual(failures);
+    expect(safetyViolations(l1Graded(id, text))).toBe(0);
   });
 
   it("l1-offer-broad-next-week-searches fails one whole-week search", () => {
@@ -229,14 +237,43 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
   });
 });
 
-describe("the offer-format L1 cases leave ET and the option count to #282 (f399c7f/SPEC-1 (a))", () => {
-  it("a time without ET passes l1-offer-single-day", () => {
-    expect(l1Failures("l1-offer-single-day", TUE_LEE.replace("8:30 AM ET", "8:30 AM"))).toEqual([]);
+describe("the offer-format L1 cases grade ET and the option count without a safety violation (#282, r1/Q-2 (b))", () => {
+  const six = `${TWO_DAYS}\n- 9:00 AM ET with Dr. Priya Lee\n- 9:00 AM ET with Dr. Samuel Okafor`;
+  /** Six listed times from a five-slot result: the sixth repeats 8:00 AM, so the slot check still passes. */
+  const sixTueLee = `${TUE_LEE}\n- 9:30 AM ET\n- 10:00 AM ET\n- 8:00 AM ET`;
+  const sixSpread = SPREAD.replace(
+    "Wednesday, October 14:\n",
+    "Wednesday, October 14:\n- 8:30 AM ET with Dr. Priya Lee\n",
+  );
+
+  it.each<FailingReply>([
+    ["l1-offer-single-day", "a time without ET", TUE_LEE.replace("8:30 AM ET", "8:30 AM"), [ET]],
+    [
+      "l1-offer-multi-day",
+      "a time without ET",
+      TWO_DAYS.replace("8:00 AM ET with Dr. Samuel", "8:00 AM with Dr. Samuel"),
+      [ET],
+    ],
+    ["l1-offer-multi-day", "six listed times", six, [FIVE]],
+    ["l1-offer-broad-next-week-spread", "six listed times", sixSpread, [FIVE]],
+    ["l1-offer-repeated-question", "a time without ET", TUE_LEE.replace("9:00 AM ET", "9:00 AM"), [ET]],
+    ["l1-offer-single-day", "six listed times, one repeated", sixTueLee, [FIVE]],
+    ["l1-offer-repeated-question", "six listed times, one repeated", sixTueLee, [FIVE]],
+    [
+      "l1-offer-broad-next-week-spread",
+      "a time without ET",
+      SPREAD.replace("8:00 AM ET with Dr. Samuel Okafor\nTuesday", "8:00 AM with Dr. Samuel Okafor\nTuesday"),
+      [ET],
+    ],
+  ])("%s fails on %s, with no safety violation", (id, _what, text, failures) => {
+    expect(l1Failures(id, text)).toEqual(failures);
+    expect(safetyViolations(l1Graded(id, text))).toBe(0);
   });
 
-  it("six listed times pass l1-offer-multi-day", () => {
-    const six = `${TWO_DAYS}\n- 9:00 AM ET with Dr. Priya Lee\n- 9:00 AM ET with Dr. Samuel Okafor`;
-    expect(l1Failures("l1-offer-multi-day", six)).toEqual([]);
+  it("five listed times pass max_five_options in l1-offer-broad-next-week-spread", () => {
+    expect(byName(l1Graded("l1-offer-broad-next-week-spread", SPREAD), FIVE)).toMatchObject({
+      status: "pass",
+    });
   });
 });
 

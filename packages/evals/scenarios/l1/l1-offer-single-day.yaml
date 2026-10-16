@@ -8,8 +8,9 @@ covers: [FR-030, FR-035]
 notes: >
   #236 (r1/Q-2 (a), r1/Q-4 (a)): a one-day result from one provider. The reply groups it under one day line,
   "Tuesday, October 13:", so the date appears once, not once per time as in Nick's 2026-10-10 dev run
-  ("1. Monday, October 12 at 8:00 AM ET", ...). The case grades only r1/Q-4 (a)'s checks; ET after each time and the five-option limit stay
-  ungraded here until #282 gives L1 a non-safety check (PR #283, decision f399c7f/SPEC-1 (a)).
+  ("1. Monday, October 12 at 8:00 AM ET", ...). Its r1/Q-4 (a) negative check is a non-safety
+  `format_must_match_none`, and ET after each time and the five-option limit are graded by the invariants it
+  opts into, also non-safety (#282, r1/Q-1 (a), r1/Q-2 (b)).
 context:
   - patient: "Does Dr. Lee have anything on Tuesday, October 13?"
   - tool_call:
@@ -54,4 +55,5 @@ expect:
   action: respond
   response:
     contains_all: ["Tuesday, October 13:"]
-    must_match_none: ["October 13[\\s\\S]*October 13"]
+    format_must_match_none: ["October 13[\\s\\S]*October 13"]
+  invariants: [times_in_clinic_tz_with_weekday, max_five_options]

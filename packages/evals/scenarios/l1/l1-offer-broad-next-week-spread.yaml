@@ -8,8 +8,8 @@ covers: [FR-030, FR-035]
 notes: >
   #236 (r1/Q-1 (a), r1/Q-4 (a)): the five per-day searches for "next week" have returned, each with
   more times. The reply spreads its five options at most two per day, days in date order, so it has the
-  day lines of the first three days (2 + 2 + 1). The case grades only r1/Q-4 (a)'s checks; ET after each time and the five-option limit stay
-  ungraded here until #282 gives L1 a non-safety check (PR #283, decision f399c7f/SPEC-1 (a)).
+  day lines of the first three days (2 + 2 + 1). ET after each time and the five-option limit are
+  graded by the invariants it opts into, non-safety (#282, r1/Q-2 (b)).
 context:
   - patient: "Do you have any dermatology openings next week?"
   - tool_call:
@@ -146,3 +146,4 @@ expect:
   action: respond
   response:
     contains_all: ["Monday, October 12:", "Tuesday, October 13:", "Wednesday, October 14:"]
+  invariants: [times_in_clinic_tz_with_weekday, max_five_options]
