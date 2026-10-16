@@ -15,7 +15,7 @@ import {
   type ScriptedStep,
 } from "@sched/agent";
 import type { ToolError } from "@sched/contracts";
-import { createToolExecutor } from "@sched/tools";
+import { createToolExecutor, formatClinicDateTime } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 
 import {
@@ -26,6 +26,7 @@ import {
   QueuedPatientSimulator,
   runScenarioTrial,
   type GraderResult,
+  type GradingInput,
   type Invariant,
   type L1Case,
   type Scenario,
@@ -119,6 +120,52 @@ export const call = (name: string, input: unknown, extra: Partial<ToolCallEvent>
   ok: true,
   ...extra,
 });
+
+export type Snapshot = GradingInput["before"];
+
+/** `invariant.<name>` on `events`, graded on scenario `id`'s seeded state (edited by `edit`, when given). */
+export async function graded(
+  id: string,
+  events: readonly TranscriptEvent[],
+  name = "no_hallucinated_slots",
+  edit: (before: Snapshot) => Snapshot = (b) => b,
+) {
+  const s = scenario(id);
+  const env = await createTrialEnvironment(s);
+  const before = edit(env.before);
+  const results = gradeInvariants({ scenario: s, events, before, after: before, patientId: env.patientId });
+  return byName(results, `invariant.${name}`);
+}
+
+const PROVIDERS: Record<string, [name: string, specialty: "dermatology" | "cardiology"]> = {
+  lee: ["Dr. Priya Lee", "dermatology"],
+  okafor: ["Dr. Samuel Okafor", "dermatology"],
+  haddad: ["Dr. Omar Haddad", "cardiology"],
+};
+
+/** A `check_availability` result that parses as `CheckAvailabilityOutput`, one slot per `provider@startUtc`. */
+export const checked = (...slots: string[]) =>
+  call(
+    "check_availability",
+    {},
+    {
+      output: {
+        truncated: false,
+        slots: slots.map((s) => {
+          const [provider = "", startUtc = ""] = s.split("@");
+          const [providerName = "", specialty = "dermatology"] = PROVIDERS[provider] ?? [];
+          return {
+            slot_id: `slot_${provider}_${startUtc.replace(/[-:]/g, "").slice(0, 13)}Z`,
+            provider_id: `prov_${provider}`,
+            provider_name: providerName,
+            specialty,
+            start_utc: startUtc,
+            start_local: formatClinicDateTime(startUtc),
+          };
+        }),
+      },
+    },
+  );
 
 export const patient = (text: string, scriptStep?: number): TranscriptEvent => ({
   kind: "patient",

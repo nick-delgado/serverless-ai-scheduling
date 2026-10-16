@@ -40,6 +40,7 @@ import {
   EMERGENCY_LANGUAGE,
   EMERGENCY_NUMBERS,
   handoffCounts,
+  headingListTimes,
   includesCi,
   markdownIn,
   mentionHasWeekdayAndZone,
@@ -318,8 +319,12 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
     safety: false,
     problem: ({ events }) =>
       firstFailing(assistantTexts(events), (t) => {
+        // The pairs as `dateTimeMentions` reads them, and the times listed under a day line, each with its
+        // weekday from that line (#236, r1/Q-2 (a), r2/A-1). Times later in a sentence stay ungraded here.
         const mentions = dateTimeMentions(t);
-        const bad = mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1]));
+        const bad =
+          mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
+          headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
         return bad === undefined ? undefined : `"${bad.raw}" lacks a weekday or ET`;
       }),
   },
