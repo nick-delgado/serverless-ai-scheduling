@@ -11,8 +11,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { gradeL1, markdownIn, trialPassed, type TranscriptEvent } from "../src";
-import { assistant, checked, graded, l1Case, patient } from "./helpers";
+import { gradeL1, isDeterministicFailure, markdownIn, type TranscriptEvent } from "../src";
+import { assistant, checked, failing, graded, l1Case, patient } from "./helpers";
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
@@ -116,15 +116,11 @@ describe("times_in_clinic_tz_with_weekday leaves out what isn't a listed time (r
   });
 });
 
-/** The failing grader names for `text` (and `calls`) as the next action of L1 case `id`. */
-const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) => {
-  const results = gradeL1(l1Case(id), {
-    stopReason: calls.length > 0 ? "tool_use" : "end_turn",
-    toolCalls: calls,
-    text,
-  });
-  return trialPassed(results) ? [] : results.filter((r) => r.status === "fail").map((r) => r.name);
-};
+/** The failing deterministic grader names for `text` (and `calls`) as the next action of L1 case `id`. */
+const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text })
+    .filter(isDeterministicFailure)
+    .map((r) => r.name);
 
 const TUE_LEE = "Dr. Lee has these openings:\nTuesday, October 13:\n- 8:00 AM ET\n- 8:30 AM ET\n- 9:00 AM ET";
 const TWO_DAYS =
@@ -135,52 +131,117 @@ const perDay = (date: string) => ({
   name: "check_availability",
   input: { specialty: "dermatology", date_range: { start_date: date, end_date: date } },
 });
+const CONTAINS = "l1.response.contains_all";
+const MATCH_NONE = "l1.response.must_match_none";
+/** A case, what the reply breaks, the reply, and the checks it fails. */
+type FailingReply = [id: string, what: string, text: string, failures: string[]];
 
-describe("the offer-format L1 cases pass a reply in the format and fail the old one (#236, r1/Q-4 (a))", () => {
-  it("l1-offer-single-day", () => {
-    expect(l1Failures("l1-offer-single-day", TUE_LEE)).toEqual([]);
-    expect(
-      l1Failures(
-        "l1-offer-single-day",
-        "Dr. Lee has:\n1. Tuesday, October 13 at 8:00 AM ET\n2. Tuesday, October 13 at 8:30 AM ET",
-      ),
-    ).toEqual(["l1.response.contains_all", "l1.response.must_match_none"]);
-    expect(l1Failures("l1-offer-single-day", TUE_LEE.replace("8:30 AM ET", "8:30 AM"))).toEqual([
-      "l1.response.must_match_none",
-    ]);
+describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a))", () => {
+  it.each([
+    ["l1-offer-single-day", TUE_LEE],
+    ["l1-offer-multi-day", TWO_DAYS],
+    ["l1-offer-broad-next-week-spread", SPREAD],
+    ["l1-offer-repeated-question", TUE_LEE],
+  ])("%s", (id, text) => {
+    expect(l1Failures(id, text)).toEqual([]);
   });
 
-  it("l1-offer-multi-day", () => {
-    expect(l1Failures("l1-offer-multi-day", TWO_DAYS)).toEqual([]);
-    expect(
-      l1Failures(
-        "l1-offer-multi-day",
-        `${TWO_DAYS}\n- 9:00 AM ET with Dr. Priya Lee\n- 9:00 AM ET with Dr. Samuel Okafor`,
-      ),
-    ).toEqual(["l1.response.must_match_none"]);
-  });
-
-  it("l1-offer-broad-next-week-searches", () => {
+  it("l1-offer-broad-next-week-searches passes one search per weekday", () => {
     const week = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"].map(perDay);
     expect(l1Failures("l1-offer-broad-next-week-searches", "", week)).toEqual([]);
+  });
+});
+
+describe("each settled check of the offer-format L1 cases fails on its own (#236, r1/Q-4 (a))", () => {
+  it.each<FailingReply>([
+    ["l1-offer-single-day", "no day line", TUE_LEE.replace("Tuesday, October 13:", "Tuesday:"), [CONTAINS]],
+    [
+      "l1-offer-single-day",
+      "the date in the lead-in too",
+      TUE_LEE.replace("these openings:", "these openings on Tuesday, October 13:"),
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "the date on each time (Nick's dev run)",
+      "Dr. Lee has:\n1. Tuesday, October 13 at 8:00 AM ET\n2. Tuesday, October 13 at 8:30 AM ET",
+      [CONTAINS, MATCH_NONE],
+    ],
+    [
+      "l1-offer-multi-day",
+      "no Tuesday day line",
+      TWO_DAYS.replace("Tuesday, October 13:", "Tuesday:"),
+      [CONTAINS],
+    ],
+    [
+      "l1-offer-multi-day",
+      "no Wednesday day line",
+      TWO_DAYS.replace("Wednesday, October 14:", "Wednesday:"),
+      [CONTAINS],
+    ],
+    ["l1-offer-multi-day", "October 13 twice", `${TWO_DAYS}\nOctober 13 is the earlier day.`, [MATCH_NONE]],
+    ["l1-offer-multi-day", "October 14 twice", `${TWO_DAYS}\nOctober 14 is the later day.`, [MATCH_NONE]],
+    [
+      "l1-offer-broad-next-week-spread",
+      "no Monday day line",
+      SPREAD.replace("Monday, October 12:", "Monday:"),
+      [CONTAINS],
+    ],
+    [
+      "l1-offer-broad-next-week-spread",
+      "no Tuesday day line",
+      SPREAD.replace("Tuesday, October 13:", "Tuesday:"),
+      [CONTAINS],
+    ],
+    [
+      "l1-offer-broad-next-week-spread",
+      "no Wednesday day line",
+      SPREAD.replace("Wednesday, October 14:", "Wednesday:"),
+      [CONTAINS],
+    ],
+    [
+      "l1-offer-repeated-question",
+      "no day line",
+      TUE_LEE.replace("Tuesday, October 13:", "Tuesday:"),
+      [CONTAINS],
+    ],
+    ...[
+      "Same times as above:",
+      "As I mentioned, here they are:",
+      "I already showed these:",
+      "Here they are again (I showed those earlier):",
+    ].map((remark): FailingReply => [
+      "l1-offer-repeated-question",
+      `the remark "${remark}"`,
+      `${remark} ${TUE_LEE}`,
+      ["l1.response.must_not_contain"],
+    ]),
+  ])("%s fails on %s", (id, _what, text, failures) => {
+    expect(l1Failures(id, text)).toEqual(failures);
+  });
+
+  it("l1-offer-broad-next-week-searches fails one whole-week search", () => {
     const whole = {
       name: "check_availability",
       input: { specialty: "dermatology", date_range: { start_date: "2026-10-12", end_date: "2026-10-16" } },
     };
     expect(l1Failures("l1-offer-broad-next-week-searches", "", [whole])).toEqual(["l1.action"]);
   });
+});
 
-  it("l1-offer-broad-next-week-spread", () => {
-    expect(l1Failures("l1-offer-broad-next-week-spread", SPREAD)).toEqual([]);
-    const bunched =
-      "Here are the earliest openings:\nMonday, October 12:\n- 8:00 AM ET with Dr. Priya Lee\n- 8:00 AM ET with Dr. Samuel Okafor\n- 8:30 AM ET with Dr. Priya Lee";
-    expect(l1Failures("l1-offer-broad-next-week-spread", bunched)).toEqual(["l1.response.contains_all"]);
+describe("the offer-format L1 cases leave ET and the option count to #282 (f399c7f/SPEC-1 (a))", () => {
+  it("a time without ET passes l1-offer-single-day", () => {
+    expect(l1Failures("l1-offer-single-day", TUE_LEE.replace("8:30 AM ET", "8:30 AM"))).toEqual([]);
   });
 
-  it("l1-offer-repeated-question", () => {
-    expect(l1Failures("l1-offer-repeated-question", TUE_LEE)).toEqual([]);
-    expect(l1Failures("l1-offer-repeated-question", `I just showed those above! ${TUE_LEE}`)).toEqual([
-      "l1.response.must_not_contain",
-    ]);
+  it("six listed times pass l1-offer-multi-day", () => {
+    const six = `${TWO_DAYS}\n- 9:00 AM ET with Dr. Priya Lee\n- 9:00 AM ET with Dr. Samuel Okafor`;
+    expect(l1Failures("l1-offer-multi-day", six)).toEqual([]);
   });
+});
+
+describe("the recorded trials under the day-line reading (#236, r2/Q-1 (a))", () => {
+  it("none of the 20 recorded trials fails times_in_clinic_tz_with_weekday", async () => {
+    expect(await failing("times_in_clinic_tz_with_weekday")).toEqual([]);
+  }, 120_000);
 });
