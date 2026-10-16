@@ -373,6 +373,8 @@ export function namesClinicHours(text: string, mention: SlotMention): boolean {
 
 /** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
+/** How far after a time, in characters, the clinic timezone may be written (`mentionHasWeekdayAndZone`). */
+const ZONE_WINDOW = 16;
 
 /**
  * Whether a date+time mention carries a weekday and the clinic timezone (`ET`/`Eastern` within 16 characters
@@ -388,10 +390,10 @@ export function mentionHasWeekdayAndZone(
   previous?: DateTimeMention,
 ): boolean {
   if ("heading" in mention)
-    return WEEKDAY_RE.test(mention.heading) && ZONE_RE.test(mention.afterTime.slice(0, 16));
+    return WEEKDAY_RE.test(mention.heading) && ZONE_RE.test(mention.afterTime.slice(0, ZONE_WINDOW));
   const floor = previous === undefined ? 0 : previous.index + previous.raw.length;
   const before = text.slice(Math.max(floor, mention.index - 40), mention.index + mention.raw.length);
-  const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + 16);
+  const after = text.slice(mention.index + mention.raw.length, mention.index + mention.raw.length + ZONE_WINDOW);
   return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
 }
 

@@ -123,7 +123,11 @@ export const call = (name: string, input: unknown, extra: Partial<ToolCallEvent>
 
 export type Snapshot = GradingInput["before"];
 
-/** `invariant.<name>` on `events`, graded on scenario `id`'s seeded state (edited by `edit`, when given). */
+/**
+ * `invariant.<name>` on `events`, graded on scenario `id`'s seeded state (edited by `edit`, when given). It
+ * doesn't call `invariants`, because a test here edits `before` (an appointment's status, #239) and grades with
+ * `after` equal to it, while `invariants` takes both snapshots from the trial environment as seeded.
+ */
 export async function graded(
   id: string,
   events: readonly TranscriptEvent[],
