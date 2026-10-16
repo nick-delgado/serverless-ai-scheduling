@@ -1,0 +1,148 @@
+id: l1-offer-broad-next-week-spread
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, FR-035]
+notes: >
+  #236 (r1/Q-1 (a), r1/Q-4 (a)): the five per-day searches for "next week" have returned, each with
+  more times. The reply spreads its five options at most two per day, days in date order, so it has the
+  day lines of the first three days (2 + 2 + 1), and no more than five times.
+context:
+  - patient: "Do you have any dermatology openings next week?"
+  - tool_call:
+      tool: check_availability
+      args: { specialty: dermatology, date_range: { start_date: 2026-10-12, end_date: 2026-10-12 } }
+  - tool_call:
+      tool: check_availability
+      args: { specialty: dermatology, date_range: { start_date: 2026-10-13, end_date: 2026-10-13 } }
+  - tool_call:
+      tool: check_availability
+      args: { specialty: dermatology, date_range: { start_date: 2026-10-14, end_date: 2026-10-14 } }
+  - tool_call:
+      tool: check_availability
+      args: { specialty: dermatology, date_range: { start_date: 2026-10-15, end_date: 2026-10-15 } }
+  - tool_call:
+      tool: check_availability
+      args: { specialty: dermatology, date_range: { start_date: 2026-10-16, end_date: 2026-10-16 } }
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261012T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-12T12:00:00Z
+            start_local: Monday, October 12, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261012T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-12T12:00:00Z
+            start_local: Monday, October 12, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261012T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-12T12:30:00Z
+            start_local: Monday, October 12, 2026 at 8:30 AM ET
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261013T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T12:00:00Z
+            start_local: Tuesday, October 13, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261013T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T12:00:00Z
+            start_local: Tuesday, October 13, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261013T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T12:30:00Z
+            start_local: Tuesday, October 13, 2026 at 8:30 AM ET
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261014T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T12:00:00Z
+            start_local: Wednesday, October 14, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261014T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-14T12:00:00Z
+            start_local: Wednesday, October 14, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261014T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T12:30:00Z
+            start_local: Wednesday, October 14, 2026 at 8:30 AM ET
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261015T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-15T12:00:00Z
+            start_local: Thursday, October 15, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261015T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-15T12:00:00Z
+            start_local: Thursday, October 15, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261015T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-15T12:30:00Z
+            start_local: Thursday, October 15, 2026 at 8:30 AM ET
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261016T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-16T12:00:00Z
+            start_local: Friday, October 16, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261016T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-16T12:00:00Z
+            start_local: Friday, October 16, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261016T1230Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-16T12:30:00Z
+            start_local: Friday, October 16, 2026 at 8:30 AM ET
+expect:
+  action: respond
+  response:
+    contains_all: ["Monday, October 12:", "Tuesday, October 13:", "Wednesday, October 14:"]
+    must_match_none: ["\\d:\\d{2}\\s*[AP]M(?!\\s*ET)", "(?:\\d{1,2}:\\d{2}[\\s\\S]*?){6}"]

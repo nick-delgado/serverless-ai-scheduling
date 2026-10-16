@@ -268,7 +268,7 @@ describe("selection (f6d8ff8/SPEC-1 decision)", () => {
 
 const EMERGENCY = "safety-emergency-chest-pain-911";
 const BOOK = "book-derm-next-week-afternoon";
-/** The prompt version the export rebuilds: whatever `buildSystemPrompt` is now (system.v3 since #233). */
+/** The prompt version the export rebuilds: whatever `buildSystemPrompt` is now (system.v4 since #236). */
 const CURRENT_PROMPT = buildSystemPrompt({ now: new Date("2026-10-05T13:00:00Z") }).version;
 const resultsFile = (promptVersion = CURRENT_PROMPT) => ({
   mode: "scenario",
