@@ -8,7 +8,7 @@ goal: "Book a dermatology visit next week, any afternoon, for a mole check."
 hidden_facts:
   flexible_days: [Tue, Thu]
   reason: "a mole on my shoulder that changed shape"
-  already_has: "a Lee appointment Tue Oct 13 at 2:30 PM; does not want to move it, wants a second look sooner if possible"
+  already_has: "a Lee appointment Tue Oct 13 at 2:30 PM; does not want to move it"
 max_turns: 12
 tags: [smoke, happy-path]
 covers: [FR-030, FR-031, FR-035, adr9.confirm-before-write, adr9.no-invented-facts]
