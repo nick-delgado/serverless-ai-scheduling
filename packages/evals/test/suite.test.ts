@@ -3,6 +3,7 @@
  * retries, the budget guard, and the markdown summary, in L1 and scenario mode with a scripted model.
  */
 import {
+  buildSystemPrompt,
   estimateCostUsd,
   MODEL_PROFILES,
   ScriptedLlmClient,
@@ -151,7 +152,9 @@ describe("runSuite / summarize", () => {
       systemPrompt: custom,
     });
     expect(report.promptVersion).toBe("custom.v7");
-    expect((await suite(STEPS)).promptVersion).toBe("system.v5");
+    expect((await suite(STEPS)).promptVersion).toBe(
+      buildSystemPrompt({ now: new Date("2026-10-05T13:00:00Z") }).version,
+    );
   });
 
   it("scenario mode: skips stop after one trial, retries are summed, the simulator is recorded", async () => {
