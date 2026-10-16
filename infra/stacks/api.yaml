@@ -350,8 +350,8 @@ Resources:
       # applies per method, so each method has its own bucket, shared by every client. It bounds the sustained
       # request rate (5 a second, burst 10), best effort. It doesn't bound a simultaneous warm burst (30 of 30
       # passed, docs/research/security-review.md §3), Bedrock requests (an account-wide per-model quota,
-      # profiles.ts `rpm`; a turn makes up to 8 model calls), Lambda concurrency (ChatFunction's reservation
-      # does), or one patient's use (DailyTurnCap does).
+      # profiles.ts `rpm`; a turn makes up to 8 model calls), Lambda concurrency (only ChatFunction is capped,
+      # at its reservation of 5; SessionFunction has no cap), or one patient's use (DailyTurnCap does).
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
