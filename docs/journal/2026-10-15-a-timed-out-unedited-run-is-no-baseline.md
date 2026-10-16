@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** issue #276, #268 and its [entry](2026-10-15-a-timeout-stops-reading-the-output.md), #256, #215
+**Related:** issue #276, PR #281, #268 and its [entry](2026-10-15-a-timeout-stops-reading-the-output.md), #256, #215
 
 ## What happened
 
