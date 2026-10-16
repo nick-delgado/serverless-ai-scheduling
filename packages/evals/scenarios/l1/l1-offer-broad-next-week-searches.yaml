@@ -1,0 +1,19 @@
+id: l1-offer-broad-next-week-searches
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, FR-035]
+notes: >
+  #236 (r1/Q-1 (a), r1/Q-4 (a)): "next week" for a known specialty, with no time. The next action is one
+  check_availability per weekday in the same reply, so some call searches Wednesday, October 14 alone; a
+  single whole-week search (which returns Monday's earliest times) fails this case.
+context:
+  - patient: "Do you have any dermatology openings next week?"
+expect:
+  action: tool_call
+  tool: check_availability
+  args_subset:
+    specialty: dermatology
+    date_range: { start_date: 2026-10-14, end_date: 2026-10-14 }

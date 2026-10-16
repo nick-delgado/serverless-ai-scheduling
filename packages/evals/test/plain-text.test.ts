@@ -13,7 +13,12 @@ import { buildSystemPrompt } from "@sched/agent";
 import { gradeL1, handoffCounts, markdownIn, type TranscriptEvent } from "../src";
 import { assistant, byName, call, failing, inTurn, invariants, l1Case, patient, recorded } from "./helpers";
 
-async function graded(name: string, events: TranscriptEvent[], id = "escalate-explicit-human-request") {
+/** `invariant.<name>` on `events`, graded through `invariants` on scenario `id` (the escalation scenario by default). */
+async function plainTextCheck(
+  name: string,
+  events: TranscriptEvent[],
+  id = "escalate-explicit-human-request",
+) {
   const { results } = await invariants(id, events);
   return byName(results, `invariant.${name}`);
 }
@@ -25,7 +30,7 @@ const escalate = (ok = true) =>
 describe("no_markdown on recorded system.v1 replies (#233, AC 4)", () => {
   it("fails book-derm-next-week-afternoon#1's bold confirmation, as a non-safety check", async () => {
     expect(
-      await graded(
+      await plainTextCheck(
         "no_markdown",
         recorded("book-derm-next-week-afternoon#1"),
         "book-derm-next-week-afternoon",
@@ -38,7 +43,7 @@ describe("no_markdown on recorded system.v1 replies (#233, AC 4)", () => {
   });
 
   it("fails reschedule-single-appointment#1, whose only Markdown is a single-asterisk italic (r1/Q-2 (b))", async () => {
-    const result = await graded(
+    const result = await plainTextCheck(
       "no_markdown",
       recorded("reschedule-single-appointment#1"),
       "reschedule-single-appointment",
@@ -116,7 +121,9 @@ describe("markdownIn: what counts as Markdown (r1/Q-2 (b))", () => {
 
 describe("no_repeated_handoff on recorded system.v1 replies (#233, AC 4)", () => {
   it("fails escalate-explicit-human-request#1 turn 1: a pre-tool 'connect you' line, then the handoff", async () => {
-    expect(await graded("no_repeated_handoff", recorded("escalate-explicit-human-request#1"))).toMatchObject({
+    expect(
+      await plainTextCheck("no_repeated_handoff", recorded("escalate-explicit-human-request#1")),
+    ).toMatchObject({
       status: "fail",
       safety: false,
       detail: "turn 1 gives the handoff 2× and the phone number 1×",
@@ -138,20 +145,24 @@ describe("no_repeated_handoff on recorded system.v1 replies (#233, AC 4)", () =>
 describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
   it("passes the handoff given once", async () => {
     expect(
-      await graded("no_repeated_handoff", [patient("A person, please."), escalate(), assistant(HANDOFF)]),
+      await plainTextCheck("no_repeated_handoff", [
+        patient("A person, please."),
+        escalate(),
+        assistant(HANDOFF),
+      ]),
     ).toMatchObject({ status: "pass" });
   });
 
   it("fails the phone number twice, and the phrase twice in any case", async () => {
     expect(
-      await graded("no_repeated_handoff", [
+      await plainTextCheck("no_repeated_handoff", [
         escalate(),
         assistant(HANDOFF),
         assistant("Again: 1-800-555-0199."),
       ]),
     ).toMatchObject({ status: "fail", detail: "turn 1 gives the handoff 1× and the phone number 2×" });
     expect(
-      await graded("no_repeated_handoff", [
+      await plainTextCheck("no_repeated_handoff", [
         assistant("Let me Connect You With The Front Desk."),
         escalate(),
         assistant(HANDOFF),
@@ -161,7 +172,7 @@ describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
 
   it("doesn't count a turn whose escalate_to_human call failed, or a turn without one", async () => {
     expect(
-      await graded("no_repeated_handoff", [
+      await plainTextCheck("no_repeated_handoff", [
         ...inTurn(1, assistant(HANDOFF), escalate(false), assistant(HANDOFF)),
         ...inTurn(2, assistant(HANDOFF), assistant(HANDOFF)),
       ]),
@@ -170,7 +181,7 @@ describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
 
   it("doesn't count a turn whose only successful call is another tool", async () => {
     expect(
-      await graded("no_repeated_handoff", [
+      await plainTextCheck("no_repeated_handoff", [
         call("get_my_appointments", {}),
         assistant("You can also reach the front desk at 1-800-555-0199."),
         assistant("Again, that's 1-800-555-0199."),
@@ -180,7 +191,7 @@ describe("no_repeated_handoff: what an escalation turn is (r1/Q-3 (a))", () => {
 
   it("counts only the escalation turn's own texts, not a reminder in the next turn", async () => {
     expect(
-      await graded("no_repeated_handoff", [
+      await plainTextCheck("no_repeated_handoff", [
         ...inTurn(1, escalate(), assistant(HANDOFF)),
         ...inTurn(2, patient("What was the number?"), assistant("It's 1-800-555-0199.")),
       ]),

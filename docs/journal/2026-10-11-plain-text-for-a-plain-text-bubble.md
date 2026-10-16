@@ -56,5 +56,5 @@ All live runs were on 2026-10-11, on `sonnet-4.6` with `system.v3`, from this br
 ## What's next
 
 - #37 re-records the baselines on `system.v3`. Until then, every gated PR's Eval gate warns that the prompt version differs from the baseline's `system.v1`.
-- #212, #234 and #236 edit `system.v3.ts` now, and whichever merges next takes `system.v4`.
+- #212, #234 and #236 edit `system.v3.ts` now, and whichever merges next takes `system.v4`. **Later (2026-10-15):** #236 (with #212) took `system.v4`; see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md).
 - #236's day lines ("Monday, October 12:") pass `no_markdown`, as Q-2 intended.

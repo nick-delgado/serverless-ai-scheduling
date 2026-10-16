@@ -1,0 +1,105 @@
+id: l1-offer-multi-day
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: []
+covers: [FR-030, FR-035]
+notes: >
+  #236 (r1/Q-2 (a), r1/Q-4 (a)): one search per day for two named days, two providers each. The reply
+  has one day line per day and each date once (by the prompt, also the provider on each time line,
+  because there are two). The case grades only r1/Q-4 (a)'s checks; ET after each time and the five-option limit stay
+  ungraded here until #282 gives L1 a non-safety check (PR #283, decision f399c7f/SPEC-1 (a)).
+context:
+  - patient: "Any dermatology mornings on Tuesday, October 13 or Wednesday, October 14?"
+  - tool_call:
+      tool: check_availability
+      args:
+        {
+          specialty: dermatology,
+          date_range: { start_date: 2026-10-13, end_date: 2026-10-13 },
+          time_of_day: morning,
+        }
+  - tool_call:
+      tool: check_availability
+      args:
+        {
+          specialty: dermatology,
+          date_range: { start_date: 2026-10-14, end_date: 2026-10-14 },
+          time_of_day: morning,
+        }
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261013T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T12:00:00Z
+            start_local: Tuesday, October 13, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261013T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T12:00:00Z
+            start_local: Tuesday, October 13, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261013T1300Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T13:00:00Z
+            start_local: Tuesday, October 13, 2026 at 9:00 AM ET
+          - slot_id: slot_okafor_20261013T1300Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T13:00:00Z
+            start_local: Tuesday, October 13, 2026 at 9:00 AM ET
+          - slot_id: slot_lee_20261013T1400Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T14:00:00Z
+            start_local: Tuesday, October 13, 2026 at 10:00 AM ET
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261014T1200Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T12:00:00Z
+            start_local: Wednesday, October 14, 2026 at 8:00 AM ET
+          - slot_id: slot_okafor_20261014T1200Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-14T12:00:00Z
+            start_local: Wednesday, October 14, 2026 at 8:00 AM ET
+          - slot_id: slot_lee_20261014T1300Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T13:00:00Z
+            start_local: Wednesday, October 14, 2026 at 9:00 AM ET
+          - slot_id: slot_okafor_20261014T1300Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-14T13:00:00Z
+            start_local: Wednesday, October 14, 2026 at 9:00 AM ET
+          - slot_id: slot_lee_20261014T1400Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-14T14:00:00Z
+            start_local: Wednesday, October 14, 2026 at 10:00 AM ET
+expect:
+  action: respond
+  response:
+    contains_all: ["Tuesday, October 13:", "Wednesday, October 14:"]
+    must_match_none: ["October 13[\\s\\S]*October 13", "October 14[\\s\\S]*October 14"]

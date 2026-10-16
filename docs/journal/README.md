@@ -94,5 +94,6 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-15 | [A timed-out mutate run stops reading the output instead of waiting for a process it can't kill](2026-10-15-a-timeout-stops-reading-the-output.md) | 5. What the evals showed |
 | 2026-10-15 | [The security review's burst never reached the throttle: Lambda's concurrency quota of 10 answered first](2026-10-15-the-throttle-never-saw-the-burst.md) | 5. What the evals showed |
 | 2026-10-15 | [A quoted slot is an offer, not an echo: the slot check reads heading lists and lets three non-offers go](2026-10-15-a-quoted-slot-is-an-offer-not-an-echo.md) | 5. What the evals showed |
+| 2026-10-15 | [Five options, grouped by day: one search per weekday spreads a broad request](2026-10-15-five-options-grouped-by-day.md) | 5. What the evals showed |
 | 2026-10-15 | [A timed-out unedited run is no baseline, even when it exits 0](2026-10-15-a-timed-out-unedited-run-is-no-baseline.md) | 5. What the evals showed |
 | 2026-10-16 | [A new env from the runbook alone: five friction points, then 7 min 45 s from deploy to a signed-in turn](2026-10-16-a-new-env-from-the-runbook-alone.md) | 5. What the evals showed |
