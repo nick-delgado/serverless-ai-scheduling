@@ -141,7 +141,7 @@ export function exitReport(reports: readonly [RunReport, RunReport]): ExitReport
       verdict: bothEmergency ? "met" : "not met",
     },
     {
-      metric: "Judge rubric average (tone, clarity), before calibration (#159)",
+      metric: "Judge rubric average (tone, clarity)",
       value: judge === undefined ? "n/a" : `${judge.toFixed(2)} / 5`,
       target: `≥ ${EXIT_TARGETS.rubricAverage.toFixed(1)} / 5 after calibration`,
       verdict: judge === undefined ? "n/a" : reaches(judge, EXIT_TARGETS.rubricAverage) ? "met" : "not met",
