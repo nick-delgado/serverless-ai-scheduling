@@ -64,19 +64,22 @@ base_from="$(git -C "$repo" merge-base "$base_ref" "$from")"
   /^OLD\+\+\+ / { ofile = substr($0, 10); oldfiles[ofile] = 1; next }
   /^OLD\+/ { old[ofile SUBSEP substr($0, 5)]++; next }
   /^OLD/ { next }
-  /^NEW\+\+\+ / { file = substr($0, 10); next }
+  # A file the PR creates: its header is "--- /dev/null". A file the PR newly touches is not new.
+  /^NEW--- / { created = ($0 == "NEW--- /dev/null"); next }
+  /^NEW\+\+\+ / { file = substr($0, 10); isnew = created; created = 0; next }
   /^NEW\+/ {
     k = kind(file)
     if (k == "source") prsource++
     key = file SUBSEP substr($0, 5)
-    if (old[key] > 0) old[key]--; else { added[k]++; if (!(file in oldfiles)) newfile[file]++ }
+    if (old[key] > 0) old[key]--; else { added[k]++; if (isnew && !(file in oldfiles)) { if (!(file in newfile)) neworder[++nnew] = file; newfile[file]++ } }
     next
   }
   END {
     for (key in old) if (old[key] > 0) { split(key, parts, SUBSEP); dropped[kind(parts[1])] += old[key] }
     split("source tests other", ks, " ")
     for (i = 1; i <= 3; i++) printf "%s %d %d %d\n", ks[i], added[ks[i]], dropped[ks[i]], added[ks[i]] + dropped[ks[i]]
-    for (f in newfile) if (kind(f) == "source") printf "new-source %s %d\n", f, newfile[f]
+    # In diff order: "for (f in newfile)" differs between awks.
+    for (i = 1; i <= nnew; i++) { f = neworder[i]; if (kind(f) == "source") printf "new-source %s %d\n", f, newfile[f] }
     printf "pr-source %d\n", prsource
   }
 '

@@ -46,8 +46,10 @@ replies. Then ask for the apply step, which writes your answers into the issue's
 - **Edges:** <how the choice settles the cases at its edges, whichever apply: boundary
   inputs (empty, the exact limit, just past it); every point where two concurrent calls can
   interleave and one can lose; a case where an edit and an assumption both apply, and which
-  wins; the artifact that counts as evidence (a file, a log, a test name), named; whether a
-  list is complete or a minimum. Or "none: <why>". The apply step copies this line into the
+  wins; the artifact that counts as evidence for each edge (a file, a log, a test name),
+  named; who performs each step (the agent, the owner, CI) and whether a stand-in the agent
+  builds (a mock, a fake, a local run) counts; whether a list of per-case checks is
+  complete or a minimum, and how a failing case counts. Or "none: <why>". The apply step copies this line into the
   issue beside the answer.>
 - **Recommendation:** (<letter>), because <reason, citing a source the owner can check>.
   No conditions here: if the recommended choice holds only under a condition, write the
@@ -169,6 +171,10 @@ The review is advisory: the owner decides whether work starts.
   passes everything.
 - **"Stays as is" is checked.** An assumption or option saying something does not change
   cites the search showing nothing else needs it to change.
+- **A criterion over a set names each member** ("the three packages: `contracts`, `tools`,
+  `agent`"), never only "all of them", so the agent and the reviewer check the same list.
+- **"Doesn't change" says what does not change:** the output (what a user or a test sees)
+  or the code (the lines themselves).
 - **A measured criterion stays observable:** it says where the number is seen (a test's
   output, a log line, a report) and by whom, so a reviewer can check it.
 - **A prescribed command is run first.** An edit or criterion that names a command whose

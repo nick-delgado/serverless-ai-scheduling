@@ -64,13 +64,19 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
 } | awk -F'\t' -v k="$k" -v out_body="$run/issue-body.new.md" -v out_log="$run/applied.md" '
   function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
   # Continuation lines of a field, one level deeper under the sub-bullet that carries it.
+  function setsup(key, val) { if (!(key in sup)) suporder[++nsup] = key; sup[key] = val }
   function nest(s) { gsub(/\n/, "\n  ", s); return s }
   function staled(x) { return (x in stale) ? " (makes stale: " stale[x] ")" : "" }
   # The earlier entries a line says it replaces or reopens, as " r1/A-11 r1/Q-2".
-  function reopened(s,   out, m) {
-    out = ""
-    while (match(s, /(reopens|replaces|supersedes) r[0-9]+\/[QAE]-[0-9]+/)) {
-      m = substr(s, RSTART, RLENGTH); sub(/^[a-z]+ /, "", m); out = out " " m; s = substr(s, RSTART + RLENGTH)
+  # Matched in any case ("Replaces r1/A-6."); the IDs are taken from the original text.
+  function reopened(s,   out, m, low) {
+    out = ""; low = tolower(s)
+    while (match(low, /(reopens|replaces|supersedes) r[0-9]+\/[qae]-[0-9]+/)) {
+      m = substr(s, RSTART, RLENGTH); sub(/^[A-Za-z]+ /, "", m)
+      s = substr(s, RSTART + RLENGTH); low = substr(low, RSTART + RLENGTH)
+      # "Replaces r1/A-1'"'"'s last sentence" replaces only part of it.
+      if (s ~ /^('"'"'|’)s /) m = m "+part"
+      out = out " " m
     }
     return out
   }
@@ -122,7 +128,10 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
     if (mode == "q") qsup[qid] = qsup[qid] reopened(line)
     if (line ~ /^#### E-[0-9]+:/) { cur = line; sub(/^#### /, "", cur); eid = cur; sub(/:.*/, "", eid); etitle[eid] = trim(substr(cur, length(eid) + 2)); eorder[++ne] = eid; mode = "e"; part = ""; next }
     if (line ~ /^#{2,4} /) { mode = ""; next }
-    if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); letters[qid] = letters[qid] letter; next }
+    # An option and its own sub-bullets (indented under it).
+    if (mode == "q" && curopt != "" && line ~ /^[ ][ ][ ][ ]+[^ ]/) { optsub[qid, curopt] = optsub[qid, curopt] "\n" substr(line, 3); next }
+    curopt = ""
+    if (mode == "q" && line ~ /^[ ]+- \([a-z]\) /) { l = line; sub(/^[ ]+- \(/, "", l); letter = substr(l, 1, 1); opt[qid, letter] = trim(substr(l, 4)); letters[qid] = letters[qid] letter; curopt = letter; next }
     # The "Makes stale" and "Edges" fields of a question: the first line and every indented line
     # after it, nested bullets included ("each case below:" followed by "  - ...").
     if (mode == "q" && field != "" && line ~ /^[ \t]+[^ \t]/) { if (field == "edges") edges[qid] = edges[qid] "\n" line; else qstale[qid] = qstale[qid] "\n" line; next }
@@ -183,7 +192,7 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       # An option that widens the owned paths.
       # Every path in "Owned paths: + `a`, `b` and `c`": the list ends at the first text that
       # is not a path or a separator, so a backticked word in a following note is not taken.
-      t = text
+      t = text ((chosen != "") ? optsub[q, chosen] : "")
       while ((p = index(t, "Owned paths: +")) > 0) {
         t = substr(t, p + length("Owned paths: +"))
         while (match(t, /^([ ,]|and |\+)*`[^`]+`/)) {
@@ -201,9 +210,10 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       }
       link = (q in url) ? " ([answer](" url[q] "))" : " (accept all" ((("ALL" in url) ? ", [answer](" url["ALL"] ")" : "")) ")"
       entries = entries "- **r" k "/" q "** (settled against `" spec "`): " qtext[q] " → " text link "\n"
+      if (chosen != "" && optsub[q, chosen] != "") entries = entries substr(optsub[q, chosen], 2) "\n"
       chosenq[q] = chosen
       if (qstale[q] != "" && !nothing(qstale[q])) entries = entries "  - makes stale: " nest(qstale[q]) "\n"
-      m2 = split(qsup[q], olds, " "); for (z = 1; z <= m2; z++) if (olds[z] != "") sup[olds[z]] = "r" k "/" q
+      m2 = split(qsup[q], olds, " "); for (z = 1; z <= m2; z++) if (olds[z] != "") setsup(olds[z], "r" k "/" q)
       if (edges[q] != "" && tolower(edges[q]) !~ /^none/) entries = entries "  - edges: " nest(edges[q]) "\n"
       # The options not chosen, so the agent and the reviewer know what was ruled out.
       for (z = 1; z <= length(letters[q]); z++) { l = substr(letters[q], z, 1); if (l != chosen) entries = entries "  - not chosen: (" l ") " opt[q, l] "\n" }
@@ -225,7 +235,7 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
       } else {
         assumed = assumed "  - " x ": " atext[x] staled(x) "\n"
       }
-      m2 = split(supersedes[x], olds, " "); for (z = 1; z <= m2; z++) if (olds[z] != "") sup[olds[z]] = "r" k "/" x
+      m2 = split(supersedes[x], olds, " "); for (z = 1; z <= m2; z++) if (olds[z] != "") setsup(olds[z], "r" k "/" x)
     }
     if (assumed != "") entries = entries "- **r" k ", assumed** (as of `" spec "`):\n" assumed
     # Reuse pointers go to their own section: guidance from the review, not owner decisions.
@@ -261,18 +271,22 @@ answers="$("$here/get-issue-decisions.sh" "$n" "$k" | awk '
 
     # Superseded entries: "- **r1/Q-2** ...", an item "  - A-11: ..." of "- **r1, assumed**",
     # or a hand-written "- **r1, assumed (A-11):** ...".
-    for (old in sup) {
+    # In the order they were found: "for (key in sup)" differs between awks.
+    for (si = 1; si <= nsup; si++) {
+      key = suporder[si]
+      old = key; part = sub(/\+part$/, "", old)
+      how = (part ? "partly superseded by " : "superseded by ") sup[key]
       oround = old; sub(/\/.*/, "", oround); oid = old; sub(/^[^\/]*\//, "", oid)
       m = split(b, L, "\n"); nb2 = ""; blk = ""; hit = 0
       for (j = 1; j <= m; j++) {
         if (L[j] ~ /^- \*\*/) blk = (index(L[j], "- **" oround ", assumed**") == 1) ? oround : ""
         if (index(L[j], "- **" old "**") == 1 || index(L[j], "- **" oround ", assumed (" oid ")") == 1 || (blk != "" && index(L[j], "  - " oid ":") == 1)) {
-          if (index(L[j], "superseded") == 0) { L[j] = L[j] " — superseded by " sup[old]; hit = 1 } else if (!hit) hit = 2
+          if (index(L[j], "superseded") == 0) { L[j] = L[j] " — " how; hit = 1 } else if (!hit) hit = 2
         }
         nb2 = nb2 (j > 1 ? "\n" : "") L[j]
       }
       b = nb2
-      log_applied = log_applied "- " old (hit == 1 ? " marked superseded by " sup[old] : hit == 2 ? ": already marked superseded" : ": superseded by " sup[old] ", but no entry for it was found in the description") "\n"
+      log_applied = log_applied "- " old (hit == 1 ? " marked " how : hit == 2 ? ": already marked superseded" : ": " how ", but no entry for it was found in the description") "\n"
     }
 
     # The decisions section.
