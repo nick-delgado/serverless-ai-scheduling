@@ -97,6 +97,11 @@ Resources:
       # Bounds the whole streamed turn (up to 8 model calls, ADR-001). The handler aborts the agent loop
       # 15 s before this, so it can still store the turn and end the stream with an error event.
       Timeout: 180
+      # Reserved concurrency (#273, owner decision r1/Q-2 (c)): 5 of the account's concurrent executions are
+      # kept for chat turns in each env, so a burst on another function or env can't starve them, and chat
+      # can't run more than 5 turns at once. Each env deployed from this template reserves its own 5; Lambda
+      # keeps 100 of the account quota unreserved, so the sum must fit in the quota less 100.
+      ReservedConcurrentExecutions: 5
       Environment:
         Variables:
           TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
@@ -341,7 +346,12 @@ Resources:
       StageName: live
       EndpointConfiguration:
         Type: REGIONAL
-      # Stage-wide throttle: a cheap guard in front of Bedrock spend (the account quota is 10 req/min).
+      # Stage throttle (#273): one setting for every method of this env's stage ("/*" "*"), which API Gateway
+      # applies per method, so each method has its own bucket, shared by every client. It bounds the sustained
+      # request rate (5 a second, burst 10), best effort. It doesn't bound a simultaneous warm burst (30 of 30
+      # passed, docs/research/security-review.md §3), Bedrock requests (an account-wide per-model quota,
+      # profiles.ts `rpm`; a turn makes up to 8 model calls), Lambda concurrency (only ChatFunction is capped,
+      # at its reservation of 5; SessionFunction has no cap), or one patient's use (DailyTurnCap does).
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"

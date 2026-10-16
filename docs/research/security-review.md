@@ -30,7 +30,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 |---|---|---|
 | Synthetic data only; the UI shows a "demo, not a real clinic" banner | holds | `apps/web/src/app/DisclaimerBanner.tsx:2`; fixtures in `packages/tools` (`buildClinicFixture`); the scenario lint rejects unknown entities (`packages/evals/scenarios/README.md`, "Synthetic data only"). The secrets scan (§4) found no real address, account ID or key in any tracked file or commit. |
 | Conversation messages are kept for 30 days (TTL) | holds | `packages/tools/src/repos/dynamo/items.ts:31` (`MESSAGE_TTL_DAYS = 30`), `:123` (conversation meta), `:143` (messages); traces `services/api/src/lib/dynamo-turn-store.ts:79`; TTL on `expiresAt` at `infra/stacks/data.yaml:43-45`. Escalations have no TTL, and PITR keeps expired items restorable: F-10, follow-up #271. |
-| No audio is stored (ADR-006) | holds | The browser streams audio straight to Transcribe with Identity Pool credentials (`apps/web/src/voice/transcribe/streamClient.ts`). `TranscribeBrowserRole` can only call `transcribe:StartStreamTranscriptionWebSocket` (`infra/stacks/auth.yaml:115-118`), and no API route accepts audio (`infra/stacks/api.yaml:359-380`). |
+| No audio is stored (ADR-006) | holds | The browser streams audio straight to Transcribe with Identity Pool credentials (`apps/web/src/voice/transcribe/streamClient.ts`). `TranscribeBrowserRole` can only call `transcribe:StartStreamTranscriptionWebSocket` (`infra/stacks/auth.yaml:115-118`), and no API route accepts audio (`infra/stacks/api.yaml:369-390`). |
 | CloudWatch logs carry IDs, timings and token counts, not message text | fixed | Live: the marker check found 0 hits (§3). `dev`: 0 hits for the fixture names (§3). One code path could log free text: `errorSummary` logged any error's message (F-21, high). It now logs a message only for AWS SDK errors (`services/api/src/lib/log.ts:22-37`, commit `572297e`, r1/Q-5 (b)). |
 
 ### ADR-009 "Identity and authorization" (`:26-29`)
@@ -45,8 +45,8 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 
 | Line | Status | Evidence |
 |---|---|---|
-| API Gateway stage throttling | follow-up #273, #272 | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:345-349`, pinned by `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10". Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15; follow-ups #273, #272). |
-| A per-patient cap on agent turns per day (50), enforced in the chat handler | holds | `DailyTurnCap` defaults to 50 (`infra/stacks/api.yaml:27-31`) and reaches the function as `DAILY_TURN_CAP` (`:104`), pinned by `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function". Deployed: `dev` 50, `sec39` 1 (`lambda get-function-configuration`). The rules are pinned by the tests in A-5: `turn-store.test.ts:27-29`; `dynamo-turn-store.local.test.ts:52-67` (concurrency); `chat-turn.test.ts:789` (replays don't count); `errors.test.ts:40-44` (the cap's message); `chat-turn.test.ts:436` "enforces the daily turn cap per patient and per clinic day" (429 with `RATE_LIMITED`). Live on `sec39`: 200, then 429 `RATE_LIMITED` (§3). |
+| API Gateway stage throttling | accepted: owner decision r1/Q-1 (a) on #273 (F-12) | Rate 5, burst 10 on `*/*` in `infra/stacks/api.yaml:355-359`, pinned by `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10". Deployed on `dev` and `sec39` as rate 5.0, burst 10 (`apigateway get-stage`). Live, paced load trips it, but a simultaneous burst of 30 gets no 429 (§3, F-12, F-15). #273's re-check on `ab273`, after #272 raised the Lambda quota to 1000, got the same shape: no 429 for either simultaneous burst of 30, 429s for paced load ([journal 2026-10-16](../journal/2026-10-16-five-chat-turns-at-once.md)). |
+| A per-patient cap on agent turns per day (50), enforced in the chat handler | holds | `DailyTurnCap` defaults to 50 (`infra/stacks/api.yaml:27-31`) and reaches the function as `DAILY_TURN_CAP` (`:109`), pinned by `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, and passes the cap to the chat function". Deployed: `dev` 50, `sec39` 1 (`lambda get-function-configuration`). The rules are pinned by the tests in A-5: `turn-store.test.ts:27-29`; `dynamo-turn-store.local.test.ts:52-67` (concurrency); `chat-turn.test.ts:789` (replays don't count); `errors.test.ts:40-44` (the cap's message); `chat-turn.test.ts:436` "enforces the daily turn cap per patient and per clinic day" (429 with `RATE_LIMITED`). Live on `sec39`: 200, then 429 `RATE_LIMITED` (§3). |
 | An agent-loop iteration cap (ADR-001) | holds | `packages/agent/src/loop.ts:71` (`maxIterations: 8`, `maxToolCallsPerTurn: 16`); `packages/agent/test/loop.test.ts:497` "counts retries as iterations, so a retry can't push the turn past the cap". |
 | An AWS Budget alarm (bootstrap stack) | holds | `infra/bootstrap/bootstrap.yaml:229-250` (`sched-monthly`, 80% actual and 100% forecast) and the Bedrock budget (`BedrockBudgetLimitUsd`, `:20`). The deployed bootstrap template matches the repo (§2, A-2). |
 
@@ -55,7 +55,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | Clause | Status | Evidence |
 |---|---|---|
 | Least-privilege IAM | fixed; follow-up #270 | §2. Two avoidable `*` fixed in `api.yaml`. Every `*` in the bootstrap stack and `SchedDeployer` has a class, and the avoidable ones are filed on #270. |
-| JWT on every API | holds | Both methods use the Cognito authorizer (`infra/stacks/api.yaml:364`, `:376`). Pinned by `api-template.test.ts` "puts every method of the API behind the Cognito authorizer, which validates this env's user pool" (new: every method under `paths:` must carry `security: - CognitoUserPool: []`, and the authorizer's definition is compared exactly), "routes POST /api/chat through the Cognito authorizer to the chat function" (new) and the session route test. |
+| JWT on every API | holds | Both methods use the Cognito authorizer (`infra/stacks/api.yaml:374`, `:386`). Pinned by `api-template.test.ts` "puts every method of the API behind the Cognito authorizer, which validates this env's user pool" (new: every method under `paths:` must carry `security: - CognitoUserPool: []`, and the authorizer's definition is compared exactly), "routes POST /api/chat through the Cognito authorizer to the chat function" (new) and the session route test. |
 | Patient ID only from the token | holds | See the identity row above. |
 | No secrets in the repo | holds | §4, row "Secrets in tracked files and git history". The commit author email is metadata, not a file: F-18, #272. |
 | Synthetic data only | holds | See the data row above. |
@@ -68,7 +68,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | 30-day message TTL | holds | See the ADR-009 data row. |
 | No message text in logs | fixed | F-21; §3. |
 | Least-privilege IAM | fixed; follow-up #270 | §2 |
-| API throttling | follow-up #273, #272 | §3; F-12, F-15 |
+| API throttling | accepted: owner decision r1/Q-1 (a) on #273 (F-12) | §3; F-12, F-15 |
 | Daily turn cap | holds | §3; the A-5 tests |
 | Loop iteration cap | holds | `loop.ts:71`, `loop.test.ts:497` |
 | Budget alarm | holds | `bootstrap.yaml:229-250` |
@@ -84,7 +84,7 @@ Each table lists every statement whose action or resource contains `*`.
 
 `detect-stack-drift` failed with AccessDenied: `SchedDeployer` has `cloudformation:DetectStackDrift` but not `cloudformation:DetectStackResourceDrift` (F-9, #270). So drift wasn't checked; the processed templates are the evidence.
 
-### Chat function role (`ChatFunctionRole`, `infra/stacks/api.yaml:116-166`)
+### Chat function role (`ChatFunctionRole`, `infra/stacks/api.yaml:121-171`)
 
 | Statement | `*` | Class |
 |---|---|---|
@@ -94,7 +94,7 @@ Each table lists every statement whose action or resource contains `*`.
 | `AWSLambdaBasicExecutionRole` (SAM) | `logs:*` actions on `"*"` | **justified**: SAM's managed policy (Q-2 (a)). The boundary caps it to log writes. |
 | `AWSXrayWriteOnlyAccess` (SAM) | `xray:Put*` on `"*"` | **justified**: X-Ray's write actions have no resource-level permissions. |
 
-### Session function role (`SessionFunctionRole`, `api.yaml:324-335`)
+### Session function role (`SessionFunctionRole`, `api.yaml:329-340`)
 
 | Statement | `*` | Class |
 |---|---|---|
@@ -105,7 +105,7 @@ Each table lists every statement whose action or resource contains `*`.
 
 | Statement | `*` | Class |
 |---|---|---|
-| `transcribe-streaming-only` | `Resource: "*"` | **justified**: Transcribe streaming has no resource-level permissions. Only authenticated identities of this env's pool can assume the role (`amr: authenticated`, `aud` = the pool). There is no per-patient cap: F-16, #273. |
+| `transcribe-streaming-only` | `Resource: "*"` | **justified**: Transcribe streaming has no resource-level permissions. Only authenticated identities of this env's pool can assume the role (`amr: authenticated`, `aud` = the pool). There is no per-patient cap: F-16, accepted (owner decision r1/Q-3 (a) on #273). |
 
 ### CloudFormation execution role (`CfnExecutionRole`, `infra/bootstrap/bootstrap.yaml:94-178`)
 
@@ -123,7 +123,7 @@ Each table lists every statement whose action or resource contains `*`.
 |---|---|---|
 | `WorkloadServices` | `Resource: "*"` | **justified**: a ceiling, not a grant. |
 | `WorkloadServices` | `bedrock-mantle:CreateInference`, `bedrock-mantle:CountTokens` (no `*`, but unused) | **follow-up #270** (F-4, low): nothing calls Mantle since ADR-010. |
-| `WorkloadServices` | `cloudwatch:PutMetricData`, `dynamodb:DeleteItem`, `BatchGetItem`, `BatchWriteItem`, `DescribeTable`, `ses:SendRawEmail`, `transcribe:StartStreamTranscription`, `ssm:GetParameter`, `GetParameters`, `GetParametersByPath`, `s3:GetObject`, `PutObject`, `lambda:InvokeFunction`, `cognito-identity:GetId`, `GetCredentialsForIdentity` (no `*`; no `sched-*` workload role grants them) | **follow-up #270** (F-23, low): ceiling-only actions. The workload roles grant only the chat role's five DynamoDB item actions, two Bedrock invokes and `ses:SendEmail` (`infra/stacks/api.yaml:122-166`), the session role's two reads (`:329-335`), Transcribe's WebSocket action (`infra/stacks/auth.yaml:117`), and SAM's log and X-Ray writes. |
+| `WorkloadServices` | `cloudwatch:PutMetricData`, `dynamodb:DeleteItem`, `BatchGetItem`, `BatchWriteItem`, `DescribeTable`, `ses:SendRawEmail`, `transcribe:StartStreamTranscription`, `ssm:GetParameter`, `GetParameters`, `GetParametersByPath`, `s3:GetObject`, `PutObject`, `lambda:InvokeFunction`, `cognito-identity:GetId`, `GetCredentialsForIdentity` (no `*`; no `sched-*` workload role grants them) | **follow-up #270** (F-23, low): ceiling-only actions. The workload roles grant only the chat role's five DynamoDB item actions, two Bedrock invokes and `ses:SendEmail` (`infra/stacks/api.yaml:127-171`), the session role's two reads (`:334-340`), Transcribe's WebSocket action (`infra/stacks/auth.yaml:117`), and SAM's log and X-Ray writes. |
 | `NeverIamOrAccountLevel` | `iam:*`, `organizations:*`, `account:*`, `sso:*` (Deny) | **justified**: a deny. |
 
 ### GitHub OIDC role `sched-github-deploy` (`GitHubDeployRole`, `bootstrap.yaml:309-405`)
@@ -191,7 +191,7 @@ Each table lists every statement whose action or resource contains `*`.
 |---|---|---|
 | Chat log group (`/aws/lambda/sched-<env>-api-chat`, EMF included) | **Code path:** every log call goes through `Logger` and `errorSummary` (`services/api/src/lib/chat-turn.ts`, `handlers/chat.ts`, `lib/observability/metrics.ts`); the Powertools logger never logs the event (`lib/observability/logger.ts:10`); no `console.*` in Lambda code (`git grep`). **Live (`sec39`):** a patient message holding the marker `ZQX-SEC39-e6625ed91781`, then a `FilterLogEvents` read of every event in the group, grepped locally. **`dev`:** Logs Insights over 14 days (below), and a parse of all 286 events' keys. | **Pass.** `sec39`: 0 marker hits in 10 events, while the turn's own `chat turn` line was found by `conversationId` (positive control). `dev`: 0 hits for the fixture names. Every line's keys are IDs, enums, counts, timings and token usage. One `errorMessage` was ever logged: a Bedrock `ThrottlingException`, "Too many requests, please wait before trying again." |
 | Session log group (`…-api-session`) | The same: code path (`services/api/src/lib/session.ts:94-97`), the `sec39` marker grep, and the `dev` query and key parse. | **Pass.** `sec39`: 0 marker hits in 385 events. `dev`: 0 hits in 788 records. `session` lines carry `conversationId`, `displayMessages` (a count), `hasProfile`, `hasUpcoming`, `status` and `totalMs`. |
-| Chat function X-Ray traces | `Tracing: Active` with `POWERTOOLS_TRACER_CAPTURE_RESPONSE` and `…_ERROR` set to `"false"` (`api.yaml:96`, `:110-111`), pinned by `api-template.test.ts` "traces the chat function with X-Ray, and nothing else, with no response or error capture". `xray batch-get-traces` on `sec39`'s 2 traces (15 segments) and `dev`'s 4 (26), keys listed and grepped. | **Pass.** 0 marker hits and 0 fixture-name hits. Keys are only `aws.*` (operation, table, index, request ID, retries), `http.response` and duration annotations. The `cause` fields hold DynamoDB's generic "The conditional request failed" from the cap check. |
+| Chat function X-Ray traces | `Tracing: Active` with `POWERTOOLS_TRACER_CAPTURE_RESPONSE` and `…_ERROR` set to `"false"` (`api.yaml:96`, `:115-116`), pinned by `api-template.test.ts` "traces the chat function with X-Ray, and nothing else, with no response or error capture". `xray batch-get-traces` on `sec39`'s 2 traces (15 segments) and `dev`'s 4 (26), keys listed and grepped. | **Pass.** 0 marker hits and 0 fixture-name hits. Keys are only `aws.*` (operation, table, index, request ID, retries), `http.response` and duration annotations. The `cause` fields hold DynamoDB's generic "The conditional request failed" from the cap check. |
 | Bedrock model invocation logging (A-4, verify first) | `aws bedrock get-model-invocation-logging-configuration` | **Pass:** it returned no configuration (exit 0, empty output), so invocation logging is off and prompts and replies go nowhere. #272 asks to keep it off. |
 
 **By design, not logs (A-3).** The marker was stored in DynamoDB, in `MSG#000000` (the patient's words) and `MSG#000001` (the model's turn), both with the 30-day TTL. It was not in the `TRACE#…` item, which holds figures only (`scripts/trace.ts`; journal [2026-10-13](../journal/2026-10-13-the-trace-viewer-reads-figures-not-words.md)). The staff email carries the summary and transcript by design (`packages/tools/src/notify/render.ts:5`, `:72`). The failure text stored on an escalation has addresses redacted (`packages/tools/src/notify/ses.ts:48`).
@@ -212,8 +212,8 @@ On `sec39`, Logs Insights reported records skipped by its index for a `like` fil
 
 | Value | In `infra/stacks/api.yaml` | Deployed | Pinned by | Live check (`sec39`, 2026-10-15) |
 |---|---|---|---|---|
-| Stage throttle | rate 5, burst 10, `/*` `*` (`:345-349`) | `dev` and `sec39`: `"*/*": rate 5.0, burst 10` | `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10" | See below. |
-| `DailyTurnCap` | default 50, min 1 (`:27-31`), passed as `DAILY_TURN_CAP` (`:104`) | `dev` 50; `sec39` 1 (deploy override) | `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, …"; the A-5 tests | A first new message got 200 (`turnsUsedToday: 1`, one `check_availability` call). A second new message, with a new `clientMessageId`, the same clinic day, 14:28 ET, got **429**: `{"type":"error","code":"RATE_LIMITED",…,"retryable":false}`. |
+| Stage throttle | rate 5, burst 10, `/*` `*` (`:355-359`) | `dev` and `sec39`: `"*/*": rate 5.0, burst 10` | `api-template.test.ts` "throttles every method of the stage at rate 5 and burst 10" | See below. |
+| `DailyTurnCap` | default 50, min 1 (`:27-31`), passed as `DAILY_TURN_CAP` (`:109`) | `dev` 50; `sec39` 1 (deploy override) | `api-template.test.ts` "caps each patient at the handler's default of 50 turns a day, …"; the A-5 tests | A first new message got 200 (`turnsUsedToday: 1`, one `check_availability` call). A second new message, with a new `clientMessageId`, the same clinic day, 14:28 ET, got **429**: `{"type":"error","code":"RATE_LIMITED",…,"retryable":false}`. |
 
 The throttle checks, all as `POST /api/session`:
 
@@ -259,13 +259,13 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 | F-8 | medium | `SchedDeployer`'s `SeedAndEvalData` grants `index/*`. | follow-up #270 |
 | F-9 | low | `SchedDeployer` can't run drift detection (no `DetectStackResourceDrift`), so the review couldn't check drift (A-2). | follow-up #270 |
 | F-10 | medium | Escalation items have no TTL. The patient's `reason` and the model's `summary` stay indefinitely, PITR keeps expired items restorable for its window, and the staff email holds the transcript (Q-4 (a)). | follow-up #271 |
-| F-11 | low | The stage throttle's comment cites "the account quota is 10 req/min". That is `sonnet-4.6`'s Bedrock RPM (`packages/agent/src/profiles.ts:121`), which a rate of 5 per second doesn't bound. | follow-up #273 |
-| F-12 | medium | The throttle is stage-wide, not per client, and a simultaneous burst of 30 gets no 429 (§3). | follow-up #273 |
+| F-11 | low | The stage throttle's comment cites "the account quota is 10 req/min". That is `sonnet-4.6`'s Bedrock RPM (`packages/agent/src/profiles.ts:121`), which a rate of 5 per second doesn't bound. | fixed by #273 (`7edb209`): the comment says what the throttle bounds (the sustained rate, per method) and what it doesn't (a simultaneous warm burst, Bedrock requests, Lambda concurrency, one patient's use) |
+| F-12 | medium | The throttle is stage-wide, not per client, and a simultaneous burst of 30 gets no 429 (§3). | accepted: owner decision r1/Q-1 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`); each patient is capped at 50 turns a day (`DailyTurnCap`, `infra/stacks/api.yaml:27-31`); the stage throttle rejects sustained load (§3); and the `sched-monthly` budget alarm reports spend. WAF would add a web ACL and its rules to every standing env, and the exec role has no `wafv2` grant |
 | F-13 | medium | The e2e role's `SeedE2eData` grants `index/*`. | follow-up #270 |
-| F-14 | medium | No reserved concurrency for the chat function (impossible while the quota is 10). | follow-up #273 |
-| F-15 | medium | The account's Lambda concurrency quota is 10, shared by every env. A burst of one env's calls throttles the others, and the client sees a 500. | follow-up #272 (quota), #273 (the 500) |
-| F-16 | low | No per-patient cap on Transcribe streaming. | follow-up #273 |
-| F-17 | low | No WAF on CloudFront or the stage. | follow-up #273 |
+| F-14 | medium | No reserved concurrency for the chat function (impossible while the quota is 10). | fixed by #273 (`7edb209`, owner decision r1/Q-2 (c)): `ReservedConcurrentExecutions: 5` on `ChatFunction`, pinned by `api-template.test.ts` "reserves 5 concurrent executions for the chat function …", deployed on `dev` (`aws lambda get-function` `Concurrency`: 5). Lambda keeps 100 of the account's 1000 unreserved, so each env's 5 fits |
+| F-15 | medium | The account's Lambda concurrency quota is 10, shared by every env. A burst of one env's calls throttles the others, and the client sees a 500. | follow-up #272 (quota; raised to 1000 on 2026-10-16); the 500 holds: on `ab273`, 25 of 30 simultaneous `POST /api/chat` calls beyond the chat function's reservation of 5 got API Gateway's 500 with no event body, which the SPA offers Retry for (`apps/web/src/chat/useChat.ts:114-118`) (#273, [journal 2026-10-16](../journal/2026-10-16-five-chat-turns-at-once.md)) |
+| F-16 | low | No per-patient cap on Transcribe streaming. | accepted: owner decision r1/Q-3 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`), and the role allows `transcribe:StartStreamTranscriptionWebSocket` only (`:111-119`). The SPA stops a recording at 60 seconds (`apps/web/src/voice/useRecording.ts:25`), but that cap is client-side and per recording, and nothing caps minutes per patient or per day, so a patient's credentials can stream for longer within their lifetime. The `sched-monthly` budget alarm reports the spend |
+| F-17 | low | No WAF on CloudFront or the stage. | accepted: owner decision r1/Q-1 (a) on #273: only admin-created patients can sign in (`infra/stacks/auth.yaml:34`); each patient is capped at 50 turns a day (`DailyTurnCap`, `infra/stacks/api.yaml:27-31`); the stage throttle rejects sustained load (§3); and the `sched-monthly` budget alarm reports spend. WAF would add a web ACL and its rules to every standing env, and the exec role has no `wafv2` grant |
 | F-18 | low | Commits carry the owner's personal address in author metadata. | follow-up #272 |
 | F-19 | low | `docs/runbooks/aws-setup.md:53` says `SchedDeployer` calls `bedrock-mantle:CreateInference`; it's `bedrock:InvokeModel*` since ADR-010 (A-8). | fixed in the runbook by #42 (PR #285): step 3 names the Bedrock actions `SchedDeployer` grants today; the grant itself narrows in #270 |
 | F-20 | low | AWS SDK error messages are still logged, clipped to 200 characters. AWS doesn't document their format, so one could quote a request field. | accepted: owner decision r1/Q-5 (b) keeps them for debugging Bedrock errors |
