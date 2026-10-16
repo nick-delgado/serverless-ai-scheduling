@@ -37,6 +37,27 @@ if ! head -n 1 "$file" | grep -qE '^<!-- agent-pr-review:response review=[0-9a-f
   exit 1
 fi
 
+# Broad test names: every one the fixes added or changed must be quoted in the response,
+# narrowed or kept with the check that backs it ("Broad test names" line).
+review="$(head -n 1 "$file" | sed -n 's/.*review=\([0-9a-f]*\) head=\([0-9a-f]*\).*/\1/p')"
+head_sha="$(head -n 1 "$file" | sed -n 's/.*head=\([0-9a-f]*\).*/\1/p')"
+if git cat-file -e "${review}^{commit}" 2>/dev/null && git cat-file -e "${head_sha}^{commit}" 2>/dev/null; then
+  missing=""
+  while IFS= read -r hit; do
+    [ -n "$hit" ] || continue
+    name="${hit#*: }"; name="${name%  \[*}"
+    grep -qF -- "$name" "$file" || missing="$missing
+  $hit"
+  done < <("$(dirname "$0")/broad-test-names.sh" "$review" "$head_sha")
+  if [ -n "$missing" ]; then
+    echo "error: the fixes added or changed test names that claim more than one case, and the response does not mention them:$missing" >&2
+    echo "Narrow each name to what its test checks, or keep it and quote it under \"Broad test names\" with the check that backs it." >&2
+    exit 1
+  fi
+else
+  echo "note: commits $review or $head_sha are not in this clone; broad test names not checked" >&2
+fi
+
 chars="$(LC_ALL=en_US.UTF-8 wc -m < "$file" | tr -d '[:space:]')"
 if [ "$chars" -gt "$MAX_CHARS" ]; then
   echo "error: response is $chars characters; GitHub allows $MAX_CHARS per comment." >&2

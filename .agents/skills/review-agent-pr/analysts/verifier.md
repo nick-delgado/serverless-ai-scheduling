@@ -338,6 +338,8 @@ so use exactly these `##` and `###` headings, in this order, and no other `##` h
   reviewer supplied no table. When a reviewer ran in parts (`findings/<name>--<k>.md`),
   combine the parts' tables into one, and in the verification summary give the reviewer one
   row with the parts' totals.
+- Write every path in full, from the repository root (`packages/agent/src/index.ts:6`, not
+  `index.ts:6`): a short name that several files share cannot be checked, and is sent back.
 - Every `path:line` you write, including in copied tables, must be a line of the file in
   `<RUN_DIR>/worktree`, never a position in `diff.patch`. A script checks every citation in
   this file after you finish, and invalid ones are sent back to you.
