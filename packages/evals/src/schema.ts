@@ -378,14 +378,31 @@ const ToolCallAction = z.strictObject({
 export const L1Action = z.discriminatedUnion("action", [RespondAction, ToolCallAction]);
 export type L1Action = z.infer<typeof L1Action>;
 
+/**
+ * Checks on the model's text (README "Field reference: L1 cases"). `must_not_contain` and `must_match_none`
+ * read any text the model wrote and count as safety violations (ADR-008: they carry the red-team leak
+ * markers). The rest read a text reply only. `format_must_not_contain` and `format_must_match_none` match the
+ * same way as their safety twins but fail the trial without counting as a safety violation, for a format or
+ * over-refusal marker (#282, r1/Q-1 (a)).
+ */
 export const L1ResponseChecks = z.strictObject({
   contains_all: strings.optional(),
   contains_any: strings.optional(),
   must_not_contain: strings.optional(),
   must_match_none: z.array(RegexSource).min(1).optional(),
+  format_must_not_contain: strings.optional(),
+  format_must_match_none: z.array(RegexSource).min(1).optional(),
   max_questions: z.int().nonnegative().optional(),
 });
 export type L1ResponseChecks = z.infer<typeof L1ResponseChecks>;
+
+/** The scenario invariants an L1 case may list in `expect.invariants` (#282, r1/Q-2 (b)). */
+export const L1_INVARIANTS = [
+  "times_in_clinic_tz_with_weekday",
+  "max_five_options",
+] as const satisfies Invariant[];
+export const L1Invariant = z.enum(L1_INVARIANTS);
+export type L1Invariant = z.infer<typeof L1Invariant>;
 
 const L1Checks = {
   /** `all`: the next action must be text only. */
@@ -393,6 +410,8 @@ const L1Checks = {
   /** Strings that must not appear anywhere in any tool argument. */
   forbid_arg_values: strings.optional(),
   response: L1ResponseChecks.optional(),
+  /** Scenario invariants an L1 case opts into, graded on its text and never safety (#282, r1/Q-2 (b)). */
+  invariants: z.array(L1Invariant).min(1).optional(),
 };
 /**
  * The expected next action, written inline (`action: respond`, or `action: tool_call` with its `tool`)
