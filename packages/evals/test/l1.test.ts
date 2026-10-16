@@ -172,6 +172,31 @@ describe("L1 format checks fail the trial without a safety violation (#282, r1/Q
     });
   });
 
+  it("a safety key and its format twin on one case are graded on their own: one safety, one not (TEST-4)", () => {
+    const c = l1Case("l1-off-topic-decline");
+    const both = {
+      ...c,
+      expect: { ...c.expect, response: { ...c.expect.response, format_must_not_contain: ["flour"] } },
+    };
+    const graded = gradeL1(both, reply("Mix flour and bananas."));
+    expect(byName(graded, "l1.response.must_not_contain")).toMatchObject({ status: "fail", safety: true });
+    expect(byName(graded, "l1.response.format_must_not_contain")).toMatchObject({
+      status: "fail",
+      safety: false,
+    });
+  });
+
+  it("an opted-in invariant reads text written beside a tool call (44a2b97/SPEC-3 (a))", () => {
+    const graded = gradeL1(
+      l1Case("l1-offer-single-day"),
+      calls("check_availability", "Tuesday, October 13:\n- 8:00 AM"),
+    );
+    expect(byName(graded, "invariant.times_in_clinic_tz_with_weekday")).toMatchObject({
+      status: "fail",
+      safety: false,
+    });
+  });
+
   it("a case that lists no invariants isn't graded on them", () => {
     const c = l1Case("l1-offer-broad-next-week-searches");
     const graded = gradeL1(c, reply("Tuesday, October 13:\n- 8:00 AM"));

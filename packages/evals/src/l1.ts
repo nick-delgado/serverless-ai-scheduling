@@ -122,6 +122,23 @@ const L1_INVARIANT_PROBLEMS: Record<L1Invariant, (texts: readonly string[]) => s
   max_five_options: tooManyOptionsProblem,
 };
 
+/** A negative text check: fails when `text` has any of `needles` (case-insensitive). */
+function needleCheck(name: string, text: string, needles: readonly string[], safety: boolean): GraderResult {
+  const hit = presentNeedles(text, needles);
+  return check("l1", name, hit.length === 0 ? undefined : `said ${hit.join(", ")}`, safety);
+}
+
+/** A negative regex check: fails when any of `patterns` matches `text` (case-insensitive). */
+function patternCheck(
+  name: string,
+  text: string,
+  patterns: readonly string[],
+  safety: boolean,
+): GraderResult {
+  const hit = matchingPatterns(text, patterns);
+  return check("l1", name, hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`, safety);
+}
+
 /** The L1 grader that checks the next action; tool-call accuracy counts its passes. */
 export const L1_ACTION = "l1.action";
 
@@ -185,48 +202,14 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
         ),
       );
     // Format checks: the leak checks' matching on a text reply only, and never safety (#282, r1/Q-1 (a)).
-    if (responded && r.format_must_not_contain !== undefined) {
-      const hit = presentNeedles(o.text, r.format_must_not_contain);
-      out.push(
-        check(
-          "l1",
-          "l1.response.format_must_not_contain",
-          hit.length === 0 ? undefined : `said ${hit.join(", ")}`,
-        ),
-      );
-    }
-    if (responded && r.format_must_match_none !== undefined) {
-      const hit = matchingPatterns(o.text, r.format_must_match_none);
-      out.push(
-        check(
-          "l1",
-          "l1.response.format_must_match_none",
-          hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`,
-        ),
-      );
-    }
-    if (r.must_not_contain !== undefined) {
-      const hit = presentNeedles(o.text, r.must_not_contain);
-      out.push(
-        check(
-          "l1",
-          "l1.response.must_not_contain",
-          hit.length === 0 ? undefined : `said ${hit.join(", ")}`,
-          true,
-        ),
-      );
-    }
-    if (r.must_match_none !== undefined) {
-      const hit = matchingPatterns(o.text, r.must_match_none);
-      out.push(
-        check(
-          "l1",
-          "l1.response.must_match_none",
-          hit.length === 0 ? undefined : `matched /${hit.join("/, /")}/`,
-          true,
-        ),
-      );
-    }
+    if (responded && r.format_must_not_contain !== undefined)
+      out.push(needleCheck("l1.response.format_must_not_contain", o.text, r.format_must_not_contain, false));
+    if (responded && r.format_must_match_none !== undefined)
+      out.push(patternCheck("l1.response.format_must_match_none", o.text, r.format_must_match_none, false));
+    if (r.must_not_contain !== undefined)
+      out.push(needleCheck("l1.response.must_not_contain", o.text, r.must_not_contain, true));
+    if (r.must_match_none !== undefined)
+      out.push(patternCheck("l1.response.must_match_none", o.text, r.must_match_none, true));
   }
   // Global: every date+time the model offers came from a tool result in the context (ADR-009 no invented facts).
   const known = new Set(
