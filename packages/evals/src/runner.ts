@@ -41,7 +41,7 @@ import { assistantTexts, turnEvents, type TranscriptEvent } from "./transcript";
 export interface AgentUnderTest {
   llm: LlmClient;
   profile: ModelProfile;
-  /** Builds the system prompt for a trial. Default: the interim prompt until #16 lands. */
+  /** Builds the system prompt for a trial. Default: the current system prompt (`buildSystemPrompt` from `@sched/agent`). */
   systemPrompt?: SystemPromptFactory;
   /** Tool handlers. Default: the production `TOOL_REGISTRY`. */
   registry?: ToolRegistry;
