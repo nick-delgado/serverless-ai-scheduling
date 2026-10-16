@@ -410,10 +410,26 @@ describe("regexParts: class members and anchors (#287, B11-2)", () => {
     expect(removals("[\\x00-\\x1fA]").members).toEqual(["[A]", "[\\x00-\\x1f]"]);
     expect(removals("[-a]").members).toEqual(["[a]", "[-]"]);
     expect(removals("[a-]").members).toEqual(["[-]", "[a]"]);
+    // Without v, `--` after a member starts a range; with v, it is subtraction, and ranges still read.
+    expect(removals("[a--b]").members).toEqual(["[b]", "[a--]"]);
+    expect(removals("[a-z_]", true).members).toEqual(["[_]", "[a-z]"]);
+  });
+
+  it("reads an unterminated class to the pattern's end, with no range past it", () => {
+    expect(removals("[ab-").members).toEqual(["[b-", "[a-", "[ab"]);
+    expect(removals("[a-b").members).toEqual([]);
+    expect(regexParts("[a|", false).alternatives).toEqual([]);
   });
 
   it("reads \\p{…}, \\u{…}, \\uXXXX, \\xXX and \\cX whole, and any other escape as two characters", () => {
     expect(removals("[\\p{Cc}\\P{Cf}]+").members).toEqual(["[\\P{Cf}]+", "[\\p{Cc}]+"]);
+    // A whole escape is read from its backslash, with either case of hex digit and control letter.
+    expect(removals("[\\n\\p{L}]").members).toEqual(["[\\p{L}]", "[\\n]"]);
+    expect(removals("[\\u00E9\\xAF\\cj]").members).toEqual([
+      "[\\xAF\\cj]",
+      "[\\u00E9\\cj]",
+      "[\\u00E9\\xAF]",
+    ]);
     expect(removals("[\\u{1F600}\\u00e9\\x41\\cJ\\]]").members).toEqual([
       "[\\u00e9\\x41\\cJ\\]]",
       "[\\u{1F600}\\x41\\cJ\\]]",
@@ -424,12 +440,15 @@ describe("regexParts: class members and anchors (#287, B11-2)", () => {
   });
 
   it("with the v flag, skips a class holding a nested class, && or --, and reads the nested class itself", () => {
-    expect(removals("[[ab]c]", true).members).toEqual(["[[b]c]", "[[a]c]"]);
+    expect(removals("[[ab]cd]", true).members).toEqual(["[[b]cd]", "[[a]cd]"]);
+    expect(removals("[[a&&b]c]", true).members).toEqual([]);
     expect(removals("[ab&&c]", true).members).toEqual([]);
+    expect(regexParts("[a&&]|b", true).alternatives).toHaveLength(2);
     expect(removals("[ab--c]", true).members).toEqual([]);
     expect(removals("[ab]", true).members).toEqual(["[b]", "[a]"]);
-    // Without v, `[` is a member and the first `]` ends the class.
+    // Without v, `[` is a member and the first `]` ends the class, and `&&` is two members.
     expect(removals("[[ab]c]").members).toEqual(["[ab]c]", "[[b]c]", "[[a]c]"]);
+    expect(removals("[a&&]").members).toEqual(["[&&]", "[a&]", "[a&]"]);
   });
 
   it("removes \\b, ^ and $ outside a class, and not \\B, an escaped ^ or $, or a \\b, ^ or $ in a class", () => {
