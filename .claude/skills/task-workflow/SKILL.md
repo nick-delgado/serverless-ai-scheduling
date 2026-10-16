@@ -65,7 +65,7 @@ Worktrees let several agents build and test at the same time without stepping on
 
 ## 4. Read before you write
 
-1. **The issue body.** The goal, acceptance criteria, **owned paths**, dependencies, and verification commands form the contract for this task. An item under "Decisions and clarifications", or an owner decision on the PR (`Decision <commit>/<ID>: ...`), is Nick's answer: build it exactly as written, even when nearby code, an example or a check seems to disagree, and raise any doubt under the PR's "Departs from or questions an owner decision" rather than choosing your own reading.
+1. **The issue body.** The goal, acceptance criteria, **owned paths**, dependencies, and verification commands form the contract for this task. An item under "Decisions and clarifications", or an owner decision on the PR (`Decision <commit>/<ID>: ...`), is Nick's answer: build it exactly as written, even when nearby code, an example or a check seems to disagree, and raise any doubt under the PR's "Departs from or questions an owner decision" rather than choosing your own reading. Anything you build beyond a decision's own text (an extra check, pattern, case, route or tool) is your decision, not the owner's: list it under the PR's "Departs from or questions an owner decision" and don't credit it to the decision.
 2. **`CLAUDE.md`.** Especially the architecture rules:
    - patient ID only from the JWT;
    - atomic bookings;
@@ -107,11 +107,11 @@ gh pr create --base main --title "<type>(<scope>): <summary> (#<N>)" --body-file
 Write the title in that form, not the issue's title (the `PR body` check: `<type>` is a branch type from step 3 or `test`, and the scope is optional).
 
 Use `.github/pull_request_template.md`. The body must include:
-- `Closes #<N>`, or `Refs #<N>` for a split issue's earlier parts, where nowhere in the body or commits does a closing keyword (`closes`, `fixes`, `resolves` and their forms) come right before `#<N>`, because GitHub closes on prose too (the `PR body` check reads the body). It stays even when a criterion needs a step you can't run (a write to `dev`, a live measurement, a browser check, an eval run a rule you were given blocks): mark that step pending in the PR, where its result will go, and report it. It's done before merge;
+- `Closes #<N>`, or `Refs #<N>` for a split issue's earlier parts, where nowhere in the body or commits does a closing keyword (`closes`, `fixes`, `resolves` and their forms) come right before `#<N>`, because GitHub closes on prose too (the `PR body` check reads the body). It stays even when a criterion needs a step you can't run (a write to `dev`, a live measurement, a browser check your session has no browser tool for (a headless browser you script counts only if the issue allows it), an eval run a rule you were given blocks): mark that step pending in the PR, where its result will go, and report it. It's done before merge;
 - the PRD requirement IDs covered;
 - how you verified it (commands and results, eval numbers);
 - any shared-file or contract changes;
-- anything deferred, each with the issue that tracks it: file it from `.github/ISSUE_TEMPLATE/task.yml` and link it here and in the journal entry's "What's next"; if you can't file it, write "to file" and report it, and it's linked before merge.
+- anything deferred, each with the issue that tracks it: file it from `.github/ISSUE_TEMPLATE/task.yml` and link it here and in the journal entry's "What's next"; if you can't file it, write "to file" and report it, and it's linked before merge. The `PR body` check fails a list item under "Deferred / follow-ups" that has neither a `#<N>` nor "to file" (prose there isn't read).
 
 End it with the PR attribution line from the session's system reminder, if there is one.
 

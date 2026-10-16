@@ -22,15 +22,19 @@
  * A command that names `vitest` gets Vitest's JSON reporter added, and a KILLED edit lists the tests that
  * failed (`    ✗ <test file> > <test name>`). A Vitest run that fails with no failing test (a compile error, a
  * crash, a failed import) is ERROR, not KILLED. Any other command that exits non-zero is KILLED, with no names.
- * A KILLED edit with an `expect` list whose failed tests include none of them is KILLED-OTHER, and doesn't count as
- * killed: an unrelated test went red (in PR #175 an esbuild syntax error did), or a non-Vitest command named none.
+ * A KILLED edit with an `expect` list is KILLED-OTHER, and doesn't count as killed, unless every name in the list
+ * matches a failed test (#287, B11-4; one failed test may match several): an unrelated test went red (in PR #175 an
+ * esbuild syntax error did), an expected test stayed green behind a sibling that went red (#274 TEST-1), or a
+ * non-Vitest command named none.
  * A command still running after `--timeout` seconds (default 300) is killed and the edit is TIMEOUT. The kill reaches
  * every process in the command's process group; a process that left it (setsid, a detached spawn) isn't killed or
  * waited for: the run stops reading the output and ends once the started process has exited, what that process
  * prints after the kill is dropped, and it may still run during the next edit's command (#256, #268).
  * `--markdown` prints the progress lines to stderr, then, on stdout, the PR's Seen-failing table (one row per edit:
  * id, file, exact edit, status, failed tests; a KILLED edit with no `expect` list reads `KILLED (no expect)`) and the
- * summary line, both from the same results.
+ * summary line, both from the same results. The Failed-tests cell shows one test, the first failed test an `expect`
+ * name matches (else the first failed test), and `(+<n> more)` for the rest (#287, B11-5), so the table fits a PR
+ * body; the progress lines and `--json` keep every failed test.
  * The command first runs once unedited; if that run fails or times out, nothing is mutated: a timed-out unedited run
  * fails whatever its exit code, since the started process can exit 0 while a process it started outlives the timeout
  * (#276), and its printed output holds only what came before the timeout.
@@ -132,14 +136,20 @@ export function classify(
   return outcome.failedTests.length > 0 ? "KILLED" : "ERROR";
 }
 
-/** KILLED-OTHER for a KILLED edit whose `expect` list names none of its failed tests; else the status as it is. */
+/** True when the failed test `test` is one the `expect` name `name` names (a substring match). */
+const matches = (test: string, name: string): boolean => test.includes(name);
+
+/**
+ * KILLED-OTHER for a KILLED edit with an `expect` list that has a name no failed test matches (every name must go
+ * red, #287 B11-4); else the status as it is.
+ */
 export function checkExpected(
   status: Exclude<Status, "REFUSED">,
   failedTests: readonly string[],
   expected: readonly string[] | undefined,
 ): Exclude<Status, "REFUSED"> {
   if (status !== "KILLED" || expected === undefined || expected.length === 0) return status;
-  return failedTests.some((test) => expected.some((name) => test.includes(name))) ? status : "KILLED-OTHER";
+  return expected.every((name) => failedTests.some((test) => matches(test, name))) ? status : "KILLED-OTHER";
 }
 
 /** The arguments before the first `--` are the runner's own; everything after it is the test command. */
@@ -332,6 +342,15 @@ export function codeSpan(text: string): string {
   return `${fence}${pad}${inner}${pad}${fence}`;
 }
 
+/** The Failed-tests cell: the first failed test an `expect` name matches (else the first), and how many others. */
+function failedCell(result: EditResult): string {
+  const failed = result.failedTests;
+  if (failed.length === 0) return "—";
+  const names = result.expect ?? [];
+  const shownTest = failed.find((test) => names.some((name) => matches(test, name))) ?? (failed[0] as string);
+  return failed.length > 1 ? `${codeSpan(shownTest)} (+${failed.length - 1} more)` : codeSpan(shownTest);
+}
+
 /** A counter of `results` by status. */
 const countStatus = (results: readonly EditResult[]) => (status: Status) =>
   results.filter((r) => r.status === status).length;
@@ -353,8 +372,7 @@ export function markdownTable(results: readonly EditResult[]): string[] {
   const rows = results.map((r) => {
     const why = r.status === "KILLED" && !r.expect?.length ? "no expect" : note(r);
     const status = why === undefined ? r.status : `${r.status} (${why})`;
-    const failed = r.failedTests.length > 0 ? r.failedTests.map(codeSpan).join("<br>") : "—";
-    return `| ${cell(r.id)} | ${codeSpan(r.file)} | ${codeSpan(r.find)} → ${codeSpan(r.replace)} | ${cell(status)} | ${failed} |`;
+    return `| ${cell(r.id)} | ${codeSpan(r.file)} | ${codeSpan(r.find)} → ${codeSpan(r.replace)} | ${cell(status)} | ${failedCell(r)} |`;
   });
   return [MARKDOWN_HEADER, "|---|---|---|---|---|", ...rows, "", summary(results)];
 }

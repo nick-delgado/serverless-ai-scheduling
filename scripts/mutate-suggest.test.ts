@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { main as mutate, readEdits } from "./mutate";
-import { regexParts, type SuggestedEdit, suggestEdits } from "./mutate-suggest";
+import { regexParts, type Span, type SuggestedEdit, suggestEdits } from "./mutate-suggest";
 import { gitRepo, logsTo, type TestRepo, withConsole } from "./test/git-repo";
 
 /** The edits for `text` with every line added. */
@@ -17,6 +17,19 @@ const all = (text: string) => suggestEdits("a.ts", text, new Set(text.split("\n"
 /** The text each edit leaves, as the runner writes it, with the edit's note. */
 const applied = (text: string, edits: readonly SuggestedEdit[]) =>
   edits.map((edit) => [edit.note, text.replace(edit.find, () => edit.replace)]);
+
+/** Each edit of `note` as the text it leaves. */
+const only = (text: string, note: string) =>
+  applied(
+    text,
+    all(text).edits.filter((edit) => edit.note === note),
+  ).map(([, out]) => out);
+
+/** `pattern` with `span` removed. */
+const cut =
+  (pattern: string) =>
+  ({ start, end }: Span) =>
+    pattern.slice(0, start) + pattern.slice(end);
 
 describe("suggestEdits", () => {
   it("drops each operand of #238's .filter chain and flips its ===, three edits in all", () => {
@@ -31,12 +44,16 @@ describe("suggestEdits", () => {
     expect(edits.every((edit) => edit.file === "a.ts" && edit.expect.length === 0)).toBe(true);
   });
 
-  it("removes each of the four lookarounds of #238's italics regex, and no alternative", () => {
+  it("removes each of the four lookarounds of #238's italics regex and each member of its two-member classes", () => {
     const text = "const ITALIC = /(?<!\\*)\\*(?![\\s*])[^*]*?(?<![\\s*])\\*(?!\\*)/;\n";
     expect(applied(text, all(text).edits)).toEqual([
       ["regex-lookaround", "const ITALIC = /\\*(?![\\s*])[^*]*?(?<![\\s*])\\*(?!\\*)/;\n"],
       ["regex-lookaround", "const ITALIC = /(?<!\\*)\\*[^*]*?(?<![\\s*])\\*(?!\\*)/;\n"],
+      ["regex-class-member", "const ITALIC = /(?<!\\*)\\*(?![*])[^*]*?(?<![\\s*])\\*(?!\\*)/;\n"],
+      ["regex-class-member", "const ITALIC = /(?<!\\*)\\*(?![\\s])[^*]*?(?<![\\s*])\\*(?!\\*)/;\n"],
       ["regex-lookaround", "const ITALIC = /(?<!\\*)\\*(?![\\s*])[^*]*?\\*(?!\\*)/;\n"],
+      ["regex-class-member", "const ITALIC = /(?<!\\*)\\*(?![\\s*])[^*]*?(?<![*])\\*(?!\\*)/;\n"],
+      ["regex-class-member", "const ITALIC = /(?<!\\*)\\*(?![\\s*])[^*]*?(?<![\\s])\\*(?!\\*)/;\n"],
       ["regex-lookaround", "const ITALIC = /(?<!\\*)\\*(?![\\s*])[^*]*?(?<![\\s*])\\*/;\n"],
     ]);
   });
@@ -173,13 +190,6 @@ describe("suggestEdits", () => {
 });
 
 describe("suggestEdits: the #265 kinds (B10-4)", () => {
-  /** Each edit of `note` as the text it leaves. */
-  const only = (text: string, note: string) =>
-    applied(
-      text,
-      all(text).edits.filter((edit) => edit.note === note),
-    ).map(([, out]) => out);
-
   it("passes undefined for each argument of handler(event, responseStream, context), lambda.ts's shape", () => {
     const text =
       "export const h = awslambda.streamifyResponse(async (event, responseStream, context) => {\n" +
@@ -272,12 +282,66 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
   });
 });
 
+describe("suggestEdits: the #287 kinds (B11-2, B11-3)", () => {
+  it("removes each member of /\\b[.;\\n]$/'s class and each of its two anchors", () => {
+    const text = "const END = /\\b[.;\\n]$/;";
+    expect(applied(text, all(text).edits)).toEqual([
+      ["regex-anchor", "const END = /[.;\\n]$/;"],
+      ["regex-class-member", "const END = /\\b[;\\n]$/;"],
+      ["regex-class-member", "const END = /\\b[.\\n]$/;"],
+      ["regex-class-member", "const END = /\\b[.;]$/;"],
+      ["regex-anchor", "const END = /\\b[.;\\n]/;"],
+    ]);
+  });
+
+  it("keeps a pattern a regex when removing its only anchor empties it", () => {
+    expect(applied("r = /^/;", all("r = /^/;").edits)).toEqual([["regex-anchor", "r = /(?:)/;"]]);
+  });
+
+  it("swaps two adjacent block guards, one edit, keeping the text between them", () => {
+    const text =
+      "function f(a, b) {\n  if (a) {\n    log();\n    return 1;\n  }\n  // b next\n  if (b) {\n    throw e;\n  }\n}\n";
+    expect(only(text, "swap-guard")).toEqual([
+      "function f(a, b) {\n  if (b) {\n    throw e;\n  }\n  // b next\n  if (a) {\n    log();\n    return 1;\n  }\n}\n",
+    ]);
+  });
+
+  it("swaps a braceless pair and a mixed pair, one edit each", () => {
+    expect(only("if (a) return 1;\nif (b) throw e;\n", "swap-guard")).toEqual([
+      "if (b) throw e;\nif (a) return 1;\n",
+    ]);
+    expect(only("if (a) return;\nif (b) {\n  return 2;\n}\n", "swap-guard")).toEqual([
+      "if (b) {\n  return 2;\n}\nif (a) return;\n",
+    ]);
+  });
+
+  it("gives one edit per adjacent pair of three guards, and none for a pair whose first guard isn't added", () => {
+    const text = "if (a) return 1;\nif (b) return 2;\nif (c) return 3;\n";
+    expect(only(text, "swap-guard")).toEqual([
+      "if (b) return 2;\nif (a) return 1;\nif (c) return 3;\n",
+      "if (a) return 1;\nif (c) return 3;\nif (b) return 2;\n",
+    ]);
+    expect(suggestEdits("a.ts", text, new Set([3])).edits.filter((e) => e.note === "swap-guard")).toEqual([]);
+  });
+
+  it("gives none for an if with an else, a guard before a non-guard or last, and break, continue or an empty block", () => {
+    expect(only("if (a) return 1;\nelse return 2;\nif (b) return 3;\n", "swap-guard")).toEqual([]);
+    expect(only("if (a) return 1;\nelse if (c) return 2;\nif (b) return 3;\n", "swap-guard")).toEqual([]);
+    expect(only("if (a) return 1;\nx = 1;\nif (b) return 3;\n", "swap-guard")).toEqual([]);
+    expect(only("if (a) return 1;\nif (b) {\n  return 2;\n  x = 1;\n}\n", "swap-guard")).toEqual([]);
+    expect(
+      only(
+        "for (;;) {\n  if (a) break;\n  if (b) continue;\n  if (c) {}\n  if (d) return;\n}\n",
+        "swap-guard",
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("regexParts", () => {
   const removals = (pattern: string, v = false) => {
     const { lookarounds, alternatives } = regexParts(pattern, v);
-    const cut = ({ start, end }: { start: number; end: number }) =>
-      pattern.slice(0, start) + pattern.slice(end);
-    return { lookarounds: lookarounds.map(cut), alternatives: alternatives.map(cut) };
+    return { lookarounds: lookarounds.map(cut(pattern)), alternatives: alternatives.map(cut(pattern)) };
   };
 
   it("reads alternatives at any depth, the whole pattern's too, and an empty alternative", () => {
@@ -320,6 +384,71 @@ describe("regexParts", () => {
     expect(removals("[[(]|b").alternatives).toEqual(["b", "[[(]"]);
     // An unmatched `)` (a syntax error in the pattern) is ignored.
     expect(removals("a)|b").alternatives).toEqual(["b", "a)"]);
+  });
+});
+
+describe("regexParts: class members and anchors (#287, B11-2)", () => {
+  /** The pattern left by removing each member, and each anchor. */
+  const removals = (pattern: string, v = false) => {
+    const { members, anchors } = regexParts(pattern, v);
+    return { members: members.map(cut(pattern)), anchors: anchors.map(cut(pattern)) };
+  };
+
+  it("reads a negated class's members after its ^, and gives a one-member class none", () => {
+    expect(removals("[^ab]")).toEqual({ members: ["[^b]", "[^a]"], anchors: [] });
+    expect(removals("[*][^*]")).toEqual({ members: [], anchors: [] });
+    expect(removals("[a^]").members).toEqual(["[^]", "[a]"]);
+  });
+
+  it("reads a range as one member, and a - first or last as a literal member", () => {
+    expect(removals("[a-z_]").members).toEqual(["[_]", "[a-z]"]);
+    expect(removals("[\\x00-\\x1fA]").members).toEqual(["[A]", "[\\x00-\\x1f]"]);
+    expect(removals("[-a]").members).toEqual(["[a]", "[-]"]);
+    expect(removals("[a-]").members).toEqual(["[-]", "[a]"]);
+    // Without v, `--` after a member starts a range; with v, it is subtraction, and ranges still read.
+    expect(removals("[a--b]").members).toEqual(["[b]", "[a--]"]);
+    expect(removals("[a-z_]", true).members).toEqual(["[_]", "[a-z]"]);
+  });
+
+  it("reads an unterminated class to the pattern's end, with no range past it", () => {
+    expect(removals("[ab-").members).toEqual(["[b-", "[a-", "[ab"]);
+    expect(removals("[a-b").members).toEqual([]);
+    expect(regexParts("[a|", false).alternatives).toEqual([]);
+  });
+
+  it("reads \\p{…}, \\u{…}, \\uXXXX, \\xXX and \\cX whole, and any other escape as two characters", () => {
+    expect(removals("[\\p{Cc}\\P{Cf}]+").members).toEqual(["[\\P{Cf}]+", "[\\p{Cc}]+"]);
+    // A whole escape is read from its backslash, with either case of hex digit and control letter.
+    expect(removals("[\\n\\p{L}]").members).toEqual(["[\\p{L}]", "[\\n]"]);
+    expect(removals("[\\u00E9\\xAF\\cj]").members).toEqual([
+      "[\\xAF\\cj]",
+      "[\\u00E9\\cj]",
+      "[\\u00E9\\xAF]",
+    ]);
+    expect(removals("[\\u{1F600}\\u00e9\\x41\\cJ\\]]").members).toEqual([
+      "[\\u00e9\\x41\\cJ\\]]",
+      "[\\u{1F600}\\x41\\cJ\\]]",
+      "[\\u{1F600}\\u00e9\\cJ\\]]",
+      "[\\u{1F600}\\u00e9\\x41\\]]",
+      "[\\u{1F600}\\u00e9\\x41\\cJ]",
+    ]);
+  });
+
+  it("with the v flag, skips a class holding a nested class, && or --, and reads the nested class itself", () => {
+    expect(removals("[[ab]cd]", true).members).toEqual(["[[b]cd]", "[[a]cd]"]);
+    expect(removals("[[a&&b]c]", true).members).toEqual([]);
+    expect(removals("[ab&&c]", true).members).toEqual([]);
+    expect(regexParts("[a&&]|b", true).alternatives).toHaveLength(2);
+    expect(removals("[ab--c]", true).members).toEqual([]);
+    expect(removals("[ab]", true).members).toEqual(["[b]", "[a]"]);
+    // Without v, `[` is a member and the first `]` ends the class, and `&&` is two members.
+    expect(removals("[[ab]c]").members).toEqual(["[ab]c]", "[[b]c]", "[[a]c]"]);
+    expect(removals("[a&&]").members).toEqual(["[&&]", "[a&]", "[a&]"]);
+  });
+
+  it("removes \\b, ^ and $ outside a class, and not \\B, an escaped ^ or $, or a \\b, ^ or $ in a class", () => {
+    expect(removals("^a\\bb$").anchors).toEqual(["a\\bb$", "^ab$", "^a\\bb"]);
+    expect(removals("\\B\\^\\$[\\b^$]").anchors).toEqual([]);
   });
 });
 

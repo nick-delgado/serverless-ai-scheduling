@@ -301,7 +301,10 @@ describe("classify", () => {
 describe("checkExpected", () => {
   it.each([
     ["KILLED", ["a.test.ts > rejects bad"], ["rejects bad"], "KILLED"],
-    ["KILLED", ["a.test.ts > one", "a.test.ts > rejects bad"], ["nothing", "rejects"], "KILLED"],
+    // Every expected name must match a failed test (#287, B11-4): two names, one failed, is KILLED-OTHER.
+    ["KILLED", ["a.test.ts > one", "a.test.ts > rejects bad"], ["nothing", "rejects"], "KILLED-OTHER"],
+    ["KILLED", ["a.test.ts > one", "a.test.ts > rejects bad"], ["one", "rejects"], "KILLED"],
+    ["KILLED", ["a.test.ts > rejects bad"], ["rejects", "bad"], "KILLED"],
     ["KILLED", ["a.test.ts > one"], ["rejects bad"], "KILLED-OTHER"],
     ["KILLED", [], ["rejects bad"], "KILLED-OTHER"],
     ["KILLED", ["a.test.ts > one"], undefined, "KILLED"],
@@ -454,14 +457,14 @@ describe("codeSpan", () => {
 
 describe("markdownTable", () => {
   const base = { file: "a.ts", find: "x", replace: "y", seconds: 1 };
-  it("has one row per result, with the edit, the status (and why), the failed tests, then the summary", () => {
+  it("has one row per result, with the edit, the status (and why), one failed test and a count, then the summary", () => {
     const results: EditResult[] = [
       {
         ...base,
         id: "k",
         status: "KILLED",
-        expect: ["one"],
-        failedTests: ["a.test.ts > one", "a.test.ts > two"],
+        expect: ["two"],
+        failedTests: ["a.test.ts > one", "a.test.ts > two", "a.test.ts > three"],
       },
       {
         ...base,
@@ -470,7 +473,15 @@ describe("markdownTable", () => {
         expect: ["three", "four"],
         failedTests: ["b.test.ts > b"],
       },
-      { ...base, id: "k2", status: "KILLED", failedTests: ["a.test.ts > three"] },
+      { ...base, id: "k2", status: "KILLED", failedTests: ["a.test.ts > three", "a.test.ts > four"] },
+      // Two names match two failed tests: the cell shows the one first in the report, not in expect.
+      {
+        ...base,
+        id: "k4",
+        status: "KILLED",
+        expect: ["six", "five"],
+        failedTests: ["a.test.ts > four", "a.test.ts > five", "a.test.ts > six"],
+      },
       { ...base, id: "k3", status: "KILLED", expect: [], failedTests: ["a.test.ts > three"] },
       { ...base, id: "s", status: "SURVIVED", failedTests: [] },
       { ...base, id: "r", status: "REFUSED", failedTests: [], detail: "find occurs 2 times" },
@@ -478,37 +489,55 @@ describe("markdownTable", () => {
     expect(markdownTable(results)).toEqual([
       MARKDOWN_HEADER,
       "|---|---|---|---|---|",
-      "| k | `a.ts` | `x` → `y` | KILLED | `a.test.ts > one`<br>`a.test.ts > two` |",
+      // The test expect named, not the first, and one code span (#287, B11-5).
+      "| k | `a.ts` | `x` → `y` | KILLED | `a.test.ts > two` (+2 more) |",
       "| o\\|1 | `a.ts` | `x` → `y` | KILLED-OTHER (expected: three, four) | `b.test.ts > b` |",
-      "| k2 | `a.ts` | `x` → `y` | KILLED (no expect) | `a.test.ts > three` |",
+      "| k2 | `a.ts` | `x` → `y` | KILLED (no expect) | `a.test.ts > three` (+1 more) |",
+      "| k4 | `a.ts` | `x` → `y` | KILLED | `a.test.ts > five` (+2 more) |",
       "| k3 | `a.ts` | `x` → `y` | KILLED (no expect) | `a.test.ts > three` |",
       "| s | `a.ts` | `x` → `y` | SURVIVED | — |",
       "| r | `a.ts` | `x` → `y` | REFUSED (find occurs 2 times) | — |",
       "",
-      "6 edits: 3 killed, 1 killed other tests, 1 survived, 0 timed out, 0 errors, 1 refused",
+      "7 edits: 4 killed, 1 killed other tests, 1 survived, 0 timed out, 0 errors, 1 refused",
     ]);
     expect(MARKDOWN_HEADER).toBe("| Edit | File | Change | Status | Failed tests |");
   });
 });
 
 describe("main", () => {
-  it("reads an edit as KILLED only when a test its expect list names went red, and exits 1 otherwise", async () => {
+  it("reads an edit as KILLED only when every test its expect list names went red, and exits 1 otherwise", async () => {
     const edits = editsFile([
       { id: "k", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["rejects bad"] },
       { id: "o", file: "target.txt", find: "ok ? 1", replace: "bad ? 1", expect: ["keeps the rest"] },
+      // One expected test red and one green: KILLED-OTHER (#287, B11-4).
+      {
+        id: "b",
+        file: "target.txt",
+        find: "ok ? 1",
+        replace: "bad ? 1",
+        expect: ["rejects bad", "keeps the rest"],
+      },
     ]);
     const code = await main([edits, "--json", "out.json", "--", ...vitest()], deps());
-    expect(out.slice(0, 5)).toEqual([
+    expect(out.slice(0, 8)).toEqual([
       "KILLED k target.txt: ok ? 1 → bad ? 1",
       "    ✗ target.test.ts > suite rejects bad",
       "KILLED-OTHER o target.txt: ok ? 1 → bad ? 1",
       "    ✗ target.test.ts > suite rejects bad",
       "    (expected: keeps the rest)",
+      "KILLED-OTHER b target.txt: ok ? 1 → bad ? 1",
+      "    ✗ target.test.ts > suite rejects bad",
+      "    (expected: rejects bad, keeps the rest)",
     ]);
-    expect(out.at(-1)).toContain("2 edits: 1 killed, 1 killed other tests, 0 survived");
+    expect(out.at(-1)).toContain("3 edits: 1 killed, 2 killed other tests, 0 survived");
     expect(code).toBe(1);
     const { results } = JSON.parse(readFileSync(join(dir, "out.json"), "utf8")) as { results: EditResult[] };
-    expect(results.map((r) => r.expect)).toEqual([["rejects bad"], ["keeps the rest"]]);
+    expect(results.map((r) => r.expect)).toEqual([
+      ["rejects bad"],
+      ["keeps the rest"],
+      ["rejects bad", "keeps the rest"],
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["KILLED", "KILLED-OTHER", "KILLED-OTHER"]);
   });
 
   it("reads a killed edit with an expect list as KILLED-OTHER when the command names no tests", async () => {
