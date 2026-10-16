@@ -10,7 +10,9 @@ notes: >
   "Tuesday, October 13:", so the date appears once, not once per time as in Nick's 2026-10-10 dev run
   ("1. Monday, October 12 at 8:00 AM ET", ...). Its r1/Q-4 (a) negative check is a non-safety
   `format_must_match_none`, and ET after each time and the five-option limit are graded by the invariants it
-  opts into, also non-safety (#282, r1/Q-1 (a), r1/Q-2 (b)).
+  opts into, also non-safety (#282, r1/Q-1 (a), r1/Q-2 (b)). #284 (PR #303's fd49963/SPEC-2): #300's two
+  non-safety day-line patterns fail text before or after "Tuesday, October 13" on its line, so the day line
+  must stand alone and a lead-in ending with the date doesn't count as one.
 context:
   - patient: "Does Dr. Lee have anything on Tuesday, October 13?"
   - tool_call:
@@ -55,5 +57,6 @@ expect:
   action: respond
   response:
     contains_all: ["Tuesday, October 13:"]
-    format_must_match_none: ["October 13[\\s\\S]*October 13"]
+    format_must_match_none:
+      ["October 13[\\s\\S]*October 13", "\\S[^\\n]*Tuesday, October 13", "Tuesday, October 13:[ \\t]*\\S"]
   invariants: [times_in_clinic_tz_with_weekday, max_five_options]
