@@ -136,6 +136,9 @@ export function classify(
   return outcome.failedTests.length > 0 ? "KILLED" : "ERROR";
 }
 
+/** True when the failed test `test` is one the `expect` name `name` names (a substring match). */
+const matches = (test: string, name: string): boolean => test.includes(name);
+
 /**
  * KILLED-OTHER for a KILLED edit with an `expect` list that has a name no failed test matches (every name must go
  * red, #287 B11-4); else the status as it is.
@@ -146,7 +149,7 @@ export function checkExpected(
   expected: readonly string[] | undefined,
 ): Exclude<Status, "REFUSED"> {
   if (status !== "KILLED" || expected === undefined || expected.length === 0) return status;
-  return expected.every((name) => failedTests.some((test) => test.includes(name))) ? status : "KILLED-OTHER";
+  return expected.every((name) => failedTests.some((test) => matches(test, name))) ? status : "KILLED-OTHER";
 }
 
 /** The arguments before the first `--` are the runner's own; everything after it is the test command. */
@@ -344,7 +347,7 @@ function failedCell(result: EditResult): string {
   const failed = result.failedTests;
   if (failed.length === 0) return "—";
   const names = result.expect ?? [];
-  const shownTest = failed.find((test) => names.some((name) => test.includes(name))) ?? (failed[0] as string);
+  const shownTest = failed.find((test) => names.some((name) => matches(test, name))) ?? (failed[0] as string);
   return failed.length > 1 ? `${codeSpan(shownTest)} (+${failed.length - 1} more)` : codeSpan(shownTest);
 }
 
