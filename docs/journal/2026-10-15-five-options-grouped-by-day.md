@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #236, #212, #282, #239 (PR #278), #233, #171, #36 (PR #235), ADR-008 ([2026-10-15 amendment, #236](../adr/0008-evaluation-strategy.md#amendment-2026-10-15-the-weekday-check-reads-times-listed-under-a-day-line-236)), PRD FR-030, FR-035
+**Related:** #236, PR #283, #212, #282, #239 (PR #278), #233, #171, #36 (PR #235), ADR-008 ([2026-10-15 amendment, #236](../adr/0008-evaluation-strategy.md#amendment-2026-10-15-the-weekday-check-reads-times-listed-under-a-day-line-236)), PRD FR-030, FR-035
 
 ## What happened
 
