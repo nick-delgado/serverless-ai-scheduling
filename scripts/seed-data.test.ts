@@ -576,6 +576,10 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
       },
     };
     /** An SSM client stub: records the region and each parameter name; the pool parameter returns `pool`. */
+    /** The SSM reply for a parameter name: the test table for the table-name parameter, `pool` for any other. */
+    const ssmReply = (name: unknown, pool: string) => ({
+      Parameter: { Value: name === "/sched/dev/data/table-name" ? table : pool },
+    });
     const fakeSsm = (pool: string) => {
       const asked: string[] = [];
       const regions: string[] = [];
@@ -583,7 +587,7 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
         regions.push(region);
         return fakeClient<Pick<SSMClient, "send">>((input) => {
           asked.push(String(input.Name));
-          return { Parameter: { Value: input.Name === "/sched/dev/data/table-name" ? table : pool } };
+          return ssmReply(input.Name, pool);
         }).client;
       };
       return { asked, regions, ssmClient };
@@ -630,14 +634,23 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
       expect(clientArgs).toEqual([["eu-west-1", undefined]]);
     });
 
-    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
-      const send = vi.spyOn(SSMClient.prototype, "send").mockImplementation((command) =>
-        Promise.resolve({
-          Parameter: {
-            Value: (command.input as { Name?: string }).Name === "/sched/dev/data/table-name" ? table : POOL,
-          },
-        }),
+    it("with --table on AWS, builds the User Pool's SSM client for AWS_REGION", async () => {
+      const ssm = fakeSsm(POOL);
+      await runCli(
+        ["--env", "dev", "--table", table, "--mapping", mappingFile],
+        { AWS_REGION: "eu-west-1" },
+        { ...deps, ssmClient: ssm.ssmClient },
       );
+      expect(ssm.regions).toEqual(["eu-west-1"]);
+      expect(ssm.asked).toEqual(["/sched/dev/auth/user-pool-id"]);
+    });
+
+    it("builds the default SSM client for AWS_REGION when none is injected", async () => {
+      const send = vi
+        .spyOn(SSMClient.prototype, "send")
+        .mockImplementation((command) =>
+          Promise.resolve(ssmReply((command.input as { Name?: string }).Name, POOL)),
+        );
       try {
         await runCli(["--env", "dev", "--mapping", mappingFile], { AWS_REGION: "eu-west-1" }, deps);
         expect(send).toHaveBeenCalledTimes(2);

@@ -583,30 +583,36 @@ describe.skipIf(!available)("retry-escalations on DynamoDB Local", { timeout: 30
       expect(summary.found).toBe(0);
     });
 
-    it("reads the table name from the env's SSM parameter when DYNAMODB_ENDPOINT is unset or empty, and passes no endpoint on", async () => {
-      await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
-      const send = vi.fn(() => Promise.resolve({ Parameter: { Value: tableName } }));
-      const ssmClient = vi.fn(() => ({ send }) as unknown as Pick<SSMClient, "send">);
-      const dynamoClient = vi.fn((_region: string, _endpoint: string | undefined) => localClient());
+    it.each([
+      ["unset", {}],
+      ["empty", { DYNAMODB_ENDPOINT: "" }],
+    ])(
+      "reads the table name from the env's SSM parameter when DYNAMODB_ENDPOINT is %s, and passes no endpoint on",
+      async (_case, endpointVars) => {
+        await escalate(MARIA, conv(1), 60 * MIN, { status: "FAILED", error: "Error: x" });
+        const send = vi.fn(() => Promise.resolve({ Parameter: { Value: tableName } }));
+        const ssmClient = vi.fn(() => ({ send }) as unknown as Pick<SSMClient, "send">);
+        const dynamoClient = vi.fn((_region: string, _endpoint: string | undefined) => localClient());
 
-      const summary = await cli(
-        ["pr52", "--dry-run"],
-        { AWS_REGION: "us-east-2", DYNAMODB_ENDPOINT: "" },
-        {
-          now: NOW,
-          ssmClient,
-          dynamoClient,
-          log: () => undefined,
-        },
-      );
+        const summary = await cli(
+          ["pr52", "--dry-run"],
+          { AWS_REGION: "us-east-2", ...endpointVars },
+          {
+            now: NOW,
+            ssmClient,
+            dynamoClient,
+            log: () => undefined,
+          },
+        );
 
-      expect(ssmClient).toHaveBeenCalledWith("us-east-2");
-      expect(dynamoClient).toHaveBeenCalledWith("us-east-2", undefined);
-      expect((send.mock.calls[0] as unknown[])[0]).toMatchObject({
-        input: { Name: "/sched/pr52/data/table-name" },
-      });
-      expect(summary.found).toBe(1);
-    });
+        expect(ssmClient).toHaveBeenCalledWith("us-east-2");
+        expect(dynamoClient).toHaveBeenCalledWith("us-east-2", undefined);
+        expect((send.mock.calls[0] as unknown[])[0]).toMatchObject({
+          input: { Name: "/sched/pr52/data/table-name" },
+        });
+        expect(summary.found).toBe(1);
+      },
+    );
 
     it("builds the default SSM client for AWS_REGION when none is injected", async () => {
       const send = vi

@@ -425,7 +425,8 @@ export async function runCli(
   deps: CliDeps = {},
 ): Promise<SeedDataResult> {
   const args = parseCliArgs(argv);
-  // One SSM client for both reads: the table name (in `resolveTable`) and the User Pool.
+  // One SSM client for both reads: the table name (in `resolveTable`) and the User Pool. It is built for the
+  // first region asked and reused after that, whatever region a later call passes; both reads pass `region`.
   let ssm: Pick<SSMClient, "send"> | undefined;
   const ssmFor = (r: string) => (ssm ??= (deps.ssmClient ?? ssmClientFor)(r));
   const { region, tableName: table, endpoint } = await resolveTable(vars, args.env, args.table, ssmFor);

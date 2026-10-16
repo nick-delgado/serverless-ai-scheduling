@@ -240,7 +240,8 @@ export async function runCli(
   deps: CliDeps = {},
 ): Promise<RetrySummary> {
   const log = deps.log ?? ((line: string) => console.log(line));
-  const region = vars.AWS_REGION ?? "us-east-1";
+  // The notifier is built before the table lookup, so it reads the region itself; the table's comes from resolveTable.
+  const sesRegion = vars.AWS_REGION ?? "us-east-1";
 
   let notifier: Notifier | undefined;
   if (!args.dryRun) {
@@ -251,10 +252,10 @@ export async function runCli(
         `Set SES_SENDER and SES_STAFF_RECIPIENT (in ${args.envFile}) to re-send, or pass --dry-run`,
       );
     }
-    notifier = (deps.notifier ?? sesNotifierFor)(region, sender, recipient);
+    notifier = (deps.notifier ?? sesNotifierFor)(sesRegion, sender, recipient);
   }
 
-  const { tableName, endpoint } = await resolveTable(
+  const { region, tableName, endpoint } = await resolveTable(
     vars,
     args.env,
     args.table,
