@@ -575,11 +575,11 @@ describe.skipIf(!available)("seedData on DynamoDB Local", { timeout: 60_000 }, (
         return localClient();
       },
     };
-    /** An SSM client stub: records the region and each parameter name; the pool parameter returns `pool`. */
     /** The SSM reply for a parameter name: the test table for the table-name parameter, `pool` for any other. */
     const ssmReply = (name: unknown, pool: string) => ({
       Parameter: { Value: name === "/sched/dev/data/table-name" ? table : pool },
     });
+    /** An SSM client stub: records the region and each parameter name; the pool parameter returns `pool`. */
     const fakeSsm = (pool: string) => {
       const asked: string[] = [];
       const regions: string[] = [];
