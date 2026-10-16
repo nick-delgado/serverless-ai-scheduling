@@ -36,6 +36,7 @@ import {
   loadMapping,
   parseCliArgs,
   resetConfirmed,
+  resolveTable,
   runCli,
   seedData,
   ssmClientFor,
@@ -233,6 +234,57 @@ describe("ssmParamFrom", () => {
       "SSM /sched/dev/auth/user-pool-id is empty",
     );
     await expect(param("dev", "none")).rejects.toThrow("SSM /sched/dev/none is empty");
+  });
+});
+
+describe("resolveTable", () => {
+  /** An SSM client factory that records each region it is built for and answers every read with `table`. */
+  const ssmFactory = (table = "sched-pr1-table") => {
+    const regions: string[] = [];
+    const { sent, client } = fakeClient<Pick<SSMClient, "send">>(() => ({ Parameter: { Value: table } }));
+    return { regions, sent, ssmClient: (region: string) => (regions.push(region), client) };
+  };
+
+  it("treats an empty DYNAMODB_ENDPOINT as unset: reads the table name from SSM and returns no endpoint", async () => {
+    const ssm = ssmFactory();
+    await expect(resolveTable({ DYNAMODB_ENDPOINT: "" }, "pr1", undefined, ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "sched-pr1-table",
+      endpoint: undefined,
+    });
+    expect(ssm.sent).toEqual([{ Name: "/sched/pr1/data/table-name" }]);
+    expect(ssm.regions).toEqual(["us-east-1"]);
+  });
+
+  it("builds the SSM client for AWS_REGION and returns that region", async () => {
+    const ssm = ssmFactory();
+    const target = await resolveTable({ AWS_REGION: "eu-west-1" }, "pr1", undefined, ssm.ssmClient);
+    expect(target.region).toBe("eu-west-1");
+    expect(ssm.regions).toEqual(["eu-west-1"]);
+  });
+
+  it("uses --table on AWS without building an SSM client", async () => {
+    const ssm = ssmFactory();
+    await expect(resolveTable({}, "pr1", "sched-other", ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "sched-other",
+      endpoint: undefined,
+    });
+    expect(ssm.regions).toEqual([]);
+  });
+
+  it("with a local endpoint, needs --table, returns the endpoint and never asks SSM", async () => {
+    const ssm = ssmFactory();
+    const local = { DYNAMODB_ENDPOINT: "http://localhost:8001" };
+    await expect(resolveTable(local, "pr1", undefined, ssm.ssmClient)).rejects.toThrow(
+      "DYNAMODB_ENDPOINT is set: pass --table <name> for the local table",
+    );
+    await expect(resolveTable(local, "pr1", "t-local", ssm.ssmClient)).resolves.toEqual({
+      region: "us-east-1",
+      tableName: "t-local",
+      endpoint: "http://localhost:8001",
+    });
+    expect(ssm.regions).toEqual([]);
   });
 });
 

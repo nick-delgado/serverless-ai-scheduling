@@ -380,6 +380,40 @@ export function dynamoClientFor(region: string, endpoint: string | undefined): D
     : new DynamoDBClient({ region });
 }
 
+/** Where an operator script's DynamoDB table is: its region, its name and the local endpoint, if any. */
+export interface TableTarget {
+  region: string;
+  tableName: string;
+  /** DynamoDB Local's URL; `undefined` on AWS. */
+  endpoint: string | undefined;
+}
+
+/**
+ * The operator scripts' one table lookup (`seed-data.ts`, `retry-escalations.ts`, `trace.ts`; #42). `vars`
+ * is the process environment, `table` the script's `--table` and `ssmClient` its injected SSM client
+ * factory. An empty `DYNAMODB_ENDPOINT` counts as unset. With an endpoint, `--table` is required and SSM is
+ * never asked; without one, the name is `--table`, else SSM `/sched/<env>/data/table-name`, and the SSM
+ * client is built only for that read.
+ */
+export async function resolveTable(
+  vars: Readonly<Record<string, string | undefined>>,
+  env: string,
+  table: string | undefined,
+  ssmClient: (region: string) => Pick<SSMClient, "send">,
+): Promise<TableTarget> {
+  const endpoint = vars.DYNAMODB_ENDPOINT || undefined;
+  const region = vars.AWS_REGION ?? "us-east-1";
+  if (endpoint) {
+    if (!table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
+    return { region, tableName: table, endpoint };
+  }
+  return {
+    region,
+    tableName: table ?? (await ssmParamFrom(ssmClient(region))(env, "data/table-name")),
+    endpoint,
+  };
+}
+
 /**
  * The CLI. `vars` is the process environment. With `DYNAMODB_ENDPOINT` set it needs `--table` and makes
  * no SSM call; otherwise the table name comes from SSM (unless `--table`) and the mapping must belong to
@@ -391,18 +425,11 @@ export async function runCli(
   deps: CliDeps = {},
 ): Promise<SeedDataResult> {
   const args = parseCliArgs(argv);
-  const endpoint = vars.DYNAMODB_ENDPOINT || undefined;
-  const region = vars.AWS_REGION ?? "us-east-1";
-  let table: string;
-  let userPoolId: string | undefined;
-  if (endpoint) {
-    if (!args.table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
-    table = args.table;
-  } else {
-    const param = ssmParamFrom((deps.ssmClient ?? ssmClientFor)(region));
-    table = args.table ?? (await param(args.env, "data/table-name"));
-    userPoolId = await param(args.env, "auth/user-pool-id");
-  }
+  // One SSM client for both reads: the table name (in `resolveTable`) and the User Pool.
+  let ssm: Pick<SSMClient, "send"> | undefined;
+  const ssmFor = (r: string) => (ssm ??= (deps.ssmClient ?? ssmClientFor)(r));
+  const { region, tableName: table, endpoint } = await resolveTable(vars, args.env, args.table, ssmFor);
+  const userPoolId = endpoint ? undefined : await ssmParamFrom(ssmFor(region))(args.env, "auth/user-pool-id");
 
   const mapping = loadMapping(args.mapping ?? mappingPath(args.env), { env: args.env, userPoolId });
   const client = (deps.dynamoClient ?? dynamoClientFor)(region, endpoint);

@@ -44,7 +44,7 @@ import {
 import { createDocumentClient, createDynamoRepositories, escalationFrom } from "@sched/tools/dynamo";
 import { SesNotifier } from "@sched/tools/ses";
 
-import { dynamoClientFor, ENV_PATTERN, ssmClientFor, ssmParamFrom } from "./seed-data";
+import { dynamoClientFor, ENV_PATTERN, resolveTable, ssmClientFor } from "./seed-data";
 
 export const DEFAULT_MIN_PENDING_AGE_MINUTES = 10;
 
@@ -240,7 +240,6 @@ export async function runCli(
   deps: CliDeps = {},
 ): Promise<RetrySummary> {
   const log = deps.log ?? ((line: string) => console.log(line));
-  const endpoint = vars.DYNAMODB_ENDPOINT;
   const region = vars.AWS_REGION ?? "us-east-1";
 
   let notifier: Notifier | undefined;
@@ -255,15 +254,12 @@ export async function runCli(
     notifier = (deps.notifier ?? sesNotifierFor)(region, sender, recipient);
   }
 
-  let tableName: string;
-  if (endpoint) {
-    if (!args.table) throw new Error("DYNAMODB_ENDPOINT is set: pass --table <name> for the local table");
-    tableName = args.table;
-  } else {
-    tableName =
-      args.table ??
-      (await ssmParamFrom((deps.ssmClient ?? ssmClientFor)(region))(args.env, "data/table-name"));
-  }
+  const { tableName, endpoint } = await resolveTable(
+    vars,
+    args.env,
+    args.table,
+    deps.ssmClient ?? ssmClientFor,
+  );
 
   const client = (deps.dynamoClient ?? dynamoClientFor)(region, endpoint);
   log(
