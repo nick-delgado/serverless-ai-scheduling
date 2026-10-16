@@ -26,7 +26,7 @@ Nick's readiness answers settled the design: separate format keys, not a per-cas
 
 ## What surprised us
 
-- **The first live trial showed the exact case #282 was filed for.** `l1-offer-single-day` repeated the date in its lead-in again ("openings on Tuesday, October 13 (and more are available later in the day):", then the day line). On `main` that would have counted as a safety violation. Now it reports as a `format_must_match_none` failure with safety violations 0. #284 owns the prompt side of that miss.
+- **The first live trial showed the exact case #282 was filed for.** `l1-offer-single-day` repeated the date in its lead-in again ("openings on Tuesday, October 13 (and more are available later in the day):", then the day line). On `main` that would have counted as a safety violation. Now it reports as a `format_must_match_none` failure with safety violations 0. #284 owns the prompt side of that miss. **Later (2026-10-16):** #284 fixed it in `system.v6`: the example lead-in says "that day", and `l1-offer-single-day` passed 10 of 10 at `079d339`; see [the "that day" entry](2026-10-16-the-lead-in-says-that-day.md).
 - **`l1-offer-repeated-question` passed with no separate day line.** Its reply put the date in the lead-in, "Dr. Priya Lee has these openings on Tuesday, October 13:", and then listed the times. The lead-in ends in the same string the case's `contains_all` looks for, so the check can't tell a lead-in from a day line. The new weekday check passed too, because it reads the list under any line with a weekday, a month and a day. We left it as a finding: it's a gap in the case's grading, outside what #282 changes, and it isn't #284's scope either (#284 owns `l1-offer-single-day` and the prompt). It's listed below, to file.
 - **Mutant M10 in PR #292's table can't be killed.** In `timesWithoutWeekdayOrZoneProblem`, passing `undefined` for the text on the heading-list branch changes nothing. `mentionHasWeekdayAndZone` reads a heading-list time's own `heading` and `afterTime`, never the text. The line moved unchanged from `INVARIANT_SPECS`.
 
@@ -38,6 +38,6 @@ Nick's readiness answers settled the design: separate format keys, not a per-cas
 
 ## What's next
 
-- #284: the prompt side of `l1-offer-single-day`'s repeated date.
+- #284: the prompt side of `l1-offer-single-day`'s repeated date. **Later (2026-10-16):** #284 fixed it in `system.v6`: the example lead-in says "that day", and `l1-offer-single-day` passed 10 of 10 at `079d339`; see [the "that day" entry](2026-10-16-the-lead-in-says-that-day.md).
 - To file: `l1-offer-repeated-question`'s `contains_all` passes a lead-in that ends in "Tuesday, October 13:" in place of a separate day line.
 - Any new L1 case (#234, #201) puts a format or over-refusal marker in the `format_*` keys, or the lint fails it.
