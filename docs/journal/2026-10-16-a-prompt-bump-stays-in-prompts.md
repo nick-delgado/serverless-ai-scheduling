@@ -39,4 +39,4 @@ How little needed to move. Row 1 of the PR's mutate table, run on `d8bcbf8`, mak
 ## What's next
 
 - The next bump (#234, #251, #284 or #293) should touch only `prompts/`. If it touches anything else, that is a regression of this change.
-- `packages/evals/src/suite.ts` still calls the default prompt "the interim prompt". The default has been the production prompt since #16. That fix is to file.
+- `packages/evals/src/suite.ts` still calls the default prompt "the interim prompt". The default has been the production prompt since #16. That fix is to file. **Later (2026-10-16):** #305 fixed it in PR #308; see [Eval gate jobs from different PRs now wait in one queue](2026-10-16-eval-gate-jobs-wait-in-one-queue.md).
