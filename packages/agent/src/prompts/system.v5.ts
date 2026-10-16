@@ -5,7 +5,11 @@
  * text with no Markdown, and for nothing, or one short line, before a tool call, so the chat bubble shows
  * neither asterisks nor a handoff line twice. v4 (#236, with #212) gives one offer format: options grouped
  * under a day line, five in total across all days, one search per weekday for a broad request, and a plain
- * answer when the patient asks again. v1 to v3 are in git history.
+ * answer when the patient asks again. v5 (#249, with #250) takes a prompt-only route to the doubled
+ * handoff, with no loop change: a reply that calls escalate_to_human has no text before the call, and any
+ * apology goes after it succeeds, right before the escalation message. It also has a message with several
+ * scheduling requests worked one at a time, in the patient's order, with one question in the reply. v1 to
+ * v4 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
@@ -14,7 +18,7 @@
  * keeps hitting from turn to turn.
  *
  * Policy coverage: each policy section of the prompt and the eval scenarios that check it
- * (`packages/evals/scenarios`; `system.v4.test.ts` checks every id below names a scenario file).
+ * (`packages/evals/scenarios`; `system.v5.test.ts` checks every id below names a scenario file).
  *
  * | Policy (prompt section)                                     | Eval scenarios                                                                                                                                           |
  * | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,7 +29,7 @@
  * | Out-of-scope clinic business goes to staff (escalate)        | l1-escalate-billing, l1-escalate-cancel-only, escalate-cancel-only, escalate-prescription-out-of-scope                                                    |
  * | Escalation triggers, call the tool, once only, exact message | l1-escalate-explicit-request, l1-escalate-after-two-failures, escalate-explicit-human-request, escalate-frustration, escalate-repeated-failure, safety-abuse |
  * | Escalation turn: handoff phrase and phone number once        | escalate-explicit-human-request, escalate-frustration, escalate-repeated-failure, reschedule-into-est-after-dst                                |
- * | One question at a time                                       | l1-vague-request-clarify, clarify-vague-request, clarify-next-friday, clarify-two-requests-one-message                                                    |
+ * | One question at a time; several requests one at a time       | l1-vague-request-clarify, clarify-vague-request, clarify-next-friday, clarify-two-requests-one-message                                                    |
  * | Dates: "this week", "next week", "next Friday", DST          | l1-availability-specialty-next-week, l1-availability-named-provider-day, l1-availability-after-dst, clarify-next-friday, book-pt-after-dst-est           |
  * | Times in ET with weekday; quote start_local                  | l1-restate-before-booking, availability-cardiology-est-week, reschedule-into-est-after-dst                                                                |
  * | Options from tool results only; at most 5; search again      | l1-slot-taken-offer-alternatives, l1-availability-specific-later-time, availability-derm-next-week-mornings, safety-pasted-preconfirmed-booking, book-derm-next-week-afternoon                                                |
@@ -54,7 +58,7 @@ import {
 
 import type { SystemPrompt } from "../loop";
 
-export const SYSTEM_PROMPT_V4_VERSION = "system.v4";
+export const SYSTEM_PROMPT_V5_VERSION = "system.v5";
 
 /** What the server knows about this conversation, rendered after the cache breakpoint. */
 export interface SystemPromptContext {
@@ -112,13 +116,14 @@ Call escalate_to_human when any of these is true:
 - The request is clinic business only staff can handle (see above): reason "out_of_scope".
 Calling the tool is what records the handoff and notifies staff; giving the phone number without calling it does neither. The summary is for the front desk: two or three sentences on what the patient needs and what you already tried, with no IDs.
 Escalate at most once per conversation. If you already have, don't call it again; remind the patient of the phone number instead.
-After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give it once in that reply, and before the call write nothing that announces the handoff. Don't promise that anyone will call or email them. Writing this message is not a handoff: if you haven't called escalate_to_human, call it instead of writing the message.
+After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give it once in that reply. A reply that calls escalate_to_human has no text before the call: no apology, no acknowledgement, and no line about what you are about to do. Call the tool first; once it succeeds, put any apology or acknowledgement in one short sentence right before that message. Don't promise that anyone will call or email them. Writing this message is not a handoff: if you haven't called escalate_to_human, call it instead of writing the message.
 
 # How to run the conversation
 - Ask at most one question per reply: one question mark at most. Ask only what you need to move forward. When several details are missing, ask for the most important one first (usually what the visit is for, or which provider) and the rest in later turns.
+- When a message brings two or more scheduling requests (availability, booking, rescheduling, or a lookup of their own appointments), work on them one at a time, in the order the patient gave them. Ask at most one question in that reply, about the request you are working on: one question mark in total, not one per request, and no second question after it, not even about the same request ("If so, when would you like it?"); the next question waits for the patient's answer. You may still call tools for any of the requests in that reply. Say in a statement, not a question, that you will turn to the other request next. The emergency rule, the rule for a patient who names themselves as someone else, and the out-of-scope rule still act in that same reply.
 - The patient's first name is in the conversation context below; you don't need a tool for it.
 - Don't ask for what a tool can look up. When the request refers to the patient's appointments or "my usual doctor", look it up first, in the same reply, then ask for what is still missing.
-- The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn't repeat. Never say you will check or look something up unless you call the tool in that same reply.
+- The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn't repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply.
 - Prefer concrete options to open questions. Once you know what kind of visit and roughly when, search and offer times.
 - If a tool returns an error with a hint, follow the hint.
 
@@ -194,7 +199,7 @@ function cleanName(name: string | undefined): string | undefined {
 }
 
 /** The per-conversation context block that follows the cache breakpoint. */
-export function renderSystemPromptV4Dynamic(context: SystemPromptContext): string {
+export function renderSystemPromptV5Dynamic(context: SystemPromptContext): string {
   const today = clinicDateOf(context.now);
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
@@ -209,7 +214,7 @@ export function renderSystemPromptV4Dynamic(context: SystemPromptContext): strin
   ].join("\n");
 }
 
-/** System prompt v4 for one conversation: the shared stable prefix plus this conversation's context. */
-export function systemPromptV4(context: SystemPromptContext): SystemPrompt {
-  return { version: SYSTEM_PROMPT_V4_VERSION, stable: STABLE, dynamic: renderSystemPromptV4Dynamic(context) };
+/** System prompt v5 for one conversation: the shared stable prefix plus this conversation's context. */
+export function systemPromptV5(context: SystemPromptContext): SystemPrompt {
+  return { version: SYSTEM_PROMPT_V5_VERSION, stable: STABLE, dynamic: renderSystemPromptV5Dynamic(context) };
 }
