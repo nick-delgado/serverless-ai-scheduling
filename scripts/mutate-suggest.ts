@@ -18,8 +18,14 @@
  *   - `number+1`, `number-1`: a numeric or bigint literal in a value position (not a type, an enum member or a
  *     member's name), written in decimal, a negative result in parentheses (A-6).
  *   - `regex-lookaround`, `regex-alternative`: in a regex literal, each lookaround removed, and each alternative of
- *     each group (the whole pattern included) removed with one `|` next to it, at any depth (r1/Q-4). The pattern is
- *     read by `regexParts`, a character scanner; a pattern passed to `new RegExp(…)` as a string gets nothing.
+ *     each group (the whole pattern included) removed with one `|` next to it, at any depth (r1/Q-4).
+ *     `regex-class-member` (#287, B11-2): each member of a character class with two or more members removed. A member
+ *     is one character, one escape (`\p{…}`, `\P{…}`, `\u{…}`, `\uXXXX`, `\xXX` and `\cX` whole, any other as the
+ *     backslash and one character) or a range of two such joined by `-`; a negating `^` is no member, a `-` first or
+ *     last is one, and with the `v` flag a class holding a nested class, `&&` or `--` gets none (#287 r1/Q-2 (a)).
+ *     `regex-anchor`: each `\b`, `^` and `$` outside a class removed (`\B` and escaped `\^`, `\$` not; r1/A-6).
+ *     The pattern is read by `regexParts`, a character scanner; a pattern passed to `new RegExp(…)` as a string gets
+ *     nothing.
  *   - `pass-through` (#265, B10-4): in a call or `new` expression, each argument that is a parameter of any enclosing
  *     function (closures included; a destructured name counts), or a property access on one (`p.x`, `p?.x.y`),
  *     replaced by `undefined` (r1/Q-3 (b)). `p["x"]`, `p.x()`, `this` and a spread get none, and a local that shadows
@@ -32,11 +38,15 @@
  *   - `move-guard`: a statement whose whole expression is a call or `new` expression, or `await` of one, swapped with
  *     the next statement of its list (a block, a file's top level, a `case`/`default` clause), keeping the text
  *     between them; not the last statement of a list, nor across a function, class, interface or type declaration
- *     (r1/Q-2 (a)). The break starts at the moved statement; the others' at the changed argument or literal.
+ *     (r1/Q-2 (a)). `swap-guard` (#287, B11-3): a guard, an `if` with no `else` whose then-branch is a `return` or
+ *     `throw`, or a block whose last statement is one, swapped with the next statement of its list when that is a
+ *     guard too; braceless and block forms mix (#287 r1/Q-1 (b)), and `break` or `continue` makes no guard (r1/A-7).
+ *     These two breaks start at the moved statement (for `swap-guard`, the first guard); the others' at the changed
+ *     argument or literal.
  *
  * Each edit's `find` occurs exactly once in its file (`occurrences`, as the runner counts): the changed text widened
  * by whole tokens, alternately right and left, within the nearest enclosing statement (or class member; for
- * `move-guard`, the statement list the two statements are in). A candidate
+ * `move-guard` and `swap-guard`, the statement list the two statements are in). A candidate
  * whose whole statement still occurs more than once is skipped and counted on stderr (r1/Q-5). A file with
  * uncommitted changes is named on stderr and its candidates skipped and counted, since `find` is cut from HEAD (A-1).
  * `expect` is empty for the author to fill in, and `note` names the kind of break (A-7). Edits are ordered by file,
@@ -61,10 +71,13 @@ export type Note =
   | "number-1"
   | "regex-lookaround"
   | "regex-alternative"
+  | "regex-class-member"
+  | "regex-anchor"
   | "pass-through"
   | "flip-argument"
   | "extend-message"
-  | "move-guard";
+  | "move-guard"
+  | "swap-guard";
 
 export type SuggestedEdit = Edit & { expect: string[]; note: Note };
 
@@ -77,7 +90,7 @@ interface Candidate {
   /** Where the break is, for "is it on an added line" and for ordering. */
   at: number;
   node: ts.Node;
-  /** How far the `find` may widen, when not the statement or class member around `node` (`move-guard`). */
+  /** How far the `find` may widen, when not the statement or class member around `node` (`move-guard`, `swap-guard`). */
   scope?: ts.Node;
 }
 
@@ -87,14 +100,66 @@ export interface Span {
   end: number;
 }
 
+/** The length of the escape at `pattern[i]` (a backslash): `\p{…}`, `\P{…}`, `\u{…}`, `\uXXXX`, `\xXX`, `\cX` whole. */
+function escapeLength(pattern: string, i: number): number {
+  const rest = pattern.slice(i);
+  const whole = /^\\(?:[pPu]\{[^}]*\}|u[\da-fA-F]{4}|x[\da-fA-F]{2}|c[a-zA-Z])/.exec(rest);
+  return whole ? whole[0].length : 2;
+}
+
 /**
- * The lookarounds of a regex pattern, and the spans that remove each alternative of each group (the whole pattern
- * included) with one `|` next to it. Escapes and character classes (nested ones with the `v` flag) aren't syntax;
- * `(?<name>` is a group, not a lookbehind.
+ * The character class opening at `pattern[open]` (a `[`): where it ends (after its `]`, or the pattern's end), and
+ * the spans of its members when it has two or more and can be read (see the header's `regex-class-member`), its
+ * nested classes' members (with the `v` flag) included.
  */
-export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span[]; alternatives: Span[] } {
+function characterClass(pattern: string, open: number, vFlag: boolean): { end: number; members: Span[] } {
+  const own: Span[] = [];
+  const nested: Span[] = [];
+  let unreadable = false;
+  let i = open + 1;
+  if (pattern[i] === "^") i += 1;
+  const atom = (at: number) => (pattern[at] === "\\" ? escapeLength(pattern, at) : 1);
+  while (i < pattern.length && pattern[i] !== "]") {
+    if (vFlag && pattern[i] === "[") {
+      const inner = characterClass(pattern, i, vFlag);
+      nested.push(...inner.members);
+      unreadable = true;
+      i = inner.end;
+    } else if (vFlag && (pattern.startsWith("&&", i) || pattern.startsWith("--", i))) {
+      unreadable = true;
+      i += 2;
+    } else {
+      const start = i;
+      i += atom(i);
+      // A range: `-` and a member after it, unless the `-` is last in the class.
+      if (
+        pattern[i] === "-" &&
+        i + 1 < pattern.length &&
+        pattern[i + 1] !== "]" &&
+        !(vFlag && pattern[i + 1] === "-")
+      )
+        i += 1 + atom(i + 1);
+      own.push({ start, end: i });
+    }
+  }
+  const members = unreadable || own.length < 2 ? nested : [...own, ...nested];
+  return { end: Math.min(i + 1, pattern.length), members };
+}
+
+/**
+ * The parts of a regex pattern the `regex-*` kinds break: its lookarounds, the spans that remove each alternative of
+ * each group (the whole pattern included) with one `|` next to it, the members of its character classes, and its
+ * anchors (`\b`, `^` and `$` outside a class). Escapes aren't syntax, and a class's characters aren't groups, bars or
+ * anchors; `(?<name>` is a group, not a lookbehind.
+ */
+export function regexParts(
+  pattern: string,
+  vFlag: boolean,
+): { lookarounds: Span[]; alternatives: Span[]; members: Span[]; anchors: Span[] } {
   const lookarounds: Span[] = [];
   const alternatives: Span[] = [];
+  const members: Span[] = [];
+  const anchors: Span[] = [];
   // Each open group: where it opens, where its content starts, the `|`s directly in it, and whether it is a
   // lookaround. The whole pattern is the group around them all.
   const groups: { open: number; content: number; bars: number[]; lookaround: boolean }[] = [];
@@ -107,16 +172,17 @@ export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span
       if (k === group.bars.length - 1) alternatives.push({ start: bar, end });
     });
   };
-  let classDepth = 0;
   for (let i = 0; i < pattern.length; i += 1) {
     const c = pattern[i];
     if (c === "\\") {
+      if (pattern[i + 1] === "b") anchors.push({ start: i, end: i + 2 });
       i += 1;
-    } else if (classDepth > 0) {
-      if (c === "]") classDepth -= 1;
-      else if (c === "[" && vFlag) classDepth += 1;
     } else if (c === "[") {
-      classDepth = 1;
+      const found = characterClass(pattern, i, vFlag);
+      members.push(...found.members);
+      i = found.end - 1;
+    } else if (c === "^" || c === "$") {
+      anchors.push({ start: i, end: i + 1 });
     } else if (c === "(") {
       const prefix = ["(?=", "(?!", "(?<=", "(?<!"].find((opener) => pattern.startsWith(opener, i));
       groups.push({
@@ -135,7 +201,7 @@ export function regexParts(pattern: string, vFlag: boolean): { lookarounds: Span
     }
   }
   close(top, pattern.length);
-  return { lookarounds, alternatives };
+  return { lookarounds, alternatives, members, anchors };
 }
 
 const CHAINS = new Set([
@@ -194,7 +260,7 @@ function passedThrough(arg: ts.Expression, call: ts.Node): boolean {
   return false;
 }
 
-/** The statement lists a `move-guard` swaps within: a block, a file's top level, a `case`/`default` clause. */
+/** The statement lists `move-guard` and `swap-guard` swap within: a block, a file's top level, a `case`/`default` clause. */
 const statementList = (node: ts.Node): node is ts.Block | ts.SourceFile | ts.CaseOrDefaultClause =>
   ts.isBlock(node) || ts.isSourceFile(node) || ts.isCaseOrDefaultClause(node);
 
@@ -210,6 +276,17 @@ function discardedCall(node: ts.Node): node is ts.ExpressionStatement {
   if (!ts.isExpressionStatement(node)) return false;
   const value = ts.isAwaitExpression(node.expression) ? node.expression.expression : node.expression;
   return ts.isCallExpression(value) || ts.isNewExpression(value);
+}
+
+/** True for a `return` or `throw` statement. */
+const exits = (node: ts.Statement): boolean => ts.isReturnStatement(node) || ts.isThrowStatement(node);
+
+/** True for a guard: an `if` with no `else` whose then-branch exits, braceless or as a block's last statement. */
+function guard(node: ts.Node): node is ts.IfStatement {
+  if (!ts.isIfStatement(node) || node.elseStatement !== undefined) return false;
+  const then = node.thenStatement;
+  const last = ts.isBlock(then) ? then.statements.at(-1) : then;
+  return last !== undefined && exits(last);
 }
 
 /** The `pass-through` and `flip-argument` breaks of one call's arguments. */
@@ -239,18 +316,26 @@ function messageBreak(node: ts.ThrowStatement, source: ts.SourceFile): Candidate
   return [{ start: at, end: message.getEnd(), text, note: "extend-message", at, node: message }];
 }
 
-/** The `move-guard` break of a discarded call statement: swapped with the next statement of its list. */
-function guardBreak(node: ts.ExpressionStatement, source: ts.SourceFile): Candidate[] {
+/**
+ * The `move-guard` or `swap-guard` break of `node`: swapped with the next statement of its list, when `swappable`
+ * accepts that statement.
+ */
+function guardBreak(
+  node: ts.Statement,
+  source: ts.SourceFile,
+  note: "move-guard" | "swap-guard",
+  swappable: (next: ts.Statement) => boolean,
+): Candidate[] {
   const list = node.parent;
   if (!statementList(list)) return [];
   const statements: readonly ts.Statement[] = list.statements;
   const next = statements[statements.indexOf(node) + 1];
-  if (next === undefined || declaration(next)) return [];
+  if (next === undefined || !swappable(next)) return [];
   const at = node.getStart(source);
   const text = source.text;
   const swapped =
     next.getText(source) + text.slice(node.getEnd(), next.getStart(source)) + node.getText(source);
-  return [{ start: at, end: next.getEnd(), text: swapped, note: "move-guard", at, node, scope: list }];
+  return [{ start: at, end: next.getEnd(), text: swapped, note, at, node, scope: list }];
 }
 
 /** The candidate breaks in one parsed file, wherever they are. */
@@ -301,10 +386,15 @@ function candidates(source: ts.SourceFile): Candidate[] {
       const raw = node.getText(source);
       const slash = raw.lastIndexOf("/");
       const pattern = raw.slice(1, slash);
-      const { lookarounds, alternatives } = regexParts(pattern, raw.slice(slash).includes("v"));
+      const { lookarounds, alternatives, members, anchors } = regexParts(
+        pattern,
+        raw.slice(slash).includes("v"),
+      );
       const spans = [
         ...lookarounds.map((span) => ({ span, note: "regex-lookaround" as const })),
         ...alternatives.map((span) => ({ span, note: "regex-alternative" as const })),
+        ...members.map((span) => ({ span, note: "regex-class-member" as const })),
+        ...anchors.map((span) => ({ span, note: "regex-anchor" as const })),
       ];
       for (const { span, note } of spans) {
         // A pattern left empty would read as a `//` comment.
@@ -317,7 +407,9 @@ function candidates(source: ts.SourceFile): Candidate[] {
     } else if (ts.isThrowStatement(node)) {
       found.push(...messageBreak(node, source));
     }
-    if (discardedCall(node)) found.push(...guardBreak(node, source));
+    if (discardedCall(node))
+      found.push(...guardBreak(node, source, "move-guard", (next) => !declaration(next)));
+    if (guard(node)) found.push(...guardBreak(node, source, "swap-guard", guard));
     ts.forEachChild(node, visit);
   };
   visit(source);
