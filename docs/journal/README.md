@@ -97,3 +97,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-15 | [Five options, grouped by day: one search per weekday spreads a broad request](2026-10-15-five-options-grouped-by-day.md) | 5. What the evals showed |
 | 2026-10-15 | [A timed-out unedited run is no baseline, even when it exits 0](2026-10-15-a-timed-out-unedited-run-is-no-baseline.md) | 5. What the evals showed |
 | 2026-10-16 | [A new env from the runbook alone: five friction points, then 7 min 45 s from deploy to a signed-in turn](2026-10-16-a-new-env-from-the-runbook-alone.md) | 5. What the evals showed |
+| 2026-10-16 | [Every expected test goes red: batch 11 closes four gaps the suggester and the PR body left open](2026-10-16-every-expected-test-goes-red.md) | 5. What the evals showed |
