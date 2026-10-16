@@ -339,7 +339,8 @@ so use exactly these `##` and `###` headings, in this order, and no other `##` h
   combine the parts' tables into one, and in the verification summary give the reviewer one
   row with the parts' totals.
 - Write every path in full, from the repository root (`packages/agent/src/index.ts:6`, not
-  `index.ts:6`): a short name that several files share cannot be checked, and is sent back.
+  `index.ts:6`). The validator expands a short path it can resolve to one file (by its
+  name, or as the one the PR changed); one it cannot is sent back with its candidates.
 - Every `path:line` you write, including in copied tables, must be a line of the file in
   `<RUN_DIR>/worktree`, never a position in `diff.patch`. A script checks every citation in
   this file after you finish, and invalid ones are sent back to you.

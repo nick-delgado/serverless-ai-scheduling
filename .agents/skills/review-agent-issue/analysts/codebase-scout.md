@@ -39,9 +39,12 @@ needs); or **ask** (neither fits, for example it belongs to another issue's open
 ### 3a. Lines the work will make stale
 
 List every line the work will make wrong: docs, code comments, test names and descriptions,
-and any line that names this issue's number (`#<n>`, "issue <n>", a TODO pointing at it).
-Search for the issue's number and for the names the criteria change. One `path:line` per
-entry.
+prompts, and any line that names this issue's number (`#<n>`, "issue <n>", a TODO pointing
+at it). Search for the issue's number, for the names the criteria change, and for the
+wording of the behaviour being changed (how docs and prompts describe it today, in their
+own words). Judge each sentence of a line you find, not the line as a whole: one sentence
+may stay true while the next goes stale. List each copy separately, including every copy
+an option or edge replaces. One `path:line` per entry.
 
 ### 4. Dependencies and overlaps
 

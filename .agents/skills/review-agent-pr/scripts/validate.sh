@@ -147,7 +147,7 @@ case "$stage" in
     rm -f "$run/.validate-minor"
     # Citations: every one must resolve to a line of a file at the PR head.
     if [ -d "$run/worktree" ]; then
-      if ! out="$("$here/check-citations.sh" --strict "$run" "$f" 2>&1)"; then
+      if ! out="$("$here/check-citations.sh" --strict --expand "$run" "$f" 2>&1)"; then
         problem "verified.md: $(printf '%s' "$out" | tr '\n' ' ')"
       fi
     fi
