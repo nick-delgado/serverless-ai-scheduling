@@ -117,8 +117,12 @@ const escaping = (ms: number) => ["node", join(dir, "escaper.cjs"), String(ms)];
 const checkerUnderSh = () => ["sh", "-c", `node ${join(dir, "checker.cjs")}; true`];
 // The checker backgrounded by sh, which writes its own pid to sh.pid and exits at once: with no job control the
 // checker stays in sh's process group and holds the output, so the started process is gone before a timeout while
-// the group isn't empty (#215 r1/A-3, #268).
-const checkerAfterSh = () => ["sh", "-c", `echo $$ > sh.pid; node ${join(dir, "checker.cjs")} &`];
+// the group isn't empty (#215 r1/A-3, #268). `before` is shell script run first.
+const checkerAfterSh = (before = "") => [
+  "sh",
+  "-c",
+  `${before}echo $$ > sh.pid; node ${join(dir, "checker.cjs")} &`,
+];
 const target = () => readFileSync(join(dir, "target.txt"), "utf8");
 /**
  * True while the process with this pid runs. Only a positive integer names one process: kill(2) reads 0 as the
@@ -791,6 +795,64 @@ describe("main", () => {
     expect(errors[0]).toContain("the unedited run failed (exit 1); nothing was mutated");
     expect(errors[0]).toContain("checker: bad");
   });
+
+  // The started process exits 0 at once (sh, the escaper), while what it started outlives the 3 s timeout: the
+  // checker in sh's group (killed at the timeout; the after-each check sees it gone), or the escaped grandchild (10 s).
+  // sh first prints a line, which the report shows: the output from before the timeout.
+  it.each([
+    {
+      what: "a process left in its group",
+      unedited: "slow\n",
+      cmd: () => checkerAfterSh("echo printed before the timeout; "),
+      pidFile: "sh.pid",
+      printed: "printed before the timeout\n",
+    },
+    {
+      what: "a process that left its group",
+      unedited: "escape\n",
+      cmd: () => escaping(10_000),
+      pidFile: "first.pid",
+      printed: "",
+    },
+  ])(
+    "mutates nothing and exits 2 when the unedited run times out after its started process exited 0, with $what",
+    async ({ unedited, cmd, pidFile, printed }) => {
+      writeFileSync(join(dir, "target.txt"), unedited);
+      const edits = editsFile([{ id: "a", file: "target.txt", find: unedited.trim(), replace: "bad" }]);
+      const run = main([edits, "--timeout", "3", "--", ...cmd()], deps());
+      // The started process wrote a whole pid and is gone (exited 0) before any kill, as the timeout is 3 s.
+      await vi.waitFor(
+        () => {
+          const pid = Number(readFileSync(join(dir, pidFile), "utf8"));
+          expect(pid > 0 && Number.isInteger(pid) && !alive(pid)).toBe(true);
+        },
+        { timeout: 2_500, interval: 20 },
+      );
+      const code = await run;
+      expect(errors[0]).toBe(
+        `mutate: the unedited run timed out after 3 s (--timeout); nothing was mutated.\n${printed}`,
+      );
+      expect(code).toBe(2);
+      expect(out).toEqual([]);
+      expect(target()).toBe(unedited);
+      await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
+    },
+    20_000,
+  );
+
+  it("mutates nothing and exits 2 when the unedited run times out with its started process still running", async () => {
+    // The checker hangs (30 s at most) and the timeout kills it: the run ends with no exit code, not with exit 0.
+    writeFileSync(join(dir, "target.txt"), "slow\n");
+    const edits = editsFile([{ id: "a", file: "target.txt", find: "slow", replace: "bad" }]);
+    const code = await main([edits, "--timeout", "1", "--", ...checker()], deps());
+    expect(errors[0]).toBe(
+      "mutate: the unedited run timed out after 1 s (--timeout); nothing was mutated.\n",
+    );
+    expect(code).toBe(2);
+    expect(out).toEqual([]);
+    expect(target()).toBe("slow\n");
+    await vi.waitFor(() => expect(checkerLeftRunning(dir)).toBe(false), { timeout: 2_000, interval: 50 });
+  }, 10_000);
 
   it("reports wrong arguments with the usage and exits 2", async () => {
     expect(await main(["edits.json"], deps())).toBe(2);
