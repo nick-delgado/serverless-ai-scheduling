@@ -42,5 +42,5 @@ Nick chose each option on #239 (r1/Q-1 to Q-4) and accepted the assumptions; thi
 
 ## What's next
 
-- #236 (the offer format, with #212) lands next; its day lines get their dates from this reader.
+- #236 (the offer format, with #212) lands next; its day lines get their dates from this reader. **Later (2026-10-15):** it did, and `times_in_clinic_tz_with_weekday` now reads the same heading lists for its weekday; see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md).
 - `docs/adr/0002-model-and-bedrock-client.md`'s M3 caveat ("can't see a time listed under a date heading (#178)") and the dated entries that say "until #178" describe the run they record and stay as written (r1/A-7).
