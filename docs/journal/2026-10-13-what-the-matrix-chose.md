@@ -81,8 +81,8 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 | Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
 | Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
 | Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
-| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 |
-| Judge–human agreement | pending #159 | ≥ 80% | pending |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(**Later (2026-10-16):** met after calibration, on `judge.v1`; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md))* |
+| Judge–human agreement | pending #159 *(**Later (2026-10-16):** 42/49, 86%, `6ee1591`; see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md))* | ≥ 80% | pending *(met)* |
 | Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
 | NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
 
@@ -96,5 +96,5 @@ The chosen cell's exit table (`sonnet-4.6@high`, from the matrix's `--exit-repor
 
 ## What's next
 
-- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice).
+- #251 (first-text latency); #244 and #245 (grader false positives, next to #239 and #178); #249 and #250 (prompt behaviours, with #212, #234 and #236; **Later (2026-10-15):** #236 and #212 landed in `system.v4`, see [Five options, grouped by day](2026-10-15-five-options-grouped-by-day.md)); #246 and #247 (cells that couldn't run); #159 (calibration, which can reopen this choice; **Later (2026-10-16):** it didn't, see [the calibration entry](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md)).
 - M4 (#43, #45) tells this story with the comparison table above.
