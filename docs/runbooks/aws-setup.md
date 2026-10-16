@@ -1,6 +1,6 @@
 # Runbook: AWS account setup (one-time, human)
 
-These steps give AI agents **scoped, short-lived** access to the AWS account and lay the foundation every stack depends on. Nick runs them once. After step 7, agents deploy everything else through CloudFormation, and so does the deploy workflow when Nick runs it ("CI credentials (GitHub OIDC)", below).
+These steps give AI agents **scoped, short-lived** access to the AWS account and lay the foundation every stack depends on. Nick runs them once. After step 7, agents deploy everything else through CloudFormation, and so does the deploy workflow when Nick runs it ("CI credentials (GitHub OIDC)", below). Deploying, checking and tearing down an environment in the set-up account is [`deploy-env.md`](deploy-env.md).
 
 **Access model**
 - People and agents use two SSO identities: an **admin** permission set used only by Nick for the bootstrap, and a **`SchedDeployer`** permission set used by agents. SchedDeployer can drive `sched-*` CloudFormation stacks and pass one role, `sched-cfn-exec`. That role creates the resources, and every workload role it creates must carry a permissions boundary.
@@ -50,7 +50,7 @@ Then go to **AWS accounts**, select the account, choose **Assign users or groups
 > - driving `sched-*` CloudFormation stacks, passing only `sched-cfn-exec`, and writing to `sched-*` S3 buckets;
 > - read-only debugging (logs, Lambda, DynamoDB, API Gateway, CloudWatch);
 > - seeding `sched-*` tables and Cognito demo users;
-> - calling Bedrock (`bedrock-mantle:CreateInference`) and Transcribe for spikes and evals.
+> - calling Bedrock and Transcribe for spikes and evals. The Bedrock actions are `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`, which every model call uses through Converse (ADR-010), and `bedrock-mantle:CreateInference` and `bedrock-mantle:CountTokens`, which nothing calls any more; #270 drops them (security review F-19).
 >
 > It **cannot** modify IAM directly or touch the `sched-bootstrap` stack.
 
@@ -147,24 +147,43 @@ The bootstrap stack gives GitHub Actions short-lived credentials (#41): GitHub's
 
 ## 6. Enable Bedrock model access
 
+The agent calls six models, one per entitled profile in `packages/agent/src/profiles.ts`, all through Converse:
+
+| Profile | Model (base ID) | Called as |
+|---|---|---|
+| `sonnet-4.6` (the production profile) | Claude Sonnet 4.6 (`anthropic.claude-sonnet-4-6`) | `us.anthropic.claude-sonnet-4-6` |
+| `haiku-4.5` | Claude Haiku 4.5 (`anthropic.claude-haiku-4-5-20251001-v1:0`) | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| `nova-2-lite` | Amazon Nova 2 Lite (`amazon.nova-2-lite-v1:0`) | `us.amazon.nova-2-lite-v1:0` |
+| `nova-pro` | Amazon Nova Pro (`amazon.nova-pro-v1:0`) | `us.amazon.nova-pro-v1:0` |
+| `gpt-oss-120b` | OpenAI gpt-oss-120b (`openai.gpt-oss-120b-1:0`) | `openai.gpt-oss-120b-1:0` |
+| `gpt-oss-20b` | OpenAI gpt-oss-20b (`openai.gpt-oss-20b-1:0`) | `openai.gpt-oss-20b-1:0` |
+
+`opus-5` and `sonnet-5` stay defined in `profiles.ts` but aren't entitled: AWS refused this account access, so don't request them here.
+
 1. Console → **Amazon Bedrock** (us-east-1) → **Model catalog** (formerly **Model access**).
-2. For **Claude Opus 5**, **Claude Sonnet 5**, and **Claude Haiku 4.5**: if this is the account's first Anthropic model, submit the one-time use-case form. Opus 5 has per-model access criteria; note what the console says.
+2. For the two Claude models: if this is the account's first Anthropic model, submit the one-time use-case form.
 3. **Accept each model's AWS Marketplace agreement. Being listed as "ACTIVE" isn't enough** (found in spike S-1). Bedrock accepts the agreement on the model's first call, but only when the caller has AWS Marketplace permissions. The `SchedDeployer` role has none, by design. So, **signed in as `sched-admin`**, send one message to each model in the Bedrock **playground** (select the model → "Open in playground" → send "hi"), or run:
    ```bash
-   for m in us.anthropic.claude-opus-5 us.anthropic.claude-sonnet-5 us.anthropic.claude-haiku-4-5-20251001-v1:0; do
-     aws bedrock-runtime invoke-model --profile sched-admin --region us-east-1 --model-id "$m" \
-       --cli-binary-format raw-in-base64-out \
-       --body '{"anthropic_version":"bedrock-2023-05-31","max_tokens":5,"messages":[{"role":"user","content":"hi"}]}' /dev/null
+   for m in us.anthropic.claude-sonnet-4-6 us.anthropic.claude-haiku-4-5-20251001-v1:0 us.amazon.nova-2-lite-v1:0 \
+            us.amazon.nova-pro-v1:0 openai.gpt-oss-120b-1:0 openai.gpt-oss-20b-1:0; do
+     aws bedrock-runtime converse --profile sched-admin --region us-east-1 --model-id "$m" \
+       --messages '[{"role":"user","content":[{"text":"hi"}]}]' --inference-config maxTokens=5 --query stopReason --output text
    done
    ```
-4. Verify that each model's agreement shows `AVAILABLE`. It may show `PENDING` for a few minutes:
+4. Verify each model's access. An agreement may show `PENDING` for a few minutes:
    ```bash
-   for m in anthropic.claude-opus-5 anthropic.claude-sonnet-5 anthropic.claude-haiku-4-5-20251001-v1:0; do
+   for m in anthropic.claude-sonnet-4-6 anthropic.claude-haiku-4-5-20251001-v1:0 amazon.nova-2-lite-v1:0 \
+            amazon.nova-pro-v1:0 openai.gpt-oss-120b-1:0 openai.gpt-oss-20b-1:0; do
      aws bedrock get-foundation-model-availability --profile sched-dev --region us-east-1 --model-id "$m" \
-       --query '[modelId, agreementAvailability.status, authorizationStatus]' --output text
+       --query '[modelId, agreementAvailability.status, authorizationStatus, entitlementAvailability]' --output text
    done
    ```
-5. **Check the on-demand quotas.** New accounts can start low; spike S-1 was throttled after about 15 calls. Go to Console → **Service Quotas** → **Amazon Bedrock**, search for each model (e.g., "Claude Sonnet 5"), and note the requests-per-minute and tokens-per-minute values. Request increases if they're in single digits, because the eval harness makes thousands of calls.
+   Each line should read `AVAILABLE`, `AUTHORIZED` and `AVAILABLE`.
+5. **Check the on-demand quotas.** New accounts can start low; spike S-1 was throttled after about 15 calls. Go to Console → **Service Quotas** → **Amazon Bedrock**, search for each model (e.g., "Claude Sonnet 4.6"), and note the requests-per-minute and tokens-per-minute values. Request increases if they're in single digits, because the eval harness makes thousands of calls. The harness paces each profile to its `rpm` in `profiles.ts`.
+6. **Leave model invocation logging off** (**Amazon Bedrock → Settings → Model invocation logging**, off by default). Turned on, it delivers every prompt and reply, patients' messages included, to CloudWatch Logs or S3, which ADR-009's ID-only logging rules out (#272). The agent's own traces (`scripts/trace.ts`, below) carry IDs and figures instead. To check it's still off, this prints nothing (or `None`):
+   ```bash
+   aws bedrock get-model-invocation-logging-configuration --profile sched-dev --region us-east-1 --query loggingConfig --output text
+   ```
 
 ## 7. Verify an SES identity (sandbox)
 
@@ -177,7 +196,7 @@ The bootstrap stack gives GitHub Actions short-lived credentials (#41): GitHub's
 
 Reply in the Claude Code session with:
 - the `sched-dev` profile working (output of `aws sts get-caller-identity --profile sched-dev`);
-- the Bedrock model-access status for the three models;
+- the Bedrock model-access status for the six models of step 6 (the output of step 6.4);
 - that the verified SES address is in `.env` (step 7). Don't paste the address itself.
 
 ---
@@ -199,7 +218,8 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 
 ## Teardown
 
-Delete workload stacks in reverse order (`web` → `api` → `auth` → `data`) with the `sched-dev` profile. Delete `sched-bootstrap` last with `sched-admin`. The artifact bucket is retained, so empty and delete it manually if desired. Disable Identity Center only if nothing else uses it.
+- **An environment:** an ephemeral env goes with `scripts/teardown.sh <env>`, which refuses `dev` and `demo`; those two follow the protected-env procedure. Both are in [`deploy-env.md`](deploy-env.md), "Teardown".
+- **The whole account:** tear down every env first (above), then delete `sched-bootstrap` last, as `sched-admin`. The artifact bucket is retained, so empty and delete it manually if desired. Disable Identity Center only if nothing else uses it.
 
 ---
 
@@ -207,7 +227,7 @@ Delete workload stacks in reverse order (`web` → `api` → `auth` → `data`) 
 
 Two scripts, in this order. Both run as `sched-dev` (`aws sso login --profile sched-dev` first), or, in the E2E workflow, as the E2E role ("Appendix: end-to-end tests (the e2e env)"). Everything they write is synthetic (the `clinic-default` fixture).
 
-1. **Cognito demo users:** `npx tsx scripts/seed-users.ts --env <env>` (passwords from the git-ignored `.env`). This writes `.seed/cognito-users.<env>.json`, which maps each fixture patient to their Cognito `sub`.
+1. **Cognito demo users:** `npx tsx scripts/seed-users.ts --env <env>` (passwords from the git-ignored `.env` of the checkout it runs in; from a worktree, add `--env-file "<main checkout>/.env"`, and for `demo`, `--env-file "<main checkout>/.env.demo"`, [`deploy-env.md`](deploy-env.md)). This writes `.seed/cognito-users.<env>.json`, which maps each fixture patient to their Cognito `sub`.
 2. **Table data:** `npm run seed:data -- --env <env>` (or `npx tsx scripts/seed-data.ts --env <env>`).
 
 What the data seed writes to the table named by SSM `/sched/<env>/data/table-name`:
@@ -265,6 +285,34 @@ DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/retry-escalations.ts dev
 ```
 
 The tests (`scripts/retry-escalations.test.ts`) run against DynamoDB Local with a recording notifier, so they never send email.
+
+---
+
+## Appendix: reading a conversation's agent traces
+
+The chat function saves one trace per agent turn (ADR-009, FR-051): the turn's outcome, model profile, prompt version, iterations, duration and token usage, then each model call (model ID, stop reason, time to first token, duration, usage) and each tool call (name, ok or the error code, duration). `scripts/trace.ts` prints them for one conversation.
+
+**When to run it:** a patient's turn was slow, failed or did something unexpected, and you have the conversation's ID: the `conversationId` field of the SPA's `POST /api/chat` request body (the browser's developer tools, Network tab), a UUID. It answers "which model call or tool was slow, retried or failed" without reading the conversation's messages.
+
+**How** (as `sched-dev`; it only reads):
+
+```bash
+npx tsx scripts/trace.ts <env> <conversationId>                   # one block per turn, in start order
+npx tsx scripts/trace.ts <env> <conversationId> --json            # one JSON object per turn, the same fields
+npx tsx scripts/trace.ts <env> <conversationId> --inputs          # also each tool call's input
+npx tsx scripts/trace.ts <env> <conversationId> --table <name>    # a table other than SSM /sched/<env>/data/table-name
+```
+
+- **What it prints:** IDs and figures only. It queries only the conversation's `TRACE#` items, with a projection that leaves out `patientId`, so the messages that share the partition are never read. `--inputs` adds tool inputs, which can carry the patient's own words: read that output, never paste it into an issue or PR.
+- **Exit code:** 0 when every trace printed; 1 for no traces (an unknown conversation, traces past their 30-day TTL and a conversation with none look the same), an unreadable trace (printed after the rest), or an error. Replayed turns and turns whose trace save failed have no trace.
+
+Local runs (DynamoDB Local; no AWS calls):
+
+```bash
+DYNAMODB_ENDPOINT=http://localhost:8000 npx tsx scripts/trace.ts dev <conversationId> --table <local-table>
+```
+
+`--table` is required when `DYNAMODB_ENDPOINT` is set; an empty `DYNAMODB_ENDPOINT` counts as unset in all three operator scripts (`seed-data.ts`, `retry-escalations.ts`, `trace.ts`). The tests (`scripts/trace.test.ts`) run against DynamoDB Local.
 
 ---
 
