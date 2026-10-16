@@ -10,12 +10,14 @@
 
 Nick decided yes: an unedited run that timed out fails the check whatever its exit code. `main` now checks the run's `timedOut` flag before its exit code. A timed-out unedited run prints `mutate: the unedited run timed out after <n> s (--timeout); nothing was mutated.`, then the output the command printed before the timeout, and exits 2 without applying an edit. Edited runs are unchanged: a timeout there is still TIMEOUT. The `scripts/mutate.ts` header now says so, and its exit-code list counts a timed-out unedited run under 2.
 
-The agent (Claude, as #276's task worker) added one parametrised test in `scripts/mutate.test.ts` with two cases. In each, the process the runner starts exits 0 at once, and `--timeout` is 2 s:
+The agent (Claude, as #276's task worker) added one parametrised test in `scripts/mutate.test.ts` with two cases. In each, the process the runner starts exits 0 at once, and `--timeout` is 3 s:
 
 - `sh -c 'echo printed before the timeout; echo $$ > sh.pid; node checker.cjs &'`: the hanging checker stays in sh's process group. The timeout kills it, and the after-each check confirms it's gone;
 - #268's `ESCAPER`: its grandchild leaves the group and holds the output for 10 s.
 
-Both cases expect exit 2, no output on stdout, the target file unchanged, the started process gone, and a message that says "timed out after 2 s" and never "failed". The first case also expects the line printed before the timeout in the message.
+Each case first waits, for up to 2.5 s and so before the kill, until the started process is gone: the run's exit code is 0. Then it expects exit 2, no output on stdout, the target file unchanged, and the whole message on stderr: `mutate: the unedited run timed out after 3 s (--timeout); nothing was mutated.`, followed by the line printed before the timeout in the first case and by nothing in the second.
+
+The PR's review (on `675c6c6`) found that the test left the other half of "whatever its exit code" unchecked. A second test runs the hanging checker itself with `--timeout 1`, so the timeout kills the started process and the run ends with exit `null`. It expects the "timed out after 1 s" message, exit 2 and no edit. Without it, narrowing the guard to exit 0, or moving it below the exit-code check, passed every test. The review also had the first test wait for the started process before the kill, as #268's `sh.pid` test does, rather than check its pid after the run, when the kill would have ended it anyway.
 
 ## Why we chose what we chose
 
@@ -28,8 +30,8 @@ The issue had no readiness review (Nick's choice), so where it was silent the ag
 
 ## Evidence
 
-- The fix: `70034ad`; the test's output assertion: `8ff7369`.
-- Seen failing: the PR's `npm run mutate` table. Each edit names the new test: dropping the `timedOut` guard, moving its `return 2` above the message, returning 0, printing the default timeout instead of `--timeout`'s value, dropping the output, and saying "failed".
+- The fix: `70034ad`; the test's output assertion: `8ff7369`; the review round's tests: `c3c8ce8`.
+- Seen failing: the PR's `npm run mutate` table. Each edit's `expect` names the tests above: dropping the `timedOut` guard, narrowing it to exit 0, moving it below the exit-code check, moving its `return 2` above the message, returning 0, printing the default timeout instead of `--timeout`'s value, dropping the output, dropping "(--timeout)" or "nothing was mutated", and saying "failed". One more edit keeps `sh` alive until the kill (an EXIT trap that sleeps), and the first case fails on its wait.
 
 ## What's next
 
