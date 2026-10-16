@@ -103,15 +103,23 @@ export AWS_PROFILE=sched-dev AWS_REGION=us-east-1
 scripts/deploy.sh data "$env" -- DeletionProtection=disabled     # 1. protection off, table
 scripts/deploy.sh auth "$env" -- DeletionProtection=disabled     #    and User Pool
 bucket="$(aws ssm get-parameter --name "/sched/$env/web/bucket-name" --query Parameter.Value --output text)"
-[[ "$bucket" == sched-"$env"-web-* ]] && aws s3 rm "s3://$bucket" --recursive --only-show-errors   # 2. empty the site bucket (CloudFormation can't delete a full one)
-role="$(aws ssm get-parameter --name /sched/bootstrap/cfn-exec-role-arn --query Parameter.Value --output text)"
-for stack in web api auth data; do                                # 3. delete in reverse order
-  aws cloudformation delete-stack --stack-name "sched-$env-$stack" --role-arn "$role"
-  aws cloudformation wait stack-delete-complete --stack-name "sched-$env-$stack"
-done
+if [[ "$bucket" != sched-"$env"-web-* ]]; then
+  echo "stop: unexpected site bucket '$bucket' for '$env'; delete nothing" >&2
+elif ! aws s3 rm "s3://$bucket" --recursive --only-show-errors; then   # 2. empty the site bucket (CloudFormation can't delete a full one)
+  echo "stop: couldn't empty s3://$bucket; delete nothing" >&2
+else
+  role="$(aws ssm get-parameter --name /sched/bootstrap/cfn-exec-role-arn --query Parameter.Value --output text)"
+  for stack in web api auth data; do                              # 3. delete in reverse order, stopping at the first failure
+    if ! aws cloudformation delete-stack --stack-name "sched-$env-$stack" --role-arn "$role" ||
+       ! aws cloudformation wait stack-delete-complete --stack-name "sched-$env-$stack"; then
+      echo "stop: sched-$env-$stack didn't delete; read its events before going on" >&2
+      break
+    fi
+  done
+fi
 ```
 
-Step 2 is what `teardown.sh` does: it empties only a bucket named `sched-<env>-web-*`. If a `wait` fails, read the stack's events (`aws cloudformation describe-stack-events --stack-name sched-<env>-<stack>`) before going on. Leave `sched-bootstrap` alone.
+The block stops where `teardown.sh` stops: it empties only a bucket named `sched-<env>-web-*`, deletes nothing when the name doesn't match or the bucket can't be emptied, and stops at the first stack that doesn't delete. It is stricter in one case: a missing `web/bucket-name` parameter, which `teardown.sh` takes as "no bucket", stops it too; check that the `web` stack is really gone before deleting the rest by hand. After a stack's `stop:` line, read its events (`aws cloudformation describe-stack-events --stack-name sched-<env>-<stack>`) before going on. Leave `sched-bootstrap` alone.
 
 **The whole account:** `aws-setup.md`, "Teardown".
 
