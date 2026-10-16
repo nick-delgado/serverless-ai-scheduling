@@ -28,6 +28,6 @@ decisions with other agents working in parallel.
   blocked, report what you tried rather than thrashing.
 - End with a concise report: PR URL, what was built, verification results, deviations, and anything that
   affects other issues. A step you couldn't run yourself (a write to `dev`, a live measurement, a browser
-  check, or a definition-of-done item a rule you were given blocks, such as no Bedrock calls) goes first,
+  check your session has no browser tool for (a headless browser you script counts only if the issue allows it), or a definition-of-done item a rule you were given blocks, such as no Bedrock calls) goes first,
   so the orchestrator runs it before merge or asks Nick to waive it, or to accept a regression that neither the issue's criteria nor the passing gate's tolerance (`CLAUDE.md`) already allows, recorded as a
   decision line in the issue's "Decisions and clarifications" (`task-workflow` step 7).
