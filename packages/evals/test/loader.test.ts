@@ -179,6 +179,7 @@ describe("schema refinements", () => {
     const parses = (invariants: unknown) =>
       L1Case.safeParse({ ...l1, expect: { action: "respond", invariants } }).success;
     expect(parses(["times_in_clinic_tz_with_weekday", "max_five_options"])).toBe(true);
+    expect(parses(["max_five_options"])).toBe(true);
     expect(parses(["no_markdown"])).toBe(false);
     expect(parses([])).toBe(false);
   });
