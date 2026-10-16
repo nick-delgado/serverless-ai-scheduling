@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { main as mutate, readEdits } from "./mutate";
-import { regexParts, type SuggestedEdit, suggestEdits } from "./mutate-suggest";
+import { regexParts, type Span, type SuggestedEdit, suggestEdits } from "./mutate-suggest";
 import { gitRepo, logsTo, type TestRepo, withConsole } from "./test/git-repo";
 
 /** The edits for `text` with every line added. */
@@ -17,6 +17,19 @@ const all = (text: string) => suggestEdits("a.ts", text, new Set(text.split("\n"
 /** The text each edit leaves, as the runner writes it, with the edit's note. */
 const applied = (text: string, edits: readonly SuggestedEdit[]) =>
   edits.map((edit) => [edit.note, text.replace(edit.find, () => edit.replace)]);
+
+/** Each edit of `note` as the text it leaves. */
+const only = (text: string, note: string) =>
+  applied(
+    text,
+    all(text).edits.filter((edit) => edit.note === note),
+  ).map(([, out]) => out);
+
+/** `pattern` with `span` removed. */
+const cut =
+  (pattern: string) =>
+  ({ start, end }: Span) =>
+    pattern.slice(0, start) + pattern.slice(end);
 
 describe("suggestEdits", () => {
   it("drops each operand of #238's .filter chain and flips its ===, three edits in all", () => {
@@ -177,13 +190,6 @@ describe("suggestEdits", () => {
 });
 
 describe("suggestEdits: the #265 kinds (B10-4)", () => {
-  /** Each edit of `note` as the text it leaves. */
-  const only = (text: string, note: string) =>
-    applied(
-      text,
-      all(text).edits.filter((edit) => edit.note === note),
-    ).map(([, out]) => out);
-
   it("passes undefined for each argument of handler(event, responseStream, context), lambda.ts's shape", () => {
     const text =
       "export const h = awslambda.streamifyResponse(async (event, responseStream, context) => {\n" +
@@ -277,13 +283,6 @@ describe("suggestEdits: the #265 kinds (B10-4)", () => {
 });
 
 describe("suggestEdits: the #287 kinds (B11-2, B11-3)", () => {
-  /** Each edit of `note` as the text it leaves. */
-  const only = (text: string, note: string) =>
-    applied(
-      text,
-      all(text).edits.filter((edit) => edit.note === note),
-    ).map(([, out]) => out);
-
   it("removes each member of /\\b[.;\\n]$/'s class and each of its two anchors", () => {
     const text = "const END = /\\b[.;\\n]$/;";
     expect(applied(text, all(text).edits)).toEqual([
@@ -342,9 +341,7 @@ describe("suggestEdits: the #287 kinds (B11-2, B11-3)", () => {
 describe("regexParts", () => {
   const removals = (pattern: string, v = false) => {
     const { lookarounds, alternatives } = regexParts(pattern, v);
-    const cut = ({ start, end }: { start: number; end: number }) =>
-      pattern.slice(0, start) + pattern.slice(end);
-    return { lookarounds: lookarounds.map(cut), alternatives: alternatives.map(cut) };
+    return { lookarounds: lookarounds.map(cut(pattern)), alternatives: alternatives.map(cut(pattern)) };
   };
 
   it("reads alternatives at any depth, the whole pattern's too, and an empty alternative", () => {
@@ -394,9 +391,7 @@ describe("regexParts: class members and anchors (#287, B11-2)", () => {
   /** The pattern left by removing each member, and each anchor. */
   const removals = (pattern: string, v = false) => {
     const { members, anchors } = regexParts(pattern, v);
-    const cut = ({ start, end }: { start: number; end: number }) =>
-      pattern.slice(0, start) + pattern.slice(end);
-    return { members: members.map(cut), anchors: anchors.map(cut) };
+    return { members: members.map(cut(pattern)), anchors: anchors.map(cut(pattern)) };
   };
 
   it("reads a negated class's members after its ^, and gives a one-member class none", () => {
