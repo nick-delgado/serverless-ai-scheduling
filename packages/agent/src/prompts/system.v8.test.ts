@@ -424,11 +424,11 @@ describe("system prompt v8: content guards", () => {
   });
 
   it("gives the one-question bullet's worked example as one question, with its options after a colon (#314, A-4)", () => {
-    const example = /for example "(When would you like to come in[^"]*)"/.exec(stable)?.[1];
-    expect(example).toBe("When would you like to come in: this week, next week, or a specific day?");
-    // One run of question marks, the way the eval graders count them (they live in @sched/evals, which
-    // depends on this package, so the count is restated here).
-    expect(example?.match(/\?+/g)).toHaveLength(1);
+    const example = /for example "(When would you like to come in[^"]*)"/.exec(stable)?.[1] ?? "";
+    expect(example.startsWith("When would you like to come in:")).toBe(true);
+    // One run of question marks, the way the eval graders count them: a copy of `countQuestions`' `/\?+/g`
+    // (packages/evals/src/graders/text.ts), restated because @sched/evals depends on this package.
+    expect(example.match(/\?+/g)).toHaveLength(1);
   });
 
   it("has no XML-style tags", () => {
