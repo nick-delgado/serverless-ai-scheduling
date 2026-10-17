@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #314, #249 (PR #250), #284 (PR #311), #301 (PR #307), #316 (PR #317), #293, #201, ADR-008, PRD §5 conversation rules 1 and 2, FR-041
+**Related:** #314, PR #318, #249 (PR #250), #284 (PR #311), #301 (PR #307), #316 (PR #317), #293, #201, ADR-008, PRD §5 conversation rules 1 and 2, FR-041
 
 ## What happened
 
