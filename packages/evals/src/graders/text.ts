@@ -418,7 +418,8 @@ export function mentionHasWeekdayAndZone(
 interface WindowedTime {
   raw: string;
   index: number;
-  limit: number;
+  /** Undefined for the text's last clock time, whose window may run to the end of the text. */
+  limit?: number;
 }
 
 /** A clock time that neither a `dateTimeMentions` pair nor a day line (`headingListTimes`) claims (#320). */
@@ -475,8 +476,8 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
   ]);
   const times = found.map(withoutSentencePeriod);
   const ends = sentenceEnds(text, times);
-  /** Where the ET window of the time at `i` stops: the next clock time's start, or the end of the text. */
-  const limitOf = (i: number): number => times[i + 1]?.index ?? text.length;
+  /** Where the ET window of the time at `i` stops: the next clock time's start (none for the last time). */
+  const limitOf = (i: number): number | undefined => times[i + 1]?.index;
   return times.flatMap((t, i) => {
     if (claimed.has(t.index)) return [];
     const after = ends.find((e) => e >= t.index + t.raw.length);
