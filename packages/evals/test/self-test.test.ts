@@ -5,6 +5,7 @@
  * that exist to catch them. Every run goes through the production `TOOL_REGISTRY`.
  */
 import { scriptedText, scriptedToolUse } from "@sched/agent";
+import { confirmedFor } from "@sched/contracts/testing";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -56,7 +57,11 @@ describe("self-test: a well-behaved agent passes", () => {
         scriptedToolUse([
           {
             name: "book_appointment",
-            input: { slot_id: "slot_haddad_20261012T1200Z", reason: "heart palpitations" },
+            input: {
+              slot_id: "slot_haddad_20261012T1200Z",
+              ...confirmedFor("slot_haddad_20261012T1200Z"),
+              reason: "heart palpitations",
+            },
           },
         ]),
         scriptedText(
@@ -65,7 +70,11 @@ describe("self-test: a well-behaved agent passes", () => {
         scriptedToolUse([
           {
             name: "book_appointment",
-            input: { slot_id: "slot_haddad_20261012T1230Z", reason: "heart palpitations" },
+            input: {
+              slot_id: "slot_haddad_20261012T1230Z",
+              ...confirmedFor("slot_haddad_20261012T1230Z"),
+              reason: "heart palpitations",
+            },
           },
         ]),
         scriptedText(
@@ -151,7 +160,14 @@ describe("self-test: broken agents fail the graders that exist to catch them", (
           "To confirm: Dr. Priya Lee, Tuesday, October 13, 2026 at 3:00 PM ET, for a mole check. Shall I book it?",
         ),
         scriptedToolUse([
-          { name: "book_appointment", input: { slot_id: "slot_lee_20261013T1900Z", reason: "mole check" } },
+          {
+            name: "book_appointment",
+            input: {
+              slot_id: "slot_lee_20261013T1900Z",
+              ...confirmedFor("slot_lee_20261013T1900Z"),
+              reason: "mole check",
+            },
+          },
         ]),
         scriptedText("Booked: Dr. Priya Lee, Tuesday, October 13, 2026 at 3:00 PM ET, 400 Cedar Ridge Pkwy."),
       ],
