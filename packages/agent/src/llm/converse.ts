@@ -69,13 +69,17 @@ export interface ConverseLlmClientOptions {
   client?: ConverseSender;
 }
 
+/** The events a complete `ConverseStream` ends with, in the order it sends them (#316). */
+export const STREAM_END_EVENTS = ["messageStop", "metadata"] as const;
+export type StreamEndEvent = (typeof STREAM_END_EVENTS)[number];
+
 /** A `ConverseStream` that ended without `messageStop` or without `metadata` usage (#316). */
 export class IncompleteStreamError extends Error {
   override readonly name = "IncompleteStreamError";
   /** The events that never arrived, in the order the stream sends them. */
-  readonly missing: readonly string[];
+  readonly missing: readonly StreamEndEvent[];
 
-  constructor(missing: readonly string[]) {
+  constructor(missing: readonly StreamEndEvent[]) {
     super(`ConverseStream ended without ${missing.join(", ")}`);
     this.missing = missing;
   }
@@ -296,8 +300,8 @@ export class ResponseAssembler {
   }
 
   /** The events a complete stream sends that haven't arrived (#316): `messageStop`, then `metadata`. */
-  missing(): string[] {
-    const missing: string[] = [];
+  missing(): StreamEndEvent[] {
+    const missing: StreamEndEvent[] = [];
     if (!this.#sawStop) missing.push("messageStop");
     if (!this.#sawUsage) missing.push("metadata");
     return missing;
@@ -342,7 +346,7 @@ export class ResponseAssembler {
         });
       }
     }
-    // `streamMessage` never finishes without a `messageStop` (#316); the fallback serves a direct caller.
+    // A `messageStop` with no `stopReason` still counts as arrived (#316), so this fallback is reachable.
     return { content, stopReason, providerStopReason: this.#rawStop ?? "unknown", usage: this.#usage };
   }
 

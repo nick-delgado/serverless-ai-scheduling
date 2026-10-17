@@ -434,6 +434,15 @@ describe("ConverseLlmClient rejects a stream that ends incomplete (#316)", () =>
     ["a book_appointment tool call with no input", [bookStart], ["messageStop", "metadata"]],
     ["messageStop with no metadata usage", [textDelta(0, "Hi."), stop("end_turn")], ["metadata"]],
     ["metadata usage with no messageStop", [textDelta(0, "Hi."), someUsage], ["messageStop"]],
+    [
+      "a metadata event without usage",
+      [
+        textDelta(0, "Hi."),
+        stop("end_turn"),
+        { metadata: { metrics: { latencyMs: 1 } } } as unknown as ConverseStreamOutput,
+      ],
+      ["metadata"],
+    ],
   ])("%s rejects with IncompleteStreamError", async (_shape, events, missing) => {
     const rejection = run(events);
     await expect(rejection).rejects.toBeInstanceOf(IncompleteStreamError);
@@ -475,6 +484,16 @@ describe("ConverseLlmClient rejects a stream that ends incomplete (#316)", () =>
       providerStopReason: "end_turn",
       usage: { inputTokens: 40, outputTokens: 4, cacheReadTokens: 0, cacheWriteTokens: 0 },
     });
+  });
+
+  it("counts a messageStop with no stopReason as arrived: end_turn, providerStopReason unknown", async () => {
+    const { response } = await run([
+      textDelta(0, "Tuesday works."),
+      { messageStop: {} } as ConverseStreamOutput,
+      someUsage,
+    ]);
+    expect(response.stopReason).toBe("end_turn");
+    expect(response.providerStopReason).toBe("unknown");
   });
 
   it("resolves a max_tokens stop with usage as max_tokens, the agent's failure (ADR-008)", async () => {
