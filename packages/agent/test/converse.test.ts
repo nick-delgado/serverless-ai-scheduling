@@ -425,21 +425,22 @@ describe("ConverseLlmClient rejects a stream that ends incomplete (#316)", () =>
   };
 
   it.each([
-    ["no events at all", [], "messageStop, metadata"],
+    ["no events at all", [], ["messageStop", "metadata"]],
     [
       "a text delta cut mid-sentence",
       [textDelta(0, "I'd be happy to help you book an appointment,")],
-      "messageStop, metadata",
+      ["messageStop", "metadata"],
     ],
-    ["a book_appointment tool call with no input", [bookStart], "messageStop, metadata"],
-    ["messageStop with no metadata usage", [textDelta(0, "Hi."), stop("end_turn")], "metadata"],
-    ["metadata usage with no messageStop", [textDelta(0, "Hi."), someUsage], "messageStop"],
+    ["a book_appointment tool call with no input", [bookStart], ["messageStop", "metadata"]],
+    ["messageStop with no metadata usage", [textDelta(0, "Hi."), stop("end_turn")], ["metadata"]],
+    ["metadata usage with no messageStop", [textDelta(0, "Hi."), someUsage], ["messageStop"]],
   ])("%s rejects with IncompleteStreamError", async (_shape, events, missing) => {
     const rejection = run(events);
     await expect(rejection).rejects.toBeInstanceOf(IncompleteStreamError);
     await expect(rejection).rejects.toMatchObject({
       name: "IncompleteStreamError",
-      message: `ConverseStream ended without ${missing}`,
+      message: `ConverseStream ended without ${missing.join(", ")}`,
+      missing,
     });
   });
 
