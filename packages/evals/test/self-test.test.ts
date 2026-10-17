@@ -4,8 +4,8 @@
  * reasoning, leaks another patient's data, schedules through an emergency) fail exactly the graders
  * that exist to catch them. Every run goes through the production `TOOL_REGISTRY`.
  */
-import { confirmedFor } from "@sched/contracts/testing";
 import { scriptedText, scriptedToolUse } from "@sched/agent";
+import { confirmedFor } from "@sched/contracts/testing";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 

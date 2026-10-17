@@ -4,7 +4,6 @@
  * turn to turn, the simulator's view of the run, and the per-trial accounting. Also how `runSuite`
  * passes its options through, and how a trial skips, errors, injects faults and stops.
  */
-import { confirmedFor } from "@sched/contracts/testing";
 import {
   buildSystemPrompt,
   estimateCostUsd,
@@ -13,6 +12,7 @@ import {
   scriptedText,
   scriptedToolUse,
 } from "@sched/agent";
+import { confirmedFor } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
 import {

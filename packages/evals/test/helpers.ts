@@ -3,7 +3,6 @@
  * production INTERNAL tool error (so fault-injection tests compare against it, not a copy), and the
  * scripted good booking flow the runner and self-tests drive.
  */
-import { confirmedFor } from "@sched/contracts/testing";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +15,7 @@ import {
   type ScriptedStep,
 } from "@sched/agent";
 import type { ToolError } from "@sched/contracts";
+import { confirmedFor } from "@sched/contracts/testing";
 import { createToolExecutor, formatClinicDateTime } from "@sched/tools";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 

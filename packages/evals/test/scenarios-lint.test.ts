@@ -15,6 +15,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { LIMITS, TOOLS } from "@sched/contracts";
+import { confirmedFor } from "@sched/contracts/testing";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -177,6 +178,30 @@ describe("eval scenarios (coverage)", () => {
 
   it("includes scenarios after the Nov 1 DST change", () => {
     expect(scenarios.filter((s) => s.tags.includes("dst")).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("eval scenarios (confirmed slot in context write calls, #313)", () => {
+  /** Each `book_appointment` or `reschedule_appointment` call in an L1 context, with its case id (r1/A-1). */
+  const writeCalls = l1.flatMap((c) =>
+    c.context.flatMap((turn, i) => {
+      if (!("tool_call" in turn) || !isWriteTool(turn.tool_call.tool)) return [];
+      const args = turn.tool_call.args as Record<string, unknown>;
+      const slotId = String(args.slot_id ?? args.new_slot_id);
+      return [[`${c.id} context.${i}`, args, slotId] as const];
+    }),
+  );
+
+  it("finds the write calls in L1 contexts", () => {
+    expect(writeCalls.map(([where]) => where)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^l1-reschedule-same-slot-retry /)]),
+    );
+    expect(writeCalls.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it.each(writeCalls)("%s: confirmed_* match the call's own slot", (_where, args, slotId) => {
+    const { confirmed_provider_id, confirmed_date, confirmed_time } = args;
+    expect({ confirmed_provider_id, confirmed_date, confirmed_time }).toEqual(confirmedFor(slotId));
   });
 });
 

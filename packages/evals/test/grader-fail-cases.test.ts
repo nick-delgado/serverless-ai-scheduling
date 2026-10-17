@@ -16,8 +16,8 @@
  * chat handler's tests cover it at L0, #80), `judge.no_hallucinated_slots` (graded deterministically as
  * `invariant.no_hallucinated_slots`), and `judge.<dimension>` for a `judge:` entry with no rubric.
  */
-import { confirmedFor } from "@sched/contracts/testing";
 import { MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
+import { confirmedFor } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
 import {
