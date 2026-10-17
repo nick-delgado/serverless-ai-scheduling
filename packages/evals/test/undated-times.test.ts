@@ -123,7 +123,7 @@ describe("system.v9's own compliant examples pass (E-3)", () => {
 /** A rule, a text with ET present that passes it, and one that fails it, with the time and what it lacks. */
 type RulePair = [rule: string, passes: string, fails: string, time: string, what: string, sentence: string];
 
-describe("each settled rule, with ET present, passes one fixture and fails another (r1/Q-1, Q-2, Q-4; E-3)", () => {
+describe("each rule, with ET present, passes one fixture and fails another (E-3: r1/Q-1, Q-2 and Q-4, with #320's readings that 0cdd23a/SPEC-1 (a) and SPEC-4 (a) accepted)", () => {
   it.each<RulePair>([
     [
       "a later time in a sentence is graded (r1/Q-1 (a), reversing #236's reading)",
@@ -254,12 +254,28 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
       "We're open Monday to Friday, 8:00 AM, staying open until 5:00 PM Eastern Time.",
     ],
     [
-      "a list shares no ET",
-      "Monday has 9:00 AM ET, 9:30 AM ET and 10:00 AM ET.",
-      "Monday has 9:00 AM, 9:30 AM, 10:00 AM ET.",
-      "9:00 AM",
+      "a list time needs its own ET: its window stops at the next clock time (0cdd23a/SPEC-1 (a))",
+      "Monday has 9:30 AM ET or 10:00 AM ET.",
+      "Monday has 9:30 AM, 10:00 AM ET.",
+      "9:30 AM",
       "ET",
-      "Monday has 9:00 AM, 9:30 AM, 10:00 AM ET.",
+      "Monday has 9:30 AM, 10:00 AM ET.",
+    ],
+    [
+      "a range end's ET window stops at the next clock time too (0cdd23a/SPEC-1 (a))",
+      "We're open Monday, 8:00 AM to 5:00 PM Eastern Time, and 6:00 PM ET on Friday.",
+      "We're open Monday, 8:00 AM to 5:00 PM, 6:00 PM ET.",
+      "8:00 AM",
+      "ET",
+      "We're open Monday, 8:00 AM to 5:00 PM, 6:00 PM ET.",
+    ],
+    [
+      "ET may end at the 16th character after the time, with no other clock time in the window",
+      "Monday has 10:00 AM for Dr. Lee, ET.",
+      "Monday has 10:00 AM with Dr. Lee, ET.",
+      "10:00 AM",
+      "ET",
+      "Monday has 10:00 AM with Dr. Lee, ET.",
     ],
     [
       "a bound needs ET only; another lead-in word needs a weekday",
@@ -405,6 +421,12 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
 });
 
 describe("the new reading leaves pairs and day-line times to their own rule (r1/A-1, A-2)", () => {
+  it("claims a pair's own time when a period ends the pair and a time follows it at once", () => {
+    expect(unclaimedTimes("Monday, October 19 at 10:00 a.m.10:30 AM ET").map((t) => t.raw)).toEqual([
+      "10:30 AM",
+    ]);
+  });
+
   it("claims neither a pair's own time nor a listed time under a day line", () => {
     const text = "Tuesday, October 13 at 1:00 PM ET and 1:30 PM.\nWednesday, October 14:\n- 2:00 PM\n3:00 PM";
     expect(unclaimedTimes(text).map((t) => t.raw)).toEqual(["1:30 PM", "3:00 PM"]);

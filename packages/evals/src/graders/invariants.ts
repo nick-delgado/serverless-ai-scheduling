@@ -201,9 +201,7 @@ export function timesWithoutWeekdayOrZoneProblem(texts: readonly string[]): stri
     if (bad !== undefined) return `"${bad.raw}" lacks a weekday or ET`;
     return firstFailing(unclaimedTimes(t), (u) => {
       const lacks = unclaimedTimeLacks(t, u);
-      return lacks === undefined
-        ? undefined
-        : `"${u.raw}" lacks ${lacks}, in "${t.slice(u.start, u.end).trim()}"`;
+      return lacks === undefined ? undefined : `"${u.raw}" lacks ${lacks}, in "${u.sentence}"`;
     });
   });
 }

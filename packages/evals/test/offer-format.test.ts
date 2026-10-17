@@ -172,11 +172,11 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
 });
 
 /**
- * Each settled check of the offer-format L1 cases fails on its own (#236, r1/Q-4 (a)). A weekday-only line
- * ("Tuesday:") is no day line, so since #320 (r1/Q-1 (a) edges) its listed times fail the ET check too: their
+ * Each settled check of the offer-format L1 cases fails a reply that breaks it (#236, r1/Q-4 (a)). A weekday-only line
+ * ("Tuesday:") is no day line, so since #320 (r1/Q-1 (a) edges, kept by 0cdd23a/SPEC-3 (a)) its listed times fail the ET check too: their
  * weekday is read from their own line.
  */
-describe("each settled check of the offer-format L1 cases fails on its own (#236, r1/Q-4 (a))", () => {
+describe('each settled check of the offer-format L1 cases fails a reply that breaks it (#236, r1/Q-4 (a)), and a "no day line" reply fails the time check too (#320)', () => {
   it.each<FailingReply>([
     [
       "l1-offer-single-day",
