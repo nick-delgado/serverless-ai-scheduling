@@ -156,9 +156,9 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
   });
 
   it('l1-offer-single-day passes system.v7\'s own reply: a "that day" lead-in, the day line, and the remark line after the list (#284)', () => {
-    const v6Reply = `${TUE_LEE.replace("these openings:", "these openings that day:")}\nMore times are available later that day if you'd like. Would you like to book one of these?`;
-    expect(v6Reply).toContain("Dr. Lee has these openings that day:\nTuesday, October 13:\n");
-    expect(l1Failures("l1-offer-single-day", v6Reply)).toEqual([]);
+    const v7Reply = `${TUE_LEE.replace("these openings:", "these openings that day:")}\nMore times are available later that day if you'd like. Would you like to book one of these?`;
+    expect(v7Reply).toContain("Dr. Lee has these openings that day:\nTuesday, October 13:\n");
+    expect(l1Failures("l1-offer-single-day", v7Reply)).toEqual([]);
   });
 
   it("l1-offer-broad-next-week-searches passes one search per weekday", () => {
