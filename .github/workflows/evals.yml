@@ -9,13 +9,17 @@
 #   of the errored cases, then the verdict against the baseline read from the checked-out merge commit.
 # Credentials: the sched-github-evals role through GitHub OIDC (docs/runbooks/aws-setup.md, "CI credentials (GitHub
 # OIDC)"); it trusts only this file at refs/pull/*/merge, so this workflow runs on pull_request only.
+# Queueing (#304): at most one Eval gate job runs at a time across the repository, so two PRs' runs never share the
+# Bedrock quota. A later job waits, pending, behind the running one and any earlier pending ones, up to 100, first in,
+# first out (GitHub's "Workflow syntax for GitHub Actions", `concurrency`). Every gate job waits its turn, including a
+# run on a PR that changes no gated path and a fork's or Dependabot's run that fails closed; those then finish without
+# calling Bedrock. Other Bedrock callers (e2e.yml, local eval runs) don't join the queue.
 name: Evals
 
 on:
   pull_request:
 
-# Per PR: a new push cancels the PR's older run, and never another PR's (one group per repository would drop
-# another PR's pending run).
+# Per PR: a new push cancels the PR's older run, and never another PR's.
 concurrency:
   group: evals-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -28,6 +32,11 @@ jobs:
     name: Eval gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Repository-wide: one gate job at a time, every other one kept pending in order (the header, #304).
+    concurrency:
+      group: eval-gate-bedrock
+      cancel-in-progress: false
+      queue: max
     # The gate's run settings, each once: every smoke invocation takes SMOKE, and scenario mode adds SCENARIO.
     env:
       SMOKE: --suite smoke --trials 1 --profile sonnet-4.6 --max-cost 1
