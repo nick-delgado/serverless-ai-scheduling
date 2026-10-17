@@ -17,10 +17,11 @@
  * any options inside that one question (with a worked example), and a second missing detail left for a later
  * reply. v9 (#293) says how a time is written outside an offer's day and time lines: before a search returns
  * it (a line before a tool call), the weekday and the time with ET and no date, and weekdays only for a
- * range; in an offer message, the weekday and the time with ET and no date, and no time when two offered
- * days share a weekday. It also has a lone matching appointment named in a statement, not asked about, so
- * the reply's one question is when to move it, and contrast examples for a dated closing question and a
- * dated pre-tool range. v1 to v8 are in git history.
+ * range, so a resolved relative date isn't named in a sentence with such a time; in an offer message, the
+ * time with ET, its weekday or "that day", and no date, and no time when two offered days share a weekday,
+ * with a single offered time also on its day and time lines. It has contrast examples for a dated closing
+ * question and a dated pre-tool range, and a lone matching appointment named in a statement, not asked
+ * about, so the reply's one question is when to move it. v1 to v8 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,

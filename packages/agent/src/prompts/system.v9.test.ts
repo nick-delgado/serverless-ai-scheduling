@@ -83,7 +83,8 @@ describe("system prompt v9: cache split", () => {
  * moved onto the shared @sched/contracts helpers. A difference in the dynamic text is a defect; the stable
  * snapshot changes only with a deliberate prompt edit (v2's self-identification rule, #230; v3's plain-text rules, #233; v4's offer format, #236; v5's
  * escalation and multi-request rules, #249; v6's confirmed-slot rule, #313; v7's dateless lead-in and remark line,
- * #284; v8's one-question bullet, #314; v9's times outside an offer's day and time lines, #293), never as a
+ * #284; v8's one-question bullet, #314; v9's times outside an offer's day and time lines,
+ * the relative-date exception and the lone-appointment rule, #293), never as a
  * side effect of a helper change.
  */
 describe("system prompt v9: rendered text is pinned (#114)", () => {
