@@ -248,10 +248,10 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
     [
       "a range start takes its range end's ET",
       "We're open Monday to Friday, 8:00 AM to 5:00 PM Eastern Time.",
-      "We're open Monday to Friday, 8:00 AM and 5:00 PM Eastern Time.",
+      "We're open Monday to Friday, 8:00 AM, staying open until 5:00 PM Eastern Time.",
       "8:00 AM",
       "ET",
-      "We're open Monday to Friday, 8:00 AM and 5:00 PM Eastern Time.",
+      "We're open Monday to Friday, 8:00 AM, staying open until 5:00 PM Eastern Time.",
     ],
     [
       "a list shares no ET",
@@ -272,10 +272,10 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
     [
       '"or later" after the ET makes a bound; "or so" doesn\'t',
       "Anything at 2:00 PM ET or later works that week.",
-      "Anything at 2:00 PM ET or so works that week.",
+      "Anything at 2:00 PM ET or so, or 3:00 PM ET or later, works that week.",
       "2:00 PM",
       WEEKDAY,
-      "Anything at 2:00 PM ET or so works that week.",
+      "Anything at 2:00 PM ET or so, or 3:00 PM ET or later, works that week.",
     ],
     [
       "a bound still needs ET",
@@ -309,6 +309,7 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
     "up to 12:00 PM ET",
     "at 12:00 PM ET or later",
     "at 12:00 PM ET or earlier",
+    "at 12:00 PM Eastern Time or later",
   ])("the bound %j needs no weekday", async (bound) => {
     expect(await onText(`Dr. Haddad has openings ${bound} that week.`)).toMatchObject({ status: "pass" });
   });
@@ -340,6 +341,13 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
       detail: lacks("8:00 AM", "ET", "Openings start at 8:00 AM."),
     });
   });
+
+  it.each(["Dr. Haddad has 10:00 AM ET open that daytime.", "Dr. Haddad has 10:00 AM ET open somethat day."])(
+    '"that day" counts only as whole words: %j fails',
+    async (text) => {
+      expect(await onText(text)).toMatchObject({ status: "fail", detail: lacks("10:00 AM", WEEKDAY, text) });
+    },
+  );
 
   it("an empty text, and a text with no clock time, pass", async () => {
     expect(await timesCheck([ASKS, assistant("")])).toMatchObject({ status: "pass" });

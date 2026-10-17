@@ -483,7 +483,7 @@ const THAT_DAY = /\bthat day\b/i;
  */
 const BOUND_BEFORE = /\b(?:before|after|from|until|till|by|starting at|up to)[ \t]+$/i;
 /** After a time, its ET and then "or later" or "or earlier" make it a bound too (#320, r1/Q-2 (c)). */
-const BOUND_AFTER = new RegExp(`^\\s*${ZONE_RE.source}(?:\\s+time)?,?\\s+or\\s+(?:later|earlier)\\b`, "i");
+const BOUND_AFTER = new RegExp(`^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+or\\s+(?:later|earlier)\\b`, "i");
 /** The gap from a range start to its end: only "to", "until", "till", "-" or "–" (`RANGE_END`, r1/Q-2 edges). */
 const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
 
