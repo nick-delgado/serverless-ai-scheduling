@@ -43,4 +43,4 @@ GitHub accepted job-level `queue: max` beside the workflow-level `cancel-in-prog
 ## What's next
 
 - Other Bedrock callers on the same quota (`e2e.yml`, local `npm run evals` and `evals:matrix` runs, `dev` chat traffic) don't join the queue (#304's non-goals).
-- `packages/evals/src/runner.ts` still calls its default "the interim prompt until #16 lands". #312 tracks that fix, and #284's PR #311 carries it.
+- `packages/evals/src/runner.ts` still calls its default "the interim prompt until #16 lands". #312 tracks that fix, and #284's PR #311 carries it. **Later (2026-10-16):** PR #311 fixed it in `bdf5e29`: the comment now names the current system prompt (`buildSystemPrompt` from `@sched/agent`).
