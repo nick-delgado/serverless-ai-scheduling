@@ -1,7 +1,7 @@
 /**
  * Pacing for live model calls (#34 note, ADR-002/ADR-010): one token bucket per model ID, shared by every
  * live call in the process (agent, patient simulator #31, judge #32), plus retry with exponential
- * backoff on throttling and transient 5xx errors. Which errors are throttling is `@sched/agent`'s
+ * backoff on throttling, transient 5xx errors, and a Converse stream that ended incomplete (#316). Which errors are throttling is `@sched/agent`'s
  * `isThrottle` (names and HTTP status, #105); the transient-name and 5xx checks read the error with its
  * `errorNameOf` and `httpStatusOf`.
  *
@@ -146,12 +146,14 @@ const TRANSIENT_NAMES = new Set([
   "InternalServerException",
   "ModelNotReadyException",
   "ModelStreamErrorException",
+  // `@sched/agent`'s ConverseLlmClient: the stream ended without messageStop or metadata (#316, ADR-008).
+  "IncompleteStreamError",
 ]);
 
 /** Re-exported: the throttle rule is `@sched/agent`'s, shared with the chat handler (#105). */
 export { isThrottle };
 
-/** Worth retrying: throttling, or a transient 5xx from the service. */
+/** Worth retrying: throttling, a transient 5xx from the service, or a cut stream (#316). */
 export function isRetryable(error: unknown): boolean {
   const name = errorNameOf(error);
   const status = httpStatusOf(error);
