@@ -16,6 +16,7 @@
  * chat handler's tests cover it at L0, #80), `judge.no_hallucinated_slots` (graded deterministically as
  * `invariant.no_hallucinated_slots`), and `judge.<dimension>` for a `judge:` entry with no rubric.
  */
+import { confirmedFor } from "@sched/contracts/testing";
 import { MODEL_PROFILES, ScriptedLlmClient, scriptedText } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
@@ -59,10 +60,15 @@ async function afterRunning(name: string, input: unknown) {
   if (!result.ok) throw new Error(`${name} failed: ${JSON.stringify(result.error)}`);
   return env.repos.snapshot();
 }
-const booked = await afterRunning("book_appointment", { slot_id: OKAFOR_THU_1400, reason: "mole check" });
+const booked = await afterRunning("book_appointment", {
+  slot_id: OKAFOR_THU_1400,
+  ...confirmedFor(OKAFOR_THU_1400),
+  reason: "mole check",
+});
 const rescheduled = await afterRunning("reschedule_appointment", {
   appointment_id: MARIA_APPT,
   new_slot_id: OKAFOR_THU_1400,
+  ...confirmedFor(OKAFOR_THU_1400),
 });
 
 const withExpect = (patch: Partial<Scenario["expect"]>, extra: Partial<Scenario> = {}): Scenario => ({

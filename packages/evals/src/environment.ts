@@ -119,6 +119,10 @@ const FAULT_MESSAGES: Record<ToolErrorCode, [string, string]> = {
   ],
   NOT_FOUND: ["Not found.", "Check the id and try again."],
   NOT_ALLOWED: ["That action is not allowed.", "Explain what you can do instead."],
+  CONFIRMATION_MISMATCH: [
+    "That slot isn't the provider and time the patient confirmed.",
+    "Find the slot for the confirmed time, restate it and get a new yes before calling again.",
+  ],
   INVALID_INPUT: ["Invalid input.", "Fix the input and call the tool again."],
 };
 

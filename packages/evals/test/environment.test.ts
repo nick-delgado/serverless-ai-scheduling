@@ -2,6 +2,7 @@
  * The per-trial world: fault injection's edge cases (valid-input call counting, the fallback when the
  * slot can't be taken) and setup validation.
  */
+import { confirmedFor } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -26,7 +27,7 @@ describe("fault injection", () => {
     const valid = await env.executor.execute({
       id: "t2",
       name: "book_appointment",
-      input: { slot_id: OPEN_SLOT, reason: "palpitations" },
+      input: { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "palpitations" },
     });
     expect(valid).toMatchObject({ ok: false, error: { error: { code: "SLOT_UNAVAILABLE" } } });
     expect(env.faultsFired).toEqual([
@@ -39,7 +40,7 @@ describe("fault injection", () => {
     const result = await env.executor.execute({
       id: "t1",
       name: "book_appointment",
-      input: { slot_id: WALTERS_SLOT, reason: "palpitations" },
+      input: { slot_id: WALTERS_SLOT, ...confirmedFor(WALTERS_SLOT), reason: "palpitations" },
     });
     expect(result).toEqual({
       ok: false,
@@ -61,7 +62,7 @@ describe("injected INTERNAL faults say what production says (2e22f79/SMELL-202 d
     const injected = await env.executor.execute({
       id: "t1",
       name: "book_appointment",
-      input: { slot_id: OPEN_SLOT, reason: "lingering cold" },
+      input: { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "lingering cold" },
     });
     expect(injected).toEqual({ ok: false, error: { error: await productionInternalError() } });
   });
@@ -78,7 +79,11 @@ describe("fault injection: later calls and reschedules (2e22f79/TEST-206)", () =
       withFaults([{ tool: "book_appointment", call: 2, error: "INTERNAL" }]),
     );
     const book = (id: string, slot: string) =>
-      env.executor.execute({ id, name: "book_appointment", input: { slot_id: slot, reason: "mole check" } });
+      env.executor.execute({
+        id,
+        name: "book_appointment",
+        input: { slot_id: slot, ...confirmedFor(slot), reason: "mole check" },
+      });
     expect((await book("t1", "slot_okafor_20261015T1800Z")).ok).toBe(true);
     expect(await book("t2", "slot_okafor_20261015T1830Z")).toEqual({
       ok: false,
@@ -102,7 +107,7 @@ describe("fault injection: later calls and reschedules (2e22f79/TEST-206)", () =
     const result = await env.executor.execute({
       id: "t1",
       name: "reschedule_appointment",
-      input: { appointment_id: MARIA_APPT, new_slot_id: newSlot },
+      input: { appointment_id: MARIA_APPT, new_slot_id: newSlot, ...confirmedFor(newSlot) },
     });
     expect(result).toMatchObject({
       ok: false,

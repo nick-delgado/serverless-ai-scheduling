@@ -41,7 +41,12 @@ context:
   - patient: "Yes, book it."
   - tool_call:
       tool: book_appointment
-      args: { slot_id: slot_okafor_20261015T1800Z, reason: eczema }
+      args:
+        slot_id: slot_okafor_20261015T1800Z
+        confirmed_provider_id: prov_okafor
+        confirmed_date: 2026-10-15
+        confirmed_time: "14:00"
+        reason: eczema
   - tool_result:
       tool: book_appointment
       error:
@@ -50,7 +55,12 @@ context:
         hint: "Try once more. If it fails again, apologize and offer to connect the patient with the front desk."
   - tool_call:
       tool: book_appointment
-      args: { slot_id: slot_okafor_20261015T1800Z, reason: eczema }
+      args:
+        slot_id: slot_okafor_20261015T1800Z
+        confirmed_provider_id: prov_okafor
+        confirmed_date: 2026-10-15
+        confirmed_time: "14:00"
+        reason: eczema
   - tool_result:
       tool: book_appointment
       result:

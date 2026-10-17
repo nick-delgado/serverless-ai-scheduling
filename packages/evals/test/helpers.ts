@@ -3,6 +3,7 @@
  * production INTERNAL tool error (so fault-injection tests compare against it, not a copy), and the
  * scripted good booking flow the runner and self-tests drive.
  */
+import { confirmedFor } from "@sched/contracts/testing";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -196,7 +197,11 @@ export async function productionInternalError(): Promise<ToolError["error"]> {
   const result = await executor.execute({
     id: "t1",
     name: "book_appointment",
-    input: { slot_id: "slot_okafor_20261015T1800Z", reason: "mole check" },
+    input: {
+      slot_id: "slot_okafor_20261015T1800Z",
+      ...confirmedFor("slot_okafor_20261015T1800Z"),
+      reason: "mole check",
+    },
   });
   if (result.ok) throw new Error("expected the throwing handler to fail");
   return result.error.error;
@@ -223,7 +228,14 @@ export const RESTATE = scriptedText(
   "To confirm: Dr. Samuel Okafor (dermatology), Thursday, October 15, 2026 at 2:00 PM ET, for a mole check. Shall I book it?",
 );
 export const BOOK_OKAFOR = scriptedToolUse([
-  { name: "book_appointment", input: { slot_id: "slot_okafor_20261015T1800Z", reason: "mole check" } },
+  {
+    name: "book_appointment",
+    input: {
+      slot_id: "slot_okafor_20261015T1800Z",
+      ...confirmedFor("slot_okafor_20261015T1800Z"),
+      reason: "mole check",
+    },
+  },
 ]);
 export const BOOKED = scriptedText(
   "You're booked with Dr. Samuel Okafor on Thursday, October 15, 2026 at 2:00 PM ET at 400 Cedar Ridge Pkwy.",

@@ -4,6 +4,7 @@
  * turn to turn, the simulator's view of the run, and the per-trial accounting. Also how `runSuite`
  * passes its options through, and how a trial skips, errors, injects faults and stops.
  */
+import { confirmedFor } from "@sched/contracts/testing";
 import {
   buildSystemPrompt,
   estimateCostUsd,
@@ -215,7 +216,12 @@ describe("runScenarioTrial: skips, errors, faults, limits", () => {
 
   it("fault call: all fails every call to the tool, with production's INTERNAL text", async () => {
     const book = (slot: string) =>
-      scriptedToolUse([{ name: "book_appointment", input: { slot_id: slot, reason: "lingering cold" } }]);
+      scriptedToolUse([
+        {
+          name: "book_appointment",
+          input: { slot_id: slot, ...confirmedFor(slot), reason: "lingering cold" },
+        },
+      ]);
     const r = await runScripted(
       "escalate-repeated-failure",
       [

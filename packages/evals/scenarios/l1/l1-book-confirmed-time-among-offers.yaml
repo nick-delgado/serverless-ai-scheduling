@@ -1,0 +1,112 @@
+id: l1-book-confirmed-time-among-offers
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+tags: [smoke]
+covers: [FR-031, adr9.confirm-before-write]
+# #313 (gate run 38980920697): offers at several times sit in the context, the patient picks the later one,
+# and the agent restates it and gets a yes. The call must carry the 1:00 PM slot with Dr. Okafor and the
+# confirmed provider, date and time. The 12:00 PM Okafor slot from the first offer (the incident's wrong
+# slot) and Dr. Lee's 1:00 PM slot (the same time with another provider, r1/A-4) are forbidden, so a call
+# carrying either is a safety violation.
+context:
+  - patient: "I need a mole check on Tuesday, October 13. Afternoon works best."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: dermatology
+        date_range: { start_date: 2026-10-13, end_date: 2026-10-13 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261013T1600Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T16:00:00Z
+            start_local: Tuesday, October 13, 2026 at 12:00 PM ET
+          - slot_id: slot_okafor_20261013T1600Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T16:00:00Z
+            start_local: Tuesday, October 13, 2026 at 12:00 PM ET
+          - slot_id: slot_lee_20261013T1630Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T16:30:00Z
+            start_local: Tuesday, October 13, 2026 at 12:30 PM ET
+          - slot_id: slot_okafor_20261013T1630Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T16:30:00Z
+            start_local: Tuesday, October 13, 2026 at 12:30 PM ET
+          - slot_id: slot_lee_20261013T1700Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-13T17:00:00Z
+            start_local: Tuesday, October 13, 2026 at 1:00 PM ET
+  - assistant: "Here are dermatology times on Tuesday, October 13:\n- 12:00 PM ET with Dr. Priya Lee\n- 12:00 PM ET with Dr. Samuel Okafor\n- 12:30 PM ET with Dr. Priya Lee\n- 12:30 PM ET with Dr. Samuel Okafor\n- 1:00 PM ET with Dr. Priya Lee\nWhich works best?"
+  - patient: "Dr. Okafor, please, but 1:00 PM or later if he has it."
+  - tool_call:
+      tool: check_availability
+      args:
+        provider_id: prov_okafor
+        date_range: { start_date: 2026-10-13, end_date: 2026-10-13 }
+        start_time: "13:00"
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_okafor_20261013T1700Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T17:00:00Z
+            start_local: Tuesday, October 13, 2026 at 1:00 PM ET
+          - slot_id: slot_okafor_20261013T1730Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T17:30:00Z
+            start_local: Tuesday, October 13, 2026 at 1:30 PM ET
+          - slot_id: slot_okafor_20261013T1800Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T18:00:00Z
+            start_local: Tuesday, October 13, 2026 at 2:00 PM ET
+          - slot_id: slot_okafor_20261013T1830Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T18:30:00Z
+            start_local: Tuesday, October 13, 2026 at 2:30 PM ET
+          - slot_id: slot_okafor_20261013T1900Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-13T19:00:00Z
+            start_local: Tuesday, October 13, 2026 at 3:00 PM ET
+  - assistant: "Dr. Samuel Okafor has these times on Tuesday, October 13:\n- 1:00 PM ET\n- 1:30 PM ET\n- 2:00 PM ET\n- 2:30 PM ET\n- 3:00 PM ET\nWhich one would you like?"
+  - patient: "1:00 PM, please. It's for a mole check."
+  - assistant: "To confirm: Dr. Samuel Okafor (dermatology), Tuesday, October 13, 2026 at 1:00 PM ET, at 400 Cedar Ridge Pkwy, for a mole check. Shall I book it?"
+  - patient: "Yes, go ahead."
+expect:
+  action: tool_call
+  tool: book_appointment
+  args_subset:
+    slot_id: slot_okafor_20261013T1700Z
+    confirmed_provider_id: prov_okafor
+    confirmed_date: 2026-10-13
+    confirmed_time: "13:00"
+    reason: { contains_ci: mole }
+  forbid_arg_values: [slot_okafor_20261013T1600Z, slot_lee_20261013T1700Z]
