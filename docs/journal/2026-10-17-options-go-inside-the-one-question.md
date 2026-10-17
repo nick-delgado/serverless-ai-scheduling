@@ -1,4 +1,4 @@
-# 2026-10-17 — Options go inside the one question: `system.v8` passes `clarify-vague-request`'s question checks 5 of 5, and the model now joins two details with "and"
+# 2026-10-17 — Options go inside the one question: `system.v8` passes `clarify-vague-request`'s question checks 5 of 5, and two of five opening replies joined two details with "and"
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
@@ -31,7 +31,7 @@ The 5-trial run at `b3791ec` passed both question checks in every trial, and eve
 ## What surprised us
 
 - **The model kept the example's words but not its colon.** In four of the five trials, the time question was "When would you like to come in — this week, next week, or a specific day?" That is the example word for word, with an em dash where the example has a colon. In the fifth, the patient's "go ahead and search" made the question unnecessary. A colon and a dash both keep it to one `?`, which is all the graders count.
-- **Two of five opening replies now join two details with "and", in one question.** "What is the visit for, and do you have a preferred provider or specialty?" (trials 1 and 4, `2026-10-17T133231Z`). That is run 39023823567's shape 2 with the `?` between its two halves removed. It passes both checks, because they count question marks. But it asks for what the new sentence says should wait. The other three trials asked only for the reason. So the run shows shape 1 handled, and shape 2 only partly handled: the graders can't see the joined form. We've listed an L1 case for this opening turn on #201.
+- **Two of five opening replies joined two details with "and", in one question.** "What is the visit for, and do you have a preferred provider or specialty?" (trials 1 and 4, `2026-10-17T133231Z`). That is run 39023823567's shape 2 with the `?` between its two halves removed. It passes both checks, because they count question marks. But it asks for what the new sentence says should wait. The other three trials asked only for the reason. It isn't new. In the review round we went back to the same 59 gate trials behind the before rate, and the joined form was already the usual opening there: 35 of 59 opening replies on `system.v1` to `v7`, and 9 of 25 on `v5` to `v7` (the agent counted replies containing ", and do you have a [preferred] provider"). It never counted as a miss, because it has one `?`. So the run is consistent with shape 1 handled, and shape 2 is only partly handled, since the graders can't see the joined form. Nick chose to track it on #201 (decision `d0433ae/SPEC-2` (b) on PR #318): the opening-turn L1 case there is to carry a `format_must_match_none` pattern that fails a second detail joined into the one question ([comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201#issuecomment-6235233900)).
 - **The dry-run estimate was 2.7× low for the 5-trial run.** It estimated $0.3064 and the run cost $0.8295 with the judge, the top of the 1.7 to 2.7× range seen before. The 3-case run was 1.9× low. An earlier attempt at the 5-trial run hit an expired SSO token on every simulator call. It cost $0 and was re-run once Nick had signed in again.
 
 ## Evidence
@@ -52,5 +52,5 @@ Both runs were at `b3791ec` with `system.v8`, on sonnet-4.6, in scenario mode wi
 
 ## What's next
 
-- #201: an L1 case for each failing turn, including the opening turn whose reply now joins two details in one question (listed there as a comment).
+- #201: an L1 case for each failing turn ([suggestion](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201#issuecomment-6234699697)). The opening-turn case carries a `format_must_match_none` pattern for a second detail joined into the one question, as seen in two of this run's five opening replies ([addition](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201#issuecomment-6235233900)). If it fails, #201 records it as a finding, and a prompt fix gets its own issue.
 - #293 (the missing "ET"), #234 and #251 take `system.v9` and later. They keep this bullet and its example unless they measure a better one.
