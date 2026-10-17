@@ -53,4 +53,4 @@ Both runs were at `b3791ec` with `system.v8`, on sonnet-4.6, in scenario mode wi
 ## What's next
 
 - #201: an L1 case for each failing turn ([suggestion](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201#issuecomment-6234699697)). The opening-turn case carries a `format_must_match_none` pattern for a second detail joined into the one question, as seen in two of this run's five opening replies ([addition](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201#issuecomment-6235233900)). If it fails, #201 records it as a finding, and a prompt fix gets its own issue.
-- #293 (the missing "ET"), #234 and #251 take `system.v9` and later. They keep this bullet and its example unless they measure a better one.
+- #293 (the missing "ET"), #234 and #251 take `system.v9` and later. They keep this bullet and its example unless they measure a better one. **Later (2026-10-17):** #293 took `system.v9` (PR #319), so #234 and #251 take `system.v10` and later; see [Every undated time still left out "ET"](2026-10-17-every-undated-time-still-left-out-et.md).
