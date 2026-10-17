@@ -107,3 +107,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-16 | [A lead-in that ends with the date is not a day line: three offer cases now want the day alone on its line](2026-10-16-a-lead-in-that-ends-with-the-date-is-not-a-day-line.md) | 5. What the evals showed |
 | 2026-10-16 | [Eval gate jobs from different PRs now wait in one queue instead of sharing the Bedrock quota](2026-10-16-eval-gate-jobs-wait-in-one-queue.md) | 5. What the evals showed |
 | 2026-10-16 | [The derm case's Monday bookings were the patient's idea: our scenario told it to want "sooner"](2026-10-16-the-patient-asked-for-the-monday.md) | 5. What the evals showed |
+| 2026-10-16 | [The agent restated 1:00 PM and booked 12:00 PM: the booking tools now check what the patient said yes to](2026-10-16-the-tools-check-what-the-patient-confirmed.md) | 5. What the evals showed |
