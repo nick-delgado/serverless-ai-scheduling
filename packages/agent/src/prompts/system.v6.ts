@@ -10,8 +10,8 @@
  * apology goes after it succeeds, right before the escalation message. It also has a message with several
  * scheduling requests worked one at a time, in the patient's order, with one question in the reply. v6
  * (#284) keeps the date off an offer's lead-in when the patient named the day, with a worked example of that
- * question whose lead-in says "that day", and puts the remark that more times are available on its own line after the list, with no date
- * and no time. v1 to v5 are in git history.
+ * question whose lead-in says "that day", and puts the remark that more times are available on its own line
+ * after the list, with no date and no time. v1 to v5 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
