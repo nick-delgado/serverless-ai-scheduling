@@ -19,6 +19,8 @@ Before opening the PR, the agent regraded the recorded transcripts at `6f3ce28` 
 
 Nick waived the re-baseline that r1/Q-3 (a) would have asked for ([decision on #320](https://github.com/nick-delgado/serverless-ai-scheduling/issues/320#issuecomment-6239989073)). Two smoke cases fail on the baseline's `system.v3` run, but the gate compares a fresh `system.v9` run against the baseline's statuses, and the latest `system.v9` gate run fails none. So the PR's own Eval gate decides: if it shows two or more smoke scenario cases failing only on this check, the agent re-records the baseline in this PR after Nick approves the estimate; with at most one, the baseline stays as it is. The first gate run, [39064674580](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39064674580) at `0cdd23a`, passed every case in both modes.
 
+The gate run after the review round, [39071561526](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39071561526) at `4f24cf7`, passed L1 9 of 9 and scenario 7 of 8. `book-derm-next-week-afternoon` regressed on this check only, on "Here are options after 2:00 PM.", a bound with no ET. That is one case in one mode, inside FR-041's tolerance, and Nick kept the baseline as it is ([decision on #320](https://github.com/nick-delgado/serverless-ai-scheduling/issues/320#issuecomment-6241803522)). The baseline still records the case as `pass`, so later gated PRs may show the same regression until #321 gets the agent to write ET on undated times and bounds.
+
 After the review's `0cdd23a/SPEC-1` (a) cut the window at the next clock time, the agent re-ran the regrade at `8888218`. The results didn't move: no case newly fails on either `system.v9` gate run (39055652853 and 39064674580), the baseline's `system.v3` run still fails the same two, and the recorded set still fails the same 7.
 
 ## Why we chose what we chose
@@ -35,7 +37,7 @@ After the review's `0cdd23a/SPEC-1` (a) cut the window at the next clock time, t
 ## What surprised us
 
 - **The recorded set went from 0 to 7 of 20.** None of the 20 `system.v1` trials failed the check before; a third fail it now, every one on a time the old readers didn't see. The undated time without ET wasn't new with `system.v9`: it was in the model's writing all along.
-- **On the smoke suite at k=1, the current prompt passes where the old one fails.** The baseline's `system.v3` run fails two smoke cases under the new rule, and the newest `system.v9` gate run fails none. That is one trial per case. It isn't evidence that `system.v9` writes ET on undated times: #293's k=3 runs of `clarify-two-requests-one-message` show it still leaves ET out, which is #321's target.
+- **On the smoke suite at k=1, the current prompt mostly passes where the old one fails.** The baseline's `system.v3` run fails two smoke cases under the new rule. Of the three `system.v9` gate runs, two fail none: #319's [39055652853](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39055652853) on the regrade, and this PR's [39064674580](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39064674580). This PR's [39071561526](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39071561526) fails one, `book-derm-next-week-afternoon`. That is one trial per case. It isn't evidence that `system.v9` writes ET on undated times: #293's k=3 runs of `clarify-two-requests-one-message` show it still leaves ET out, which is #321's target.
 
 ## Evidence
 
