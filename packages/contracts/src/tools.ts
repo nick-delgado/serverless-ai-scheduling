@@ -68,6 +68,7 @@ export const ToolErrorCode = z.enum([
   "NOT_FOUND",
   "SLOT_UNAVAILABLE",
   "NOT_ALLOWED",
+  "CONFIRMATION_MISMATCH",
   "INTERNAL",
 ]);
 export type ToolErrorCode = z.infer<typeof ToolErrorCode>;
@@ -134,8 +135,19 @@ export const GetMyAppointmentsInput = z.strictObject({
 
 export const GetPatientProfileInput = z.strictObject({});
 
+/**
+ * What the patient said yes to (#313, r1/Q-1 (c) and A-4): the write tools refuse a slot whose provider or
+ * clinic-local date and time differ, with CONFIRMATION_MISMATCH. Required, so the check can't be skipped.
+ */
+const confirmedSlot = {
+  confirmed_provider_id: ProviderId.describe("The confirmed provider."),
+  confirmed_date: IsoDate.describe("The confirmed date, YYYY-MM-DD ET."),
+  confirmed_time: HhMm.describe("The confirmed time, HH:MM 24-hour ET."),
+};
+
 export const BookAppointmentInput = z.strictObject({
   slot_id: SlotId.describe("A slot_id returned by check_availability in this conversation."),
+  ...confirmedSlot,
   reason: z
     .string()
     .trim()
@@ -147,6 +159,7 @@ export const BookAppointmentInput = z.strictObject({
 export const RescheduleAppointmentInput = z.strictObject({
   appointment_id: AppointmentId.describe("The appointment to move (an id from get_my_appointments)."),
   new_slot_id: SlotId.describe("The new slot (a slot_id from check_availability)."),
+  ...confirmedSlot,
 });
 
 export const EscalateToHumanInput = z.strictObject({
@@ -255,14 +268,14 @@ export const TOOLS = {
   book_appointment: {
     name: "book_appointment",
     description:
-      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint.",
+      "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason, and pass those as the confirmed_* fields. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint. CONFIRMATION_MISMATCH means slot_id isn't the confirmed provider and time; nothing was booked; follow its hint.",
     input: BookAppointmentInput,
     output: BookAppointmentOutput,
   },
   reschedule_appointment: {
     name: "reschedule_appointment",
     description:
-      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. already_rescheduled: true means the appointment was already at that time (for example, after a retry) and nothing changed; previous_start_local is then null, so confirm the time instead of moving it again.",
+      "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change, and pass the new time's provider, date and time as the confirmed_* fields. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. CONFIRMATION_MISMATCH means new_slot_id isn't the confirmed provider and time; nothing was changed; follow its hint. already_rescheduled: true means the appointment was already at that time (for example, after a retry) and nothing changed; previous_start_local is then null, so confirm the time instead of moving it again.",
     input: RescheduleAppointmentInput,
     output: RescheduleAppointmentOutput,
   },

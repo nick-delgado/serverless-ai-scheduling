@@ -119,10 +119,25 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
     "name": "get_patient_profile",
   },
   {
-    "description": "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint.",
+    "description": "Book an open slot for the logged-in patient. Call it only after the patient has explicitly confirmed the provider, date, time, and reason, and pass those as the confirmed_* fields. slot_id must come from check_availability in this conversation. On success it returns the appointment: confirm it by quoting start_local verbatim. already_booked: true means the patient already held this slot (for example, after a retry); confirm it rather than booking again. SLOT_UNAVAILABLE means the slot was just taken, so offer other times. NOT_ALLOWED means the time has already started, or the provider isn't taking new patients; follow its hint. CONFIRMATION_MISMATCH means slot_id isn't the confirmed provider and time; nothing was booked; follow its hint.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "confirmed_date": {
+          "description": "The confirmed date, YYYY-MM-DD ET.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string",
+        },
+        "confirmed_provider_id": {
+          "description": "The confirmed provider.",
+          "pattern": "^prov_[a-z0-9]+(?:_[a-z0-9]+)*$",
+          "type": "string",
+        },
+        "confirmed_time": {
+          "description": "The confirmed time, HH:MM 24-hour ET.",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "type": "string",
+        },
         "reason": {
           "description": "Short reason for the visit, in the patient's words.",
           "maxLength": 300,
@@ -137,6 +152,9 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
       },
       "required": [
         "slot_id",
+        "confirmed_provider_id",
+        "confirmed_date",
+        "confirmed_time",
         "reason",
       ],
       "type": "object",
@@ -144,13 +162,28 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
     "name": "book_appointment",
   },
   {
-    "description": "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. already_rescheduled: true means the appointment was already at that time (for example, after a retry) and nothing changed; previous_start_local is then null, so confirm the time instead of moving it again.",
+    "description": "Move one of the logged-in patient's existing appointments to a different open slot, in one atomic step (the old time is released only if the new one is booked). Call it only after the patient has explicitly confirmed the change, and pass the new time's provider, date and time as the confirmed_* fields. appointment_id must come from get_my_appointments and new_slot_id from check_availability; the new slot must be in the same specialty. On success it returns the moved appointment: quote start_local (the new time) and previous_start_local verbatim. SLOT_UNAVAILABLE means the new time was just taken and the original appointment is kept, so offer other times. NOT_ALLOWED means the appointment is cancelled, completed or already started, the new time has passed or is a different specialty, or the provider isn't taking new patients; follow its hint. CONFIRMATION_MISMATCH means new_slot_id isn't the confirmed provider and time; nothing was changed; follow its hint. already_rescheduled: true means the appointment was already at that time (for example, after a retry) and nothing changed; previous_start_local is then null, so confirm the time instead of moving it again.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "appointment_id": {
           "description": "The appointment to move (an id from get_my_appointments).",
           "pattern": "^appt_[0-9A-Za-z]{10,40}$",
+          "type": "string",
+        },
+        "confirmed_date": {
+          "description": "The confirmed date, YYYY-MM-DD ET.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string",
+        },
+        "confirmed_provider_id": {
+          "description": "The confirmed provider.",
+          "pattern": "^prov_[a-z0-9]+(?:_[a-z0-9]+)*$",
+          "type": "string",
+        },
+        "confirmed_time": {
+          "description": "The confirmed time, HH:MM 24-hour ET.",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
           "type": "string",
         },
         "new_slot_id": {
@@ -162,6 +195,9 @@ exports[`tool registry > matches the committed snapshot (model-facing changes sh
       "required": [
         "appointment_id",
         "new_slot_id",
+        "confirmed_provider_id",
+        "confirmed_date",
+        "confirmed_time",
       ],
       "type": "object",
     },

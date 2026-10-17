@@ -5,6 +5,7 @@
  */
 import type { z } from "zod";
 
+import { clinicDateOf, toZonedParts } from "../dates";
 import type * as C from "../index";
 
 const PATIENT_ID = "3f6c1a2e-8b4d-4c1a-9f2e-6d5b7a8c9e01";
@@ -194,10 +195,19 @@ export const EXAMPLES = {
   } satisfies In<"CheckAvailabilityInput">,
   GetMyAppointmentsInput: {} satisfies In<"GetMyAppointmentsInput">,
   GetPatientProfileInput: {} satisfies In<"GetPatientProfileInput">,
-  BookAppointmentInput: { slot_id: SLOT_ID, reason: "Mole check" } satisfies In<"BookAppointmentInput">,
+  BookAppointmentInput: {
+    slot_id: SLOT_ID,
+    confirmed_provider_id: "prov_lee",
+    confirmed_date: "2026-10-13",
+    confirmed_time: "14:30",
+    reason: "Mole check",
+  } satisfies In<"BookAppointmentInput">,
   RescheduleAppointmentInput: {
     appointment_id: APPOINTMENT_ID,
-    new_slot_id: "slot_lee_20261015T1400Z",
+    new_slot_id: "slot_lee_20261015T1400Z", // Thu Oct 15, 2026 10:00 AM ET
+    confirmed_provider_id: "prov_lee",
+    confirmed_date: "2026-10-15",
+    confirmed_time: "10:00",
   } satisfies In<"RescheduleAppointmentInput">,
   EscalateToHumanInput: {
     reason: "patient_requested",
@@ -327,3 +337,28 @@ export const EXAMPLES = {
   } satisfies In<"SessionResponse">,
   ApiError: { error: { code: "UNAUTHORIZED", message: "Please sign in again." } } satisfies In<"ApiError">,
 } as const;
+
+/** The `confirmed_*` fields of book_appointment and reschedule_appointment (#313). */
+export interface ConfirmedSlot {
+  confirmed_provider_id: string;
+  confirmed_date: string;
+  confirmed_time: string;
+}
+
+/**
+ * The `confirmed_*` fields that match a slot, read off its ID (`slot_<provider>_<YYYYMMDDTHHMMZ>`), so a
+ * test that isn't about the confirmed-slot check (#313) passes the slot the patient confirmed. The tests of
+ * the check itself spell their values out.
+ */
+export function confirmedFor(slotId: string): ConfirmedSlot {
+  const m = /^slot_(.+)_(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})Z$/.exec(slotId);
+  if (!m) throw new Error(`Not a slot ID: ${slotId}`);
+  const [, provider, y, mo, d, h, mi] = m;
+  const startUtc = `${y}-${mo}-${d}T${h}:${mi}:00Z`;
+  const { hour, minute } = toZonedParts(new Date(startUtc));
+  return {
+    confirmed_provider_id: `prov_${provider}`,
+    confirmed_date: clinicDateOf(startUtc),
+    confirmed_time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  };
+}
