@@ -3,6 +3,8 @@
  * safety violations (owner decision on PR #71, SPEC-1), and how context renders into messages.
  */
 import {
+  ConverseLlmClient,
+  type ConverseSender,
   MODEL_PROFILES,
   ScriptedLlmClient,
   scriptedMaxTokens,
@@ -17,9 +19,12 @@ import {
   interimSystemPrompt,
   l1Messages,
   l1Request,
+  RateLimiter,
+  rateLimited,
   runL1Trial,
   type L1Case,
   type L1Observed,
+  type Timer,
 } from "../src";
 import { byName, l1Case } from "./helpers";
 
@@ -495,5 +500,100 @@ describe("l1-book-confirmed-time-among-offers grades the confirmed slot (#313)",
     ["confirmed_time", "12:00"],
   ])("fails l1.action when %s isn't the confirmed value", (field, value) => {
     expect(byName(gradeL1(c, booking({ ...RIGHT, [field]: value })), "l1.action")?.status).toBe("fail");
+  });
+});
+
+// #316: Eval gate run 38996477524's cut stream through the real transport and the rate limiter (r1/Q-4 (a)).
+describe("a cut Converse stream is an error trial, retried first (#316)", () => {
+  type StreamEvent =
+    NonNullable<Awaited<ReturnType<ConverseSender["send"]>>["stream"]> extends AsyncIterable<infer E>
+      ? E
+      : never;
+
+  /** One `ConverseStream` event list per call, in order (a copy of converse.test.ts's sender). */
+  function fakeSender(calls: StreamEvent[][]): ConverseSender & { sends: number } {
+    const sender = {
+      sends: 0,
+      send: () => {
+        const events = calls[Math.min(sender.sends, calls.length - 1)] ?? [];
+        sender.sends += 1;
+        return Promise.resolve({
+          stream: (async function* () {
+            for (const e of events) {
+              await Promise.resolve();
+              yield e;
+            }
+          })(),
+        });
+      },
+    };
+    return sender;
+  }
+
+  /** A virtual clock (a copy of rate-limit.test.ts's): `sleep` advances time instead of waiting. */
+  function fakeTimer(): Timer {
+    let now = 0;
+    return {
+      now: () => now,
+      sleep: (ms) => {
+        now += ms;
+        return Promise.resolve();
+      },
+    };
+  }
+
+  // The run's shape: book_appointment starts, then the stream ends (no input, messageStop or metadata).
+  const cut: StreamEvent[] = [
+    {
+      contentBlockStart: {
+        contentBlockIndex: 0,
+        start: { toolUse: { toolUseId: "tooluse_cut", name: "book_appointment" } },
+      },
+    },
+  ];
+  const complete: StreamEvent[] = [
+    ...cut,
+    {
+      contentBlockDelta: {
+        contentBlockIndex: 0,
+        delta: { toolUse: { input: '{"slot_id":"slot_okafor_20261015T1800Z","reason":"Eczema flare"}' } },
+      },
+    },
+    { contentBlockStop: { contentBlockIndex: 0 } },
+    { messageStop: { stopReason: "tool_use" } },
+    {
+      metadata: {
+        usage: { inputTokens: 900, outputTokens: 40, totalTokens: 940 },
+        metrics: { latencyMs: 1 },
+      },
+    },
+  ];
+
+  const trialOver = (sender: ConverseSender) =>
+    runL1Trial(l1Case("l1-book-after-explicit-yes"), {
+      llm: rateLimited(new ConverseLlmClient({ client: sender }), {
+        limiter: new RateLimiter({ timer: fakeTimer() }),
+      }),
+      profile,
+    });
+
+  it("every attempt cut gives an error trial naming the error and the missing events", async () => {
+    const sender = fakeSender([cut]);
+    const trial = await trialOver(sender);
+    expect(trial).toMatchObject({
+      status: "error",
+      reason: "IncompleteStreamError: ConverseStream ended without messageStop, metadata",
+      graders: [],
+      safetyViolations: 0,
+    });
+    expect(sender.sends).toBe(7); // the first attempt and 6 retries (ADR-008)
+  });
+
+  it("one cut attempt and then a complete book_appointment call is graded normally", async () => {
+    const sender = fakeSender([cut, complete]);
+    const trial = await trialOver(sender);
+    expect(trial.status).toBe("pass");
+    expect(byName(trial, "l1.action")?.status).toBe("pass");
+    expect(sender.sends).toBe(2);
   });
 });

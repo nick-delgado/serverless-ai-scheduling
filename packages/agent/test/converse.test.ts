@@ -3,7 +3,12 @@ import { toolDefinitionsForModel } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
 import { CACHE_POINT, ConverseLlmClient, type LlmRequest } from "../src";
-import { InlineReasoningFilter, toConverseRequest, toLlmStopReason } from "../src/llm/converse";
+import {
+  IncompleteStreamError,
+  InlineReasoningFilter,
+  toConverseRequest,
+  toLlmStopReason,
+} from "../src/llm/converse";
 
 const baseRequest = (overrides: Partial<LlmRequest> = {}): LlmRequest => ({
   modelId: "us.anthropic.claude-sonnet-4-6",
@@ -42,6 +47,8 @@ const stop = (stopReason: string): ConverseStreamOutput =>
   ({ messageStop: { stopReason } }) as ConverseStreamOutput;
 const usage = (u: Record<string, number>): ConverseStreamOutput =>
   ({ metadata: { usage: u, metrics: { latencyMs: 1 } } }) as unknown as ConverseStreamOutput;
+/** A complete stream ends with `messageStop` and `metadata` usage (#316). */
+const someUsage = usage({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
 
 async function run(events: ConverseStreamOutput[], request = baseRequest()) {
   const sender = fakeSender(events);
@@ -225,6 +232,7 @@ describe("ConverseLlmClient", () => {
           },
         },
         stop("tool_use"),
+        someUsage,
       ],
       baseRequest({ family: "openai.gpt-oss", modelId: "openai.gpt-oss-120b-1:0" }),
     );
@@ -250,6 +258,7 @@ describe("ConverseLlmClient", () => {
       },
       textDelta(1, "Hi"),
       stop("end_turn"),
+      someUsage,
     ]);
     expect(response.content[0]).toMatchObject({ type: "reasoning", redactedContent: "AQID" });
   });
@@ -264,6 +273,7 @@ describe("ConverseLlmClient", () => {
       },
       { contentBlockDelta: { contentBlockIndex: 0, delta: { toolUse: { input: '{"slot_id": "slot_' } } } },
       stop("tool_use"),
+      someUsage,
     ]);
     expect(response.stopReason).toBe("malformed_output");
     expect(response.providerStopReason).toBe("tool_use");
@@ -283,6 +293,7 @@ describe("ConverseLlmClient", () => {
           },
         },
         stop("tool_use"),
+        someUsage,
       ],
       baseRequest({
         family: "amazon.nova",
@@ -309,6 +320,7 @@ describe("ConverseLlmClient", () => {
       textDelta(0, " Tuesday works."),
       { contentBlockStop: { contentBlockIndex: 0 } },
       stop("end_turn"),
+      someUsage,
     ]);
     expect(deltas.join("")).toBe("Let me look.  Tuesday works.");
     expect(response.content).toEqual([{ type: "text", text: "Let me look.  Tuesday works." }]);
@@ -319,6 +331,7 @@ describe("ConverseLlmClient", () => {
       textDelta(0, "Is 3 <"),
       { contentBlockStop: { contentBlockIndex: 0 } },
       stop("end_turn"),
+      someUsage,
     ]);
     expect(deltas).toEqual(["Is 3 ", "<"]);
     expect(response.content).toEqual([{ type: "text", text: "Is 3 <" }]);
@@ -331,6 +344,7 @@ describe("ConverseLlmClient", () => {
       textDelta(1, "Tuesday works."),
       { contentBlockStop: { contentBlockIndex: 1 } },
       stop("end_turn"),
+      someUsage,
     ]);
     expect(deltas).toEqual(["Hi. ", "Tuesday works."]);
     expect(response.content).toEqual([
@@ -346,6 +360,7 @@ describe("ConverseLlmClient", () => {
         textDelta(0, "</thinking> I'll connect you."),
         { contentBlockStop: { contentBlockIndex: 0 } },
         stop("end_turn"),
+        someUsage,
       ],
       baseRequest({
         family: "amazon.nova",
@@ -366,6 +381,7 @@ describe("ConverseLlmClient", () => {
         textDelta(0, "<reasoning>r</reasoning>Hi. <thinking>t</thinking>Bye."),
         { contentBlockStop: { contentBlockIndex: 0 } },
         stop("end_turn"),
+        someUsage,
       ],
       baseRequest({
         family: "openai.gpt-oss",
@@ -388,7 +404,7 @@ describe("ConverseLlmClient", () => {
   });
 
   it("passes the abort signal to the SDK", async () => {
-    const sender = fakeSender([stop("end_turn")]);
+    const sender = fakeSender([stop("end_turn"), someUsage]);
     const controller = new AbortController();
     await new ConverseLlmClient({ client: sender }).streamMessage(
       baseRequest(),
@@ -396,6 +412,73 @@ describe("ConverseLlmClient", () => {
       { signal: controller.signal },
     );
     expect(sender.sent[0]?.abortSignal).toBe(controller.signal);
+  });
+});
+
+// #316: the cut streams of Eval gate run 38996477524 (r1/Q-4 (a)) and what still resolves (r1/Q-2 (b)).
+describe("ConverseLlmClient rejects a stream that ends incomplete (#316)", () => {
+  const bookStart: ConverseStreamOutput = {
+    contentBlockStart: {
+      contentBlockIndex: 0,
+      start: { toolUse: { toolUseId: "tooluse_cut", name: "book_appointment" } },
+    },
+  };
+
+  it.each([
+    ["no events at all", [], "messageStop, metadata"],
+    [
+      "a text delta cut mid-sentence",
+      [textDelta(0, "I'd be happy to help you book an appointment,")],
+      "messageStop, metadata",
+    ],
+    ["a book_appointment tool call with no input", [bookStart], "messageStop, metadata"],
+    ["messageStop with no metadata usage", [textDelta(0, "Hi."), stop("end_turn")], "metadata"],
+    ["metadata usage with no messageStop", [textDelta(0, "Hi."), someUsage], "messageStop"],
+  ])("%s rejects with IncompleteStreamError", async (_shape, events, missing) => {
+    const rejection = run(events);
+    await expect(rejection).rejects.toBeInstanceOf(IncompleteStreamError);
+    await expect(rejection).rejects.toMatchObject({
+      name: "IncompleteStreamError",
+      message: `ConverseStream ended without ${missing}`,
+    });
+  });
+
+  it("streams the cut text before it rejects, as an in-stream exception does", async () => {
+    const deltas: string[] = [];
+    const client = new ConverseLlmClient({ client: fakeSender([textDelta(0, "I'd be happy to help,")]) });
+    await expect(client.streamMessage(baseRequest(), { onTextDelta: (t) => deltas.push(t) })).rejects.toThrow(
+      "ConverseStream ended without messageStop, metadata",
+    );
+    expect(deltas).toEqual(["I'd be happy to help,"]);
+  });
+
+  it("keeps the abort error when the signal fired before the stream ended", async () => {
+    const controller = new AbortController();
+    const deadline = new Error("turn deadline");
+    controller.abort(deadline);
+    const client = new ConverseLlmClient({ client: fakeSender([]) });
+    await expect(client.streamMessage(baseRequest(), {}, { signal: controller.signal })).rejects.toBe(
+      deadline,
+    );
+  });
+
+  it("resolves a complete stream: text, messageStop end_turn and metadata usage", async () => {
+    const { response } = await run([
+      textDelta(0, "Tuesday works."),
+      stop("end_turn"),
+      usage({ inputTokens: 40, outputTokens: 4 }),
+    ]);
+    expect(response).toEqual({
+      content: [{ type: "text", text: "Tuesday works." }],
+      stopReason: "end_turn",
+      providerStopReason: "end_turn",
+      usage: { inputTokens: 40, outputTokens: 4, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    });
+  });
+
+  it("resolves a max_tokens stop with usage as max_tokens, the agent's failure (ADR-008)", async () => {
+    const { response } = await run([textDelta(0, "Here are the"), stop("max_tokens"), someUsage]);
+    expect(response.stopReason).toBe("max_tokens");
   });
 });
 

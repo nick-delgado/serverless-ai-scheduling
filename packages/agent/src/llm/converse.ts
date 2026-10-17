@@ -19,6 +19,12 @@
  * - Claude's reasoning signature arrives as its own delta after the reasoning text, and must be sent
  *   back with it on the next call of a tool-use turn.
  * - gpt-oss may send an empty text block before its reasoning; empty text blocks are dropped.
+ *
+ * A stream must end complete (#316): a `messageStop` event and a `metadata` event with `usage`. When the
+ * iterator ends without either, `streamMessage` rejects with `IncompleteStreamError` instead of resolving
+ * the cut reply as an `end_turn` with zero usage. Eval gate run 38996477524 graded six such replies as real
+ * ones. The evals' rate limiter retries the error (ADR-008's 2026-10-17 amendment); the chat Lambda ends
+ * the turn as an agent error, which offers Retry.
  */
 import {
   BedrockRuntimeClient,
@@ -63,6 +69,18 @@ export interface ConverseLlmClientOptions {
   client?: ConverseSender;
 }
 
+/** A `ConverseStream` that ended without `messageStop` or without `metadata` usage (#316). */
+export class IncompleteStreamError extends Error {
+  override readonly name = "IncompleteStreamError";
+  /** The events that never arrived, in the order the stream sends them. */
+  readonly missing: readonly string[];
+
+  constructor(missing: readonly string[]) {
+    super(`ConverseStream ended without ${missing.join(", ")}`);
+    this.missing = missing;
+  }
+}
+
 export class ConverseLlmClient implements LlmClient {
   readonly #client: ConverseSender;
 
@@ -90,6 +108,9 @@ export class ConverseLlmClient implements LlmClient {
       options.signal?.throwIfAborted();
       assembler.push(event);
     }
+    options.signal?.throwIfAborted(); // a deadline's abort keeps its own error
+    const missing = assembler.missing();
+    if (missing.length > 0) throw new IncompleteStreamError(missing);
     return assembler.finish();
   }
 }
@@ -217,6 +238,8 @@ export class ResponseAssembler {
   readonly #handlers: LlmStreamHandlers;
   readonly #blocks = new Map<number, BlockState>();
   #rawStop: string | undefined;
+  #sawStop = false;
+  #sawUsage = false;
   #usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
   constructor(request: LlmRequest, handlers: LlmStreamHandlers) {
@@ -258,8 +281,10 @@ export class ResponseAssembler {
       const block = this.#blocks.get(event.contentBlockStop.contentBlockIndex ?? 0);
       if (block?.kind === "text") this.#emit(block, block.filter.end());
     } else if (event.messageStop) {
+      this.#sawStop = true;
       this.#rawStop = event.messageStop.stopReason;
     } else if (event.metadata?.usage) {
+      this.#sawUsage = true;
       const u = event.metadata.usage;
       this.#usage = {
         inputTokens: u.inputTokens ?? 0,
@@ -268,6 +293,14 @@ export class ResponseAssembler {
         cacheWriteTokens: u.cacheWriteInputTokens ?? 0,
       };
     }
+  }
+
+  /** The events a complete stream sends that haven't arrived (#316): `messageStop`, then `metadata`. */
+  missing(): string[] {
+    const missing: string[] = [];
+    if (!this.#sawStop) missing.push("messageStop");
+    if (!this.#sawUsage) missing.push("metadata");
+    return missing;
   }
 
   finish(): LlmResponse {
@@ -309,6 +342,7 @@ export class ResponseAssembler {
         });
       }
     }
+    // `streamMessage` never finishes without a `messageStop` (#316); the fallback serves a direct caller.
     return { content, stopReason, providerStopReason: this.#rawStop ?? "unknown", usage: this.#usage };
   }
 
