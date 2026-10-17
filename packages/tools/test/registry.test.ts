@@ -3,7 +3,7 @@
  * plus one check that the production TOOL_REGISTRY registers every tool.
  */
 import { TOOL_NAMES, ToolError, toolDefinitionsForModel, type PatientId } from "@sched/contracts";
-import { EXAMPLES } from "@sched/contracts/testing";
+import { confirmedFor, EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../fixtures";
@@ -208,7 +208,7 @@ describe("tool executor", () => {
         await executor.execute({
           id: "t",
           name: "book_appointment",
-          input: { slot_id: "tuesday", reason: "" },
+          input: { slot_id: "tuesday", ...confirmedFor("slot_lee_20261013T1830Z"), reason: "" },
         }),
       );
       expect(error.code).toBe("INVALID_INPUT");
@@ -225,13 +225,21 @@ describe("tool executor", () => {
       const mine = await executor.execute({
         id: "t1",
         name: "book_appointment",
-        input: { slot_id: "slot_lee_20261013T1830Z", reason: "Mole check" },
+        input: {
+          slot_id: "slot_lee_20261013T1830Z",
+          ...confirmedFor("slot_lee_20261013T1830Z"),
+          reason: "Mole check",
+        },
       });
       expect(mine).toMatchObject({ ok: true, output: { already_booked: true } });
       const taken = await executor.execute({
         id: "t2",
         name: "book_appointment",
-        input: { slot_id: "slot_haddad_20261015T1400Z", reason: "Checkup" },
+        input: {
+          slot_id: "slot_haddad_20261015T1400Z",
+          ...confirmedFor("slot_haddad_20261015T1400Z"),
+          reason: "Checkup",
+        },
       });
       expect(errorOf(taken)).toEqual({
         code: "SLOT_UNAVAILABLE",
@@ -314,12 +322,20 @@ describe("tool executor", () => {
         executor.execute({
           id: "b",
           name: "book_appointment",
-          input: { slot_id: "slot_lee_20261013T1800Z", reason: "Skin check" },
+          input: {
+            slot_id: "slot_lee_20261013T1800Z",
+            ...confirmedFor("slot_lee_20261013T1800Z"),
+            reason: "Skin check",
+          },
         }),
         executor.execute({
           id: "c",
           name: "book_appointment",
-          input: { slot_id: "slot_lee_20261013T1800Z", reason: "Skin check" },
+          input: {
+            slot_id: "slot_lee_20261013T1800Z",
+            ...confirmedFor("slot_lee_20261013T1800Z"),
+            reason: "Skin check",
+          },
         }),
         executor.execute({ id: "d", name: "nope", input: {} }),
       ]);

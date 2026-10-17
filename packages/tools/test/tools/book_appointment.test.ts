@@ -1,5 +1,5 @@
 import { LIMITS, TOOLS, type ToolError, type ToolOutput } from "@sched/contracts";
-import { EXAMPLES } from "@sched/contracts/testing";
+import { confirmedFor, EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
@@ -79,7 +79,7 @@ describe("book_appointment", () => {
       await executor.execute({
         id: "toolu_test",
         name: "book_appointment",
-        input: { slot_id: OPEN_SLOT, reason: "Skin check" },
+        input: { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" },
       }),
     );
     expect(out.already_booked).toBe(false);
@@ -88,7 +88,9 @@ describe("book_appointment", () => {
   });
 
   it("books an open slot and returns the appointment in clinic-local time", async () => {
-    const out = outputOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Itchy rash on my arm" }));
+    const out = outputOf(
+      await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Itchy rash on my arm" }),
+    );
     expect(out).toEqual({
       appointment: {
         appointment_id: "appt_0000000001",
@@ -107,27 +109,37 @@ describe("book_appointment", () => {
   });
 
   it("shows the post-DST local time for a slot after Nov 1", async () => {
-    const out = outputOf(await run(AISHA, { slot_id: DST_SLOT, reason: "Follow-up" }));
+    const out = outputOf(
+      await run(AISHA, { slot_id: DST_SLOT, ...confirmedFor(DST_SLOT), reason: "Follow-up" }),
+    );
     expect(out.appointment.start_utc).toBe("2026-11-02T14:00:00Z");
     expect(out.appointment.start_local).toBe("Monday, November 2, 2026 at 9:00 AM ET");
   });
 
   it("trims the reason (the contract schema does it before the handler runs)", async () => {
-    const out = outputOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "   Skin check  \n" }));
+    const out = outputOf(
+      await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "   Skin check  \n" }),
+    );
     expect(out.appointment.reason).toBe("Skin check");
   });
 
   it("is idempotent: the same patient retrying gets the existing appointment, and nothing new is written", async () => {
-    const first = outputOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" }));
+    const first = outputOf(
+      await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }),
+    );
     const afterFirst = repos.snapshot();
-    const retry = outputOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Different words" }));
+    const retry = outputOf(
+      await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Different words" }),
+    );
     expect(retry).toEqual({ appointment: first.appointment, already_booked: true });
     expect(retry.appointment.reason).toBe("Skin check"); // the original reason is kept
     expect(repos.snapshot()).toEqual(afterFirst);
   });
 
   it("returns already_booked for a fixture appointment the patient already holds", async () => {
-    const out = outputOf(await run(MARIA, { slot_id: MARIAS_SLOT, reason: "Mole check" }));
+    const out = outputOf(
+      await run(MARIA, { slot_id: MARIAS_SLOT, ...confirmedFor(MARIAS_SLOT), reason: "Mole check" }),
+    );
     expect(out.already_booked).toBe(true);
     expect(out.appointment).toMatchObject({
       appointment_id: "appt_01JBX7Q2M3N4P5R6S7T8V9W0XY",
@@ -137,7 +149,9 @@ describe("book_appointment", () => {
 
   it("answers SLOT_UNAVAILABLE with an alternatives hint when someone else holds the slot, changing nothing", async () => {
     const before = repos.snapshot();
-    const error = errorOf(await run(WALTER, { slot_id: MARIAS_SLOT, reason: "Skin check" }));
+    const error = errorOf(
+      await run(WALTER, { slot_id: MARIAS_SLOT, ...confirmedFor(MARIAS_SLOT), reason: "Skin check" }),
+    );
     expect(error.code).toBe("SLOT_UNAVAILABLE");
     expect(error.hint).toMatch(/check_availability/);
     // Never reveals who holds it.
@@ -147,7 +161,9 @@ describe("book_appointment", () => {
 
   it("answers NOT_FOUND with a hint for an unknown slot", async () => {
     const before = repos.snapshot();
-    const error = errorOf(await run(AISHA, { slot_id: UNKNOWN_SLOT, reason: "Skin check" }));
+    const error = errorOf(
+      await run(AISHA, { slot_id: UNKNOWN_SLOT, ...confirmedFor(UNKNOWN_SLOT), reason: "Skin check" }),
+    );
     expect(error.code).toBe("NOT_FOUND");
     expect(error.hint).toMatch(/check_availability/);
     expect(repos.snapshot()).toEqual(before);
@@ -159,7 +175,9 @@ describe("book_appointment", () => {
   ])("refuses a slot that started %s with NOT_ALLOWED, writing nothing", async (_label, slotId) => {
     expect(await slotStatus(slotId)).toBe("OPEN");
     const before = repos.snapshot();
-    const error = errorOf(await run(AISHA, { slot_id: slotId, reason: "Skin check" }));
+    const error = errorOf(
+      await run(AISHA, { slot_id: slotId, ...confirmedFor(slotId), reason: "Skin check" }),
+    );
     expect(error.code).toBe("NOT_ALLOWED");
     expect(error.hint).toMatch(/check_availability/);
     expect(repos.snapshot()).toEqual(before);
@@ -173,12 +191,16 @@ describe("book_appointment", () => {
     async (_label, now) => {
       clock.set(now);
       const before = repos.snapshot();
-      const out = outputOf(await run(MARIA, { slot_id: MARIAS_SLOT, reason: "Mole check" }));
+      const out = outputOf(
+        await run(MARIA, { slot_id: MARIAS_SLOT, ...confirmedFor(MARIAS_SLOT), reason: "Mole check" }),
+      );
       expect(out.already_booked).toBe(true);
       expect(out.appointment.appointment_id).toBe(MARIA_APPT);
       expect(repos.snapshot()).toEqual(before);
       // Anyone else asking for that started slot still gets the past-slot rule, with no hint of who holds it.
-      const error = errorOf(await run(WALTER, { slot_id: MARIAS_SLOT, reason: "Check-up" }));
+      const error = errorOf(
+        await run(WALTER, { slot_id: MARIAS_SLOT, ...confirmedFor(MARIAS_SLOT), reason: "Check-up" }),
+      );
       expect(error.code).toBe("NOT_ALLOWED");
       expect(JSON.stringify(error)).not.toMatch(/appt_|Maria|Mole/);
     },
@@ -186,16 +208,22 @@ describe("book_appointment", () => {
 
   it("judges 'past' by ctx.clock, not the real clock", async () => {
     clock.set("2026-10-06T14:00:01Z"); // one second after OPEN_SLOT started
-    expect(errorOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" })).code).toBe("NOT_ALLOWED");
+    expect(
+      errorOf(await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }))
+        .code,
+    ).toBe("NOT_ALLOWED");
     clock.set("2026-10-06T13:59:59Z");
-    expect(outputOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" })).already_booked).toBe(
-      false,
-    );
+    expect(
+      outputOf(await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }))
+        .already_booked,
+    ).toBe(false);
   });
 
   it("refuses a new patient for a provider not taking new patients, writing nothing", async () => {
     const before = repos.snapshot();
-    const error = errorOf(await run(JAMES, { slot_id: BROOKS_SLOT, reason: "General check-up" }));
+    const error = errorOf(
+      await run(JAMES, { slot_id: BROOKS_SLOT, ...confirmedFor(BROOKS_SLOT), reason: "General check-up" }),
+    );
     expect(error.code).toBe("NOT_ALLOWED");
     expect(error.hint).toMatch(/same specialty/);
     expect(repos.snapshot()).toEqual(before);
@@ -205,7 +233,9 @@ describe("book_appointment", () => {
   it("refuses a patient whose appointments are only with other providers", async () => {
     // Maria holds a BOOKED appointment with Dr. Lee but has never seen Dr. Brooks.
     const before = repos.snapshot();
-    const error = errorOf(await run(MARIA, { slot_id: BROOKS_SLOT, reason: "General check-up" }));
+    const error = errorOf(
+      await run(MARIA, { slot_id: BROOKS_SLOT, ...confirmedFor(BROOKS_SLOT), reason: "General check-up" }),
+    );
     expect(error.code).toBe("NOT_ALLOWED");
     expect(error.hint).toMatch(/same specialty/);
     expect(repos.snapshot()).toEqual(before);
@@ -220,7 +250,9 @@ describe("book_appointment", () => {
       reason: "Check-up",
     });
     expect(setup.ok).toBe(true);
-    const out = outputOf(await run(JAMES, { slot_id: BROOKS_SLOT, reason: "Follow-up" }));
+    const out = outputOf(
+      await run(JAMES, { slot_id: BROOKS_SLOT, ...confirmedFor(BROOKS_SLOT), reason: "Follow-up" }),
+    );
     expect(out).toMatchObject({ already_booked: false, appointment: { provider_id: "prov_brooks" } });
     expect(await slotStatus(BROOKS_SLOT)).toBe("BOOKED");
   });
@@ -234,7 +266,9 @@ describe("book_appointment", () => {
       ids: sequentialIds(),
     });
     const before = repos.snapshot();
-    const error = errorOf(await run(JAMES, { slot_id: BROOKS_SLOT, reason: "General check-up" }));
+    const error = errorOf(
+      await run(JAMES, { slot_id: BROOKS_SLOT, ...confirmedFor(BROOKS_SLOT), reason: "General check-up" }),
+    );
     expect(error.code).toBe("NOT_ALLOWED");
     expect(error.message).toMatch(/new patients/);
     expect(repos.snapshot()).toEqual(before);
@@ -242,7 +276,9 @@ describe("book_appointment", () => {
 
   it("books an existing patient with a provider not taking new patients", async () => {
     // Walter's fixture history has a COMPLETED annual physical with Dr. Brooks.
-    const out = outputOf(await run(WALTER, { slot_id: BROOKS_SLOT, reason: "Follow-up" }));
+    const out = outputOf(
+      await run(WALTER, { slot_id: BROOKS_SLOT, ...confirmedFor(BROOKS_SLOT), reason: "Follow-up" }),
+    );
     expect(out.already_booked).toBe(false);
     expect(out.appointment.provider_id).toBe("prov_brooks");
     expect(await slotStatus(BROOKS_SLOT)).toBe("BOOKED");
@@ -254,7 +290,7 @@ describe("book_appointment", () => {
     const causes: unknown[] = [];
     const result = await run(
       AISHA,
-      { slot_id: OPEN_SLOT, reason: "Skin check" },
+      { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" },
       { onInternalError: (error) => causes.push(error) },
     );
     expect(errorOf(result).code).toBe("INTERNAL");
@@ -265,16 +301,21 @@ describe("book_appointment", () => {
 
   it("answers NOT_FOUND with a hint when the slot disappears between the read and the booking", async () => {
     vi.spyOn(repos.appointments, "book").mockResolvedValue({ ok: false, reason: "SLOT_NOT_FOUND" });
-    const error = errorOf(await run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" }));
+    const error = errorOf(
+      await run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }),
+    );
     expect(error.code).toBe("NOT_FOUND");
     expect(error.hint).toMatch(/check_availability/);
   });
 
   it.each([
-    ["an empty reason", { slot_id: OPEN_SLOT, reason: "   " }],
-    ["an over-long reason", { slot_id: OPEN_SLOT, reason: "x".repeat(LIMITS.reasonMaxChars + 1) }],
-    ["a malformed slot_id", { slot_id: "tuesday at 10", reason: "Skin check" }],
-    ["a missing reason", { slot_id: OPEN_SLOT }],
+    ["an empty reason", { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "   " }],
+    [
+      "an over-long reason",
+      { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "x".repeat(LIMITS.reasonMaxChars + 1) },
+    ],
+    ["a malformed slot_id", { slot_id: "tuesday at 10", ...confirmedFor(OPEN_SLOT), reason: "Skin check" }],
+    ["a missing reason", { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT) }],
   ])("rejects %s with INVALID_INPUT", async (_label, input) => {
     const before = repos.snapshot();
     expect(errorOf(await run(AISHA, input)).code).toBe("INVALID_INPUT");
@@ -283,13 +324,22 @@ describe("book_appointment", () => {
 
   it("rejects a model-supplied patient_id and books for nobody (cross-patient attempt)", async () => {
     const before = repos.snapshot();
-    const error = errorOf(await run(WALTER, { slot_id: OPEN_SLOT, reason: "Skin check", patient_id: MARIA }));
+    const error = errorOf(
+      await run(WALTER, {
+        slot_id: OPEN_SLOT,
+        ...confirmedFor(OPEN_SLOT),
+        reason: "Skin check",
+        patient_id: MARIA,
+      }),
+    );
     expect(error.code).toBe("INVALID_INPUT");
     expect(repos.snapshot()).toEqual(before);
   });
 
   it("always books for the context patient", async () => {
-    const out = outputOf(await run(WALTER, { slot_id: OPEN_SLOT, reason: "Skin check" }));
+    const out = outputOf(
+      await run(WALTER, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }),
+    );
     const stored = await repos.appointments.get(WALTER, out.appointment.appointment_id);
     expect(stored?.patientId).toBe(WALTER);
     expect(await repos.appointments.get(MARIA, out.appointment.appointment_id)).toBeNull();
@@ -298,7 +348,7 @@ describe("book_appointment", () => {
   it("parallel bookings of one slot by different patients: exactly one succeeds", async () => {
     const patients = [AISHA, JAMES, WALTER, MARIA];
     const results = await Promise.all(
-      patients.map((p) => run(p, { slot_id: OPEN_SLOT, reason: "Skin check" })),
+      patients.map((p) => run(p, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" })),
     );
 
     const [winner, ...otherWinners] = results.filter((r) => r.ok);
@@ -314,11 +364,101 @@ describe("book_appointment", () => {
 
   it("parallel duplicate calls by the same patient: one booking, the rest already_booked", async () => {
     const results = await Promise.all(
-      [1, 2, 3].map(() => run(AISHA, { slot_id: OPEN_SLOT, reason: "Skin check" })),
+      [1, 2, 3].map(() =>
+        run(AISHA, { slot_id: OPEN_SLOT, ...confirmedFor(OPEN_SLOT), reason: "Skin check" }),
+      ),
     );
     const outputs = results.map(outputOf);
     expect(outputs.filter((o) => !o.already_booked)).toHaveLength(1);
     expect(new Set(outputs.map((o) => o.appointment.appointment_id)).size).toBe(1);
     expect(bookedFor(AISHA)).toHaveLength(1);
+  });
+
+  // #313: the slot must be the provider, date and time the patient said yes to (r1/Q-1 (c), A-4). Gate run
+  // 38980920697: the agent restated 1:00 PM, the patient said yes, and the call carried the 12:00 PM slot.
+  describe("confirmed slot (#313)", () => {
+    const OKAFOR_NOON = "slot_okafor_20261013T1600Z"; // Tue Oct 13, 2026 12:00 PM EDT
+    const OKAFOR_ONE_PM = "slot_okafor_20261013T1700Z"; // Tue Oct 13, 2026 1:00 PM EDT
+    const LEE_ONE_PM = "slot_lee_20261013T1700Z"; // the same time with Dr. Lee
+    const CONFIRMED_ONE_PM = {
+      confirmed_provider_id: "prov_okafor",
+      confirmed_date: "2026-10-13",
+      confirmed_time: "13:00",
+    };
+
+    /** Runs `input` for Maria and asserts CONFIRMATION_MISMATCH with nothing written; returns the error. */
+    const expectMismatch = async (input: Record<string, unknown>): Promise<ToolError["error"]> => {
+      const before = repos.snapshot();
+      const error = errorOf(await run(MARIA, { reason: "Mole check", ...input }));
+      expect(error.code).toBe("CONFIRMATION_MISMATCH");
+      expect(repos.snapshot()).toEqual(before);
+      return error;
+    };
+
+    it("refuses the 12:00 PM slot when the patient confirmed 1:00 PM, and writes nothing (gate run 38980920697)", async () => {
+      const error = await expectMismatch({ slot_id: OKAFOR_NOON, ...CONFIRMED_ONE_PM });
+      expect(error).toEqual({
+        code: "CONFIRMATION_MISMATCH",
+        message:
+          "That slot is Tuesday, October 13, 2026 at 12:00 PM ET, and its provider or time isn't the one the patient confirmed. Nothing was booked.",
+        hint: "Find the slot_id for the provider and time the patient confirmed in earlier check_availability results, or search again. Restate that time, get a new yes, then call again.",
+      });
+      expect(await slotStatus(OKAFOR_NOON)).toBe("OPEN");
+      expect(bookedFor(MARIA)).toHaveLength(1); // only her fixture appointment
+    });
+
+    it("books the 1:00 PM slot when the patient confirmed 1:00 PM", async () => {
+      const out = outputOf(
+        await run(MARIA, { slot_id: OKAFOR_ONE_PM, ...CONFIRMED_ONE_PM, reason: "Mole check" }),
+      );
+      expect(out.appointment).toMatchObject({
+        provider_id: "prov_okafor",
+        start_local: "Tuesday, October 13, 2026 at 1:00 PM ET",
+      });
+      expect(await slotStatus(OKAFOR_ONE_PM)).toBe("BOOKED");
+    });
+
+    it("refuses the confirmed time on another day", async () => {
+      await expectMismatch({ slot_id: OKAFOR_ONE_PM, ...CONFIRMED_ONE_PM, confirmed_date: "2026-10-14" });
+    });
+
+    it("refuses a slot at the confirmed date and time with another provider (r1/A-4)", async () => {
+      await expectMismatch({ slot_id: LEE_ONE_PM, ...CONFIRMED_ONE_PM });
+      expect(await slotStatus(LEE_ONE_PM)).toBe("OPEN");
+    });
+
+    it("compares clinic-local time after the DST change: 9:00 AM EST books, the EDT reading 10:00 is refused", async () => {
+      const confirmed = { confirmed_provider_id: "prov_lee", confirmed_date: "2026-11-02" };
+      await expectMismatch({ slot_id: DST_SLOT, ...confirmed, confirmed_time: "10:00" });
+      const out = outputOf(
+        await run(MARIA, { slot_id: DST_SLOT, ...confirmed, confirmed_time: "09:00", reason: "Mole check" }),
+      );
+      expect(out.appointment.start_utc).toBe("2026-11-02T14:00:00Z");
+    });
+
+    it("refuses a time not in HH:MM 24-hour form as INVALID_INPUT, before the handler runs", async () => {
+      const before = repos.snapshot();
+      const error = errorOf(
+        await run(MARIA, {
+          slot_id: OKAFOR_ONE_PM,
+          ...CONFIRMED_ONE_PM,
+          confirmed_time: "1:00 PM",
+          reason: "Mole check",
+        }),
+      );
+      expect(error.code).toBe("INVALID_INPUT");
+      expect(repos.snapshot()).toEqual(before);
+    });
+
+    it("answers a retry of a slot the patient holds as already_booked, whatever it passes (r1/A-2)", async () => {
+      const out = outputOf(
+        await run(MARIA, { slot_id: MARIAS_SLOT, ...CONFIRMED_ONE_PM, reason: "Mole check" }),
+      );
+      expect(out.already_booked).toBe(true);
+    });
+
+    it("answers CONFIRMATION_MISMATCH before the past-slot rule (r1/A-2)", async () => {
+      await expectMismatch({ slot_id: PAST_SLOT, ...CONFIRMED_ONE_PM });
+    });
   });
 });
