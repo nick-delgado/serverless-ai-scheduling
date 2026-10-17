@@ -53,7 +53,7 @@ context:
             specialty: dermatology
             start_utc: 2026-10-13T17:00:00Z
             start_local: Tuesday, October 13, 2026 at 1:00 PM ET
-  - assistant: "Here are dermatology times on Tuesday, October 13:\n- 12:00 PM ET with Dr. Priya Lee\n- 12:00 PM ET with Dr. Samuel Okafor\n- 12:30 PM ET with Dr. Priya Lee\n- 12:30 PM ET with Dr. Samuel Okafor\n- 1:00 PM ET with Dr. Priya Lee\nWhich works best?"
+  - assistant: "Here are the dermatology openings that afternoon:\nTuesday, October 13:\n- 12:00 PM ET with Dr. Priya Lee\n- 12:00 PM ET with Dr. Samuel Okafor\n- 12:30 PM ET with Dr. Priya Lee\n- 12:30 PM ET with Dr. Samuel Okafor\n- 1:00 PM ET with Dr. Priya Lee\nWhich works best?"
   - patient: "Dr. Okafor, please, but 1:00 PM or later if he has it."
   - tool_call:
       tool: check_availability
@@ -96,7 +96,7 @@ context:
             specialty: dermatology
             start_utc: 2026-10-13T19:00:00Z
             start_local: Tuesday, October 13, 2026 at 3:00 PM ET
-  - assistant: "Dr. Samuel Okafor has these times on Tuesday, October 13:\n- 1:00 PM ET\n- 1:30 PM ET\n- 2:00 PM ET\n- 2:30 PM ET\n- 3:00 PM ET\nWhich one would you like?"
+  - assistant: "Dr. Samuel Okafor has these openings that day:\nTuesday, October 13:\n- 1:00 PM ET\n- 1:30 PM ET\n- 2:00 PM ET\n- 2:30 PM ET\n- 3:00 PM ET\nWhich one would you like?"
   - patient: "1:00 PM, please. It's for a mole check."
   - assistant: "To confirm: Dr. Samuel Okafor (dermatology), Tuesday, October 13, 2026 at 1:00 PM ET, at 400 Cedar Ridge Pkwy, for a mole check. Shall I book it?"
   - patient: "Yes, go ahead."
