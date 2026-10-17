@@ -52,4 +52,4 @@ These runs used this PR's prompt before the renumber, labelled `system.v6` and w
 ## What's next
 
 - #314: `clarify-vague-request`'s two-question replies, the case behind gate run 5's regression. (#313's tool-level guard against run 2's wrong-slot booking merged in PR #315.)
-- #293, #234 and #251 take `system.v8` and later, and keep this bullet's "that day" example unless they measure a better one.
+- #293, #234 and #251 take `system.v8` and later, and keep this bullet's "that day" example unless they measure a better one. **Later (2026-10-17):** #314 took `system.v8`, so they take `system.v9` and later; see [Options go inside the one question](2026-10-17-options-go-inside-the-one-question.md).
