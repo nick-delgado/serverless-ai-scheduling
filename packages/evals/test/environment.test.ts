@@ -92,6 +92,29 @@ describe("fault injection: later calls and reschedules (2e22f79/TEST-206)", () =
     expect(env.faultsFired).toEqual([{ tool: "book_appointment", call: 2, error: "INTERNAL" }]);
   });
 
+  it("a CONFIRMATION_MISMATCH fault answers with the harness's own text for that code (#313)", async () => {
+    const env = await createTrialEnvironment(
+      withFaults([{ tool: "book_appointment", call: 1, error: "CONFIRMATION_MISMATCH" }]),
+    );
+    const slot = "slot_okafor_20261015T1800Z";
+    expect(
+      await env.executor.execute({
+        id: "t1",
+        name: "book_appointment",
+        input: { slot_id: slot, ...confirmedFor(slot), reason: "mole check" },
+      }),
+    ).toEqual({
+      ok: false,
+      error: {
+        error: {
+          code: "CONFIRMATION_MISMATCH",
+          message: "That slot isn't the provider and time the patient confirmed.",
+          hint: "Find the slot for the confirmed time, restate it and get a new yes before calling again.",
+        },
+      },
+    });
+  });
+
   it("slot_taken_by_other_patient on reschedule takes the new slot, and the real handler answers", async () => {
     const env = await createTrialEnvironment(
       withFaults([

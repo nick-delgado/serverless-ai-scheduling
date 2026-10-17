@@ -12,7 +12,7 @@ import {
   ToolErrorCode,
   type ToolName,
 } from "./tools";
-import { EXAMPLES } from "./testing/examples";
+import { confirmedFor, EXAMPLES } from "./testing/examples";
 
 const INPUT_EXAMPLES: Record<ToolName, unknown> = {
   find_providers: EXAMPLES.FindProvidersInput,
@@ -193,4 +193,31 @@ describe("input validation rules", () => {
   it("has an error code for a write whose slot isn't the confirmed one (#313)", () => {
     expect(ToolErrorCode.options).toContain("CONFIRMATION_MISMATCH");
   });
+});
+
+describe("confirmedFor (test helper, #313)", () => {
+  it("reads the provider and the clinic-local date and HH:MM time off a slot ID, in EDT and in EST", () => {
+    expect(confirmedFor("slot_okafor_20261013T1700Z")).toEqual({
+      confirmed_provider_id: "prov_okafor",
+      confirmed_date: "2026-10-13",
+      confirmed_time: "13:00",
+    });
+    expect(confirmedFor("slot_lee_20261102T1400Z")).toEqual({
+      confirmed_provider_id: "prov_lee",
+      confirmed_date: "2026-11-02",
+      confirmed_time: "09:00",
+    });
+  });
+
+  it("matches the book_appointment example", () => {
+    const { slot_id, reason: _reason, ...confirmed } = EXAMPLES.BookAppointmentInput;
+    expect(confirmedFor(slot_id)).toEqual(confirmed);
+  });
+
+  it.each(["tuesday at 1", "xslot_lee_20261013T1700Z", "slot_lee_20261013T1700Zx"])(
+    "throws for %s, which isn't a whole slot ID",
+    (id) => {
+      expect(() => confirmedFor(id)).toThrow(`Not a slot ID: ${id}`);
+    },
+  );
 });
