@@ -414,8 +414,8 @@ export interface UnclaimedTime {
   end: number;
 }
 
-/** "Dr" right before a period: that period ends no sentence (#320, r1/Q-2 edges). */
-const DR_BEFORE = /(?:^|[^A-Za-z])Dr$/;
+/** "Dr", as a word, right before a period: that period ends no sentence (#320, r1/Q-2 edges). */
+const DR_BEFORE = /\bDr$/;
 
 /** A clock time's dotted period ("a.m.", "p.m."): its periods are part of the time. */
 const DOTTED_PERIOD = /[ap]\./i;
@@ -433,16 +433,10 @@ const withoutSentencePeriod = (t: ClockTime): ClockTime =>
  * `withoutSentencePeriod`).
  */
 function sentenceEnds(text: string, times: readonly ClockTime[]): number[] {
+  const inTime = new Set(times.flatMap((t) => [...t.raw.matchAll(/\./g)].map((m) => t.index + m.index)));
   return [...text.matchAll(new RegExp(SENTENCE_BREAK.source, "g"))]
     .map((m) => m.index)
-    .filter(
-      (i) =>
-        text[i] !== "." ||
-        !(
-          DR_BEFORE.test(text.slice(Math.max(0, i - 3), i)) ||
-          times.some((t) => i > t.index && i < t.index + t.raw.length)
-        ),
-    );
+    .filter((i) => text[i] !== "." || !(DR_BEFORE.test(text.slice(0, i)) || inTime.has(i)));
 }
 
 /**
@@ -469,7 +463,7 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
       return {
         raw: t.raw,
         index: t.index,
-        start: (ends.findLast((i) => i < t.index) ?? -1) + 1,
+        start: Math.max(-1, ...ends.filter((i) => i < t.index)) + 1,
         end: after === undefined ? text.length : after + 1,
       };
     });

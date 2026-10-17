@@ -175,7 +175,7 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
     ],
     [
       'the periods inside "10:00 a.m." end no sentence',
-      "Dr. Haddad has 10:00 a.m. ET on Monday.",
+      "Monday has 9:00 a.m. ET, 1:00 p.m. ET and 1:30 PM ET.",
       "Dr. Haddad has 10:00 a.m. ET. Monday is full.",
       "10:00 a.m.",
       WEEKDAY,
@@ -310,6 +310,7 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
     "at 12:00 PM ET or later",
     "at 12:00 PM ET or earlier",
     "at 12:00 PM Eastern Time or later",
+    "before\t12:00 PM ET",
   ])("the bound %j needs no weekday", async (bound) => {
     expect(await onText(`Dr. Haddad has openings ${bound} that week.`)).toMatchObject({ status: "pass" });
   });
@@ -348,6 +349,54 @@ describe("each settled rule, with ET present, passes one fixture and fails anoth
       expect(await onText(text)).toMatchObject({ status: "fail", detail: lacks("10:00 AM", WEEKDAY, text) });
     },
   );
+
+  it.each([
+    [
+      'the period of a word that ends in "Dr" ends a sentence',
+      "Monday is with CDr. 10:00 AM ET is open.",
+      "10:00 AM ET is open.",
+    ],
+    [
+      'a period after an earlier "Dr" ends a sentence',
+      "Dr. Haddad is out Monday. 10:00 AM ET is open.",
+      "10:00 AM ET is open.",
+    ],
+    [
+      'a newline after "Dr" ends a sentence',
+      "Monday, see your Dr\n10:00 AM ET is open",
+      "10:00 AM ET is open",
+    ],
+    [
+      "a sentence ends at its mark, with nothing after it",
+      "10:00 AM ET is open.Monday is full.",
+      "10:00 AM ET is open.",
+    ],
+    [
+      "a word that ends in a bound word is no bound",
+      "Openings nearby 12:00 PM ET that week.",
+      "Openings nearby 12:00 PM ET that week.",
+    ],
+  ])("%s", async (_what, text, sentence) => {
+    const time = /\d+:\d\d [AP]M/.exec(sentence)?.[0] ?? "";
+    expect(await onText(text)).toMatchObject({ status: "fail", detail: lacks(time, WEEKDAY, sentence) });
+  });
+
+  it("a bound word that opens the text makes a bound", async () => {
+    expect(await onText("Before 12:00 PM ET works that week.")).toMatchObject({ status: "pass" });
+  });
+
+  it("a range start takes the ET of the time right after it, not a later one", async () => {
+    expect(
+      await onText("We're open Monday to Friday, 8:00 AM to 5:00 PM Eastern Time, not 6:00 PM ET."),
+    ).toMatchObject({ status: "pass" });
+  });
+
+  it("a range start whose end has no ET lacks ET", async () => {
+    expect(await onText("Monday, 8:00 AM to 5:00 PM.")).toMatchObject({
+      status: "fail",
+      detail: lacks("8:00 AM", "ET", "Monday, 8:00 AM to 5:00 PM."),
+    });
+  });
 
   it("an empty text, and a text with no clock time, pass", async () => {
     expect(await timesCheck([ASKS, assistant("")])).toMatchObject({ status: "pass" });
