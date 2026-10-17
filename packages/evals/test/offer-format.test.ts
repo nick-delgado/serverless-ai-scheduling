@@ -1,7 +1,8 @@
 /**
  * The grouped offer format (#236, r1/Q-2 (a), r2/Q-1 (a), r2/A-1) against the three checks that read it
  * (the last two also in the four `l1-offer-*` cases that reply in text, which opt into them, #282 r1/Q-2 (b)),
- * and against those cases' own checks, including #300's day line that stands alone on its line:
+ * and against those cases' own checks, including #300's day line that stands alone on its line (which #284
+ * gives `l1-offer-single-day` too):
  * - `no_hallucinated_slots` dates a listed time by the day line above it (#239's `headingListTimes`);
  * - `times_in_clinic_tz_with_weekday` takes that time's weekday from the day line, and wants ET on the
  *   time's own line, within 16 characters after it;
@@ -154,6 +155,12 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
     expect(l1Failures(id, text)).toEqual([]);
   });
 
+  it('l1-offer-single-day passes system.v7\'s own reply: a "that day" lead-in, the day line, and the remark line after the list (#284)', () => {
+    const v7Reply = `${TUE_LEE.replace("these openings:", "these openings that day:")}\nMore times are available later that day if you'd like. Would you like to book one of these?`;
+    expect(v7Reply).toContain("Dr. Lee has these openings that day:\nTuesday, October 13:\n");
+    expect(l1Failures("l1-offer-single-day", v7Reply)).toEqual([]);
+  });
+
   it("l1-offer-broad-next-week-searches passes one search per weekday", () => {
     const week = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"].map(perDay);
     expect(l1Failures("l1-offer-broad-next-week-searches", "", week)).toEqual([]);
@@ -167,6 +174,12 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
       "l1-offer-single-day",
       "the date in the lead-in too",
       TUE_LEE.replace("these openings:", "these openings on Tuesday, October 13:"),
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "a remark after the list that names the date without its weekday (the date-twice check alone)",
+      `${TUE_LEE}\nDr. Lee has more openings later on October 13.`,
       [MATCH_NONE],
     ],
     [
@@ -277,6 +290,30 @@ describe("a day line stands alone on its line in the offer-format L1 cases (#300
       [MATCH_NONE],
     ],
     [
+      "l1-offer-single-day",
+      "a lead-in that ends with the date, and no day line",
+      "Dr. Priya Lee has these openings on Tuesday, October 13:\n- 8:00 AM ET\n- 8:30 AM ET\n- 9:00 AM ET",
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "a list-marked day line",
+      TUE_LEE.replace("Tuesday, October 13:", "- Tuesday, October 13:"),
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "the times on the day line",
+      "Dr. Lee has these openings:\nTuesday, October 13: 8:00 AM ET, 8:30 AM ET, 9:00 AM ET",
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "a tab, then the times, on the day line",
+      "Dr. Lee has these openings:\nTuesday, October 13:\t8:00 AM ET, 8:30 AM ET, 9:00 AM ET",
+      [MATCH_NONE],
+    ],
+    [
       "l1-offer-multi-day",
       "a lead-in that ends with Tuesday's date, and no Tuesday day line",
       TWO_DAYS.replace("mornings:\nTuesday, October 13:", "mornings on Tuesday, October 13:"),
@@ -380,6 +417,7 @@ describe("a day line stands alone on its line in the offer-format L1 cases (#300
   it.each(
     (
       [
+        ["l1-offer-single-day", TUE_LEE],
         ["l1-offer-repeated-question", TUE_LEE],
         ["l1-offer-multi-day", TWO_DAYS],
         ["l1-offer-broad-next-week-spread", SPREAD],

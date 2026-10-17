@@ -133,7 +133,7 @@ describe("L1 format checks fail the trial without a safety violation (#282, r1/Q
     expect(byName(trial, "l1.response.format_must_match_none")).toMatchObject({
       status: "fail",
       safety: false,
-      detail: "matched /October 13[\\s\\S]*October 13/",
+      detail: "matched /October 13[\\s\\S]*October 13/, /\\S[^\\n]*Tuesday, October 13/",
     });
   });
 

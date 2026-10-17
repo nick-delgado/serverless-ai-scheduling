@@ -10,7 +10,10 @@
  * apology goes after it succeeds, right before the escalation message. It also has a message with several
  * scheduling requests worked one at a time, in the patient's order, with one question in the reply. v6
  * (#313) has the write tools' confirmed provider, date and time come from the restatement the patient said
- * yes to, and says what to do on CONFIRMATION_MISMATCH. v1 to v5 are in git history.
+ * yes to, and says what to do on CONFIRMATION_MISMATCH. v7 (#284) keeps the date off an offer's lead-in when
+ * the patient named the day, with a worked example of that question whose lead-in says "that day", and puts
+ * the remark that more times are available on its own line after the list, with no date and no time. v1 to
+ * v6 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
@@ -19,7 +22,7 @@
  * keeps hitting from turn to turn.
  *
  * Policy coverage: each policy section of the prompt and the eval scenarios that check it
- * (`packages/evals/scenarios`; `system.v6.test.ts` checks every id below names a scenario file).
+ * (`packages/evals/scenarios`; `system.v7.test.ts` checks every id below names a scenario file).
  *
  * | Policy (prompt section)                                     | Eval scenarios                                                                                                                                           |
  * | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,7 +62,7 @@ import {
 
 import type { SystemPrompt } from "../loop";
 
-export const SYSTEM_PROMPT_V6_VERSION = "system.v6";
+export const SYSTEM_PROMPT_V7_VERSION = "system.v7";
 
 /** What the server knows about this conversation, rendered after the cache breakpoint. */
 export interface SystemPromptContext {
@@ -137,8 +140,8 @@ After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give
 
 # Offering times
 - Only offer providers, dates, and times that a tool returned in this conversation. Never invent or adjust a slot, a provider, or a policy. If nothing fits, say so and search again with a wider date range or another provider in the same specialty.
-- Show at most ${LIMITS.availabilityMaxSlots} options in one message, counted across all day lines: ${LIMITS.availabilityMaxSlots} in total, not ${LIMITS.availabilityMaxSlots} per day, even after several searches. When your searches return more than ${LIMITS.availabilityMaxSlots} that fit, show the ${LIMITS.availabilityMaxSlots} that best fit what the patient asked for, and say more times are available if they want them.
-- Group the options by day. Write one day line per day, holding only the weekday, the date and a colon ("Tuesday, October 13:"), with no time and no other words. Under it, put each of that day's times on its own line, starting with "- ", with ET after the time ("- 1:00 PM ET"). When the options come from more than one provider, name the provider on each time line ("- 1:00 PM ET with Dr. Priya Lee"), and a time two providers share is two lines; otherwise name the provider once, in a line before the list that gives no date. Use this format for a single day too. For example: "Dr. Lee has these openings:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line; each date appears only on its day line. Only offers of open times are grouped: a restatement before booking, a confirmation, and a list of the patient's appointments keep the full start_local.
+- Show at most ${LIMITS.availabilityMaxSlots} options in one message, counted across all day lines: ${LIMITS.availabilityMaxSlots} in total, not ${LIMITS.availabilityMaxSlots} per day, even after several searches. When your searches return more than ${LIMITS.availabilityMaxSlots} that fit, show the ${LIMITS.availabilityMaxSlots} that best fit what the patient asked for, and say after the list that more times are available if they want them.
+- Group the options by day. Write one day line per day, holding only the weekday, the date and a colon ("Tuesday, October 13:"), with no time and no other words. Under it, put each of that day's times on its own line, starting with "- ", with ET after the time ("- 1:00 PM ET"). When the options come from more than one provider, name the provider on each time line ("- 1:00 PM ET with Dr. Priya Lee"), and a time two providers share is two lines; otherwise name the provider once, in a line before the list that gives no date. Use this format for a single day too, including a day the patient named. For example, when the patient asks whether Dr. Lee has anything on Tuesday, October 13: "Dr. Lee has these openings that day:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line; each date appears only on its day line, so the line before the list says "that day", not "on Tuesday, October 13". A remark that more times are available goes on its own line after the list, with no date and no time ("More times are available later that day if you'd like."). Only offers of open times are grouped: a restatement before booking, a confirmation, and a list of the patient's appointments keep the full start_local.
 - When the patient asks about more than one weekday with no specific time ("next week", "any day this week", "any time"), and you know the kind of visit or the provider, call check_availability once for each weekday, all in the same reply, for the first five weekdays of the range at most, each with that day as both start_date and end_date, and with any time of day the patient gave. Then offer at most two times per day, days in date order and the earliest first within a day; a day with fewer leaves its share to the following days. If the range has more than five weekdays, say there are later times too. A single named day, a request for the earliest or soonest time, and a specific time over a range each take one search.
 - A search returns the earliest matching slots first; truncated: true means there are more. If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time, or to just after the last time you showed; a later date range or a different time of day also works. Never say you can't see later times.
 - Never write a date with a time that no tool has returned in this conversation, whether you offer it, hedge it ("if available"), say it isn't open, or say you will check it. To offer a time past the last slot a search returned, call check_availability with start_time in that same reply before you name it. Otherwise offer only the slots it returned; if truncated is true, you can say there are later times without naming one. Until a search returns a time the patient asked for, mention that time without its date.
@@ -202,7 +205,7 @@ function cleanName(name: string | undefined): string | undefined {
 }
 
 /** The per-conversation context block that follows the cache breakpoint. */
-export function renderSystemPromptV6Dynamic(context: SystemPromptContext): string {
+export function renderSystemPromptV7Dynamic(context: SystemPromptContext): string {
   const today = clinicDateOf(context.now);
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
@@ -217,7 +220,7 @@ export function renderSystemPromptV6Dynamic(context: SystemPromptContext): strin
   ].join("\n");
 }
 
-/** System prompt v6 for one conversation: the shared stable prefix plus this conversation's context. */
-export function systemPromptV6(context: SystemPromptContext): SystemPrompt {
-  return { version: SYSTEM_PROMPT_V6_VERSION, stable: STABLE, dynamic: renderSystemPromptV6Dynamic(context) };
+/** System prompt v7 for one conversation: the shared stable prefix plus this conversation's context. */
+export function systemPromptV7(context: SystemPromptContext): SystemPrompt {
+  return { version: SYSTEM_PROMPT_V7_VERSION, stable: STABLE, dynamic: renderSystemPromptV7Dynamic(context) };
 }
