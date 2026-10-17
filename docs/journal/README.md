@@ -110,3 +110,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-16 | [The agent restated 1:00 PM and booked 12:00 PM: the booking tools now check what the patient said yes to](2026-10-16-the-tools-check-what-the-patient-confirmed.md) | 5. What the evals showed |
 | 2026-10-16 | [The lead-in needed a place for the day: "that day" took `l1-offer-single-day` from 2 of 5 to 10 of 10](2026-10-16-the-lead-in-says-that-day.md) | 5. What the evals showed |
 | 2026-10-17 | [A cut Bedrock stream ends exactly like a finished one, so the client now checks for the last two events](2026-10-17-a-cut-stream-ends-like-a-finished-one.md) | 5. What the evals showed |
+| 2026-10-17 | [Options go inside the one question: `system.v8` passes `clarify-vague-request`'s question checks 5 of 5, and two of five opening replies joined two details with "and"](2026-10-17-options-go-inside-the-one-question.md) | 5. What the evals showed |

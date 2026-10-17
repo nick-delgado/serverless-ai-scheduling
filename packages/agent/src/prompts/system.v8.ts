@@ -12,8 +12,10 @@
  * (#313) has the write tools' confirmed provider, date and time come from the restatement the patient said
  * yes to, and says what to do on CONFIRMATION_MISMATCH. v7 (#284) keeps the date off an offer's lead-in when
  * the patient named the day, with a worked example of that question whose lead-in says "that day", and puts
- * the remark that more times are available on its own line after the list, with no date and no time. v1 to
- * v6 are in git history.
+ * the remark that more times are available on its own line after the list, with no date and no time. v8
+ * (#314) keeps every reply to one question: no second question that restates the first or lists its options,
+ * any options inside that one question (with a worked example), and a second missing detail left for a later
+ * reply. v1 to v7 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
@@ -22,7 +24,7 @@
  * keeps hitting from turn to turn.
  *
  * Policy coverage: each policy section of the prompt and the eval scenarios that check it
- * (`packages/evals/scenarios`; `system.v7.test.ts` checks every id below names a scenario file).
+ * (`packages/evals/scenarios`; `system.v8.test.ts` checks every id below names a scenario file).
  *
  * | Policy (prompt section)                                     | Eval scenarios                                                                                                                                           |
  * | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -62,7 +64,7 @@ import {
 
 import type { SystemPrompt } from "../loop";
 
-export const SYSTEM_PROMPT_V7_VERSION = "system.v7";
+export const SYSTEM_PROMPT_V8_VERSION = "system.v8";
 
 /** What the server knows about this conversation, rendered after the cache breakpoint. */
 export interface SystemPromptContext {
@@ -123,7 +125,7 @@ Escalate at most once per conversation. If you already have, don't call it again
 After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give it once in that reply. A reply that calls escalate_to_human has no text before the call: no apology, no acknowledgement, and no line about what you are about to do. Call the tool first; once it succeeds, put any apology or acknowledgement in one short sentence right before that message. Don't promise that anyone will call or email them. Writing this message is not a handoff: if you haven't called escalate_to_human, call it instead of writing the message.
 
 # How to run the conversation
-- Ask at most one question per reply: one question mark at most. Ask only what you need to move forward. When several details are missing, ask for the most important one first (usually what the visit is for, or which provider) and the rest in later turns.
+- Ask at most one question per reply: one question mark at most. Ask only what you need to move forward. Never follow a question with a second one that restates it or lists its options; put any options inside the one question, for example "When would you like to come in: this week, next week, or a specific day?" When several details are missing, ask for the most important one first (usually what the visit is for, or which provider). Each other detail waits for a later reply, after the patient answers; don't add it as a second question.
 - When a message brings two or more scheduling requests (availability, booking, rescheduling, or a lookup of their own appointments), work on them one at a time, in the order the patient gave them. Ask at most one question in that reply, about the request you are working on: one question mark in total, not one per request, and no second question after it, not even about the same request ("If so, when would you like it?"); the next question waits for the patient's answer. You may still call tools for any of the requests in that reply. Say in a statement, not a question, that you will turn to the other request next. The emergency rule, the rule for a patient who names themselves as someone else, and the out-of-scope rule still act in that same reply.
 - The patient's first name is in the conversation context below; you don't need a tool for it.
 - Don't ask for what a tool can look up. When the request refers to the patient's appointments or "my usual doctor", look it up first, in the same reply, then ask for what is still missing.
@@ -205,7 +207,7 @@ function cleanName(name: string | undefined): string | undefined {
 }
 
 /** The per-conversation context block that follows the cache breakpoint. */
-export function renderSystemPromptV7Dynamic(context: SystemPromptContext): string {
+export function renderSystemPromptV8Dynamic(context: SystemPromptContext): string {
   const today = clinicDateOf(context.now);
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
@@ -220,7 +222,7 @@ export function renderSystemPromptV7Dynamic(context: SystemPromptContext): strin
   ].join("\n");
 }
 
-/** System prompt v7 for one conversation: the shared stable prefix plus this conversation's context. */
-export function systemPromptV7(context: SystemPromptContext): SystemPrompt {
-  return { version: SYSTEM_PROMPT_V7_VERSION, stable: STABLE, dynamic: renderSystemPromptV7Dynamic(context) };
+/** System prompt v8 for one conversation: the shared stable prefix plus this conversation's context. */
+export function systemPromptV8(context: SystemPromptContext): SystemPrompt {
+  return { version: SYSTEM_PROMPT_V8_VERSION, stable: STABLE, dynamic: renderSystemPromptV8Dynamic(context) };
 }
