@@ -1,6 +1,7 @@
 /**
  * Deterministic text heuristics shared by the graders. They're deliberately conservative: a check that
- * can't decide (no date next to a time, say) doesn't fire, and the LLM judge (#32) covers nuance.
+ * can't decide doesn't fire (`no_hallucinated_slots` grades no time without a date next to it, say), and the
+ * LLM judge (#32) covers nuance.
  */
 
 import { CLINIC } from "@sched/contracts";
@@ -269,6 +270,10 @@ const dated = (date: NamedDate, t: ClockTime): SlotMention => ({
   timeIndex: t.index,
 });
 
+/** A `dateTimeMentions` pair's own clock time: the last one that starts inside its `raw`. */
+const pairTime = (pair: DateTimeMention, times: readonly ClockTime[]): ClockTime =>
+  times.filter((t) => t.index < pair.index + pair.raw.length).reduce((_, t) => t);
+
 /**
  * The `dateTimeMentions` pairs, each followed by the later times in its sentence, which take its date
  * (#178, r1/Q-2 (a)): "Monday, November 2 at 9:00 AM and 11:30 AM" yields both. A range end (a time right
@@ -279,8 +284,7 @@ function pairsAndLaterTimes(text: string, times: readonly ClockTime[]): SlotMent
   const out: SlotMention[] = [];
   for (const pair of dateTimeMentions(text)) {
     const end = pair.index + pair.raw.length;
-    // The pair's own time is the last one that starts inside it.
-    const own = times.filter((t) => t.index < end).reduce((_, t) => t);
+    const own = pairTime(pair, times);
     out.push({ ...pair, time: own.time, timeIndex: own.index });
     // A pair holds one month-day: its gap can't cross another.
     for (const date of datesIn(pair.raw)) {
@@ -310,7 +314,8 @@ export interface HeadingListTime extends SlotMention {
  * list lines, and ends at the next line that names a month-day or at the first other non-blank line, so a
  * weekday-only line ("Tuesday:") ends it and gives no date. It walks every line, not only `listItemLines`,
  * because the blank, prose and heading lines decide the reach. It serves both the slot check (`slotMentions`)
- * and `times_in_clinic_tz_with_weekday` (#236, r2/Q-1 (a)), which reads each time's `heading` and `afterTime`.
+ * and `times_in_clinic_tz_with_weekday` (#236, r2/Q-1 (a)), which reads each time's `heading` and `afterTime`
+ * and grades every other clock time with `unclaimedTimes` (#320).
  */
 export function headingListTimes(
   text: string,
@@ -373,8 +378,21 @@ export function namesClinicHours(text: string, mention: SlotMention): boolean {
 
 /** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
-/** How far after a time, in characters, the clinic timezone may be written (`mentionHasWeekdayAndZone`). */
+/**
+ * How far after a time, in characters, the clinic timezone may be written (`zoneAfter`: a pair's time, a time
+ * listed under a day line, and an `unclaimedTimes` time, whose window also stops at the next clock time).
+ */
 const ZONE_WINDOW = 16;
+
+/**
+ * Whether the clinic timezone is within `ZONE_WINDOW` characters after the clock time (or pair) `t`, and before
+ * `limit` (#320, 0cdd23a/SPEC-1 (a): an `unclaimedTimes` time passes its next clock time's start, so a list time
+ * can't take a later time's ET).
+ */
+const zoneAfter = (text: string, t: { raw: string; index: number }, limit = text.length): boolean => {
+  const end = t.index + t.raw.length;
+  return ZONE_RE.test(text.slice(end, Math.min(end + ZONE_WINDOW, limit)));
+};
 
 /**
  * Whether a date+time mention carries a weekday and the clinic timezone (`ET`/`Eastern` within 16 characters
@@ -393,11 +411,121 @@ export function mentionHasWeekdayAndZone(
     return WEEKDAY_RE.test(mention.heading) && ZONE_RE.test(mention.afterTime.slice(0, ZONE_WINDOW));
   const floor = previous === undefined ? 0 : previous.index + previous.raw.length;
   const before = text.slice(Math.max(floor, mention.index - 40), mention.index + mention.raw.length);
-  const after = text.slice(
-    mention.index + mention.raw.length,
-    mention.index + mention.raw.length + ZONE_WINDOW,
-  );
-  return WEEKDAY_RE.test(before) && ZONE_RE.test(after);
+  return WEEKDAY_RE.test(before) && zoneAfter(text, mention);
+}
+
+/** A clock time, as written and where it starts, with where its ET window must stop: the next clock time's start. */
+interface WindowedTime {
+  raw: string;
+  index: number;
+  /** Undefined for the text's last clock time, whose window may run to the end of the text. */
+  limit?: number;
+}
+
+/** A clock time that neither a `dateTimeMentions` pair nor a day line (`headingListTimes`) claims (#320). */
+export interface UnclaimedTime extends WindowedTime {
+  /** The sentence that holds the time, trimmed. */
+  sentence: string;
+  /** The next clock time in the text, claimed or not: a range start's end (`unclaimedTimeLacks`). */
+  next?: WindowedTime;
+}
+
+/**
+ * "Dr", as a word, right before a period: that period ends no sentence (#320, r1/Q-2 edges; whole words only is
+ * #320's reading, accepted as 0cdd23a/SPEC-4 (a)).
+ */
+const DR_BEFORE = /\bDr$/;
+
+/** A clock time's dotted period ("a.m.", "p.m."): its periods are part of the time. */
+const DOTTED_PERIOD = /[ap]\./i;
+
+/**
+ * A clock time as written, less a period after a plain "AM" or "PM", which `CLOCK_TIME_SOURCE` takes in but which
+ * ends the sentence ("at 8:00 AM. Here's…"). A dotted "10:00 a.m." keeps its periods. This is #320's reading of
+ * r1/Q-2's edges, accepted as 0cdd23a/SPEC-4 (a).
+ */
+const withoutSentencePeriod = (t: ClockTime): ClockTime =>
+  t.raw.endsWith(".") && !DOTTED_PERIOD.test(t.raw) ? { ...t, raw: t.raw.slice(0, -1) } : t;
+
+/**
+ * Where sentences end in `text`, for `unclaimedTimes` (#320, r1/Q-2 edges): each `SENTENCE_END` character,
+ * except the period of "Dr." and a period inside a clock time ("10:00 a.m."; `times` are trimmed by
+ * `withoutSentencePeriod`).
+ */
+function sentenceEnds(text: string, times: readonly ClockTime[]): number[] {
+  const inTime = new Set(times.flatMap((t) => [...t.raw.matchAll(/\./g)].map((m) => t.index + m.index)));
+  return [...text.matchAll(new RegExp(SENTENCE_BREAK.source, "g"))]
+    .map((m) => m.index)
+    .filter((i) => text[i] !== "." || !(DR_BEFORE.test(text.slice(0, i)) || inTime.has(i)));
+}
+
+/**
+ * The clock times (`CLOCK_TIME_SOURCE`'s "h:mm AM/PM" only, r1/Q-4 (a)) of `text` that
+ * `times_in_clinic_tz_with_weekday` grades with `unclaimedTimeLacks` (#320, r1/Q-1 (a)): every one that isn't a
+ * `dateTimeMentions` pair's own time or a list-line time under a date heading (`headingListTimes`), wherever it
+ * is. That includes a pre-tool line, a lead-in, a closing question, a time before its date, a later time in a
+ * sentence, a list line outside a day line's reach, a bound, an echo, a held appointment and the clinic's hours.
+ * Each comes with its sentence (`sentenceEnds`). It dates nothing, so `slotMentions` and the slot check don't
+ * read it (r1/A-1).
+ */
+export function unclaimedTimes(text: string): UnclaimedTime[] {
+  const found = clockTimesIn(text);
+  const claimed = new Set([
+    ...dateTimeMentions(text).map((pair) => pairTime(pair, found).index),
+    ...headingListTimes(text, found).map((m) => m.timeIndex),
+  ]);
+  const times = found.map(withoutSentencePeriod);
+  const ends = sentenceEnds(text, times);
+  /** Where the ET window of the time at `i` stops: the next clock time's start (none for the last time). */
+  const limitOf = (i: number): number | undefined => times[i + 1]?.index;
+  return times.flatMap((t, i) => {
+    if (claimed.has(t.index)) return [];
+    const after = ends.find((e) => e >= t.index + t.raw.length);
+    const start = Math.max(-1, ...ends.filter((e) => e < t.index)) + 1;
+    const end = after === undefined ? text.length : after + 1;
+    const n = times[i + 1];
+    const next = n === undefined ? {} : { next: { raw: n.raw, index: n.index, limit: limitOf(i + 1) } };
+    return [
+      { raw: t.raw, index: t.index, limit: limitOf(i), sentence: text.slice(start, end).trim(), ...next },
+    ];
+  });
+}
+
+/** Stands for a weekday in a newly graded time's sentence: that exact phrase, any case (#320, r1/Q-2 edges). */
+const THAT_DAY = /\bthat day\b/i;
+/**
+ * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
+ * complete: a new wording needs a weekday until it is added here.
+ */
+const BOUND_BEFORE = /\b(?:before|after|from|until|till|by|starting at|up to)[ \t]+$/i;
+/**
+ * After a time, its ET and then "or later" or "or earlier" make it a bound too (#320, r1/Q-2 (c)). Reading
+ * "Eastern Time" as an ET spelling here is #320's reading, accepted as 0cdd23a/SPEC-4 (a).
+ */
+const BOUND_AFTER = new RegExp(`^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+or\\s+(?:later|earlier)\\b`, "i");
+/**
+ * The gap from a range start to its end (r1/Q-2 edges): only "to", "until", "till", "-" or "–" (`RANGE_END`),
+ * anchored at the gap's start so the range end is the very next time. The anchor is #320's reading, accepted as
+ * 0cdd23a/SPEC-4 (a).
+ */
+const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
+
+/**
+ * What an `unclaimedTimes` time lacks, or undefined (#320, r1/Q-2 (c)): ET within `ZONE_WINDOW` characters after
+ * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start (a time followed by only "to",
+ * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its
+ * sentence, unless the time is a bound (`BOUND_BEFORE`, `BOUND_AFTER`). "that week", "every day", "today" and
+ * "weekdays" are no weekday.
+ */
+export function unclaimedTimeLacks(text: string, t: UnclaimedTime): string | undefined {
+  const end = t.index + t.raw.length;
+  const rangeEnd = t.next !== undefined && RANGE_GAP.test(text.slice(end, t.next.index)) ? t.next : undefined;
+  if (!zoneAfter(text, t, t.limit) && (rangeEnd === undefined || !zoneAfter(text, rangeEnd, rangeEnd.limit)))
+    return "ET";
+  const bound = BOUND_BEFORE.test(text.slice(0, t.index)) || BOUND_AFTER.test(text.slice(end));
+  return bound || WEEKDAY_RE.test(t.sentence) || THAT_DAY.test(t.sentence)
+    ? undefined
+    : 'a weekday or "that day"';
 }
 
 /** The needles `text` lacks (case-insensitive): `contains_all` checks. */

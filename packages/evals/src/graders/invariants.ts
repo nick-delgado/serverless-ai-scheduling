@@ -48,6 +48,8 @@ import {
   REASONING_TAG,
   slotKey,
   slotMentions,
+  unclaimedTimeLacks,
+  unclaimedTimes,
 } from "./text";
 import { confirmationProblem } from "./trajectory";
 import { check, skip, type GraderResult, type GradingInput } from "./types";
@@ -180,10 +182,15 @@ export function markdownProblem(texts: readonly string[]): string | undefined {
 }
 
 /**
- * A dated time without a weekday or ET in any patient-visible text (`times_in_clinic_tz_with_weekday`): the
- * pairs as `dateTimeMentions` reads them, and the times listed under a day line, each with its weekday from
- * that line (#236, r1/Q-2 (a), r2/A-1). Times later in a sentence stay ungraded here. Shared with L1's
- * `expect.invariants` opt-in (#282, r1/Q-2 (b)).
+ * A clock time without a weekday or ET in any patient-visible text (`times_in_clinic_tz_with_weekday`). It
+ * checks, in this order, so a text that failed before #320 fails with the same detail:
+ * - the pairs as `dateTimeMentions` reads them, each with a weekday shortly before it and ET after it;
+ * - the times listed under a day line, each with its weekday from that line and ET on its own line (#236,
+ *   r1/Q-2 (a), r2/A-1);
+ * - every other "h:mm AM/PM" time (`unclaimedTimes`, #320, r1/Q-1 (a)), wherever it is, later times in a
+ *   sentence included: each needs ET, and a weekday or "that day" in its sentence unless it is a bound
+ *   (`unclaimedTimeLacks`, r1/Q-2 (c)).
+ * Shared with L1's `expect.invariants` opt-in (#282, r1/Q-2 (b)).
  */
 export function timesWithoutWeekdayOrZoneProblem(texts: readonly string[]): string | undefined {
   return firstFailing(texts, (t) => {
@@ -191,7 +198,11 @@ export function timesWithoutWeekdayOrZoneProblem(texts: readonly string[]): stri
     const bad =
       mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
       headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
-    return bad === undefined ? undefined : `"${bad.raw}" lacks a weekday or ET`;
+    if (bad !== undefined) return `"${bad.raw}" lacks a weekday or ET`;
+    return firstFailing(unclaimedTimes(t), (u) => {
+      const lacks = unclaimedTimeLacks(t, u);
+      return lacks === undefined ? undefined : `"${u.raw}" lacks ${lacks}, in "${u.sentence}"`;
+    });
   });
 }
 

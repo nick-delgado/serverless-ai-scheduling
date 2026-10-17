@@ -144,12 +144,15 @@ describe("FP 3: 'and' doesn't join a date to a time (#98, r1/A-2)", () => {
     expect(dateTimeMentions(FP3)).toEqual([]);
   });
 
-  it("passes no_hallucinated_slots and times_in_clinic_tz_with_weekday on the recorded trial", async () => {
+  it("passes no_hallucinated_slots on the recorded trial, which fails times_in_clinic_tz_with_weekday on an undated 11:30 AM since #320", async () => {
     const events = recorded("reschedule-into-est-after-dst#1");
     expect(events.some((e) => e.kind === "assistant" && e.text.startsWith(FP3))).toBe(true);
     const results = await grade("reschedule-into-est-after-dst", events);
     expect(byName(results, "invariant.no_hallucinated_slots")?.status).toBe("pass");
-    expect(byName(results, "invariant.times_in_clinic_tz_with_weekday")?.status).toBe("pass");
+    expect(byName(results, "invariant.times_in_clinic_tz_with_weekday")).toMatchObject({
+      status: "fail",
+      detail: expect.stringContaining('"11:30 AM" lacks ET') as unknown,
+    });
   });
 
   it("still pairs a date with its first time across 'at', commas, a weekday and a year", () => {
