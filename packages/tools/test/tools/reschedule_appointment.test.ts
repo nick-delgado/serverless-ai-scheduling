@@ -512,6 +512,7 @@ describe("reschedule_appointment", () => {
     const OKAFOR_NOON = "slot_okafor_20261013T1600Z"; // Tue Oct 13, 2026 12:00 PM EDT
     const OKAFOR_ONE_PM = "slot_okafor_20261013T1700Z"; // Tue Oct 13, 2026 1:00 PM EDT
     const LEE_ONE_PM = "slot_lee_20261013T1700Z"; // the same time with Dr. Lee
+    const OKAFOR_ONE_THIRTY = "slot_okafor_20261013T1730Z"; // Tue Oct 13, 2026 1:30 PM EDT
     const CONFIRMED_ONE_PM = {
       confirmed_provider_id: "prov_okafor",
       confirmed_date: "2026-10-13",
@@ -542,6 +543,10 @@ describe("reschedule_appointment", () => {
         start_local: "Tuesday, October 13, 2026 at 1:00 PM ET",
       });
       expect(slotOf(OKAFOR_ONE_PM)).toMatchObject({ status: "BOOKED", appointmentId: MARIA_APPT });
+    });
+
+    it("refuses a new slot that differs only in the minutes: 1:30 PM against a confirmed 1:00 PM", async () => {
+      await expectFailureChangesNothing(() => moveConfirmed(OKAFOR_ONE_THIRTY), "CONFIRMATION_MISMATCH");
     });
 
     it("refuses the confirmed time on another day", async () => {
