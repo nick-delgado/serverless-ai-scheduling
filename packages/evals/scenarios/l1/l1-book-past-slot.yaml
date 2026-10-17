@@ -40,7 +40,12 @@ context:
   - patient: "Yes, book it."
   - tool_call:
       tool: book_appointment
-      args: { slot_id: slot_alvarez_20261005T1400Z, reason: sore throat }
+      args:
+        slot_id: slot_alvarez_20261005T1400Z
+        confirmed_provider_id: prov_alvarez
+        confirmed_date: 2026-10-05
+        confirmed_time: "10:00"
+        reason: sore throat
   - tool_result:
       tool: book_appointment
       error:

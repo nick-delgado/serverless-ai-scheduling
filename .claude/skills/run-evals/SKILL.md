@@ -26,7 +26,7 @@ profile; if its SSO session expired, ask Nick to run `aws sso login --profile sc
 | Smoke cost on `sonnet-4.6`, k=1 | ≈ $0.06 | ≈ $0.36 with the judge (estimate ≈ $0.50) |
 | Counts towards | a diagnostic | PRD §7 task success and reliability |
 
-`--suite smoke` is the cases tagged `smoke` (8 per mode); `--suite full` is everything. A full scenario run
+`--suite smoke` is the cases tagged `smoke` (9 L1 cases and 8 scenarios); `--suite full` is everything. A full scenario run
 at k=3 is several dollars and about two hours at the 10 RPM Claude quota; don't start one without approval.
 
 ```bash

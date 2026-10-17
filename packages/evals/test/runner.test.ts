@@ -12,6 +12,7 @@ import {
   scriptedText,
   scriptedToolUse,
 } from "@sched/agent";
+import { confirmedFor } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -215,7 +216,12 @@ describe("runScenarioTrial: skips, errors, faults, limits", () => {
 
   it("fault call: all fails every call to the tool, with production's INTERNAL text", async () => {
     const book = (slot: string) =>
-      scriptedToolUse([{ name: "book_appointment", input: { slot_id: slot, reason: "lingering cold" } }]);
+      scriptedToolUse([
+        {
+          name: "book_appointment",
+          input: { slot_id: slot, ...confirmedFor(slot), reason: "lingering cold" },
+        },
+      ]);
     const r = await runScripted(
       "escalate-repeated-failure",
       [

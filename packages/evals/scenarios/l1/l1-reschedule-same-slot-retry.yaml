@@ -46,7 +46,12 @@ context:
   - patient: "Yes, move it."
   - tool_call:
       tool: reschedule_appointment
-      args: { appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, new_slot_id: slot_lee_20261014T1900Z }
+      args:
+        appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+        new_slot_id: slot_lee_20261014T1900Z
+        confirmed_provider_id: prov_lee
+        confirmed_date: 2026-10-14
+        confirmed_time: "15:00"
   - tool_result:
       tool: reschedule_appointment
       error:
@@ -55,7 +60,12 @@ context:
         hint: "Try once more. If it fails again, apologize and offer to connect the patient with the front desk."
   - tool_call:
       tool: reschedule_appointment
-      args: { appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY, new_slot_id: slot_lee_20261014T1900Z }
+      args:
+        appointment_id: appt_01JBX7Q2M3N4P5R6S7T8V9W0XY
+        new_slot_id: slot_lee_20261014T1900Z
+        confirmed_provider_id: prov_lee
+        confirmed_date: 2026-10-14
+        confirmed_time: "15:00"
   - tool_result:
       tool: reschedule_appointment
       result:

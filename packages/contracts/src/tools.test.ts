@@ -9,9 +9,10 @@ import {
   TOOLS,
   toolDefinitionsForModel,
   toolInputJsonSchema,
+  ToolErrorCode,
   type ToolName,
 } from "./tools";
-import { EXAMPLES } from "./testing/examples";
+import { confirmedFor, EXAMPLES } from "./testing/examples";
 
 const INPUT_EXAMPLES: Record<ToolName, unknown> = {
   find_providers: EXAMPLES.FindProvidersInput,
@@ -163,4 +164,60 @@ describe("input validation rules", () => {
       false,
     );
   });
+
+  it.each(["book_appointment", "reschedule_appointment"] as const)(
+    "%s requires confirmed_provider_id, confirmed_date and confirmed_time in their formats (#313)",
+    (name) => {
+      const input = TOOLS[name].input;
+      const example = INPUT_EXAMPLES[name] as Record<string, unknown>;
+      expect(input.safeParse(example).success).toBe(true);
+      for (const field of ["confirmed_provider_id", "confirmed_date", "confirmed_time"]) {
+        const { [field]: _dropped, ...without } = example;
+        expect(input.safeParse(without).success, `without ${field}`).toBe(false);
+      }
+      for (const [field, bad] of [
+        ["confirmed_provider_id", "Dr. Okafor"],
+        ["confirmed_date", "October 13"],
+        ["confirmed_date", "2026-10-32"],
+        ["confirmed_time", "1:00 PM"],
+        ["confirmed_time", "9:00"],
+      ] as const) {
+        expect(input.safeParse({ ...example, [field]: bad }).success, `${field}: ${bad}`).toBe(false);
+      }
+      expect(toolInputJsonSchema(name).required).toEqual(
+        expect.arrayContaining(["confirmed_provider_id", "confirmed_date", "confirmed_time"]),
+      );
+    },
+  );
+
+  it("has an error code for a write whose slot isn't the confirmed one (#313)", () => {
+    expect(ToolErrorCode.options).toContain("CONFIRMATION_MISMATCH");
+  });
+});
+
+describe("confirmedFor (test helper, #313)", () => {
+  it("reads the provider and the clinic-local date and HH:MM time off a slot ID, in EDT and in EST", () => {
+    expect(confirmedFor("slot_okafor_20261013T1700Z")).toEqual({
+      confirmed_provider_id: "prov_okafor",
+      confirmed_date: "2026-10-13",
+      confirmed_time: "13:00",
+    });
+    expect(confirmedFor("slot_lee_20261102T1400Z")).toEqual({
+      confirmed_provider_id: "prov_lee",
+      confirmed_date: "2026-11-02",
+      confirmed_time: "09:00",
+    });
+  });
+
+  it("matches the book_appointment example", () => {
+    const { slot_id, reason: _reason, ...confirmed } = EXAMPLES.BookAppointmentInput;
+    expect(confirmedFor(slot_id)).toEqual(confirmed);
+  });
+
+  it.each(["tuesday at 1", "xslot_lee_20261013T1700Z", "slot_lee_20261013T1700Zx"])(
+    "throws for %s, which isn't a whole slot ID",
+    (id) => {
+      expect(() => confirmedFor(id)).toThrow(`Not a slot ID: ${id}`);
+    },
+  );
 });

@@ -15,14 +15,21 @@
  *      moved" would tell the patient they lost an appointment they hold (PR #67 review, STD-3). The repo's
  *      own retry answer (`alreadyRescheduled`, #77), for a concurrent retry that read the appointment after
  *      the first move or (#207) lost the race to it in DynamoDB, gets the same answer.
- *   3. Clock rules (tool-level, need ctx.clock): an appointment that has already started can't be moved,
- *      and the new slot must start after now.
- *   4. The new slot must be in the same specialty (owner decision, PR #67 review SPEC-2): a different kind
+ *   3. An appointment that has already started can't be moved (a clock rule, ctx.clock).
+ *   4. The new slot must be the one the patient confirmed (#313, ADR-009's 2026-10-16 amendment): its
+ *      provider, clinic-local date and HH:MM start must equal `confirmed_provider_id`, `confirmed_date` and
+ *      `confirmed_time` (`matchesConfirmation`, shared with book_appointment; r1/Q-1 (c), A-4). Only the new
+ *      slot is checked, not the appointment being moved (r1/Q-4 (a)). It runs after the new slot's read and
+ *      before the new-slot clock rule (r1/A-2), and a mismatch answers CONFIRMATION_MISMATCH with nothing
+ *      changed. A retry already at the new slot was answered in step 2, whatever it passes; the repo's
+ *      concurrent-retry answer is reached only by a call that passes this check.
+ *   5. The new slot must start after now (a clock rule).
+ *   6. The new slot must be in the same specialty (owner decision, PR #67 review SPEC-2): a different kind
  *      of visit needs a new reason, which only book_appointment collects.
- *   5. Another provider is allowed, but a provider who isn't accepting new patients only for an existing
+ *   7. Another provider is allowed, but a provider who isn't accepting new patients only for an existing
  *      patient: one with a COMPLETED or BOOKED appointment with that provider (the appointment being moved
  *      counts), the same rule as book_appointment (PR #67 review, SPEC-1).
- *   Rule breaks answer NOT_ALLOWED, as opposed to SLOT_UNAVAILABLE (someone else holds the slot), and the
+ *   Rule breaks in steps 3 and 5 to 7 answer NOT_ALLOWED, as opposed to SLOT_UNAVAILABLE (someone else holds the slot), and the
  *   hint points the model at the next step. The returned summary names the new provider so the model can
  *   say so.
  */
@@ -31,6 +38,7 @@ import type { Appointment } from "@sched/contracts";
 import { formatClinicDateTime, startsAfter } from "../clock";
 import { toolFail, toolOk, type ToolHandler, type ToolHandlerResult } from "../handler";
 import { TOOL_ERROR_CODE_FOR, type RescheduleFailureReason } from "../repos/types";
+import { confirmationMismatch, matchesConfirmation } from "./book_appointment";
 import { toAppointmentSummary } from "./summaries";
 
 const LIST_HINT =
@@ -103,6 +111,9 @@ export const rescheduleAppointment: ToolHandler<"reschedule_appointment"> = asyn
 
   const slot = await ctx.repos.slots.get(input.new_slot_id);
   if (!slot) return fail("SLOT_NOT_FOUND");
+  if (!matchesConfirmation(slot, input)) {
+    return confirmationMismatch(slot, "The original appointment is unchanged.");
+  }
   if (!startsAfter(slot.startUtc, now)) {
     return toolFail(
       "NOT_ALLOWED",

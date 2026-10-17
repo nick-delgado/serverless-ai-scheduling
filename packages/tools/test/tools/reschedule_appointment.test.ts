@@ -1,5 +1,5 @@
 import { TOOLS, type ToolError, type ToolOutput } from "@sched/contracts";
-import { EXAMPLES } from "@sched/contracts/testing";
+import { confirmedFor, EXAMPLES } from "@sched/contracts/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildClinicFixture, FIXTURE_PATIENT_IDS } from "../../fixtures";
@@ -76,7 +76,7 @@ describe("reschedule_appointment", () => {
     });
   };
   const move = (patientId: string, appointmentId: string, newSlotId: string) =>
-    run(patientId, { appointment_id: appointmentId, new_slot_id: newSlotId });
+    run(patientId, { appointment_id: appointmentId, new_slot_id: newSlotId, ...confirmedFor(newSlotId) });
 
   /** Runs `attempt` and asserts it failed with `code` and a hint, leaving the whole store unchanged. */
   const expectFailureChangesNothing = async (
@@ -144,7 +144,11 @@ describe("reschedule_appointment", () => {
       await executor.execute({
         id: "toolu_test",
         name: "reschedule_appointment",
-        input: { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST },
+        input: {
+          appointment_id: MARIA_APPT,
+          new_slot_id: LEE_NOV_2_10AM_EST,
+          ...confirmedFor(LEE_NOV_2_10AM_EST),
+        },
       }),
     );
     expect(out.appointment.start_utc).toBe("2026-11-02T15:00:00Z");
@@ -246,7 +250,12 @@ describe("reschedule_appointment", () => {
     it("rejects a model-supplied patient_id", async () => {
       await expectFailureChangesNothing(
         () =>
-          run(MARIA, { appointment_id: WALTER_APPT, new_slot_id: LEE_NOV_2_10AM_EST, patient_id: WALTER }),
+          run(MARIA, {
+            appointment_id: WALTER_APPT,
+            new_slot_id: LEE_NOV_2_10AM_EST,
+            ...confirmedFor(LEE_NOV_2_10AM_EST),
+            patient_id: WALTER,
+          }),
         "INVALID_INPUT",
       );
     });
@@ -254,7 +263,12 @@ describe("reschedule_appointment", () => {
 
   it("rejects invalid input", async () => {
     await expectFailureChangesNothing(
-      () => run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: "tomorrow at 3" }),
+      () =>
+        run(MARIA, {
+          appointment_id: MARIA_APPT,
+          new_slot_id: "tomorrow at 3",
+          ...confirmedFor(LEE_NOV_2_10AM_EST),
+        }),
       "INVALID_INPUT",
     );
   });
@@ -393,9 +407,14 @@ describe("reschedule_appointment", () => {
       };
       const before = repos.snapshot();
       const causes: unknown[] = [];
-      const result = await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: newSlotId }, stubbed, {
-        onInternalError: (error) => causes.push(error),
-      });
+      const result = await run(
+        MARIA,
+        { appointment_id: MARIA_APPT, new_slot_id: newSlotId, ...confirmedFor(newSlotId) },
+        stubbed,
+        {
+          onInternalError: (error) => causes.push(error),
+        },
+      );
       expect(errorOf(result).code).toBe("INTERNAL");
       // The handler's own guard, not a TypeError from reading a null provider.
       expect(String(causes[0])).toMatch(guardMessage);
@@ -430,7 +449,11 @@ describe("reschedule_appointment", () => {
       },
     };
     const out = outputOf(
-      await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST }, stubbed),
+      await run(
+        MARIA,
+        { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST, ...confirmedFor(LEE_NOV_2_10AM_EST) },
+        stubbed,
+      ),
     );
     expect(out).toMatchObject({ previous_start_local: null, already_rescheduled: true });
     expect(out.appointment.start_local).toBe("Monday, November 2, 2026 at 10:00 AM ET");
@@ -467,11 +490,83 @@ describe("reschedule_appointment", () => {
         appointments: { ...repos.appointments, reschedule: () => Promise.resolve({ ok: false, reason }) },
       };
       const error = errorOf(
-        await run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: LEE_NOV_2_10AM_EST }, stubbed),
+        await run(
+          MARIA,
+          {
+            appointment_id: MARIA_APPT,
+            new_slot_id: LEE_NOV_2_10AM_EST,
+            ...confirmedFor(LEE_NOV_2_10AM_EST),
+          },
+          stubbed,
+        ),
       );
       expect(error.code).toBe(code);
       expect(error.message).toMatch(/unchanged|Nothing was changed/);
       expect(error.hint).toBeTruthy();
+    });
+  });
+
+  // #313: the new slot must be the provider, date and time the patient said yes to (r1/Q-1 (c), A-4); only
+  // the new slot is checked (r1/Q-4 (a)).
+  describe("confirmed new slot (#313)", () => {
+    const OKAFOR_NOON = "slot_okafor_20261013T1600Z"; // Tue Oct 13, 2026 12:00 PM EDT
+    const OKAFOR_ONE_PM = "slot_okafor_20261013T1700Z"; // Tue Oct 13, 2026 1:00 PM EDT
+    const LEE_ONE_PM = "slot_lee_20261013T1700Z"; // the same time with Dr. Lee
+    const OKAFOR_ONE_THIRTY = "slot_okafor_20261013T1730Z"; // Tue Oct 13, 2026 1:30 PM EDT
+    const CONFIRMED_ONE_PM = {
+      confirmed_provider_id: "prov_okafor",
+      confirmed_date: "2026-10-13",
+      confirmed_time: "13:00",
+    };
+    const moveConfirmed = (newSlotId: string, confirmed: Record<string, string> = CONFIRMED_ONE_PM) =>
+      run(MARIA, { appointment_id: MARIA_APPT, new_slot_id: newSlotId, ...confirmed });
+
+    it("refuses a new slot at another time than the patient confirmed: the appointment and both slots are unchanged", async () => {
+      const error = await expectFailureChangesNothing(
+        () => moveConfirmed(OKAFOR_NOON),
+        "CONFIRMATION_MISMATCH",
+      );
+      expect(error).toEqual({
+        code: "CONFIRMATION_MISMATCH",
+        message:
+          "That slot is Tuesday, October 13, 2026 at 12:00 PM ET, and its provider or time isn't the one the patient confirmed. The original appointment is unchanged.",
+        hint: "Find the slot_id for the provider and time the patient confirmed in earlier check_availability results, or search again. Restate that time, get a new yes, then call again.",
+      });
+      expect(slotOf(OKAFOR_NOON)).toMatchObject({ status: "OPEN" });
+      expect(slotOf(MARIA_SLOT)).toMatchObject({ status: "BOOKED", appointmentId: MARIA_APPT });
+    });
+
+    it("moves the appointment to the new slot that matches the confirmed time", async () => {
+      const out = outputOf(await moveConfirmed(OKAFOR_ONE_PM));
+      expect(out.appointment).toMatchObject({
+        provider_id: "prov_okafor",
+        start_local: "Tuesday, October 13, 2026 at 1:00 PM ET",
+      });
+      expect(slotOf(OKAFOR_ONE_PM)).toMatchObject({ status: "BOOKED", appointmentId: MARIA_APPT });
+    });
+
+    it("refuses a new slot that differs only in the minutes: 1:30 PM against a confirmed 1:00 PM", async () => {
+      await expectFailureChangesNothing(() => moveConfirmed(OKAFOR_ONE_THIRTY), "CONFIRMATION_MISMATCH");
+    });
+
+    it("refuses the confirmed time on another day", async () => {
+      await expectFailureChangesNothing(
+        () => moveConfirmed(OKAFOR_ONE_PM, { ...CONFIRMED_ONE_PM, confirmed_date: "2026-10-14" }),
+        "CONFIRMATION_MISMATCH",
+      );
+    });
+
+    it("refuses a new slot at the confirmed date and time with another provider (r1/A-4)", async () => {
+      await expectFailureChangesNothing(() => moveConfirmed(LEE_ONE_PM), "CONFIRMATION_MISMATCH");
+    });
+
+    it("answers a retry already at the new slot as already_rescheduled, whatever it passes (r1/A-2)", async () => {
+      const out = outputOf(await moveConfirmed(MARIA_SLOT));
+      expect(out.already_rescheduled).toBe(true);
+    });
+
+    it("answers CONFIRMATION_MISMATCH before the new-slot clock rule (r1/A-2)", async () => {
+      await expectFailureChangesNothing(() => moveConfirmed(LEE_OCT_5_8AM), "CONFIRMATION_MISMATCH");
     });
   });
 });
