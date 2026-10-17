@@ -6,6 +6,7 @@
 import type { z } from "zod";
 
 import { clinicDateOf, toZonedParts } from "../dates";
+import { parseSlotId } from "../ids";
 import type * as C from "../index";
 
 const PATIENT_ID = "3f6c1a2e-8b4d-4c1a-9f2e-6d5b7a8c9e01";
@@ -197,7 +198,7 @@ export const EXAMPLES = {
   GetPatientProfileInput: {} satisfies In<"GetPatientProfileInput">,
   BookAppointmentInput: {
     slot_id: SLOT_ID,
-    confirmed_provider_id: "prov_lee",
+    confirmed_provider_id: PROVIDER_ID,
     confirmed_date: "2026-10-13",
     confirmed_time: "14:30",
     reason: "Mole check",
@@ -205,7 +206,7 @@ export const EXAMPLES = {
   RescheduleAppointmentInput: {
     appointment_id: APPOINTMENT_ID,
     new_slot_id: "slot_lee_20261015T1400Z", // Thu Oct 15, 2026 10:00 AM ET
-    confirmed_provider_id: "prov_lee",
+    confirmed_provider_id: PROVIDER_ID,
     confirmed_date: "2026-10-15",
     confirmed_time: "10:00",
   } satisfies In<"RescheduleAppointmentInput">,
@@ -339,26 +340,24 @@ export const EXAMPLES = {
 } as const;
 
 /** The `confirmed_*` fields of book_appointment and reschedule_appointment (#313). */
-export interface ConfirmedSlot {
-  confirmed_provider_id: string;
-  confirmed_date: string;
-  confirmed_time: string;
-}
+/** The `confirmed_*` fields of book_appointment and reschedule_appointment (#313), typed from the schema. */
+export type ConfirmedSlot = Pick<
+  In<"BookAppointmentInput">,
+  "confirmed_provider_id" | "confirmed_date" | "confirmed_time"
+>;
 
 /**
- * The `confirmed_*` fields that match a slot, read off its ID (`slot_<provider>_<YYYYMMDDTHHMMZ>`), so a
- * test that isn't about the confirmed-slot check (#313) passes the slot the patient confirmed. The tests of
- * the check itself spell their values out.
+ * The `confirmed_*` fields that match a slot, read off its ID with `parseSlotId`, so a test that isn't about
+ * the confirmed-slot check (#313) passes the slot the patient confirmed. The tests of the check itself spell
+ * their values out.
  */
 export function confirmedFor(slotId: string): ConfirmedSlot {
-  const m = /^slot_(.+)_(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})Z$/.exec(slotId);
-  if (!m) throw new Error(`Not a slot ID: ${slotId}`);
-  const [, provider, y, mo, d, h, mi] = m;
-  const startUtc = `${y}-${mo}-${d}T${h}:${mi}:00Z`;
-  const { hour, minute } = toZonedParts(new Date(startUtc));
+  const slot = parseSlotId(slotId);
+  if (!slot) throw new Error(`Not a slot ID: ${slotId}`);
+  const { hour, minute } = toZonedParts(new Date(slot.startUtc));
   return {
-    confirmed_provider_id: `prov_${provider}`,
-    confirmed_date: clinicDateOf(startUtc),
+    confirmed_provider_id: slot.providerId,
+    confirmed_date: clinicDateOf(slot.startUtc),
     confirmed_time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
   };
 }
