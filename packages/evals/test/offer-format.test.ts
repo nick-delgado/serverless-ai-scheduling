@@ -105,17 +105,21 @@ describe("times_in_clinic_tz_with_weekday reads ET on the listed time's own line
   });
 });
 
-describe("times_in_clinic_tz_with_weekday leaves out what isn't a listed time (r1/Q-2 (a) edges)", () => {
-  it("doesn't grade a list after a prose line, which ends the day line's reach", async () => {
+describe("times_in_clinic_tz_with_weekday grades what isn't a listed time too (#320, r1/Q-1 (a), reversing #236's r1/Q-2 (a) edges)", () => {
+  it("grades a list after a prose line, which ends the day line's reach, on its own line", async () => {
     expect(await weekdayCheck("Tuesday, October 13:\nHere they are:\n- 1:00 PM")).toMatchObject({
-      status: "pass",
+      status: "fail",
+      detail: '"1:00 PM" lacks ET, in "- 1:00 PM"',
     });
   });
 
-  it("doesn't grade a later time in a sentence: only the slot check dates it", async () => {
+  it("grades a later time in a sentence, which the slot check dates too", async () => {
     expect(
       await weekdayCheck("Dr. Lee has Tuesday, October 13 at 1:00 PM ET and 1:30 PM. Would either work?"),
-    ).toMatchObject({ status: "pass" });
+    ).toMatchObject({
+      status: "fail",
+      detail: '"1:30 PM" lacks ET, in "Dr. Lee has Tuesday, October 13 at 1:00 PM ET and 1:30 PM."',
+    });
   });
 });
 
@@ -167,9 +171,19 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
   });
 });
 
+/**
+ * Each settled check of the offer-format L1 cases fails on its own (#236, r1/Q-4 (a)). A weekday-only line
+ * ("Tuesday:") is no day line, so since #320 (r1/Q-1 (a) edges) its listed times fail the ET check too: their
+ * weekday is read from their own line.
+ */
 describe("each settled check of the offer-format L1 cases fails on its own (#236, r1/Q-4 (a))", () => {
   it.each<FailingReply>([
-    ["l1-offer-single-day", "no day line", TUE_LEE.replace("Tuesday, October 13:", "Tuesday:"), [CONTAINS]],
+    [
+      "l1-offer-single-day",
+      "no day line",
+      TUE_LEE.replace("Tuesday, October 13:", "Tuesday:"),
+      [CONTAINS, ET],
+    ],
     [
       "l1-offer-single-day",
       "the date in the lead-in too",
@@ -192,13 +206,13 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
       "l1-offer-multi-day",
       "no Tuesday day line",
       TWO_DAYS.replace("Tuesday, October 13:", "Tuesday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     [
       "l1-offer-multi-day",
       "no Wednesday day line",
       TWO_DAYS.replace("Wednesday, October 14:", "Wednesday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     ["l1-offer-multi-day", "October 13 twice", `${TWO_DAYS}\nOctober 13 is the earlier day.`, [MATCH_NONE]],
     ["l1-offer-multi-day", "October 14 twice", `${TWO_DAYS}\nOctober 14 is the later day.`, [MATCH_NONE]],
@@ -206,25 +220,25 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
       "l1-offer-broad-next-week-spread",
       "no Monday day line",
       SPREAD.replace("Monday, October 12:", "Monday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     [
       "l1-offer-broad-next-week-spread",
       "no Tuesday day line",
       SPREAD.replace("Tuesday, October 13:", "Tuesday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     [
       "l1-offer-broad-next-week-spread",
       "no Wednesday day line",
       SPREAD.replace("Wednesday, October 14:", "Wednesday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     [
       "l1-offer-repeated-question",
       "no day line",
       TUE_LEE.replace("Tuesday, October 13:", "Tuesday:"),
-      [CONTAINS],
+      [CONTAINS, ET],
     ],
     ...[
       "Same times as above:",
@@ -471,8 +485,16 @@ describe("the offer-format L1 cases grade ET and the option count without a safe
   });
 });
 
-describe("the recorded trials under the day-line reading (#236, r2/Q-1 (a))", () => {
-  it("none of the 20 recorded trials fails times_in_clinic_tz_with_weekday", async () => {
-    expect(await failing("times_in_clinic_tz_with_weekday")).toEqual([]);
+describe("the recorded trials under the reading of every clock time (#320, r1/A-5)", () => {
+  it("7 of the 20 recorded trials fail times_in_clinic_tz_with_weekday, each on a time that isn't a pair's or a listed one", async () => {
+    expect(await failing("times_in_clinic_tz_with_weekday")).toEqual([
+      "availability-cardiology-est-week#1",
+      "availability-derm-next-week-mornings#1",
+      "book-derm-next-week-afternoon#1",
+      "book-multi-constraint#1",
+      "clarify-two-requests-one-message#1",
+      "reschedule-into-est-after-dst#1",
+      "reschedule-single-appointment#1",
+    ]);
   }, 120_000);
 });
