@@ -155,6 +155,12 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
     expect(l1Failures(id, text)).toEqual([]);
   });
 
+  it('l1-offer-single-day passes system.v6\'s own reply: a "that day" lead-in, the day line, and the remark line after the list (#284)', () => {
+    const v6Reply = `${TUE_LEE.replace("these openings:", "these openings that day:")}\nMore times are available later that day if you'd like. Would you like to book one of these?`;
+    expect(v6Reply).toContain("Dr. Lee has these openings that day:\nTuesday, October 13:\n");
+    expect(l1Failures("l1-offer-single-day", v6Reply)).toEqual([]);
+  });
+
   it("l1-offer-broad-next-week-searches passes one search per weekday", () => {
     const week = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"].map(perDay);
     expect(l1Failures("l1-offer-broad-next-week-searches", "", week)).toEqual([]);
@@ -168,6 +174,12 @@ describe("each settled check of the offer-format L1 cases fails on its own (#236
       "l1-offer-single-day",
       "the date in the lead-in too",
       TUE_LEE.replace("these openings:", "these openings on Tuesday, October 13:"),
+      [MATCH_NONE],
+    ],
+    [
+      "l1-offer-single-day",
+      "a remark after the list that names the date without its weekday (the date-twice check alone)",
+      `${TUE_LEE}\nDr. Lee has more openings later on October 13.`,
       [MATCH_NONE],
     ],
     [
@@ -299,12 +311,6 @@ describe("a day line stands alone on its line in the offer-format L1 cases (#300
       "l1-offer-single-day",
       "a tab, then the times, on the day line",
       "Dr. Lee has these openings:\nTuesday, October 13:\t8:00 AM ET, 8:30 AM ET, 9:00 AM ET",
-      [MATCH_NONE],
-    ],
-    [
-      "l1-offer-single-day",
-      "a remark after the list that names the date without its weekday (the date-twice check alone)",
-      `${TUE_LEE}\nDr. Lee has more openings later on October 13.`,
       [MATCH_NONE],
     ],
     [
