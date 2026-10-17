@@ -56,5 +56,5 @@ The readiness review settled the route and the scope of both rules (Q-1 (a), Q-2
 
 ## What's next
 
-- #293: times written outside an offer list (pre-tool lines, closing questions) leave out "ET".
+- #293: times written outside an offer list (pre-tool lines, closing questions) leave out "ET". **Later (2026-10-17):** #293 took `system.v9` (PR #319); see [Every undated time still left out "ET"](2026-10-17-every-undated-time-still-left-out-et.md).
 - #251 (first-text latency) and #234 bump the prompt next, from `system.v5`. **Later (2026-10-16):** #313 took `system.v6` (PR #315) and #284 `system.v7` (PR #311), each touching only `prompts/` for the bump; see [the "that day" entry](2026-10-16-the-lead-in-says-that-day.md).

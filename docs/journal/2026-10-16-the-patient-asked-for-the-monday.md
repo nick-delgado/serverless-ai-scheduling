@@ -41,4 +41,4 @@ No test or `npm run mutate` table comes with the change (r1/A-5): the YAML isn't
 ## What's next
 
 - #306: carry the patient's time of day into searches over other dates.
-- #293: the missing "ET" outside offer lists, which failed this run's fifth trial.
+- #293: the missing "ET" outside offer lists, which failed this run's fifth trial. **Later (2026-10-17):** #293 took `system.v9` (PR #319); see [Every undated time still left out "ET"](2026-10-17-every-undated-time-still-left-out-et.md).

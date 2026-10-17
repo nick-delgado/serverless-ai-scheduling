@@ -42,5 +42,5 @@ The readiness review on #313 asked its questions, and Nick [took its recommendat
 
 ## What's next
 
-- Merge order with the other prompt bumps (#293, #234, #251): whichever lands later renumbers its prompt.
+- Merge order with the other prompt bumps (#293, #234, #251): whichever lands later renumbers its prompt. **Later (2026-10-17):** #314 took `system.v8` (PR #318) and #293 `system.v9` (PR #319); see [Every undated time still left out "ET"](2026-10-17-every-undated-time-still-left-out-et.md).
 - The size budget for tool definitions is nearly spent; the next contracts change that adds a field should expect to trim descriptions or raise the cap with Nick.
