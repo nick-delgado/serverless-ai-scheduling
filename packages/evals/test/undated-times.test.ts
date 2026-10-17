@@ -432,6 +432,17 @@ describe("the new reading leaves pairs and day-line times to their own rule (r1/
     expect(unclaimedTimes(text).map((t) => t.raw)).toEqual(["1:30 PM", "3:00 PM"]);
   });
 
+  it("a pair without ET fails on its own window", async () => {
+    expect(await onText("Monday, October 19 at 10:00 AM works for us")).toMatchObject({
+      status: "fail",
+      detail: '"October 19 at 10:00 AM" lacks a weekday or ET',
+    });
+  });
+
+  it("a pair's window doesn't stop at the next clock time: only a newly graded time's does (0cdd23a/SPEC-1 (a))", async () => {
+    expect(await onText("Monday, October 19 at 9:30 AM, 10:00 AM ET.")).toMatchObject({ status: "pass" });
+  });
+
   it("reports a failing pair before a failing new time, though the new time comes first", async () => {
     expect(await onText("Let me check 2:00 PM.\nOctober 13 at 1:00 PM ET")).toMatchObject({
       status: "fail",
