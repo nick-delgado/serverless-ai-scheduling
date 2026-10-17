@@ -23,7 +23,7 @@ import {
   verdictMarkdown,
 } from "./eval-gate";
 import { gitRepo, logsTo, type TestRepo } from "./test/git-repo";
-import { block, children, credentialsOf, entries, stepsOf } from "./test/yaml-text";
+import { block, children, credentialsOf, entries, member, stepsOf } from "./test/yaml-text";
 
 describe("isGatedPath (r1/Q-3 (b))", () => {
   it.each([
@@ -458,6 +458,21 @@ describe("the eval gate workflow (.github/workflows/evals.yml; 91c9fc5/TEST-303 
     expect(children(block(/^jobs:$/, workflow))).toEqual(["  gate:"]);
     expect(entries(job)).toMatchObject({ name: "Eval gate" });
     expect(entries(block(/^\s+permissions:$/, job))).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  it("a new push cancels the PR's own older run, and only that PR's (the per-PR workflow group)", () => {
+    expect(entries(block(/^concurrency:$/, workflow))).toEqual({
+      group: "evals-${{ github.event.pull_request.number }}",
+      "cancel-in-progress": "true",
+    });
+  });
+
+  it("queues every gate job repository-wide, one at a time, keeping each pending one (#304)", () => {
+    expect(member(job, "concurrency")).toEqual({
+      group: "eval-gate-bedrock",
+      "cancel-in-progress": "false",
+      queue: "max",
+    });
   });
 
   it("runs every step after the plan that reaches AWS or Bedrock only when the plan says so", () => {

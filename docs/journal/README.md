@@ -105,3 +105,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-16 | [The judge agrees with Nick on 42 of 49 calls, and passes every reply he failed](2026-10-16-the-judge-agrees-but-passes-every-reply-nick-failed.md) | 5. What the evals showed |
 | 2026-10-16 | [A prompt bump now stays in `prompts/`: the tests outside it ask the factory for the version](2026-10-16-a-prompt-bump-stays-in-prompts.md) | 5. What the evals showed |
 | 2026-10-16 | [A lead-in that ends with the date is not a day line: three offer cases now want the day alone on its line](2026-10-16-a-lead-in-that-ends-with-the-date-is-not-a-day-line.md) | 5. What the evals showed |
+| 2026-10-16 | [Eval gate jobs from different PRs now wait in one queue instead of sharing the Bedrock quota](2026-10-16-eval-gate-jobs-wait-in-one-queue.md) | 5. What the evals showed |
