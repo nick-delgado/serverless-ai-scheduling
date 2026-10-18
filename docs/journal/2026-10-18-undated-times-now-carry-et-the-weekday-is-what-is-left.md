@@ -40,6 +40,15 @@ The runs:
 
 r1/Q-3 (a)'s bar was at most 1 of 15. Neither run 2 nor run 4 met it. Nick accepted the result as it stands for this issue ([decision on #321](https://github.com/nick-delgado/serverless-ai-scheduling/issues/321#issuecomment-6245857206)): the ET half is fixed, the four smoke cases the Eval gate runs fell from 5 of 24 failing trials on `system.v9` to 1 of 12 in run 4, and the rest is one pattern in a full-suite case. #326 takes that pattern: a lead-in that covers several days names no time.
 
+### The Eval gate
+
+The gate runs the smoke suite at k=1 against the `system.v9` baseline, which Q-4 (a) left as it is, so each run prints a prompt-version warning and no more.
+
+- [Run 39099141456](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39099141456) at `ccf2a4a`: L1 passed 9 of 9, scenario 7 of 8. `clarify-vague-request` regressed on `invariant.times_in_clinic_tz_with_weekday`: "More times are available each day if 8:00 AM ET doesn't work." (ET present, no weekday).
+- [Run 39105206427](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39105206427) at `2989ba5`: L1 passed 9 of 9, scenario 7 of 8. `book-pt-after-dst-est` regressed on the same check: "Let me check physical therapy availability at 8:00 AM ET for the first week of November." (ET present, no weekday).
+
+Each run alone is inside FR-041's one regressed case per mode; together they are two different cases in scenario mode, so CLAUDE.md asks for a decision line. Nick accepted both ([`2989ba5/GATE`](https://github.com/nick-delgado/serverless-ai-scheduling/pull/327#issuecomment-6247100379)) and accepted in advance, for the next gate run, scenario regressions on this check alone with ET in each failing sentence, no safety violation, no error or budget stop and no L1 regression. Gate runs after these are recorded in the PR body.
+
 The agent also counted three things the grader doesn't see (A-9), over runs 2 and 4. No time written without minutes ("10 AM") appeared in either run. No month-day appeared in a closing question in either run. A month-day appeared in a line before a tool call 6 times in run 2 and once in run 4: in run 2, two of the six were "the week of October 19" beside a time (a date the prompt forbids there), and the other four, and run 4's one, were an appointment the tool had returned, which carries its date. "That day" appeared in no line before a tool call.
 
 ## Why we chose what we chose
@@ -65,4 +74,4 @@ The agent also counted three things the grader doesn't see (A-9), over runs 2 an
 - #326: a lead-in covering several days names no time (blocked by this issue). Its rewrite of the offer rule also adds the pointer to the bullet that this entry says is missing.
 - #328: a test that keeps the prompt's bound-word list and the grader's `BOUND_BEFORE` and `BOUND_AFTER` in step.
 - #234 and #251 take the next prompt version and keep these rules unless they measure better ones.
-- The Eval gate on this PR measures the four smoke cases at k=1 against the `system.v9` baseline, which Q-4 (a) left as it is.
+- Both gate runs above regressed a scenario case on the time check with ET present, one case each. Later gate runs on this PR are recorded in the PR body, not here.
