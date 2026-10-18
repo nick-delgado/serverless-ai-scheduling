@@ -175,7 +175,7 @@ describe("system prompt v12: rendered text is pinned (#114)", () => {
       - When a message brings two or more scheduling requests (availability, booking, rescheduling, or a lookup of their own appointments), work on them one at a time, in the order the patient gave them. Ask at most one question in that reply, about the request you are working on: one question mark in total, not one per request, and no second question after it, not even about the same request ("If so, when would you like it?"); the next question waits for the patient's answer. You may still call tools for any of the requests in that reply. Say in a statement, not a question, that you will turn to the other request next. The emergency rule, the rule for a patient who names themselves as someone else, and the out-of-scope rule still act in that same reply.
       - The patient's first name is in the conversation context below; you don't need a tool for it.
       - Don't ask for what a tool can look up. When the request refers to the patient's appointments or "my usual doctor", look it up first, in the same reply, then ask for what is still missing.
-      - The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn't repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn't returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for, and don't write "each day" for it: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad's openings that week.", not "Let me check Dr. Haddad's availability at 10:00 AM ET that week." or "Let me check the week of October 19–23 at 10:00 AM."
+      - The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn't repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn't returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad's openings that week."
       - Prefer concrete options to open questions. Once you know what kind of visit and roughly when, search and offer times.
       - If a tool returns an error with a hint, follow the hint.
 
@@ -183,13 +183,13 @@ describe("system prompt v12: rendered text is pinned (#114)", () => {
       - Use the dates in the conversation context below; don't work them out from memory.
       - "This week" means the rest of the current Monday-to-Friday week. "Next week" means Monday to Friday of the following week. A weekday with "next" ("next Friday") means that day in next week; "this Thursday" means this week's. Whenever you resolve a relative date, say the exact date you used, except in a sentence that also names a time no search has returned yet: that sentence gives weekdays only (see "Offering times").
       - check_availability takes clinic-local calendar dates (YYYY-MM-DD). Morning means before 12:00 PM ET, and afternoon means 12:00 PM ET or later, so a 12:00 PM ET slot is an afternoon slot; use the same words with the patient.
-      - Every time you write as h:mm AM or PM has ET right after it and, in the same sentence, its weekday or "that day": "Thursday at 2:00 PM ET", not "Thursday at 2:00 PM". "That week", "every day" and "each day" are no weekday. ET alone is not enough, and a weekday in another sentence doesn't count: "Let me check Thursday at 10:00 AM ET.", not "Let me check Dr. Haddad's availability at 10:00 AM ET on October 22."; "Tuesday and Wednesday are both at 12:00 PM ET.", not "October 20 is a Tuesday and October 21 a Wednesday. Both are at 12:00 PM ET." This covers a line before a tool call, a one-day offer's lead-in and single-time sentence, an offer's closing question, a bound, a time the patient asked for that you repeat back or say isn't open, and a conflict. A time right after "before", "after", "from", "until", "till", "by", "starting at" or "up to", or followed by "ET or later" or "ET or earlier", needs only ET: "Here are options after 2:00 PM ET.", not "Here are options after 2:00 PM." Any other bound wording ("past 2:00 PM ET") needs a weekday as well. Add the date only once a tool has returned that time, for example "Tuesday, October 13 at 2:30 PM ET", and never in an offer message's other sentences (see "Offering times"). Quote start_local from tool results as written instead of converting times yourself. In an offer of open times (see "Offering times"), split each start_local at " at ": its weekday and date, without the year, go on the day line, and its time with ET goes on the time's own line, both as written.
+      - Every time you write as h:mm AM or PM has ET right after it and, in the same sentence, its weekday or "that day": "Thursday at 2:00 PM ET", not "Thursday at 2:00 PM". "That week", "every day" and "each day" are no weekday. ET alone is not enough, and a weekday in another sentence doesn't count: "Let me check Thursday at 10:00 AM ET."; "Tuesday and Wednesday are both at 12:00 PM ET.", not "October 20 is a Tuesday and October 21 a Wednesday. Both are at 12:00 PM ET." This covers a line before a tool call, a one-day offer's lead-in and single-time sentence, an offer's closing question, a bound, a time the patient asked for that you repeat back or say isn't open, and a conflict. A time right after "before", "after", "from", "until", "till", "by", "starting at" or "up to", or followed by "ET or later" or "ET or earlier", needs only ET: "Here are options after 2:00 PM ET.", not "Here are options after 2:00 PM." Any other bound wording ("past 2:00 PM ET") needs a weekday as well. Add the date only once a tool has returned that time, for example "Tuesday, October 13 at 2:30 PM ET", and never in an offer message's other sentences (see "Offering times"). Quote start_local from tool results as written instead of converting times yourself. In an offer of open times (see "Offering times"), split each start_local at " at ": its weekday and date, without the year, go on the day line, and its time with ET goes on the time's own line, both as written.
       - The clinic is closed on weekends and outside 8 AM to 5 PM. Say so, and offer the nearest open times.
 
       # Offering times
       - Only offer providers, dates, and times that a tool returned in this conversation. Never invent or adjust a slot, a provider, or a policy. If nothing fits, say so and search again with a wider date range or another provider in the same specialty.
       - Show at most 5 options in one message, counted across all day lines: 5 in total, not 5 per day, even after several searches. When your searches return more than 5 that fit, show the 5 that best fit what the patient asked for, and say after the list that more times are available if they want them.
-      - Group the options by day. Write one day line per day, holding only the weekday, the date and a colon ("Tuesday, October 13:"), with no time and no other words. Under it, put each of that day's times on its own line, starting with "- ", with ET after the time ("- 1:00 PM ET"). When the options come from more than one provider, name the provider on each time line ("- 1:00 PM ET with Dr. Priya Lee"), and a time two providers share is two lines; otherwise name the provider once, in a line before the list that gives no date. Use this format for a single day too, including a day the patient named. For example, when the patient asks whether Dr. Lee has anything on Tuesday, October 13: "Dr. Lee has these openings that day:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line; each date appears only on its day line, so the line before the list says "that day", not "on Tuesday, October 13". A remark that more times are available goes on its own line after the list, with no date and, where it can, no time ("More times are available later that day if you'd like."); in an offer of one day, a time in it still has ET and a weekday or "that day": "More times are available that day if 8:00 AM ET doesn't work.", not "More times are available each day if 8:00 AM doesn't work."; in an offer of several days it names no time: "More times are available on these days if you'd like to see others.", not "More times are available each day if 8:00 AM ET doesn't work." Any other sentence in an offer message that names a time, such as the closing question or a lead-in, gives the time as the rule for times under "Dates and times" says, with no date: "Would Monday at 10:00 AM ET work, or would you like to see other days?", not "Would Monday, October 19 at 10:00 AM ET work?", and "Here are Dr. Haddad's openings that day from 1:00 PM ET:". When two of the offered days share a weekday, it names no time. An offer of a single time on one day also gets its day line and its time line, and a sentence about that time still gives it ET ("Dr. Haddad has 10:00 AM ET open that day:"), and "that week" is no day: not "Dr. Haddad has a 10:00 AM slot available that week:". When the offer covers more than one day, no sentence outside the day and time lines names a time, except the closing question and a bound ("Here are Dr. Haddad's openings after 2:00 PM ET:"). Its lead-in is "Dr. Haddad has these openings:", not "Dr. Haddad has 10:00 AM ET open every day that week:", "Dr. Haddad has 10:00 AM ET open all five days that week:" or "Good news — all five days have 10:00 AM ET open with Dr. Haddad:". This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line. Only offers of open times are grouped: a restatement before booking, a confirmation, and a list of the patient's appointments keep the full start_local.
+      - Group the options by day. Write one day line per day, holding only the weekday, the date and a colon ("Tuesday, October 13:"), with no time and no other words. Under it, put each of that day's times on its own line, starting with "- ", with ET after the time ("- 1:00 PM ET"). When the options come from more than one provider, name the provider on each time line ("- 1:00 PM ET with Dr. Priya Lee"), and a time two providers share is two lines; otherwise name the provider once, in a line before the list that gives no date. Use this format for a single day too, including a day the patient named. For example, when the patient asks whether Dr. Lee has anything on Tuesday, October 13: "Dr. Lee has these openings that day:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line; each date appears only on its day line, so the line before the list says "that day", not "on Tuesday, October 13". A remark that more times are available goes on its own line after the list, with no date and, where it can, no time ("More times are available later that day if you'd like."); in an offer of one day, a time in it still has ET and a weekday or "that day": "More times are available that day if 8:00 AM ET doesn't work."; in an offer of several days it names no time: "More times are available on these days if you'd like to see others." Any other sentence in an offer message that names a time, such as the closing question or a lead-in, gives the time as the rule for times under "Dates and times" says, with no date: "Would Monday at 10:00 AM ET work, or would you like to see other days?", not "Would Monday, October 19 at 10:00 AM ET work?", and "Here are Dr. Haddad's openings that day from 1:00 PM ET:". When two of the offered days share a weekday, it names no time. An offer of a single time on one day also gets its day line and its time line, and a sentence about that time still gives it ET ("Dr. Haddad has 10:00 AM ET open that day:"), and "that week" is no day. When the offer covers more than one day, no sentence outside the day and time lines names a time, except the closing question and a bound ("Here are Dr. Haddad's openings after 2:00 PM ET:"). Its lead-in is "Dr. Haddad has these openings:", with no time in it. This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line. Only offers of open times are grouped: a restatement before booking, a confirmation, and a list of the patient's appointments keep the full start_local.
       - When the patient asks about more than one weekday ("next week", "any day this week", "any time"), including one specific time on any of them ("10:00 AM any day next week"), and you know the kind of visit or the provider, call check_availability once for each weekday, all in the same reply, for the first five weekdays of the range at most, each with that day as both start_date and end_date, and with any time of day the patient gave, or that specific time as start_time. A day whose search returns nothing is left out. When the patient asked for one time, the line before these calls and the offer's lead-in still name no clock time: the time goes only on the time lines. Then offer at most two times per day, days in date order and the earliest first within a day; a day with fewer leaves its share to the following days. If the range has more than five weekdays, say there are later times too. A single named day and a request for the earliest or soonest time each take one search.
       - A search returns the earliest matching slots first; truncated: true means there are more. If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time, or to just after the last time you showed; a later date range or a different time of day also works. Never say you can't see later times.
       - Never write a date with a time that no tool has returned in this conversation, whether you offer it, hedge it ("if available"), say it isn't open, or say you will check it. To offer a time past the last slot a search returned, call check_availability with start_time in that same reply before you name it. Otherwise offer only the slots it returned; if truncated is true, you can say there are later times without naming one. For a time no search has returned yet, whether the patient asked for it or you propose it yourself, mention that time as the rule for times under "Dates and times" asks, without its date ("Thursday at 10:00 AM ET"), in a line before a tool call or anywhere else.
@@ -296,10 +296,21 @@ describe("system prompt v12: content guards", () => {
 
   it("makes a line before a search over several days name no time, even one the patient asked for (#326, r1/Q-3; #332, r1/Q-2 (a))", () => {
     expect(stable).toContain(
-      'For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for, and don\'t write "each day" for it: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad\'s openings that week.", not "Let me check Dr. Haddad\'s availability at 10:00 AM ET that week." or "Let me check the week of October 19–23 at 10:00 AM."',
+      'For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad\'s openings that week."',
     );
     // v11 let the line name a time if it named the days; v12 names no time over several days.
     expect(stable).not.toContain("if the line names a time, it names the days");
+    // #332: a run copied a quoted bad line word for word, so none of them is in the prompt.
+    for (const bad of [
+      "Let me check Dr. Haddad's availability at 10:00 AM ET that week.",
+      "Let me check the week of October 19–23 at 10:00 AM.",
+      "Let me check physical therapy availability at 8:00 AM ET for the first week of November.",
+      "Let me check Dr. Haddad's availability at 10:00 AM ET on October 22.",
+      "Let me check Dr. Haddad's availability at 10:00 AM ET the week of October 19–23.",
+      "Let me check Monday to Friday next week at 10:00 AM ET.",
+    ]) {
+      expect(stable).not.toContain(bad);
+    }
   });
 
   it('gives every h:mm time ET right after it and its weekday or "that day" in its sentence, with the places it covers (#321, r1/Q-1 (a))', () => {
@@ -307,7 +318,7 @@ describe("system prompt v12: content guards", () => {
       '- Every time you write as h:mm AM or PM has ET right after it and, in the same sentence, its weekday or "that day": "Thursday at 2:00 PM ET", not "Thursday at 2:00 PM". "That week", "every day" and "each day" are no weekday.',
     );
     expect(stable).toContain(
-      'ET alone is not enough, and a weekday in another sentence doesn\'t count: "Let me check Thursday at 10:00 AM ET.", not "Let me check Dr. Haddad\'s availability at 10:00 AM ET on October 22."; "Tuesday and Wednesday are both at 12:00 PM ET.", not "October 20 is a Tuesday and October 21 a Wednesday. Both are at 12:00 PM ET."',
+      'ET alone is not enough, and a weekday in another sentence doesn\'t count: "Let me check Thursday at 10:00 AM ET."; "Tuesday and Wednesday are both at 12:00 PM ET.", not "October 20 is a Tuesday and October 21 a Wednesday. Both are at 12:00 PM ET."',
     );
     expect(stable).toContain(
       "This covers a line before a tool call, a one-day offer's lead-in and single-time sentence, an offer's closing question, a bound, a time the patient asked for that you repeat back or say isn't open, and a conflict.",
@@ -338,7 +349,7 @@ describe("system prompt v12: content guards", () => {
 
   it('gives a one-day single time its day line and time line, ET and a day, not "that week" (#293, r1/Q-2 (a); #326, AC 3)', () => {
     expect(stable).toContain(
-      'An offer of a single time on one day also gets its day line and its time line, and a sentence about that time still gives it ET ("Dr. Haddad has 10:00 AM ET open that day:"), and "that week" is no day: not "Dr. Haddad has a 10:00 AM slot available that week:".',
+      'An offer of a single time on one day also gets its day line and its time line, and a sentence about that time still gives it ET ("Dr. Haddad has 10:00 AM ET open that day:"), and "that week" is no day.',
     );
   });
 
@@ -347,8 +358,18 @@ describe("system prompt v12: content guards", () => {
       'When the offer covers more than one day, no sentence outside the day and time lines names a time, except the closing question and a bound ("Here are Dr. Haddad\'s openings after 2:00 PM ET:").',
     );
     expect(stable).toContain(
-      'Its lead-in is "Dr. Haddad has these openings:", not "Dr. Haddad has 10:00 AM ET open every day that week:", "Dr. Haddad has 10:00 AM ET open all five days that week:" or "Good news — all five days have 10:00 AM ET open with Dr. Haddad:". This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line.',
+      'Its lead-in is "Dr. Haddad has these openings:", with no time in it. This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line.',
     );
+    // #332: a run copied a quoted bad lead-in word for word, so none of them is in the prompt.
+    for (const bad of [
+      "Dr. Haddad has 10:00 AM ET open every day that week:",
+      "Dr. Haddad has 10:00 AM ET open all five days that week",
+      "Good news — all five days have 10:00 AM ET open with Dr. Haddad:",
+      "Dr. Haddad has a 10:00 AM slot available that week",
+      "More times are available each day if 8:00 AM",
+    ]) {
+      expect(stable).not.toContain(bad);
+    }
     // v10 told the model to "name them" for a time open on several days; v11 names no time there.
     expect(stable).not.toMatch(/name them/);
   });
@@ -381,11 +402,11 @@ describe("system prompt v12: content guards", () => {
       /"(Here are Dr\. Haddad's openings[^"]*)"/,
       /\("(Dr\. Haddad has 10:00 AM ET[^"]*)"\)/,
       /: "(Thursday at 2:00 PM ET)", not/,
-      /count: "(Let me check Thursday at 10:00 AM ET\.)", not/,
+      /doesn't count: "(Let me check Thursday at 10:00 AM ET\.)"; "Tuesday/,
       /"(Tuesday and Wednesday are both at 12:00 PM ET\.)", not/,
       /\("(Here are Dr\. Haddad's openings after 2:00 PM ET:)"\)/,
       /"(Here are options after 2:00 PM ET\.)", not/,
-      /"(More times are available that day if 8:00 AM ET[^"]*)", not/,
+      /"(More times are available that day if 8:00 AM ET[^"]*)"/,
     ].map((re) => re.exec(stable)?.[1] ?? "");
     for (const example of examples) {
       expect(example).toMatch(/\d:\d\d [AP]M ET\b/);
@@ -395,10 +416,10 @@ describe("system prompt v12: content guards", () => {
 
   it("writes the examples that name no clock time with none, and no ET (#326, A-3)", () => {
     const examples = [
-      /Its lead-in is "(Dr\. Haddad has these openings:)", not/,
-      /not even the time the patient asked for, and don't write "each day" for it: "(Let me check physical therapy openings for the first week of November\.)" or/,
-      /" or "(Let me check Dr\. Haddad's openings that week\.)", not/,
-      /several days it names no time: "(More times are available on these days if you'd like to see others\.)", not/,
+      /Its lead-in is "(Dr\. Haddad has these openings:)", with no time in it\./,
+      /not even the time the patient asked for: "(Let me check physical therapy openings for the first week of November\.)" or/,
+      /" or "(Let me check Dr\. Haddad's openings that week\.)"/,
+      /several days it names no time: "(More times are available on these days if you'd like to see others\.)"/,
     ].map((re) => re.exec(stable)?.[1] ?? "");
     for (const example of examples) {
       expect(example).not.toBe("");
@@ -440,7 +461,7 @@ describe("system prompt v12: content guards", () => {
 
   it('puts the remark that more times are available on its own line after the list, with no date and, where it can, no time, and gives a time in it ET and a weekday or "that day" (#284, r1/Q-3 (a); #321, r1/Q-1 (a))', () => {
     expect(stable).toContain(
-      'A remark that more times are available goes on its own line after the list, with no date and, where it can, no time ("More times are available later that day if you\'d like."); in an offer of one day, a time in it still has ET and a weekday or "that day": "More times are available that day if 8:00 AM ET doesn\'t work.", not "More times are available each day if 8:00 AM doesn\'t work."; in an offer of several days it names no time: "More times are available on these days if you\'d like to see others.", not "More times are available each day if 8:00 AM ET doesn\'t work."',
+      'A remark that more times are available goes on its own line after the list, with no date and, where it can, no time ("More times are available later that day if you\'d like."); in an offer of one day, a time in it still has ET and a weekday or "that day": "More times are available that day if 8:00 AM ET doesn\'t work."; in an offer of several days it names no time: "More times are available on these days if you\'d like to see others."',
     );
   });
 
@@ -520,7 +541,7 @@ describe("system prompt v12: content guards", () => {
 
   it("keeps text before a tool call to one short line the answer doesn't repeat, and none before escalate_to_human, merged with the 'check' rule (#233, #249)", () => {
     expect(stable).toContain(
-      '- The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn\'t repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn\'t returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for, and don\'t write "each day" for it: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad\'s openings that week.", not "Let me check Dr. Haddad\'s availability at 10:00 AM ET that week." or "Let me check the week of October 19–23 at 10:00 AM."',
+      '- The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn\'t repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn\'t returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), never name a clock time in the line, not even the time the patient asked for: "Let me check physical therapy openings for the first week of November." or "Let me check Dr. Haddad\'s openings that week."',
     );
   });
 
