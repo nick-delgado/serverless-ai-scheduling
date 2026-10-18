@@ -97,7 +97,7 @@ describe("clarify-unsupported-specialty's text rules (#248)", () => {
     expect(needles).toHaveLength(Object.keys(SPECIALTY_LABELS).length);
   });
 
-  it("lists every phrase of the spec's minimum, curly forms included", () => {
+  it("lists the 16 phrases of the spec's minimum, curly forms included", () => {
     expect(NOT_OFFERED.response_contains_any).toEqual(expect.arrayContaining(MINIMUM_PHRASES));
     expect(MINIMUM_PHRASES).toHaveLength(16);
   });
