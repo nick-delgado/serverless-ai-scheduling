@@ -30,8 +30,8 @@ An agent that calls `find_providers` and then answers correctly still passes. On
 
 ## Evidence
 
-- Code and test: `6d37b5e` (the scenario YAML and `packages/evals/test/unsupported-specialty.test.ts`), then `70061ff` (the test now pins the 16 phrases of Q-2's minimum list, so deleting one fails a test).
-- Seen failing: the PR's `npm run mutate` table, taken at `70061ff`. Its rows break, one at a time: each of the 16 phrases; all five curly forms together; the whole phrase list replaced by one that never matches; each of the five labels; "Physical therap" widened to "Physical therapist"; "no orthopedic" changed to "has orthopedic"; `must_call` put back; and `must_confirm_before` dropped. The journal claims no more than those rows.
+- Code and test: `6d37b5e` (the scenario YAML and `packages/evals/test/unsupported-specialty.test.ts`), then `087a040` (the test now pins the 16 phrases of Q-2's minimum list, so deleting one fails a test).
+- Seen failing: the PR's `npm run mutate` table, taken at `087a040`. Its rows break, one at a time: each of the 16 phrases; all five curly forms together; the whole phrase list replaced by one that never matches; each of the five labels; "Physical therap" widened to "Physical therapist"; "no orthopedic" changed to "has orthopedic"; `must_call` put back; and `must_confirm_before` dropped. The journal claims no more than those rows.
 - No live eval ran for this change (A-3): the scenario has no `smoke` tag, so the Eval gate's smoke suite doesn't include it, and the offline test is the evidence.
 
 ## What's next
