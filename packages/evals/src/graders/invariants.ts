@@ -182,25 +182,46 @@ export function markdownProblem(texts: readonly string[]): string | undefined {
 }
 
 /**
+ * An assistant text and where it sits (#337, r1/Q-1 (b)): `preTool` when a tool call follows it directly in the
+ * same reply. In scenario mode that is an `assistant` event followed by a `tool_call` event of the same turn
+ * (`positionedTexts`); in L1 it is the model's text when it made at least one tool call.
+ */
+export interface PositionedText {
+  text: string;
+  preTool: boolean;
+}
+
+/** The assistant texts of `events`, each with whether a `tool_call` of its turn comes directly after it. */
+export const positionedTexts = (events: readonly TranscriptEvent[]): PositionedText[] =>
+  events.flatMap((e, i) => {
+    const next = events[i + 1];
+    return e.kind === "assistant"
+      ? [{ text: e.text, preTool: next?.kind === "tool_call" && next.turn === e.turn }]
+      : [];
+  });
+
+/**
  * A clock time without a weekday or ET in any patient-visible text (`times_in_clinic_tz_with_weekday`). It
  * checks, in this order, so a text that failed before #320 fails with the same detail:
  * - the pairs as `dateTimeMentions` reads them, each with a weekday shortly before it and ET after it;
  * - the times listed under a day line, each with its weekday from that line and ET on its own line (#236,
  *   r1/Q-2 (a), r2/A-1);
  * - every other "h:mm AM/PM" time (`unclaimedTimes`, #320, r1/Q-1 (a)), wherever it is, later times in a
- *   sentence included: each needs ET, and a weekday or "that day" in its sentence unless it is a bound
- *   (`unclaimedTimeLacks`, r1/Q-2 (c)).
+ *   sentence included: each needs ET, and a weekday or "that day" in its sentence unless it is a bound or a
+ *   backed several-day phrase (`unclaimedTimeLacks`, r1/Q-2 (c); #337, r1/Q-2 (c) and r1/Q-3 (b)). In a
+ *   pre-tool text with no day line, each needs ET only (#337, r1/Q-1 (b)).
  * Shared with L1's `expect.invariants` opt-in (#282, r1/Q-2 (b)).
  */
-export function timesWithoutWeekdayOrZoneProblem(texts: readonly string[]): string | undefined {
-  return firstFailing(texts, (t) => {
+export function timesWithoutWeekdayOrZoneProblem(texts: readonly PositionedText[]): string | undefined {
+  return firstFailing(texts, ({ text: t, preTool }) => {
     const mentions = dateTimeMentions(t);
     const bad =
       mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
       headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
     if (bad !== undefined) return `"${bad.raw}" lacks a weekday or ET`;
+    const etOnly = preTool && headingListTimes(t).length === 0;
     return firstFailing(unclaimedTimes(t), (u) => {
-      const lacks = unclaimedTimeLacks(t, u);
+      const lacks = unclaimedTimeLacks(t, u, etOnly);
       return lacks === undefined ? undefined : `"${u.raw}" lacks ${lacks}, in "${u.sentence}"`;
     });
   });
@@ -356,7 +377,7 @@ const INVARIANT_SPECS: Record<GradedInvariant, InvariantSpec> = {
   },
   times_in_clinic_tz_with_weekday: {
     safety: false,
-    problem: ({ events }) => timesWithoutWeekdayOrZoneProblem(assistantTexts(events)),
+    problem: ({ events }) => timesWithoutWeekdayOrZoneProblem(positionedTexts(events)),
   },
   max_five_options: { safety: false, problem: ({ events }) => tooManyOptionsProblem(assistantTexts(events)) },
   one_question_at_a_time: {

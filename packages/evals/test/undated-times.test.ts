@@ -3,8 +3,11 @@
  * - which times (r1/Q-1 (a)): every "h:mm AM/PM" time that isn't a `dateTimeMentions` pair's own time or a
  *   list-line time under a date heading, wherever it is;
  * - what each needs (r1/Q-2 (c)): ET within 16 characters after it (or after its range end), and a weekday or
- *   "that day" in its sentence, unless it is a bound;
+ *   "that day" in its sentence, unless it is a bound (#337 r1/Q-3 (b): "and later" and "and earlier" too) or a
+ *   several-day phrase its text's day lines back (#337 r1/Q-2 (c)); a pre-tool line without a day line needs ET only
+ *   (#337 r1/Q-1 (b));
  * - what counts as a time (r1/Q-4 (a)): "h:mm AM/PM" only.
+ * The sentences of #326's and #332's runs are fixtures too (#337, A-3), placed as they were in their trials.
  * The 12 sentences of #293's hand count (results comment on #293, 2026-10-17) are fixtures, placed as they were in
  * the trial, and so are `system.v9`'s own compliant examples. Pairs and day-line times keep their rule (A-2):
  * `offer-format.test.ts`.
@@ -17,7 +20,7 @@ import { buildSystemPrompt } from "@sched/agent";
 
 import { BOUND_AFTER_TAILS, BOUND_WORDS, unclaimedTimes } from "../src/graders/text";
 import type { TranscriptEvent } from "../src";
-import { assistant, checked, graded, patient } from "./helpers";
+import { assistant, call, checked, graded, inTurn, patient } from "./helpers";
 
 const SCENARIO = "clarify-two-requests-one-message";
 /** Dr. Haddad, Monday to Friday, October 19 to 23, 10:00 AM EDT. */
@@ -532,5 +535,233 @@ describe("the prompt's bound sentence (#328)", () => {
     expect(() => promptBounds(stable.replace(START, `${START}${START}`))).toThrow(
       /anchor "A time right after "/,
     );
+  });
+});
+
+/** Monday to Friday, October 19 to 23, as day lines each listing `time`; `override` gives a day its own line. */
+const WEEK_DAYS: [string, string][] = [
+  ["Monday", "October 19"],
+  ["Tuesday", "October 20"],
+  ["Wednesday", "October 21"],
+  ["Thursday", "October 22"],
+  ["Friday", "October 23"],
+];
+const dayLines = (days: readonly [string, string][] = WEEK_DAYS, override: Record<string, string> = {}) =>
+  days.map(([day, date]) => `${day}, ${date}:\n- ${override[day] ?? "10:00 AM ET"}`).join("\n\n");
+
+describe("#326's and #332's sentences, placed as they were in their trials (#337, A-3)", () => {
+  const preTool = (sentence: string) => timesCheck([ASKS, assistant(sentence), HADDAD_10AM]);
+  const PRE = "Let me check Dr. Haddad's";
+
+  it.each([
+    `${PRE} availability at 10:00 AM ET that week.`,
+    `${PRE} availability at 10:00 AM ET each day that week.`,
+  ])("a pre-tool line with ET needs no weekday (r1/Q-1 (b)): %j", async (line) => {
+    expect(await preTool(line)).toMatchObject({ status: "pass" });
+  });
+
+  it.each([
+    `${PRE} openings at 10:00 AM each day that week.`,
+    `${PRE} availability at 10:00 AM for each day that week.`,
+    `${PRE} availability at 10:00 AM each day that week.`,
+  ])("a pre-tool line without ET fails on ET (A-1): %j", async (line) => {
+    expect(await preTool(line)).toMatchObject({ status: "fail", detail: lacks("10:00 AM", "ET", line) });
+  });
+
+  it("the same ET line as the turn's last text, with no tool call after it, fails on a weekday", async () => {
+    const line = `${PRE} availability at 10:00 AM ET each day that week.`;
+    expect(await timesCheck([ASKS, HADDAD_10AM, assistant(line)])).toMatchObject({
+      status: "fail",
+      detail: lacks("10:00 AM", WEEKDAY, line),
+    });
+  });
+
+  it("a pre-tool line is read by position: a tool call after a patient message, or in a later turn, isn't directly after it", async () => {
+    const line = `${PRE} availability at 10:00 AM ET each day that week.`;
+    const failed = { status: "fail", detail: lacks("10:00 AM", WEEKDAY, line) };
+    expect(await timesCheck([ASKS, assistant(line), patient("Thanks."), HADDAD_10AM])).toMatchObject(failed);
+    expect(await timesCheck([ASKS, assistant(line), ...inTurn(2, HADDAD_10AM)])).toMatchObject(failed);
+  });
+
+  it("any tool, an errored call and several calls count as a tool call after the text", async () => {
+    const line = `${PRE} availability at 10:00 AM ET each day that week.`;
+    const escalate = call("escalate_to_human", {});
+    const errored = call("check_availability", {}, { ok: false });
+    for (const after of [[escalate], [errored], [HADDAD_10AM, escalate]])
+      expect(await timesCheck([ASKS, assistant(line), ...after])).toMatchObject({ status: "pass" });
+  });
+
+  it("a text with a day line keeps the full rule, even before a tool call", async () => {
+    const text = `Dr. Haddad has 10:00 AM ET open that week.\n\n${dayLines([["Monday", "October 19"]])}`;
+    expect(await timesCheck([ASKS, assistant(text), HADDAD_10AM])).toMatchObject({
+      status: "fail",
+      detail: lacks("10:00 AM", WEEKDAY, "Dr. Haddad has 10:00 AM ET open that week."),
+    });
+  });
+
+  const backed: [run: string, text: string][] = [
+    [
+      "#326 run 1, trial 1",
+      `Great news, Walter \u2014 Dr. Haddad has 10:00 AM ET open every day that week. Here are your options:\n\n${dayLines()}\n\nWhich day works best for you?`,
+    ],
+    [
+      "#326 run 1, trial 3",
+      `Dr. Haddad has 10:00 AM ET open all five days that week:\n\n${dayLines()}\n\nWhich day works best for you?`,
+    ],
+    [
+      "#332 run 1, trial 2",
+      `Dr. Haddad has 10:00 AM ET open all five days that week. Here are your options:\n\n${dayLines()}\n\nWhich day would you prefer?`,
+    ],
+    [
+      "#332 run 2, trial 3",
+      `Dr. Haddad has 10:00 AM ET open every day that week. Here are the options:\n\n${dayLines()}\n\nWhich day works best for you?`,
+    ],
+  ];
+  it.each(backed)(
+    "%s: a several-day lead-in with five matching day lines passes (r1/Q-2 (c))",
+    async (_run, text) => {
+      expect(await timesCheck([ASKS, HADDAD_10AM, assistant(text)])).toMatchObject({ status: "pass" });
+    },
+  );
+
+  it.each([
+    ["every day that week", "Every Day That Week"],
+    ["each day that week", "for each day that week"],
+    ["all five days that week", "ALL FIVE DAYS THAT WEEK"],
+  ])("%s counts in any case and after another word: %j", async (_phrase, phrase) => {
+    const text = `Dr. Haddad has 10:00 AM ET open ${phrase}:\n\n${dayLines()}`;
+    expect(await onText(text)).toMatchObject({ status: "pass" });
+  });
+
+  it.each(["every day", "other days that week", "those days", "every weekday", "all days that week"])(
+    'the phrase "%s" is no several-day phrase, even with five day lines',
+    async (phrase) => {
+      const sentence = `Dr. Haddad has 10:00 AM ET open ${phrase}:`;
+      expect(await onText(`${sentence}\n\n${dayLines()}`)).toMatchObject({
+        status: "fail",
+        detail: lacks("10:00 AM", WEEKDAY, sentence),
+      });
+    },
+  );
+
+  const LEAD = "Dr. Haddad has 10:00 AM ET open every day that week.";
+  const unbacked = (text: string) =>
+    timesCheck([ASKS, HADDAD_10AM, assistant(text)]).then((r) => [r?.status, r?.detail]);
+  const FAILS_ON_WEEKDAY = ["fail", lacks("10:00 AM", WEEKDAY, LEAD)];
+
+  it("the same lead-in with only Monday, Tuesday and Wednesday day lines fails on a weekday", async () => {
+    expect(await unbacked(`${LEAD}\n\n${dayLines(WEEK_DAYS.slice(0, 3))}`)).toEqual(FAILS_ON_WEEKDAY);
+  });
+
+  it.each(WEEK_DAYS.map(([day]) => day))("a missing %s line fails the lead-in", async (missing) => {
+    const days = WEEK_DAYS.filter(([day]) => day !== missing);
+    expect(await unbacked(`${LEAD}\n\n${dayLines(days)}`)).toEqual(FAILS_ON_WEEKDAY);
+  });
+
+  it.each(WEEK_DAYS.map(([day]) => day))(
+    "a %s line listing 11:00 AM ET instead fails the lead-in",
+    async (day) => {
+      expect(await unbacked(`${LEAD}\n\n${dayLines(WEEK_DAYS, { [day]: "11:00 AM ET" })}`)).toEqual(
+        FAILS_ON_WEEKDAY,
+      );
+    },
+  );
+
+  it("a day line that lists the time among others backs it, and so does a sixth (Saturday) line", async () => {
+    const withMore = dayLines(WEEK_DAYS, { Tuesday: "10:00 AM ET\n- 9:00 AM ET" });
+    expect(await unbacked(`${LEAD}\n\n${withMore}\n\nSaturday, October 24:\n- 11:00 AM ET`)).toEqual([
+      "pass",
+      undefined,
+    ]);
+  });
+
+  it("a second line for a day that lacks the time fails the lead-in", async () => {
+    const text = `${LEAD}\n\n${dayLines()}\n\nThursday, October 29:\n- 11:00 AM ET`;
+    expect(await unbacked(text)).toEqual(FAILS_ON_WEEKDAY);
+  });
+
+  it.each([
+    "Dr. Haddad has 10:00 AM ET open levery day that week.",
+    "Dr. Haddad has 10:00 AM ET open every day that weekend.",
+  ])("the phrase counts as whole words only: %j fails even with five day lines", async (sentence) => {
+    expect(await onText(`${sentence}\n\n${dayLines()}`)).toMatchObject({
+      status: "fail",
+      detail: lacks("10:00 AM", WEEKDAY, sentence),
+    });
+  });
+
+  it("a Thursday heading with no listed time fails the lead-in", async () => {
+    const text = `${LEAD}\n\n${dayLines(WEEK_DAYS.slice(0, 3))}\n\nThursday, October 22: none\n\n${dayLines(WEEK_DAYS.slice(4))}`;
+    expect(await unbacked(text)).toEqual(FAILS_ON_WEEKDAY);
+  });
+
+  it("day lines in a later text don't back a lead-in in an earlier one", async () => {
+    const events = [
+      ASKS,
+      HADDAD_10AM,
+      assistant(LEAD),
+      patient("Go on."),
+      HADDAD_10AM,
+      assistant(dayLines()),
+    ];
+    expect(await timesCheck(events)).toMatchObject({
+      status: "fail",
+      detail: lacks("10:00 AM", WEEKDAY, LEAD),
+    });
+  });
+
+  it("the time's own sentence must hold the phrase", async () => {
+    const text = `Dr. Haddad has 10:00 AM ET open.\nIt is the same every day that week.\n\n${dayLines()}`;
+    expect(await unbacked(text)).toEqual([
+      "fail",
+      lacks("10:00 AM", WEEKDAY, "Dr. Haddad has 10:00 AM ET open."),
+    ]);
+  });
+
+  it('#326 run 2: the "Other days that week" remark fails on a weekday after a one-day offer', async () => {
+    const remark = "Other days that week may have 10:00 AM ET available too if you'd prefer a different day.";
+    const text = `Dr. Haddad has 10:00 AM ET open that day:\n\nMonday, October 19, 2026:\n- 10:00 AM ET\n\n${remark} Would Monday at 10:00 AM ET work, or would you like me to check later in the week?`;
+    expect(await unbacked(text)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
+  });
+
+  it("#332 run 2: the 12:00 PM aside fails on ET, and its bound 1:00 PM ET passes", async () => {
+    const aside =
+      "Just to note, 12:00 PM does count as afternoon at Cedar Ridge, but here are slots starting at 1:00 PM ET and later:";
+    const text = `${aside}\n\nTuesday, October 13:\n- 1:00 PM ET with Dr. Priya Lee\n\nThursday, October 15:\n- 1:00 PM ET with Dr. Priya Lee\n\nMore times are available on both days if you'd like to see others. Which works for you?`;
+    expect(await unbacked(text)).toEqual(["fail", lacks("12:00 PM", "ET", aside)]);
+  });
+
+  it('#332 run 2: "openings at 2:00 PM ET and later" is a bound (r1/Q-3 (b))', async () => {
+    const text =
+      "Good news, there are openings at 2:00 PM ET and later. Here's a sample across the week:\n\nMonday, October 12:\n- 2:00 PM ET with Dr. Priya Lee\n\nThursday, October 15:\n- 2:00 PM ET with Dr. Priya Lee\n- 3:00 PM ET with Dr. Priya Lee";
+    expect(await unbacked(text)).toEqual(["pass", undefined]);
+  });
+
+  it.each([
+    "openings at 2:00 PM ET and later",
+    "openings at 2:00 PM ET and earlier",
+    "openings at 2:00 PM Eastern Time and earlier",
+    "openings at 2:00 PM ET AND LATER",
+  ])('"and later" and "and earlier" make a bound too: %j', async (bound) => {
+    expect(await onText(`Good news, there are ${bound}.`)).toMatchObject({ status: "pass" });
+  });
+
+  it.each(["openings at 2:00 PM ET onward", "openings past 2:00 PM ET", "openings at 2:00 PM ET or after"])(
+    "%j isn't a bound",
+    async (words) => {
+      const sentence = `Good news, there are ${words}.`;
+      expect(await onText(sentence)).toMatchObject({
+        status: "fail",
+        detail: lacks("2:00 PM", WEEKDAY, sentence),
+      });
+    },
+  );
+
+  it('a bound with "and" still needs ET', async () => {
+    const sentence = "Good news, there are openings at 2:00 PM and later.";
+    expect(await onText(sentence)).toMatchObject({
+      status: "fail",
+      detail: lacks("2:00 PM", "ET", sentence),
+    });
   });
 });

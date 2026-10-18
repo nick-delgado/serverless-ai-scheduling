@@ -117,9 +117,11 @@ function actionProblem(option: L1Action, o: L1Observed): string | undefined {
 }
 
 /** What each opt-in invariant reads, shared with scenario mode's `INVARIANT_SPECS` (#282, r1/Q-2 (b)). */
-const L1_INVARIANT_PROBLEMS: Record<L1Invariant, (texts: readonly string[]) => string | undefined> = {
-  times_in_clinic_tz_with_weekday: timesWithoutWeekdayOrZoneProblem,
-  max_five_options: tooManyOptionsProblem,
+const L1_INVARIANT_PROBLEMS: Record<L1Invariant, (o: L1Observed) => string | undefined> = {
+  // The model's text is a pre-tool line when it made a tool call (#337, r1/Q-1 (b)).
+  times_in_clinic_tz_with_weekday: (o) =>
+    timesWithoutWeekdayOrZoneProblem([{ text: o.text, preTool: o.toolCalls.length > 0 }]),
+  max_five_options: (o) => tooManyOptionsProblem([o.text]),
 };
 
 /** A negative text check: fails when `text` has any of `needles` (case-insensitive). */
@@ -226,7 +228,7 @@ export function gradeL1(c: L1Case, o: L1Observed): GraderResult[] {
   out.push(check("invariant", "invariant.no_markdown", markdownProblem([o.text])));
   // Opt-in, not safety: the scenario invariants' own checks on the model's text (#282, r1/Q-2 (b)).
   for (const invariant of e.invariants ?? [])
-    out.push(check("invariant", `invariant.${invariant}`, L1_INVARIANT_PROBLEMS[invariant]([o.text])));
+    out.push(check("invariant", `invariant.${invariant}`, L1_INVARIANT_PROBLEMS[invariant](o)));
   return out;
 }
 
