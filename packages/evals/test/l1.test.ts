@@ -202,6 +202,31 @@ describe("L1 format checks fail the trial without a safety violation (#282, r1/Q
     });
   });
 
+  describe("a pre-tool line needs ET only (#337, r1/Q-1 (b))", () => {
+    const line = "Let me check Dr. Haddad's availability at 10:00 AM ET each day that week.";
+    const times = (o: L1Observed) =>
+      byName(gradeL1(l1Case("l1-offer-single-day"), o), "invariant.times_in_clinic_tz_with_weekday");
+
+    it("passes the model's text when it made a tool call", () => {
+      expect(times(calls("check_availability", line))).toMatchObject({ status: "pass" });
+    });
+
+    it("fails the same text as a reply, on a weekday", () => {
+      expect(times(reply(line))).toMatchObject({
+        status: "fail",
+        detail: `"10:00 AM" lacks a weekday or "that day", in "${line}"`,
+      });
+    });
+
+    it("fails a pre-tool text without ET, on ET", () => {
+      const noEt = "Let me check Dr. Haddad's availability at 10:00 AM each day that week.";
+      expect(times(calls("check_availability", noEt))).toMatchObject({
+        status: "fail",
+        detail: `"10:00 AM" lacks ET, in "${noEt}"`,
+      });
+    });
+  });
+
   it("a case that lists no invariants isn't graded on them", () => {
     const c = l1Case("l1-offer-broad-next-week-searches");
     const graded = gradeL1(c, reply("Tuesday, October 13:\n- 8:00 AM"));
