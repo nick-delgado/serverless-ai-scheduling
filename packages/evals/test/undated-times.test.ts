@@ -731,7 +731,7 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
     expect(await offerCheck(text)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
   });
 
-  it("#332 run 2: the 12:00 PM aside fails on ET, and 1:00 PM in its sentence is a bound that needs ET only", async () => {
+  it("#332 run 2: the 12:00 PM aside fails on ET, and 1:00 PM in its sentence is a bound that passes", async () => {
     const aside =
       "Just to note, 12:00 PM does count as afternoon at Cedar Ridge, but here are slots starting at 1:00 PM ET and later:";
     const text = `${aside}\n\nTuesday, October 13:\n- 1:00 PM ET with Dr. Priya Lee\n- 1:00 PM ET with Dr. Samuel Okafor\n\nThursday, October 15:\n- 1:00 PM ET with Dr. Priya Lee\n- 1:00 PM ET with Dr. Samuel Okafor\n\nMore times are available on both days if you'd like to see others. Which works for you?`;
