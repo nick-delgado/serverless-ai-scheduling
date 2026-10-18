@@ -14,7 +14,7 @@ Nick settled the form in the readiness review: one general rule for every clock 
 - the bullet names the places it covers: a line before a tool call, an offer's lead-in, closing question and single-time sentence, a bound, a time echoed back or said not to be open, and a conflict;
 - a time right after one of #320's bound words ("before", "after", "from", "until", "till", "by", "starting at", "up to"), or followed by "ET or later" or "ET or earlier", needs ET only. Any other bound wording ("past 2:00 PM ET") needs a weekday too;
 - the date goes on a time a tool returned, and never in an offer message's other sentences (the `19a0bc2/SPEC-4` note from #319);
-- the pre-tool-line rule and the unreturned-time rule point to it; the offer rule's remark and single-time sentences restate the requirement and gained their own "not" contrasts, drawn from measured `system.v9` misses. The offer rule itself has no pointer to the bullet, and the pre-tool and unreturned-time rules keep their own "weekday and ET" wording; the review caught this and Nick deferred it to #326 ([decision](https://github.com/nick-delgado/serverless-ai-scheduling/pull/327#issuecomment-6246664477)).
+- the pre-tool-line rule and the unreturned-time rule point to it; the offer rule's remark and single-time sentences restate the requirement and gained their own "not" contrasts, drawn from measured `system.v9` misses. The offer rule itself has no pointer to the bullet, and the pre-tool and unreturned-time rules keep their own "weekday and ET" wording; the review caught this and Nick deferred it to #326 ([decision](https://github.com/nick-delgado/serverless-ai-scheduling/pull/327#issuecomment-6246664477)). **Later (2026-10-18):** #326 added the pointer to the offer rule in `system.v11` and cut the pre-tool and unreturned-time rules to their no-date halves plus the pointer; see [`system.v11` keeps a time out of a several-day lead-in](2026-10-18-several-day-offers-name-no-time.md).
 
 The ZONE_WINDOW comment in `packages/evals/src/graders/text.ts` now says which times use `zoneAfter` (the `4f24cf7/VER-2` note from #322); no code in that file changed.
 
@@ -71,7 +71,7 @@ The agent also counted three things the grader doesn't see (A-9), over runs 2 an
 
 ## What's next
 
-- #326: a lead-in covering several days names no time (blocked by this issue). Its rewrite of the offer rule also adds the pointer to the bullet that this entry says is missing.
+- #326: a lead-in covering several days names no time (blocked by this issue). Its rewrite of the offer rule also adds the pointer to the bullet that this entry says is missing. **Later (2026-10-18):** #326 took the pattern in `system.v11`: a lead-in that covers several days names no time; see [`system.v11` keeps a time out of a several-day lead-in](2026-10-18-several-day-offers-name-no-time.md).
 - #328: a test that keeps the prompt's bound-word list and the grader's `BOUND_BEFORE` and `BOUND_AFTER` in step.
 - #234 and #251 take the next prompt version and keep these rules unless they measure better ones.
 - Both gate runs above regressed a scenario case on the time check with ET present, one case each. Later gate runs on this PR are recorded in the PR body, not here.
