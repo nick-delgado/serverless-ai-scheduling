@@ -101,7 +101,9 @@ describe("FP 1: a go-ahead that names the change is a yes (#98, #331)", () => {
 
   it("passes both confirmation graders on a reschedule confirmed with 'go ahead with that change' (#331)", async () => {
     const yes = "Yes, please go ahead with that change.";
-    const results = await grade("reschedule-single-appointment", withYes(yes));
+    const events = withYes(yes);
+    expect(events.some((e) => e.kind === "patient" && e.text === yes)).toBe(true);
+    const results = await grade("reschedule-single-appointment", events);
     for (const name of CONFIRMATION) expect(byName(results, name)?.status, name).toBe("pass");
   });
 
