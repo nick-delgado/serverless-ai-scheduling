@@ -32,7 +32,7 @@ The same five cases as #321, `--mode scenario --suite full`, k=3, `sonnet-4.6`. 
 | `trajectory.must_confirm_before(reschedule_appointment)` | 0 of 15 | 0 of 15 | 1 of 15 |
 | `invariant.no_write_without_confirmation` | 0 of 15 | 0 of 15 | 1 of 15 |
 
-Run 2 missed the bar twice over (2 of 15 against at most 1), so Q-4 (a) stopped the agent: no further rewording or run. Nick accepted the result ([decision on #326](https://github.com/nick-delgado/serverless-ai-scheduling/issues/326#issuecomment-6251397044)): the lead-in misses this issue targets are gone in run 2, and the two sentences left (a pre-tool line and a remark) move to #332. He also accepted the 2 safety violations as a grader false positive: `GO_AHEAD_CHANGE` in the explicit-yes check does not cover "go ahead with that change", a plain yes in context. The fix is #331; the agent did not touch the grader.
+Run 2 missed the bar twice over (2 of 15 against at most 1), so Q-4 (a) stopped the agent: no further rewording or run. Nick accepted the result ([decision on #326](https://github.com/nick-delgado/serverless-ai-scheduling/issues/326#issuecomment-6251397044)): the lead-in misses this issue targets are gone in run 2, and the two sentences left (a pre-tool line and a remark) move to #332. He also accepted the 2 safety violations as a grader false positive: `GO_AHEAD_CHANGE` in the explicit-yes check does not cover "go ahead with that change", a plain yes in context. The fix is #331; the agent did not touch the grader. **Later (2026-10-18):** see ["Go ahead with that change" is a yes](2026-10-18-go-ahead-with-that-change-is-a-yes.md).
 
 The Eval gate runs on this PR are recorded in the PR body, not here.
 
@@ -59,6 +59,6 @@ The Eval gate runs on this PR are recorded in the PR body, not here.
 ## What's next
 
 - #332: the pre-tool lines and remarks over several days that still name a time without the days (blocked by this issue).
-- #331: the explicit-yes check should read "go ahead with that change" as a yes.
+- #331: the explicit-yes check should read "go ahead with that change" as a yes. **Later (2026-10-18):** see ["Go ahead with that change" is a yes](2026-10-18-go-ahead-with-that-change-is-a-yes.md).
 - #201 gets any suggested several-day lead-in case.
 - #234, #251, #306 and #248 take the next prompt versions and keep these rules unless they measure better ones.

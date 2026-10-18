@@ -568,11 +568,12 @@ const HEDGE =
 
 /**
  * A go-ahead whose object is the change itself ("make that change", "make the change", "go ahead with
- * the change"), with only punctuation or courtesy words after it to the end of the message (#98,
- * r1/Q-1 (a)). "make that change to Thursday" is not one, so its `change` stays a hedge.
+ * that change", "go ahead with the change"), with only punctuation or courtesy words after it to the end
+ * of the message (#98, r1/Q-1 (a); "go ahead with that change" added by #331, r1/Q-1 (a)). "make that
+ * change to Thursday" is not one, so its `change` stays a hedge.
  */
 const GO_AHEAD_CHANGE =
-  /\b(?:make (?:that|the) change|go ahead with the change)(?:[\s.,!]*(?:please|thanks|thank you))*[\s.,!]*$/i;
+  /\b(?:make (?:that|the) change|go ahead with (?:that|the) change)(?:[\s.,!]*(?:please|thanks|thank you))*[\s.,!]*$/i;
 
 /**
  * An explicit yes (ADR-009 "explicit yes"). Conservative: any hedge or question fails it, so "hmm,
