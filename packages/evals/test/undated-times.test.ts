@@ -8,10 +8,14 @@
  * The 12 sentences of #293's hand count (results comment on #293, 2026-10-17) are fixtures, placed as they were in
  * the trial, and so are `system.v9`'s own compliant examples. Pairs and day-line times keep their rule (A-2):
  * `offer-format.test.ts`.
+ * "the prompt's bound sentence (#328)" compares `BOUND_WORDS` and `BOUND_AFTER_TAILS` with the bound words and
+ * "ET or <tail>" forms quoted in `buildSystemPrompt(...).stable`.
  */
 import { describe, expect, it } from "vitest";
 
-import { unclaimedTimes } from "../src/graders/text";
+import { buildSystemPrompt } from "@sched/agent";
+
+import { BOUND_AFTER_TAILS, BOUND_WORDS, unclaimedTimes } from "../src/graders/text";
 import type { TranscriptEvent } from "../src";
 import { assistant, checked, graded, patient } from "./helpers";
 
@@ -455,5 +459,78 @@ describe("the new reading leaves pairs and day-line times to their own rule (r1/
       status: "fail",
       detail: '"October 13 … 1:00 PM" lacks a weekday or ET',
     });
+  });
+});
+
+describe("the prompt's bound sentence (#328)", () => {
+  const stable = buildSystemPrompt({ now: new Date("2026-10-19T14:00:00Z") }).stable;
+  const START = "A time right after ";
+  const END = ", needs only ET";
+  const SPLIT = ", or followed by ";
+
+  /** The double-quoted strings in `text`, as written. */
+  const quoted = (text: string): string[] => [...text.matchAll(/"([^"]*)"/g)].map((m) => m[1] ?? "");
+  /** The bound words and "ET or <tail>" forms the current prompt quotes, or a failure naming the missing anchor. */
+  const promptBounds = (prompt: string): { words: string[]; tails: string[] } => {
+    for (const anchor of [START, END, SPLIT]) {
+      expect(prompt.split(anchor).length, `the anchor ${JSON.stringify(anchor)} occurs exactly once`).toBe(2);
+    }
+    const [, afterStart = ""] = prompt.split(START);
+    const [span = ""] = afterStart.split(END);
+    const [wordPart = "", afterPart = ""] = span.split(SPLIT);
+    const words = quoted(wordPart).map((w) => w.toLowerCase());
+    const forms = quoted(afterPart);
+    expect(words.length, "the bound words before the split").toBeGreaterThan(0);
+    expect(forms.length, "the forms after the split").toBeGreaterThan(0);
+    for (const f of forms) expect(f.startsWith("ET or "), `the form "${f}" starts with "ET or "`).toBe(true);
+    return { words, tails: forms.map((f) => f.slice("ET or ".length).toLowerCase()) };
+  };
+  const graderWords: string[] = BOUND_WORDS.map((w) => w.toLowerCase());
+  const graderTails: string[] = BOUND_AFTER_TAILS.map((t) => t.toLowerCase());
+  const only = (a: readonly string[], b: readonly string[]) => a.filter((x) => !b.includes(x));
+
+  it("quotes every word BOUND_BEFORE accepts", () => {
+    expect(only(graderWords, promptBounds(stable).words), "grader words the prompt does not quote").toEqual(
+      [],
+    );
+  });
+
+  it("quotes no word BOUND_BEFORE lacks", () => {
+    expect(only(promptBounds(stable).words, graderWords), "prompt words the grader lacks").toEqual([]);
+  });
+
+  it("quotes the same 'ET or <tail>' forms BOUND_AFTER accepts", () => {
+    const { tails } = promptBounds(stable);
+    expect(
+      { missingFromPrompt: only(graderTails, tails), missingFromGrader: only(tails, graderTails) },
+      "tails on one side only",
+    ).toEqual({ missingFromPrompt: [], missingFromGrader: [] });
+  });
+
+  it("rejects a sentence whose anchor is gone, or whose quotes are missing", () => {
+    expect(() => promptBounds(stable.replace(START, "A time next to "))).toThrow(
+      /anchor "A time right after "/,
+    );
+    expect(() => promptBounds(stable.replace(SPLIT, `${SPLIT}${SPLIT}`))).toThrow(
+      /anchor ", or followed by "/,
+    );
+    expect(() =>
+      promptBounds(stable.replace('followed by "ET or later" or "ET or earlier"', "followed by ET or later")),
+    ).toThrow(/forms after the split/);
+    expect(() =>
+      promptBounds(stable.replace('followed by "ET or later"', 'followed by "ET and later"')),
+    ).toThrow(/starts with "ET or "/);
+  });
+
+  it("rejects an unquoted word list, a missing END anchor and a doubled START anchor", () => {
+    const quotedWords = '"before", "after", "from", "until", "till", "by", "starting at" or "up to"';
+    expect(stable).toContain(quotedWords);
+    expect(() => promptBounds(stable.replace(quotedWords, "any of the usual words"))).toThrow(
+      /bound words before the split/,
+    );
+    expect(() => promptBounds(stable.replace(END, ", needs ET only"))).toThrow(/anchor ", needs only ET"/);
+    expect(() => promptBounds(stable.replace(START, `${START}${START}`))).toThrow(
+      /anchor "A time right after "/,
+    );
   });
 });
