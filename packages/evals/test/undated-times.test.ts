@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildSystemPrompt } from "@sched/agent";
 
-import { BOUND_AFTER_TAILS, BOUND_WORDS, unclaimedTimes } from "../src/graders/text";
+import { BOUND_AFTER_TAILS, BOUND_WORDS, unclaimedTimeLacks, unclaimedTimes } from "../src/graders/text";
 import type { TranscriptEvent } from "../src";
 import { assistant, call, checked, graded, inTurn, patient } from "./helpers";
 
@@ -583,6 +583,13 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
     expect(await timesCheck([ASKS, assistant(line), ...inTurn(2, HADDAD_10AM)])).toMatchObject(failed);
   });
 
+  it("a pair without a weekday in a pre-tool line fails on the pair, not on ET alone", async () => {
+    expect(await preTool("Let me check October 19 at 10:00 AM ET.")).toMatchObject({
+      status: "fail",
+      detail: '"October 19 at 10:00 AM" lacks a weekday or ET',
+    });
+  });
+
   it("any tool, an errored call and several calls count as a tool call after the text", async () => {
     const line = `${PRE} availability at 10:00 AM ET each day that week.`;
     const escalate = call("escalate_to_human", {});
@@ -645,23 +652,23 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
   );
 
   const LEAD = "Dr. Haddad has 10:00 AM ET open every day that week.";
-  const unbacked = (text: string) =>
+  const offerCheck = (text: string) =>
     timesCheck([ASKS, HADDAD_10AM, assistant(text)]).then((r) => [r?.status, r?.detail]);
   const FAILS_ON_WEEKDAY = ["fail", lacks("10:00 AM", WEEKDAY, LEAD)];
 
   it("the same lead-in with only Monday, Tuesday and Wednesday day lines fails on a weekday", async () => {
-    expect(await unbacked(`${LEAD}\n\n${dayLines(WEEK_DAYS.slice(0, 3))}`)).toEqual(FAILS_ON_WEEKDAY);
+    expect(await offerCheck(`${LEAD}\n\n${dayLines(WEEK_DAYS.slice(0, 3))}`)).toEqual(FAILS_ON_WEEKDAY);
   });
 
   it.each(WEEK_DAYS.map(([day]) => day))("a missing %s line fails the lead-in", async (missing) => {
     const days = WEEK_DAYS.filter(([day]) => day !== missing);
-    expect(await unbacked(`${LEAD}\n\n${dayLines(days)}`)).toEqual(FAILS_ON_WEEKDAY);
+    expect(await offerCheck(`${LEAD}\n\n${dayLines(days)}`)).toEqual(FAILS_ON_WEEKDAY);
   });
 
   it.each(WEEK_DAYS.map(([day]) => day))(
     "a %s line listing 11:00 AM ET instead fails the lead-in",
     async (day) => {
-      expect(await unbacked(`${LEAD}\n\n${dayLines(WEEK_DAYS, { [day]: "11:00 AM ET" })}`)).toEqual(
+      expect(await offerCheck(`${LEAD}\n\n${dayLines(WEEK_DAYS, { [day]: "11:00 AM ET" })}`)).toEqual(
         FAILS_ON_WEEKDAY,
       );
     },
@@ -669,7 +676,7 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
 
   it("a day line that lists the time among others backs it, and so does a sixth (Saturday) line", async () => {
     const withMore = dayLines(WEEK_DAYS, { Tuesday: "10:00 AM ET\n- 9:00 AM ET" });
-    expect(await unbacked(`${LEAD}\n\n${withMore}\n\nSaturday, October 24:\n- 11:00 AM ET`)).toEqual([
+    expect(await offerCheck(`${LEAD}\n\n${withMore}\n\nSaturday, October 24:\n- 11:00 AM ET`)).toEqual([
       "pass",
       undefined,
     ]);
@@ -677,7 +684,7 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
 
   it("a second line for a day that lacks the time fails the lead-in", async () => {
     const text = `${LEAD}\n\n${dayLines()}\n\nThursday, October 29:\n- 11:00 AM ET`;
-    expect(await unbacked(text)).toEqual(FAILS_ON_WEEKDAY);
+    expect(await offerCheck(text)).toEqual(FAILS_ON_WEEKDAY);
   });
 
   it.each([
@@ -692,7 +699,7 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
 
   it("a Thursday heading with no listed time fails the lead-in", async () => {
     const text = `${LEAD}\n\n${dayLines(WEEK_DAYS.slice(0, 3))}\n\nThursday, October 22: none\n\n${dayLines(WEEK_DAYS.slice(4))}`;
-    expect(await unbacked(text)).toEqual(FAILS_ON_WEEKDAY);
+    expect(await offerCheck(text)).toEqual(FAILS_ON_WEEKDAY);
   });
 
   it("day lines in a later text don't back a lead-in in an earlier one", async () => {
@@ -712,7 +719,7 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
 
   it("the time's own sentence must hold the phrase", async () => {
     const text = `Dr. Haddad has 10:00 AM ET open.\nIt is the same every day that week.\n\n${dayLines()}`;
-    expect(await unbacked(text)).toEqual([
+    expect(await offerCheck(text)).toEqual([
       "fail",
       lacks("10:00 AM", WEEKDAY, "Dr. Haddad has 10:00 AM ET open."),
     ]);
@@ -721,20 +728,23 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
   it('#326 run 2: the "Other days that week" remark fails on a weekday after a one-day offer', async () => {
     const remark = "Other days that week may have 10:00 AM ET available too if you'd prefer a different day.";
     const text = `Dr. Haddad has 10:00 AM ET open that day:\n\nMonday, October 19, 2026:\n- 10:00 AM ET\n\n${remark} Would Monday at 10:00 AM ET work, or would you like me to check later in the week?`;
-    expect(await unbacked(text)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
+    expect(await offerCheck(text)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
   });
 
-  it("#332 run 2: the 12:00 PM aside fails on ET, and its bound 1:00 PM ET passes", async () => {
+  it("#332 run 2: the 12:00 PM aside fails on ET, and 1:00 PM in its sentence is a bound that needs ET only", async () => {
     const aside =
       "Just to note, 12:00 PM does count as afternoon at Cedar Ridge, but here are slots starting at 1:00 PM ET and later:";
-    const text = `${aside}\n\nTuesday, October 13:\n- 1:00 PM ET with Dr. Priya Lee\n\nThursday, October 15:\n- 1:00 PM ET with Dr. Priya Lee\n\nMore times are available on both days if you'd like to see others. Which works for you?`;
-    expect(await unbacked(text)).toEqual(["fail", lacks("12:00 PM", "ET", aside)]);
+    const text = `${aside}\n\nTuesday, October 13:\n- 1:00 PM ET with Dr. Priya Lee\n- 1:00 PM ET with Dr. Samuel Okafor\n\nThursday, October 15:\n- 1:00 PM ET with Dr. Priya Lee\n- 1:00 PM ET with Dr. Samuel Okafor\n\nMore times are available on both days if you'd like to see others. Which works for you?`;
+    expect(await offerCheck(text)).toEqual(["fail", lacks("12:00 PM", "ET", aside)]);
+    const bound = unclaimedTimes(text).find((u) => u.raw === "1:00 PM");
+    expect(bound?.sentence).toBe(aside);
+    expect(bound && unclaimedTimeLacks(text, bound, false)).toBeUndefined();
   });
 
   it('#332 run 2: "openings at 2:00 PM ET and later" is a bound (r1/Q-3 (b))', async () => {
     const text =
-      "Good news, there are openings at 2:00 PM ET and later. Here's a sample across the week:\n\nMonday, October 12:\n- 2:00 PM ET with Dr. Priya Lee\n\nThursday, October 15:\n- 2:00 PM ET with Dr. Priya Lee\n- 3:00 PM ET with Dr. Priya Lee";
-    expect(await unbacked(text)).toEqual(["pass", undefined]);
+      "Good news, there are openings at 2:00 PM ET and later. Here's a sample across the week:\n\nMonday, October 12:\n- 2:00 PM ET with Dr. Priya Lee\n- 2:00 PM ET with Dr. Samuel Okafor\n\nThursday, October 15:\n- 2:00 PM ET with Dr. Priya Lee\n- 2:00 PM ET with Dr. Samuel Okafor\n- 3:00 PM ET with Dr. Priya Lee\n\nMore times are available on these and other days if you'd like to see others.\n\nDo any of these work, or would you prefer a different day or provider?";
+    expect(await offerCheck(text)).toEqual(["pass", undefined]);
   });
 
   it.each([

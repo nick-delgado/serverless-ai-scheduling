@@ -215,11 +215,12 @@ export const positionedTexts = (events: readonly TranscriptEvent[]): PositionedT
 export function timesWithoutWeekdayOrZoneProblem(texts: readonly PositionedText[]): string | undefined {
   return firstFailing(texts, ({ text: t, preTool }) => {
     const mentions = dateTimeMentions(t);
+    const dayLines = headingListTimes(t);
     const bad =
       mentions.find((m, i) => !mentionHasWeekdayAndZone(t, m, mentions[i - 1])) ??
-      headingListTimes(t).find((m) => !mentionHasWeekdayAndZone(t, m));
+      dayLines.find((m) => !mentionHasWeekdayAndZone(t, m));
     if (bad !== undefined) return `"${bad.raw}" lacks a weekday or ET`;
-    const etOnly = preTool && headingListTimes(t).length === 0;
+    const etOnly = preTool && dayLines.length === 0;
     return firstFailing(unclaimedTimes(t), (u) => {
       const lacks = unclaimedTimeLacks(t, u, etOnly);
       return lacks === undefined ? undefined : `"${u.raw}" lacks ${lacks}, in "${u.sentence}"`;

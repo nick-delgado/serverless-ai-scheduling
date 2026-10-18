@@ -501,7 +501,10 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
   });
 }
 
-/** Stands for a weekday in a newly graded time's sentence: that exact phrase, any case (#320, r1/Q-2 edges). */
+/**
+ * Stands for a weekday in a newly graded time's sentence: that exact phrase, any case (#320, r1/Q-2 edges). The
+ * several-day phrases (`SEVERAL_DAYS`) stand for one too, but only when backed.
+ */
 const THAT_DAY = /\bthat day\b/i;
 /**
  * The several-day phrases that stand for a weekday in a time's sentence only when the same text's day lines back
@@ -530,7 +533,9 @@ function dayLinesBack(text: string, time: string): boolean {
 /**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
  * complete: a new wording needs a weekday until it is added here, in `BOUND_WORDS`, and to the prompt's bound
- * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328).
+ * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328). The bound words
+ * before a time are the prompt's list; the forms after a time (`BOUND_AFTER`) also accept "and later" and "and
+ * earlier", which the prompt doesn't teach (#337, r1/Q-3 (b)).
  */
 export const BOUND_WORDS = [
   "before",
