@@ -51,5 +51,5 @@ After the review's `0cdd23a/SPEC-1` (a) cut the window at the next clock time, t
 
 ## What's next
 
-- #321 adds ET to undated times in the prompt; this check now measures it.
+- #321 adds ET to undated times in the prompt; this check now measures it. **Later (2026-10-18):** #321 put ET on every undated time in `system.v10` and left one lead-in pattern, a time across several days with no weekday, to #326; see [`system.v10` puts ET on every undated time](2026-10-18-undated-times-now-carry-et-the-weekday-is-what-is-left.md).
 - #201's suggested L1 cases, a dated closing question among them (r1/A-3), stay there.
