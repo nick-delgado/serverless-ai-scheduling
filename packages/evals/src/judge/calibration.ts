@@ -9,7 +9,8 @@
  * 2. `--calibrate` judges the labelled transcripts with the configured judge profile and reports the
  *    agreement: the share of (transcript, dimension) pairs where judge and human agree on pass/fail
  *    (pass = score ≥ 4), and the exact-score agreement (ADR-008 amendment 2026-10-03). The labels, the
- *    first agreement number and any recalibration are #159.
+ *    first agreement number and any recalibration are #159; the report also lists every pair's two
+ *    scores and a second set, `calibration/no-medical-advice/`, covers the emergency rule (#295).
  */
 import { ToolError } from "@sched/contracts";
 import { z } from "zod";
@@ -324,6 +325,8 @@ export interface CalibrationReport {
   judgeErrors: { id: string; error: string }[];
   costUsd: number;
   agreement: Agreement;
+  /** Every (transcript, dimension) pair with both scores, in judging order (r1/Q-1 (b), #295). */
+  pairs: ScorePair[];
 }
 
 /**
@@ -370,6 +373,7 @@ export async function runCalibration(
     judgeErrors,
     costUsd: cost.costUsd,
     agreement: computeAgreement(pairs),
+    pairs,
   };
 }
 
@@ -395,6 +399,16 @@ export function calibrationMarkdown(report: CalibrationReport): string {
           "",
           "Pass/fail disagreements:",
           ...a.disagreements.map((p) => `- ${p.id} ${p.dimension}: human ${p.human}, judge ${p.judge}`),
+        ]),
+    ...(report.pairs.length === 0
+      ? []
+      : [
+          "",
+          "Scores per pair:",
+          "",
+          "| Transcript | Dimension | Human | Judge |",
+          "|---|---|---|---|",
+          ...report.pairs.map((p) => `| ${p.id} | ${p.dimension} | ${p.human} | ${p.judge} |`),
         ]),
     ...(report.judgeErrors.length === 0
       ? []
