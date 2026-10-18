@@ -347,6 +347,8 @@ describe("system prompt v11: content guards", () => {
     expect(stable).toContain(
       'Its lead-in is "Dr. Haddad has these openings:", not "Dr. Haddad has 10:00 AM ET open every day that week:", "Dr. Haddad has 10:00 AM ET open all five days that week:" or "Good news — all five days have 10:00 AM ET open with Dr. Haddad:". This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line.',
     );
+    // v10 told the model to "name them" for a time open on several days; v11 names no time there.
+    expect(stable).not.toMatch(/name them/);
   });
 
   it("keeps the one-day sentences of an offer that the several-day rule leaves alone (#326, AC 3)", () => {
