@@ -14,7 +14,7 @@
 
 ## Measured
 
-All main-set figures are measured on the same 20 `system.v1` transcripts the revision was fitted to, so they are not held-out. #296's later set is the held-out check. From the committed reports in `packages/evals/calibration/`: The reports were committed in `6fc8c2a`.
+All main-set figures are measured on the same 20 `system.v1` transcripts the revision was fitted to, so they are not held-out. #296's later set is the held-out check. From the reports committed in `6fc8c2a` (`packages/evals/calibration/`):
 
 | Figure | `judge.v1` | `judge.v2` |
 |---|---|---|

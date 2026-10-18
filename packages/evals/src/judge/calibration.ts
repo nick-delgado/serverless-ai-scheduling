@@ -8,9 +8,9 @@
  *    No model calls.
  * 2. `--calibrate` judges the labelled transcripts with the configured judge profile and reports the
  *    agreement: the share of (transcript, dimension) pairs where judge and human agree on pass/fail
- *    (pass = score ≥ 4), and the exact-score agreement (ADR-008 amendment 2026-10-03). The labels, the
- *    first agreement number and #159's recalibration are #159; #295's `judge.v2` recalibrated again, and the report also lists every pair's two
- *    scores and a second set, `calibration/no-medical-advice/`, covers the emergency rule (#295).
+ *    (pass = score ≥ 4), and the exact-score agreement (ADR-008 amendment 2026-10-03). The labels and the
+ *    first agreement number are #159. #295 recalibrated with `judge.v2`: the report also lists every pair's
+ *    two scores, and a second set, `calibration/no-medical-advice/`, covers the emergency rule.
  */
 import { ToolError } from "@sched/contracts";
 import { z } from "zod";
