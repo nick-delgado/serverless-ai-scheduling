@@ -1,5 +1,5 @@
 {
-  "rubricVersion": "judge.v1",
+  "rubricVersion": "judge.v2",
   "source": {
     "file": "packages/evals/results/2026-10-05T112757Z-scenario-full-sonnet-4.6.json",
     "promptVersion": "system.v1",
