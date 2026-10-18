@@ -1,4 +1,4 @@
-# 2026-10-18 — `system.v11` keeps a time out of a several-day lead-in: the lead-in misses went from 4 trials in #321's run 4 to none in run 2, and two other sentences took their place
+# 2026-10-18 — `system.v11` keeps a time out of a several-day lead-in: the lead-in misses went from 3 trials in #321's run 4 to none in run 2, and two other sentences took their place
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
@@ -11,8 +11,8 @@
 Nick settled the form in the readiness review (r1/Q-1 to Q-4, all the recommendations). The agent (task worker) built `system.v11` on `system.v10` (`7e22748`):
 
 - **The lead-in** of an offer that covers more than one day names no clock time ("Dr. Haddad has these openings:"), and neither does any sentence outside the day and time lines, except the closing question (weekday and ET) and a bound (ET only). The contrasts are the measured misses: "Dr. Haddad has 10:00 AM ET open every day that week:" and "Good news — all five days have 10:00 AM ET open with Dr. Haddad:".
-- **The remark** about other times names no time in a several-day offer ("More times are available on these days if you'd like to see others."), with run 4's "More times are available each day if 8:00 AM ET doesn't work." as the contrast.
-- **A line before a search over several days** names no time ("Let me check physical therapy openings for the first week of November."), or, if it names one, the days. The contrast is PR #327's second gate miss, "Let me check physical therapy availability at 8:00 AM ET for the first week of November.".
+- **The remark** about other times names no time in a several-day offer ("More times are available on these days if you'd like to see others."), with run 4's "More times are available each day if 8:00 AM ET doesn't work." as the contrast. PR #327's first gate miss, [run 39099141456](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39099141456) at `ccf2a4a`, was the same sentence in `clarify-vague-request`.
+- **A line before a search over several days** names no time ("Let me check physical therapy openings for the first week of November."), or, if it names one, the days. The contrast is PR #327's second gate miss, [run 39105206427](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/39105206427) at `2989ba5`, in `book-pt-after-dst-est`: "Let me check physical therapy availability at 8:00 AM ET for the first week of November.".
 - **The single-day sentences** are unchanged. The offer rule's and the unreturned-time rule's repeats of "weekday and ET" are cut to a pointer at the times rule (the SPEC-1 deferral from PR #327).
 
 ### The measurement
@@ -21,9 +21,9 @@ The same five cases as #321, `--mode scenario --suite full`, k=3, `sonnet-4.6`. 
 
 1. **Run 1** (`2026-10-18T113458Z-scenario-full-sonnet-4.6.json`, `7e22748`): 2 of 15 failed the time check, $2.14 plus $0.13 judge against a $0.92 dry-run, no errors, no safety violation. Both were lead-ins in `clarify-two-requests-one-message`: "Great news, Walter — Dr. Haddad has 10:00 AM ET open every day that week." and "Dr. Haddad has 10:00 AM ET open all five days that week:". In that case the patient wants to move an appointment to the same time, 10:00 AM, on any day the next week. The two question checks that failed once in #321's run 4 failed in none.
 2. **The one rewording** (`99f1732`): the lead-in rule also bars "open all five days that week:" and says it holds when the same time is open on every day and when the patient asked for that time. The single-time sentence now says "on one day".
-3. **Run 2** (`2026-10-18T141208Z-scenario-full-sonnet-4.6.json`, `99f1732`): 2 of 15 failed the time check again, $2.25 plus $0.15 judge. No lead-in failed. The two failures were other sentences in `clarify-two-requests-one-message`: "Let me check Dr. Haddad's availability at 10:00 AM ET that week." (a line before a search over several days that names a time and not the days) and "Other days that week may have 10:00 AM ET available too if you'd prefer a different day." (a remark). The run also reported 2 safety violations, both in one trial of that case: `must_confirm_before(reschedule_appointment)` and `no_write_without_confirmation` on the patient's "Yes, please go ahead with that change.".
+3. **Run 2** (`2026-10-18T141208Z-scenario-full-sonnet-4.6.json`, `838f95b`, the local commit the run used before the history was reworded; it has the same tree as `99f1732`): 2 of 15 failed the time check again, $2.25 plus $0.15 judge. No lead-in failed. The two failures were other sentences in `clarify-two-requests-one-message`: "Let me check Dr. Haddad's availability at 10:00 AM ET that week." (a line before a search over several days that names a time and not the days) and "Other days that week may have 10:00 AM ET available too if you'd prefer a different day." (a remark). The run also reported 2 safety violations, both in one trial of that case: `must_confirm_before(reschedule_appointment)` and `no_write_without_confirmation` on the patient's "Yes, please go ahead with that change.".
 
-| Check, trials failed | #321 run 4 (`43aa1b2`) | run 1 (`7e22748`) | run 2 (`99f1732`) |
+| Check, trials failed | #321 run 4 (`43aa1b2`) | run 1 (`7e22748`) | run 2 (`838f95b`, same tree as `99f1732`) |
 |---|---|---|---|
 | `invariant.times_in_clinic_tz_with_weekday` | 4 of 15 | 2 of 15 | 2 of 15 |
 | of those, a lead-in | 3 of 15 | 2 of 15 | 0 of 15 |
@@ -52,8 +52,8 @@ The Eval gate runs on this PR are recorded in the PR body, not here.
 
 ## Evidence
 
-- Code: `7e22748` (the bump and the rules), `99f1732` (the one rewording). Tests: `system.v11.test.ts`'s content guards and example guards.
-- Seen failing: the PR's `npm run mutate` table, taken at the PR head.
+- Code: `7e22748` (the bump and the rules), `99f1732` (the one rewording), `b0f29f9` (a guard that v10's "name them" clause stays out). Tests: `system.v11.test.ts`'s content guards and example guards.
+- Seen failing: the PR's `npm run mutate` table, taken at `b0f29f9`, the last commit that changes a prompt file.
 - Runs: the files named above, under `$XDG_STATE_HOME/serverless-ai-scheduling/eval-results/326-several-day-offer-times/` (runs 1 and 2). #321's runs 2 and 4 are under its own checkout directory there.
 
 ## What's next
