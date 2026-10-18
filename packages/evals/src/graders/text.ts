@@ -379,8 +379,9 @@ export function namesClinicHours(text: string, mention: SlotMention): boolean {
 /** The clinic timezone as written after a time: `CLINIC.timezoneAbbrev` (ET) or a DST spelling. */
 const ZONE_RE = new RegExp(`\\b(${CLINIC.timezoneAbbrev}|EDT|EST|Eastern)\\b`);
 /**
- * How far after a time, in characters, the clinic timezone may be written (`zoneAfter`: a pair's time, a time
- * listed under a day line, and an `unclaimedTimes` time, whose window also stops at the next clock time).
+ * How far after a time, in characters, the clinic timezone may be written. `zoneAfter` serves a pair's time and
+ * an `unclaimedTimes` time (whose window also stops at the next clock time); a time listed under a day line
+ * doesn't use `zoneAfter`, and `mentionHasWeekdayAndZone` reads its own `afterTime` slice with this window.
  */
 const ZONE_WINDOW = 16;
 

@@ -31,9 +31,11 @@ describe("estimateRunCost against recorded runs (#34, r1/A-9)", () => {
     expect(estimate / 2.16).toBeLessThanOrEqual(1.5);
   });
 
-  it("L1 smoke: at least every cold run, at most 1.5x of them", () => {
+  // The estimate counts the current prompt, which has grown since `system.v1` (the recorded runs): 1.484x at
+  // `system.v9`, 1.518x at `system.v10` (#321), so the L1 ceiling is 1.6x.
+  it("L1 smoke: at least every cold run, at most 1.6x of them", () => {
     const estimate = estimateRunCost(selectSuite(loaded.l1, "smoke"), sonnet, 1);
     expect(estimate).toBeGreaterThanOrEqual(0.0572);
-    expect(estimate / 0.0567).toBeLessThanOrEqual(1.5);
+    expect(estimate / 0.0567).toBeLessThanOrEqual(1.6);
   });
 });
