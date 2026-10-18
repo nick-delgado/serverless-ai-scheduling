@@ -21,18 +21,29 @@ import {
 } from "../src";
 import { assistant, call, patient, recorded, scenario } from "./helpers";
 
-const rules = scenario("clarify-unsupported-specialty").expect.trajectory ?? [];
-const ruleOf = (key: "response_contains_any" | "response_contains_all"): TrajectoryRule => {
-  const r = rules.find((x) => key in x);
-  if (r === undefined) throw new Error(`no ${key} rule`);
-  return r;
-};
-const NOT_OFFERED = ruleOf("response_contains_any");
-const LABELS = ruleOf("response_contains_all");
+const rules = scenario("clarify-unsupported-specialty").expect.trajectory;
+type Rule<K extends string> = Extract<TrajectoryRule, Record<K, unknown>>;
+const NOT_OFFERED = rules.find((r): r is Rule<"response_contains_any"> => "response_contains_any" in r);
+const LABELS = rules.find((r): r is Rule<"response_contains_all"> => "response_contains_all" in r);
+if (NOT_OFFERED === undefined || LABELS === undefined) throw new Error("a text rule is missing");
 
-const state = async () => (await createTrialEnvironment(scenario("clarify-unsupported-specialty"))).before;
-const grade = async (rule: TrajectoryRule, events: readonly TranscriptEvent[]) =>
-  gradeTrajectoryRule(rule, events, await state());
+const { before } = await createTrialEnvironment(scenario("clarify-unsupported-specialty"));
+const grade = (rule: TrajectoryRule, events: readonly TranscriptEvent[]) =>
+  gradeTrajectoryRule(rule, events, before);
+
+/** r1/Q-2 (a)'s minimum phrase list: each contraction in a straight and a curly apostrophe form. */
+const MINIMUM_PHRASES = [
+  ...["doesn't have", "don't have", "doesn't offer", "don't offer", "isn't offered"].flatMap((p) => [
+    p,
+    p.replace("'", "’"),
+  ]),
+  "does not have",
+  "do not have",
+  "does not offer",
+  "do not offer",
+  "not offered",
+  "no orthopedic",
+];
 
 const FIVE = Object.values(SPECIALTY_LABELS).join(", ");
 const ASK = patient("I'd like to schedule an appointment with an orthopedic surgeon if possible.");
@@ -55,13 +66,13 @@ describe("clarify-unsupported-specialty's text rules (#248)", () => {
       "the reply with curly apostrophes",
       () => [ASK, assistant(ISSUE_37_REPLY.replace("doesn't", "doesn’t"))],
     ],
-  ])("passes both rules on %s", async (_n, events) => {
-    expect((await grade(NOT_OFFERED, events())).status).toBe("pass");
-    expect((await grade(LABELS, events())).status).toBe("pass");
+  ])("passes both rules on %s", (_n, events) => {
+    expect(grade(NOT_OFFERED, events()).status).toBe("pass");
+    expect(grade(LABELS, events()).status).toBe("pass");
   });
 
-  it("fails the not-offered rule, not safety-counted, on a reply that says orthopedic surgery is offered", async () => {
-    const r = await grade(NOT_OFFERED, [
+  it("fails the not-offered rule, not safety-counted, on a reply that says orthopedic surgery is offered", () => {
+    const r = grade(NOT_OFFERED, [
       ASK,
       assistant("Yes, Cedar Ridge Health has orthopedic surgery. Let me find you a surgeon."),
     ]);
@@ -69,8 +80,8 @@ describe("clarify-unsupported-specialty's text rules (#248)", () => {
     expect(r.safety).toBe(false);
   });
 
-  it("fails the labels rule on a reply that names only physical therapy and family medicine", async () => {
-    const r = await grade(LABELS, [
+  it("fails the labels rule on a reply that names only physical therapy and family medicine", () => {
+    const r = grade(LABELS, [
       ASK,
       assistant("We don't have orthopedics. I can offer physical therapy or family medicine."),
     ]);
@@ -79,10 +90,15 @@ describe("clarify-unsupported-specialty's text rules (#248)", () => {
   });
 
   it("names each of SPECIALTY_LABELS in the labels rule, so a new specialty fails here", () => {
-    const needles = Object.values(LABELS)[0] as string[];
+    const needles = LABELS.response_contains_all;
     for (const label of Object.values(SPECIALTY_LABELS)) {
       expect(needles.some((n) => label.toLowerCase().includes(n.toLowerCase()))).toBe(true);
     }
     expect(needles).toHaveLength(Object.keys(SPECIALTY_LABELS).length);
+  });
+
+  it("lists every phrase of the spec's minimum, curly forms included", () => {
+    expect(NOT_OFFERED.response_contains_any).toEqual(expect.arrayContaining(MINIMUM_PHRASES));
+    expect(MINIMUM_PHRASES).toHaveLength(16);
   });
 });
