@@ -8,6 +8,8 @@
  * The 12 sentences of #293's hand count (results comment on #293, 2026-10-17) are fixtures, placed as they were in
  * the trial, and so are `system.v9`'s own compliant examples. Pairs and day-line times keep their rule (A-2):
  * `offer-format.test.ts`.
+ * "the prompt's bound sentence (#328)" compares `BOUND_WORDS` and `BOUND_AFTER_TAILS` with the bound words and
+ * "ET or <tail>" forms quoted in `buildSystemPrompt(...).stable`.
  */
 import { describe, expect, it } from "vitest";
 
@@ -518,5 +520,17 @@ describe("the prompt's bound sentence (#328)", () => {
     expect(() =>
       promptBounds(stable.replace('followed by "ET or later"', 'followed by "ET and later"')),
     ).toThrow(/starts with "ET or "/);
+  });
+
+  it("rejects a sentence with no quoted bound word, no END anchor or a doubled START anchor", () => {
+    const quotedWords = '"before", "after", "from", "until", "till", "by", "starting at" or "up to"';
+    expect(stable).toContain(quotedWords);
+    expect(() => promptBounds(stable.replace(quotedWords, "any of the usual words"))).toThrow(
+      /bound words before the split/,
+    );
+    expect(() => promptBounds(stable.replace(END, ", needs ET only"))).toThrow(/anchor ", needs only ET"/);
+    expect(() => promptBounds(stable.replace(START, `${START}${START}`))).toThrow(
+      /anchor "A time right after "/,
+    );
   });
 });
