@@ -522,7 +522,7 @@ describe("the prompt's bound sentence (#328)", () => {
     ).toThrow(/starts with "ET or "/);
   });
 
-  it("rejects a sentence with no quoted bound word, no END anchor or a doubled START anchor", () => {
+  it("rejects an unquoted word list, a missing END anchor and a doubled START anchor", () => {
     const quotedWords = '"before", "after", "from", "until", "till", "by", "starting at" or "up to"';
     expect(stable).toContain(quotedWords);
     expect(() => promptBounds(stable.replace(quotedWords, "any of the usual words"))).toThrow(
