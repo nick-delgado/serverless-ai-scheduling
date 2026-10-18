@@ -24,7 +24,7 @@
  * about, so the reply's one question is when to move it. v10 (#321) makes the times rule one general rule for
  * every h:mm time the reply writes (ET right after it, and its weekday or "that day" in the same sentence; a
  * bound needs ET only), with a "not" contrast drawn from each time #293's and #320's runs left without ET:
- * a line before a tool call, an offer's lead-in, closing question and remark, and a bound. v1 to v9 are in git
+ * a line before a tool call, an offer's lead-in and remark, and a bound. v1 to v9 are in git
  * history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it

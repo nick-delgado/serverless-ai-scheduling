@@ -14,7 +14,7 @@ Nick settled the form in the readiness review: one general rule for every clock 
 - the bullet names the places it covers: a line before a tool call, an offer's lead-in, closing question and single-time sentence, a bound, a time echoed back or said not to be open, and a conflict;
 - a time right after one of #320's bound words ("before", "after", "from", "until", "till", "by", "starting at", "up to"), or followed by "ET or later" or "ET or earlier", needs ET only. Any other bound wording ("past 2:00 PM ET") needs a weekday too;
 - the date goes on a time a tool returned, and never in an offer message's other sentences (the `19a0bc2/SPEC-4` note from #319);
-- the remark, single-time and unreturned-time rules each point to it, and each gained a "not" contrast drawn from a measured `system.v9` miss.
+- the pre-tool-line rule and the unreturned-time rule point to it; the offer rule's remark and single-time sentences restate the requirement and gained their own "not" contrasts, drawn from measured `system.v9` misses. The offer rule itself has no pointer to the bullet, and the pre-tool and unreturned-time rules keep their own "weekday and ET" wording; the review caught this and Nick deferred it to #326 ([decision](https://github.com/nick-delgado/serverless-ai-scheduling/pull/327#issuecomment-6246664477)).
 
 The ZONE_WINDOW comment in `packages/evals/src/graders/text.ts` now says which times use `zoneAfter` (the `4f24cf7/VER-2` note from #322); no code in that file changed.
 
@@ -47,7 +47,7 @@ The agent also counted three things the grader doesn't see (A-9), over runs 2 an
 - **One general rule, not more examples (r1/Q-1 (a)).** Option (b), more examples on the Goal's three sentence kinds, would have left bounds, remarks, echoed and refused times without text, and #320's grader reads all of them. Option (c), naming no time in a lead-in or a question, would have reversed two #293 decisions. Run 4 shows the cost of (a): one lead-in shape still slips, and #326 is that pattern's fix.
 - **ET only for a bound, as the grader reads it.** A bound word from #320's list needs no weekday, so the prompt says so and gives "Here are options after 2:00 PM ET.", not "Here are options after 2:00 PM.", the exact miss from #320's gate run. The agent used "past 2:00 PM ET" as the out-of-list bound example. The issue's edges said "at or after 2:00 PM ET" needs a weekday, but the grader's `BOUND_BEFORE` reads only the word right before the time, so that wording passes as a bound; the PR records the error.
 - **Rewording once, by the failing sentences.** Run 2's three sentences all had ET and no weekday, so the rewording added "ET alone is not enough" and a contrast for each. It did not move `clarify-two-requests-one-message` (3 of 3 before and after).
-- **Raising one test's ceiling.** `estimate-calibration.test.ts` checks the L1 smoke estimate against the cost of `system.v1`-era runs. The longer prompt took it from 1.484 times the recorded cost on `system.v9` to 1.518 on `system.v10`, past the 1.5 ceiling. The agent could not shorten the rule by half to stay under, so the ceiling is 1.6 ([decision on #321](https://github.com/nick-delgado/serverless-ai-scheduling/issues/321#issuecomment-6243962707)).
+- **Raising one test's ceiling.** `estimate-calibration.test.ts` checks the L1 smoke estimate against the cost of `system.v1`-era runs. The longer prompt took it from 1.484 times the recorded cost on `system.v9` (`4804c58`) to 1.532 on `system.v10` (`43aa1b2`; 1.518 at `767da65`, before the rewording), past the 1.5 ceiling. The agent could not shorten the rule by half to stay under, so the ceiling is 1.6 ([decision on #321](https://github.com/nick-delgado/serverless-ai-scheduling/issues/321#issuecomment-6243962707)).
 
 ## What surprised us
 
@@ -62,6 +62,7 @@ The agent also counted three things the grader doesn't see (A-9), over runs 2 an
 
 ## What's next
 
-- #326: a lead-in covering several days names no time (blocked by this issue).
+- #326: a lead-in covering several days names no time (blocked by this issue). Its rewrite of the offer rule also adds the pointer to the bullet that this entry says is missing.
+- #328: a test that keeps the prompt's bound-word list and the grader's `BOUND_BEFORE` and `BOUND_AFTER` in step.
 - #234 and #251 take the next prompt version and keep these rules unless they measure better ones.
 - The Eval gate on this PR measures the four smoke cases at k=1 against the `system.v9` baseline, which Q-4 (a) left as it is.

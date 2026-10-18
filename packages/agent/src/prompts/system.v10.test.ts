@@ -354,7 +354,7 @@ describe("system prompt v10: content guards", () => {
       /"(Here are Dr\. Haddad's openings[^"]*)"/,
       /\("(Dr\. Haddad has 10:00 AM ET[^"]*)"\)/,
       /: "(Thursday at 2:00 PM ET)", not/,
-      /"(Let me check Monday to Friday next week at 10:00 AM ET\.)", not/,
+      /count: "(Let me check Monday to Friday next week at 10:00 AM ET\.)", not/,
       /"(Tuesday and Wednesday are both at 12:00 PM ET\.)", not/,
       /"(Dr\. Haddad has 10:00 AM ET open Monday to Friday:)", not/,
       /"(Here are options after 2:00 PM ET\.)", not/,
