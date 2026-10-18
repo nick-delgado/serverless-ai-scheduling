@@ -5,7 +5,7 @@ description: >-
   issue, CLAUDE.md, and the cited ADRs; build inside the issue's owned paths; meet the definition of
   done; open a PR (never merge); report back. Use for parallel batch work delegated by the
   orchestrating session.
-model: inherit
+model: claude-sonnet-5-5
 effort: medium
 ---
 
