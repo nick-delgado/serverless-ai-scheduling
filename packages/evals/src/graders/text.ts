@@ -496,14 +496,30 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
 const THAT_DAY = /\bthat day\b/i;
 /**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
- * complete: a new wording needs a weekday until it is added here.
+ * complete: a new wording needs a weekday until it is added here, in `BOUND_WORDS`, and to the prompt's bound
+ * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328).
  */
-const BOUND_BEFORE = /\b(?:before|after|from|until|till|by|starting at|up to)[ \t]+$/i;
+export const BOUND_WORDS = [
+  "before",
+  "after",
+  "from",
+  "until",
+  "till",
+  "by",
+  "starting at",
+  "up to",
+] as const;
+const BOUND_BEFORE = new RegExp(`\\b(?:${BOUND_WORDS.join("|")})[ \\t]+$`, "i");
+/** What can follow "ET or " to make a time a bound (#328); the prompt's quoted "ET or <tail>" forms must match. */
+export const BOUND_AFTER_TAILS = ["later", "earlier"] as const;
 /**
  * After a time, its ET and then "or later" or "or earlier" make it a bound too (#320, r1/Q-2 (c)). Reading
  * "Eastern Time" as an ET spelling here is #320's reading, accepted as 0cdd23a/SPEC-4 (a).
  */
-const BOUND_AFTER = new RegExp(`^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+or\\s+(?:later|earlier)\\b`, "i");
+const BOUND_AFTER = new RegExp(
+  `^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+or\\s+(?:${BOUND_AFTER_TAILS.join("|")})\\b`,
+  "i",
+);
 /**
  * The gap from a range start to its end (r1/Q-2 edges): only "to", "until", "till", "-" or "–" (`RANGE_END`),
  * anchored at the gap's start so the range end is the very next time. The anchor is #320's reading, accepted as
