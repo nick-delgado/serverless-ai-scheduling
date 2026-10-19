@@ -30,6 +30,6 @@ The agent (a task worker) changed:
 
 ## What's next
 
-- The second #270 PR: the exec role's `WorkloadServiceControlPlanes` (F-3), plus the two Bedrock reads.
+- The second #270 PR: the exec role's `WorkloadServiceControlPlanes` (F-3), plus the two Bedrock reads. **Later (2026-10-19):** it did that; see [The exec role gets one statement per service](2026-10-19-the-exec-role-gets-one-statement-per-service.md).
 - After Nick's apply: an ephemeral env deploy, seeding, one L1 smoke case, a `DailyTurnCap` update, teardown and the drift check, then an `Eval gate` run on a PR that touches a gated path (the evals role's ARN is checked only there), and one run each of `e2e.yml` and `deploy.yml`.
 - Spike S-1's `mantle` backend stops working once the pair is gone. Spikes are throwaway, so we left it.

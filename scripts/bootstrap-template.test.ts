@@ -13,7 +13,10 @@
  *     so no stack can rewrite a role's trust;
  *   - the grants #270 narrowed (security review F-4 to F-9, F-13, F-22 to F-24; r1/Q-7 (a)): for each statement it
  *     changed, the `Action` and `Resource` lists equal fixed lists, so an added or removed entry fails the test named
- *     for its finding. The grants #270 left alone (the exec role's `WorkloadServiceControlPlanes`, F-3) aren't pinned.
+ *     for its finding;
+ *   - the exec role's service grants (#270's second PR, F-3; r1/Q-2 (a), r1/Q-7 (a)): one statement per service,
+ *     its `service:*` action and its resources fixed, no Events, X-Ray, SES or Bedrock grant, and a comment directly
+ *     above each statement that keeps `"*"`.
  * It also reads `.github/workflows/deploy.yml` as text: its only trigger is `workflow_dispatch`, it has one job, which
  * runs only on `refs/heads/main` in the `dev` environment (which the deploy role's `sub` names) with
  * `id-token: write`, its one credentials step (found as an item of `steps:` whatever its first key, `- uses:` or
@@ -548,5 +551,81 @@ describe("the SchedDeployer permission set (infra/bootstrap/sched-deployer-polic
       ],
       Resource: ["*"],
     });
+  });
+});
+
+describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
+  const exec = block(/^ {2}CfnExecutionRole:$/, lines);
+  const arn = (service: string, region: boolean, rest: string) =>
+    `!Sub arn:\${AWS::Partition}:${service}:${region ? "${AWS::Region}" : ""}:\${AWS::AccountId}:${rest}`;
+
+  const SERVICES = [
+    {
+      sid: "DynamoDbSchedTables",
+      action: "dynamodb:*",
+      resource: [arn("dynamodb", true, "table/sched-*"), arn("dynamodb", true, "table/sched-*/index/*")],
+    },
+    { sid: "LambdaSchedFunctions", action: "lambda:*", resource: [arn("lambda", true, "function:sched-*")] },
+    {
+      sid: "LogsSchedLambdaLogGroups",
+      action: "logs:*",
+      resource: [arn("logs", true, "log-group:/aws/lambda/sched-*")],
+    },
+    {
+      sid: "CloudWatchSchedAlarmsAndDashboards",
+      action: "cloudwatch:*",
+      resource: [arn("cloudwatch", true, "alarm:sched-*"), arn("cloudwatch", false, "dashboard/sched-*")],
+    },
+    {
+      sid: "S3SchedBuckets",
+      action: "s3:*",
+      resource: ["!Sub arn:${AWS::Partition}:s3:::sched-*", "!Sub arn:${AWS::Partition}:s3:::sched-*/*"],
+    },
+    { sid: "SsmSchedParameters", action: "ssm:*", resource: [arn("ssm", true, "parameter/sched/*")] },
+    {
+      sid: "CloudFrontDistributionsAndSchedFunctions",
+      action: "cloudfront:*",
+      resource: [
+        arn("cloudfront", false, "distribution/*"),
+        arn("cloudfront", false, "origin-access-control/*"),
+        arn("cloudfront", false, "function/sched-*"),
+      ],
+    },
+    {
+      sid: "ApiGatewayRegionalApis",
+      action: "apigateway:*",
+      resource: ["!Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/*"],
+    },
+    { sid: "CognitoUserPools", action: "cognito-idp:*", resource: ["*"] },
+    { sid: "CognitoIdentityPools", action: "cognito-identity:*", resource: ["*"] },
+  ];
+
+  it.each(SERVICES)(
+    "grants $action on exactly its named resources in $sid (F-3)",
+    ({ sid, action, resource }) => {
+      expect(yamlGrant("CfnExecutionRole", sid)).toEqual({ Action: [action], Resource: resource });
+      expect(entries(yamlStatement("CfnExecutionRole", sid)).Effect).toBe("Allow");
+    },
+  );
+
+  it("has no WorkloadServiceControlPlanes statement and no Events, X-Ray, SES or Bedrock action (F-3, A-3)", () => {
+    const sids = exec.flatMap((l) => /^\s+- Sid: (\w+)$/.exec(l)?.[1] ?? []);
+    expect(sids).not.toContain("WorkloadServiceControlPlanes");
+    expect(sids.slice(0, SERVICES.length)).toEqual(SERVICES.map((s) => s.sid));
+    expect(exec.filter((l) => /\b(events|xray|ses|bedrock):/.test(l))).toEqual([]);
+  });
+
+  it('keeps "*" only for the two Cognito services, each with its reason directly above (F-3, r1/Q-2 (a))', () => {
+    const starred = exec.flatMap((l, i) => (/^\s+Resource: "\*"$/.test(l) ? [i] : []));
+    const sidsOfStarred = starred.map((i) => {
+      const sid = exec.slice(0, i).findLast((l) => /^\s+- Sid: /.test(l)) ?? "";
+      return sid.replace(/^\s+- Sid: /, "");
+    });
+    // NoBoundaryRemoval is a Deny, not a grant.
+    expect(sidsOfStarred).toEqual(["CognitoUserPools", "CognitoIdentityPools", "NoBoundaryRemoval"]);
+    for (const sid of ["CognitoUserPools", "CognitoIdentityPools"]) {
+      const at = exec.findIndex((l) => l.trim() === `- Sid: ${sid}`);
+      expect(exec[at - 1]?.trim()).toMatch(/^# .*takes no resource/);
+    }
   });
 });
