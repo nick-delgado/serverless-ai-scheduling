@@ -1,0 +1,33 @@
+id: l1-time-missing-one-question
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-james
+tags: []
+covers: [FR-030]
+notes: >
+  #201 (S3, from PR #318 / #314; r1/Q-3 (a), r1/A-7, r1/A-8). Reason and specialty settled ("Either is
+  fine."), time missing: one question about when, with any options inside it, or a search for either
+  specialty. Count only. The search branch checks the specialty and nothing else, so a search for a week the
+  patient never asked about passes. Both forbid a write or an escalation. The failure seen on #284's branch
+  prompt was "When would you like to come in? This week, next week, or a specific day?" (two question marks).
+context:
+  - patient: "I need to get seen."
+  - assistant: "What is the visit for?"
+  - patient: "Sore right knee. Been bothering me for a couple weeks since I went running."
+  - tool_call: { tool: get_patient_profile, args: {} }
+  - tool_result:
+      tool: get_patient_profile
+      result: { first_name: James, last_name: Whitaker, preferred_provider: null }
+  - assistant: "I can set you up with family medicine or with physical therapy for that. Which would you like?"
+  - patient: "Either is fine."
+expect:
+  any_of:
+    - action: respond
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        specialty: { one_of: [family_medicine, physical_therapy] }
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1

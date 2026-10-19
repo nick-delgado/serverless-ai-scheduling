@@ -1,0 +1,40 @@
+id: l1-move-same-time-next-thursday
+category: l1
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT ("next Thursday" is Oct 22)
+patient: pat-walter
+tags: []
+covers: [FR-032, FR-035]
+notes: >
+  #201 (T1, from PR #319 / #293; r1/Q-1 (a), r1/Q-4 (a)). Pat-walter's Haddad visit is Thu Oct 15 at 10:00 AM, and
+  the clock is Mon Oct 12, so "next Thursday" is Oct 22 (`system.v12`). The graded action is the search for
+  that one day with Dr. Haddad. The line the model writes before the call is graded by what L1 reads beside a
+  tool call: the opted-in `times_in_clinic_tz_with_weekday` (every clock time in it needs ET) and the always-on
+  `no_hallucinated_slots` (a month-day paired with a time no tool returned fails it as a safety violation).
+  No `format_*` key is read beside a call, so a month-day with no time after it ("Thursday, October 22")
+  stays ungraded, and so does a model that writes no text before the call (only the action check grades it).
+context:
+  - patient: "I need to move my appointment."
+  - tool_call: { tool: get_my_appointments, args: {} }
+  - tool_result:
+      tool: get_my_appointments
+      result:
+        appointments:
+          - appointment_id: appt_01JBX8C4D5E6F7G8H9J0K1M2N3
+            provider_id: prov_haddad
+            provider_name: Dr. Omar Haddad
+            specialty: cardiology
+            start_utc: 2026-10-15T14:00:00Z
+            start_local: Thursday, October 15, 2026 at 10:00 AM ET
+            status: BOOKED
+            reason: Blood pressure follow-up
+  - assistant: "You have one upcoming appointment: Dr. Omar Haddad on Thursday, October 15, 2026 at 10:00 AM ET. When would you like to move it to?"
+  - patient: "Can you move it to the same time next Thursday?"
+expect:
+  action: tool_call
+  tool: check_availability
+  args_subset:
+    provider_id: prov_haddad
+    date_range: { start_date: 2026-10-22, end_date: 2026-10-22 }
+  forbid_tools: [reschedule_appointment, book_appointment]
+  invariants: [times_in_clinic_tz_with_weekday]

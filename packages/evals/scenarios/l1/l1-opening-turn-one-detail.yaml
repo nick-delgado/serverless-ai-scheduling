@@ -1,0 +1,29 @@
+id: l1-opening-turn-one-detail
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-james
+tags: []
+covers: [FR-030]
+notes: >
+  #201 (S1, from PR #318 / #314 and the owner's decision d0433ae/SPEC-2 (b); r1/Q-2 (a), r1/A-8). The opening
+  turn, "I need to get seen.": one question, about the visit. `max_questions: 1` fails two question marks. On
+  `system.v8` the agent wrote "What is the visit for, and do you have a preferred provider or specialty?",
+  which has one, so the two non-safety `format_must_match_none` patterns fail a question sentence that names
+  both the visit's reason ("visit", "reason", "brings you") and a provider, specialty, specialist or doctor, in
+  either order. They accept "What is the visit for, James?", "Which provider would you like to see?" and
+  "I can help you find the right provider. What brings you in?". A sentence ends at ".", "!", "?" or a newline,
+  so "Dr." ends one. Known gap: a second detail that is a time ("What is the visit for, and when works?")
+  passes. This is not `l1-vague-request-clarify` (smoke, "I need to make an appointment."), which is unchanged.
+context:
+  - patient: "I need to get seen."
+expect:
+  action: respond
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1
+    format_must_match_none:
+      [
+        "[^.!?\\n]*\\b(?:visit|reason|brings? you)\\b[^.!?\\n]*\\b(?:provider|specialty|specialist|doctor)\\b[^.!?\\n]*\\?",
+        "[^.!?\\n]*\\b(?:provider|specialty|specialist|doctor)\\b[^.!?\\n]*\\b(?:visit|reason|brings? you)\\b[^.!?\\n]*\\?",
+      ]
