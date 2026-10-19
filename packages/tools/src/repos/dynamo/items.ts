@@ -58,7 +58,7 @@ export const keys = {
     PK: `CONV#${conversationId}`,
     SK: `MSG#${String(seq).padStart(6, "0")}`,
   }),
-  /** Fixed per conversation, so `attribute_not_exists(PK)` enforces "at most one escalation" (amendment). */
+  /** Fixed per conversation, so `attribute_not_exists(PK)` enforces "at most one escalation" while the item exists: it expires after 30 days (ADR-004 amendment, #271). */
   escalation: (conversationId: ConversationId): Key => ({ PK: `CONV#${conversationId}`, SK: "ESC" }),
 };
 

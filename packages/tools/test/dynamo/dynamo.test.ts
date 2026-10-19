@@ -424,21 +424,23 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         expiresAt: Date.parse(NOW) / 1000 + 30 * 24 * 3600,
       });
     });
+  });
+});
 
-    it("an escalation's expiresAt follows the escalation's createdAt, not the message TTL or the clock at read time (#271)", () => {
-      const createdAt = "2026-11-01T08:30:15.900Z";
-      const item = escalationItem({
-        escalationId: "esc_0123456789ab" as EscalationId,
-        conversationId: CONV_A,
-        patientId: MARIA,
-        reason: "patient_requested",
-        summary: "Patient asked to speak with a person about a dermatology visit.",
-        createdAt,
-        notification: { status: "PENDING" },
-      });
-      expect(ESCALATION_TTL_DAYS).toBe(30);
-      expect(item.expiresAt).toBe(1_796_113_815);
-      expect(escalationFrom(item)).not.toHaveProperty("expiresAt");
+describe("escalation items (no DynamoDB Local)", () => {
+  it("an escalation item's expiresAt is its createdAt floored to epoch seconds plus ESCALATION_TTL_DAYS (pinned at 30), and reading the item back drops it (#271)", () => {
+    const createdAt = "2026-11-01T08:30:15.900Z";
+    const item = escalationItem({
+      escalationId: "esc_0123456789ab" as EscalationId,
+      conversationId: CONV_A,
+      patientId: MARIA,
+      reason: "patient_requested",
+      summary: "Patient asked to speak with a person about a dermatology visit.",
+      createdAt,
+      notification: { status: "PENDING" },
     });
+    expect(ESCALATION_TTL_DAYS).toBe(30);
+    expect(item.expiresAt).toBe(1_796_113_815);
+    expect(escalationFrom(item)).not.toHaveProperty("expiresAt");
   });
 });

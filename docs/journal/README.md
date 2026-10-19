@@ -123,4 +123,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-19 | [A spoken message reaches the model with a marker line, and everything else about it stays as it was](2026-10-19-a-spoken-message-carries-a-marker-and-nothing-else-changes.md) | 5. What the evals showed |
 | 2026-10-19 | [The grader reads "every day next week" and "on both days" as naming the days when day lines back them: PR #339's two gate failures pass](2026-10-19-backed-several-day-leadins-in-more-wordings.md) | 5. What the evals showed |
 | 2026-10-19 | [Seven suggested eval cases, and the pre-tool checks L1 can't make](2026-10-19-seven-suggested-cases-and-the-checks-l1-cannot-make.md) | 5. What the evals showed |
-| 2026-10-19 | [Escalations now expire after 30 days, and PITR keeps them for 35 more: the F-10 gap closes with one constant and two ADR amendments](2026-10-19-escalations-now-expire-after-30-days-pitr-stays-at-35.md) | 5. What the evals showed |
+| 2026-10-19 | [Escalations now expire after 30 days, and PITR probably keeps them restorable for 35 more](2026-10-19-escalations-now-expire-after-30-days-pitr-stays-at-35.md) | 5. What the evals showed |
