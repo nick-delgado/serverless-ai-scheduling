@@ -94,24 +94,65 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: WorkloadServiceControlPlanes
+              # One statement per service (#270 F-3, r1/Q-2 (a)): the actions stay service-wide, the resources are
+              # named where the ARN carries the sched- name. No stack declares an Events, X-Ray or SES resource, and
+              # none a Bedrock one, so those grants are gone. Where a statement below holds no sched- name, its
+              # comment says why. An action that takes no resource gets its own "*" statement once a deploy shows
+              # the AccessDenied.
+              - Sid: DynamoDbSchedTables
                 Effect: Allow
-                Action:
-                  - apigateway:*
-                  - cloudfront:*
-                  - cloudwatch:*
-                  - cognito-identity:*
-                  - cognito-idp:*
-                  - dynamodb:*
-                  - events:*
-                  - lambda:*
-                  - logs:*
-                  - s3:*
-                  - ses:*
-                  - ssm:*
-                  - xray:*
-                  - bedrock:GetFoundationModel
-                  - bedrock:ListFoundationModels
+                Action: dynamodb:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-*/index/*
+              - Sid: LambdaSchedFunctions
+                Effect: Allow
+                Action: lambda:*
+                Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:sched-*
+              - Sid: LogsSchedLambdaLogGroups
+                Effect: Allow
+                Action: logs:*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sched-*
+              # A dashboard's ARN has no region.
+              - Sid: CloudWatchSchedAlarmsAndDashboards
+                Effect: Allow
+                Action: cloudwatch:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:sched-*
+                  - !Sub arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/sched-*
+              # The web and artifact buckets are both sched-* (the artifact bucket is read for templates and code).
+              - Sid: S3SchedBuckets
+                Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::sched-*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-*/*
+              # Parameter names start with /sched/, so the ARN is parameter/sched/..., not parameter/sched-*.
+              - Sid: SsmSchedParameters
+                Effect: Allow
+                Action: ssm:*
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/*
+              # A distribution and an origin access control are named by a generated ID, so no ARN can carry the
+              # sched- name. That is the reason this stays "*".
+              - Sid: CloudFrontDistributionsAndOacs
+                Effect: Allow
+                Action: cloudfront:*
+                Resource: "*"
+              # A REST API, its stages and deployments are named by a generated ID (the sched- name is a property),
+              # so no ARN can carry the sched- name. That is the reason this stays "*".
+              - Sid: ApiGatewayApis
+                Effect: Allow
+                Action: apigateway:*
+                Resource: "*"
+              # CreateUserPool takes no resource, and a pool's ID is generated, so the name can't be in the ARN.
+              - Sid: CognitoUserPools
+                Effect: Allow
+                Action: cognito-idp:*
+                Resource: "*"
+              # CreateIdentityPool takes no resource, and a pool's ID is generated, so the name can't be in the ARN.
+              - Sid: CognitoIdentityPools
+                Effect: Allow
+                Action: cognito-identity:*
                 Resource: "*"
               # With --role-arn, CloudFormation expands the SAM transform as this role (found in #6).
               - Sid: ExpandSamTransform
