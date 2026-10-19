@@ -26,10 +26,19 @@ The agent (a task worker) split the statement into one per service. Each keeps i
 ## What surprised us
 
 - **A dashboard's ARN has no region** (`arn:aws:cloudwatch::<account>:dashboard/…`), unlike an alarm's. A pattern copied from the alarm line would never match.
-- **The SSM pattern is `parameter/sched/*`, not `sched-*`**, because parameter names start with `/sched/`. We expect the template parameter type `AWS::SSM::Parameter::Value<String>` that reads the boundary's ARN to resolve under the same grant, but that is unverified until a deploy runs after the apply.
+- **The SSM pattern is `parameter/sched/*`, not `sched-*`**, because parameter names start with `/sched/`. The template parameter type `AWS::SSM::Parameter::Value<String>` that reads the boundary's ARN resolved under the same grant: the `auth` and `api` stacks of the ephemeral env created without error.
 - **The first "only the Cognito ones keep `*`" test saw one spelling.** It matched the line `Resource: "*"` and nothing else, so a list item, single quotes or a trailing comment would have slipped past while the test name said otherwise. It now reads the role's statements, and the fix needed the reader's list branch to strip quotes itself.
+
+## What happened after the apply
+
+Nick applied the bootstrap stack from this branch on 2026-10-19 (`sched-bootstrap` `UPDATE_COMPLETE` at 21:30:42Z; only `CfnExecutionRole` changed; his [comment](https://github.com/nick-delgado/serverless-ai-scheduling/pull/353#issuecomment-6277839226)). The agent then ran, as `SchedDeployer`, on an ephemeral env with the narrowed role:
+
+- `scripts/deploy.sh all <name>` created `data`, `auth`, `api` and `web`, all `CREATE_COMPLETE` (21:32:22Z to 21:34:58Z).
+- `scripts/deploy.sh all <name> -- DailyTurnCap=2` took the `api` stack to `UPDATE_COMPLETE` (21:38:47Z); the other three had no changes.
+- Nick approved the teardown, and the coordinator ran it: all four stacks reached `DELETE_COMPLETE` (21:40:35Z to 21:44:39Z).
+
+No stack event in any of the four held an AccessDenied or "not authorized" reason, so none of the guessed no-resource actions (`logs:DescribeLogGroups`, `ssm:DescribeParameters`, `cloudwatch:DescribeAlarms`) was needed, and no `"*"` statement was added after the first push. That is one create, one update and one delete on a clean env; it does not cover a stack update that changes a log group, alarm or dashboard.
 
 ## What's next
 
-- Nick's apply (unrecorded as of this entry), then the deploy, update and teardown of an ephemeral env. The first deploy is the real test of these ARNs.
-- Any AccessDenied it shows becomes its own `"*"` statement for that service, with a comment, in a fix commit on this branch.
+- Nick re-runs one gated PR's `Eval gate` and runs `deploy.yml` and `e2e.yml` once each (Q-6 (b)).

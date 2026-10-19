@@ -54,7 +54,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 
 | Clause | Status | Evidence |
 |---|---|---|
-| Least-privilege IAM | fixed in #270 (after Nick's apply) | §2. Two avoidable `*` fixed in `api.yaml`. Every `*` in the bootstrap stack and `SchedDeployer` has a class, #270's first PR narrowed the avoidable ones, and its second PR split the execution role's F-3 statement into one per service. |
+| Least-privilege IAM | fixed in #270 | §2. Two avoidable `*` fixed in `api.yaml`. Every `*` in the bootstrap stack and `SchedDeployer` has a class, #270's first PR narrowed the avoidable ones, and its second PR split the execution role's F-3 statement into one per service. |
 | JWT on every API | holds | Both methods use the Cognito authorizer (`infra/stacks/api.yaml:374`, `:386`). Pinned by `api-template.test.ts` "puts every method of the API behind the Cognito authorizer, which validates this env's user pool" (new: every method under `paths:` must carry `security: - CognitoUserPool: []`, and the authorizer's definition is compared exactly), "routes POST /api/chat through the Cognito authorizer to the chat function" (new) and the session route test. |
 | Patient ID only from the token | holds | See the identity row above. |
 | No secrets in the repo | holds | §4, row "Secrets in tracked files and git history". The commit author email is metadata, not a file: F-18, accepted by #272. |
@@ -67,7 +67,7 @@ Placeholders follow ADR-009: `<ACCOUNT_ID>` and `<SES_IDENTITY>` stand for value
 | "Demo, not a real clinic" banner | holds | `apps/web/src/app/DisclaimerBanner.tsx:2` |
 | 30-day message TTL | holds | See the ADR-009 data row. |
 | No message text in logs | fixed | F-21; §3. |
-| Least-privilege IAM | fixed in #270 (after Nick's apply) | §2 |
+| Least-privilege IAM | fixed in #270 | §2 |
 | API throttling | accepted: owner decision r1/Q-1 (a) on #273 (F-12) | §3; F-12, F-15 |
 | Daily turn cap | holds | §3; the A-5 tests |
 | Loop iteration cap | holds | `loop.ts:71`, `loop.test.ts:497` |
@@ -111,7 +111,7 @@ Each table lists every statement whose action or resource contains `*`.
 
 | Statement | `*` | Class |
 |---|---|---|
-| `DynamoDbSchedTables`, `LambdaSchedFunctions`, `LogsSchedLambdaLogGroups`, `CloudWatchSchedAlarmsAndDashboards`, `S3SchedBuckets`, `SsmSchedParameters` | `table/sched-*` (and its indexes), `function:sched-*`, `log-group:/aws/lambda/sched-*`, `alarm:sched-*` and `dashboard/sched-*`, `sched-*` buckets and objects, `parameter/sched/*` | **pending Nick's apply and the post-apply deploys (#270 second PR, F-3)**: each keeps its `service:*` action (r1/Q-2 (a)) on resources that carry the `sched-` name. The SSM pattern is `parameter/sched/*` because parameter names start with `/sched/`. |
+| `DynamoDbSchedTables`, `LambdaSchedFunctions`, `LogsSchedLambdaLogGroups`, `CloudWatchSchedAlarmsAndDashboards`, `S3SchedBuckets`, `SsmSchedParameters` | `table/sched-*` (and its indexes), `function:sched-*`, `log-group:/aws/lambda/sched-*`, `alarm:sched-*` and `dashboard/sched-*`, `sched-*` buckets and objects, `parameter/sched/*` | **fixed in #270 (second PR, F-3)**: each keeps its `service:*` action (r1/Q-2 (a)) on resources that carry the `sched-` name. The SSM pattern is `parameter/sched/*` because parameter names start with `/sched/`. |
 | `CloudFrontDistributionsAndOacs` | `Resource: "*"` | **justified**: a distribution and an origin access control are named by a generated ID, so no ARN can carry the `sched-` name. The reason is a comment above the statement. |
 | `ApiGatewayApis` | `Resource: "*"` | **justified**: a REST API, its stages and deployments are named by a generated ID (the `sched-` name is a property), so no ARN can carry it. The reason is a comment above the statement. |
 | `CognitoUserPools`, `CognitoIdentityPools` | `Resource: "*"` | **justified**: `CreateUserPool` and `CreateIdentityPool` take no resource, and the pools' IDs are generated. The reason is a comment above each statement. |
@@ -246,7 +246,7 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 | Secrets in tracked files and git history | holds | `git grep -E 'A(KIA\|SIA)[0-9A-Z]{16}'`: only the fakes `ASIAMOCKMOCKMOCKMOCK` and `ASIAFAKEFAKEFAKEFAKE` in web tests. `git log --all -G` for the same pattern: those plus a redaction test's `ASIAABCDEFGHIJKLMNOP`. The account ID in any tracked file: 0; in any commit's content on any branch (`git log --all -S`): 0. Real-looking `SES_SENDER=` values: only `example.com` addresses. Email domains in tracked files: only reserved ones (`example.com`, `example.org`, `.invalid`). No private-key, GitHub-token or `sk-ant-` pattern. `infra/bootstrap/sched-deployer-policy.json` uses the `<ACCOUNT_ID>`, `<SES_IDENTITY>` and `<SES_RECIPIENT>` placeholders. The owner's personal address is in commit author metadata (1,683 author and committer fields), not in content: F-18, #272. A-9: `scripts/deploy.sh` reads the SES values from the environment or the git-ignored `.env`. #257 settles its parser quirks (the parsers agree, and a line break is refused without printing the value); #39 doesn't edit it. |
 | Data exposure in logs | fixed | §3; F-21 |
 | Data exposure in responses | holds | Error events carry fixed patient-facing text (`services/api/src/lib/errors.ts`), never an exception message. The session response is built from the caller's own records (`services/api/src/lib/session.ts`). Responses carry no stack or internal ID beyond the caller's own conversation and message IDs. |
-| IAM | fixed in #270 (after Nick's apply) | §2 |
+| IAM | fixed in #270 | §2 |
 | `npm audit` advisories | holds | `npm audit`: 0 vulnerabilities at every severity; `npm audit --omit=dev`: 0. |
 
 ## 5. Findings
@@ -255,7 +255,7 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 |---|---|---|---|
 | F-1 | medium | The chat role granted `…/index/*`; the table has one index, `GSI1`. | fixed (`572297e`) |
 | F-2 | medium | The chat role's `foundation-model/anthropic.claude-sonnet-4-6*` matched any model ID with that prefix. | fixed (`572297e`) |
-| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | pending Nick's apply and the post-apply deploy, update and teardown (#270 second PR): one statement per service, resources named; Events, X-Ray, SES and Bedrock dropped |
+| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | fixed in #270 (second PR; applied by Nick, then a create, an update and a teardown of an ephemeral env on 2026-10-19, with no AccessDenied): one statement per service, resources named; Events, X-Ray, SES and Bedrock dropped |
 | F-4 | low | The boundary allows `bedrock-mantle:*` actions nothing calls since ADR-010. | fixed in #270 (first PR) |
 | F-5 | medium | The evals role copies the `sonnet-4-6*` suffix. | fixed in #270 (first PR) |
 | F-6 | medium | `SchedDeployer`'s `SpikesAndEvals` grants Bedrock and Transcribe on `"*"`, plus unused `bedrock-mantle:*`. | fixed in #270 (first PR) |
