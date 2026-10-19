@@ -325,3 +325,7 @@ Not changed: pairs (`dateTimeMentions`), day-line times, `no_hallucinated_slots`
 ## Amendment (2026-10-19): a spoken ambiguity scenario (#234)
 
 The decision stands; the scenario budget grows by one. "Clarify / ambiguity" is 6 and the total is 42. Nick settled it on #234 (decision ASK-BEFORE-SCENARIO): a spoken turn whose weekday or provider could be heard two ways must be asked about before any search, and `must_ask_before` is a scenario trajectory rule, so `clarify-voice-ambiguous-weekday` joins the set (case-level `input_mode: voice`, not tagged `smoke`, so the smoke suite and the baselines don't change). `packages/evals/test/scenarios-lint.test.ts` pins the new counts.
+
+## Amendment (2026-10-19): which half of #320's month-day gap #201 covers (#201)
+
+The decision stands. The 2026-10-17 (#320) amendment's known gap, "A month-day in a closing question or a pre-tool line isn't failed for being there (#201's suggested L1 case covers it)", holds only for the closing question: `l1-offer-closing-question-no-date` fails it with a `format_must_match_none` pattern. The pre-tool half stays open, because L1 reads no `format_*` key beside a tool call (Nick settled this on #201, r1/Q-1 (a)); `l1-move-same-time-next-thursday` and `l1-move-any-day-week-after-at-ten` grade that line only through `times_in_clinic_tz_with_weekday` and `no_hallucinated_slots`. A grader change to read `format_*` keys beside a call is to file.
