@@ -50,9 +50,9 @@ export function l1Case(id: string): L1Case {
   return c;
 }
 
-/** The committed calibration set: the 2026-10-05 full run's trials (PR #165). */
+/** The 2026-10-05 full run's `system.v1` trials (PR #165), kept as a fixture since #296 moved them out of `calibration/`. */
 function recordedSet(): CalibrationSet {
-  const path = join(import.meta.dirname, "..", "calibration", "transcripts.json");
+  const path = join(import.meta.dirname, "fixtures", "system-v1", "transcripts.json");
   return CalibrationSet.parse(JSON.parse(readFileSync(path, "utf8")));
 }
 
