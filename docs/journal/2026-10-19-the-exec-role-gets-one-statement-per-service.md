@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #270, PR #348, #39, NFR-004, ADR-003, security review F-3
+**Related:** #270, PR #353, PR #348, #39, NFR-004, ADR-003, security review F-3
 
 ## What happened
 
