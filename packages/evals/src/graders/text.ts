@@ -425,6 +425,8 @@ interface WindowedTime {
 
 /** A clock time that neither a `dateTimeMentions` pair nor a day line (`headingListTimes`) claims (#320). */
 export interface UnclaimedTime extends WindowedTime {
+  /** The clock time, 24-hour `HH:MM` (what a backing day line must list, `dayLinesBack`). */
+  time: string;
   /** The sentence that holds the time, trimmed. */
   sentence: string;
   /** The next clock time in the text, claimed or not: a range start's end (`unclaimedTimeLacks`). */
@@ -464,7 +466,7 @@ function sentenceEnds(text: string, times: readonly ClockTime[]): number[] {
  * The clock times (`CLOCK_TIME_SOURCE`'s "h:mm AM/PM" only, r1/Q-4 (a)) of `text` that
  * `times_in_clinic_tz_with_weekday` grades with `unclaimedTimeLacks` (#320, r1/Q-1 (a)): every one that isn't a
  * `dateTimeMentions` pair's own time or a list-line time under a date heading (`headingListTimes`), wherever it
- * is. That includes a pre-tool line, a lead-in, a closing question, a time before its date, a later time in a
+ * is. That includes a pre-tool line (which `unclaimedTimeLacks` grades for ET only, #337, r1/Q-1 (b)), a lead-in, a closing question, a time before its date, a later time in a
  * sentence, a list line outside a day line's reach, a bound, an echo, a held appointment and the clinic's hours.
  * Each comes with its sentence (`sentenceEnds`). It dates nothing, so `slotMentions` and the slot check don't
  * read it (r1/A-1).
@@ -487,17 +489,53 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
     const n = times[i + 1];
     const next = n === undefined ? {} : { next: { raw: n.raw, index: n.index, limit: limitOf(i + 1) } };
     return [
-      { raw: t.raw, index: t.index, limit: limitOf(i), sentence: text.slice(start, end).trim(), ...next },
+      {
+        raw: t.raw,
+        index: t.index,
+        time: t.time,
+        limit: limitOf(i),
+        sentence: text.slice(start, end).trim(),
+        ...next,
+      },
     ];
   });
 }
 
-/** Stands for a weekday in a newly graded time's sentence: that exact phrase, any case (#320, r1/Q-2 edges). */
+/**
+ * Stands for a weekday in a newly graded time's sentence: that exact phrase, any case (#320, r1/Q-2 edges). The
+ * several-day phrases (`SEVERAL_DAYS`) stand for one too, but only when backed.
+ */
 const THAT_DAY = /\bthat day\b/i;
+/**
+ * The several-day phrases that stand for a weekday in a time's sentence only when the same text's day lines back
+ * them (`dayLinesBack`, #337, r1/Q-2 (c)), any case, whole words. The list is complete, like `BOUND_WORDS`:
+ * "other days that week", "every day", "those days" and "every weekday" need a weekday.
+ */
+const SEVERAL_DAYS = /\b(?:every day|each day|all five days) that week\b/i;
+/** The weekdays a several-day phrase promises; a Saturday line beside them hurts nothing. */
+const WORKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
+
+/**
+ * Whether `text`'s day lines (`headingListTimes`) back a several-day phrase for `time` (24-hour `HH:MM`, #337,
+ * r1/Q-2 (c)): each of Monday to Friday has a day line, and every day line that names one lists `time`. A day
+ * line is a date heading with the list lines under it, so a lead-in in one text and day lines in a later text
+ * don't back each other.
+ */
+function dayLinesBack(text: string, time: string): boolean {
+  const listed = new Map<string, Set<string>>();
+  for (const m of headingListTimes(text))
+    listed.set(m.heading, (listed.get(m.heading) ?? new Set()).add(m.time));
+  return WORKDAYS.every((day) => {
+    const lines = [...listed].filter(([heading]) => mentionsWeekday(heading, day));
+    return lines.length > 0 && lines.every(([, times]) => times.has(time));
+  });
+}
 /**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
  * complete: a new wording needs a weekday until it is added here, in `BOUND_WORDS`, and to the prompt's bound
- * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328).
+ * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328). The bound words
+ * before a time are the prompt's list; the forms after a time (`BOUND_AFTER`) also accept "and later" and "and
+ * earlier", which the prompt doesn't teach (#337, r1/Q-3 (b)).
  */
 export const BOUND_WORDS = [
   "before",
@@ -510,14 +548,18 @@ export const BOUND_WORDS = [
   "up to",
 ] as const;
 const BOUND_BEFORE = new RegExp(`\\b(?:${BOUND_WORDS.join("|")})[ \\t]+$`, "i");
-/** What can follow "ET or " to make a time a bound (#328); the prompt's quoted "ET or <tail>" forms must match. */
+/**
+ * What can follow "ET or " to make a time a bound (#328); the prompt's quoted "ET or <tail>" forms must match.
+ * The grader also accepts "ET and <tail>" (#337, r1/Q-3 (b)), which the prompt doesn't teach.
+ */
 export const BOUND_AFTER_TAILS = ["later", "earlier"] as const;
 /**
- * After a time, its ET and then "or later" or "or earlier" make it a bound too (#320, r1/Q-2 (c)). Reading
+ * After a time, its ET and then "or later", "or earlier", "and later" or "and earlier" make it a bound too
+ * (#320, r1/Q-2 (c); "and" added by #337, r1/Q-3 (b)). "onward", "or after" and "past" stay non-bounds. Reading
  * "Eastern Time" as an ET spelling here is #320's reading, accepted as 0cdd23a/SPEC-4 (a).
  */
 const BOUND_AFTER = new RegExp(
-  `^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+or\\s+(?:${BOUND_AFTER_TAILS.join("|")})\\b`,
+  `^\\s*${ZONE_RE.source}(?:\\s+time)?\\s+(?:or|and)\\s+(?:${BOUND_AFTER_TAILS.join("|")})\\b`,
   "i",
 );
 /**
@@ -530,17 +572,24 @@ const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
 /**
  * What an `unclaimedTimes` time lacks, or undefined (#320, r1/Q-2 (c)): ET within `ZONE_WINDOW` characters after
  * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start (a time followed by only "to",
- * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its
- * sentence, unless the time is a bound (`BOUND_BEFORE`, `BOUND_AFTER`). "that week", "every day", "today" and
- * "weekdays" are no weekday.
+ * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday
+ * (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its sentence, unless the time is a bound
+ * (`BOUND_BEFORE`, `BOUND_AFTER`) or `etOnly`. "every day that week", "each day that week" and "all five days that
+ * week" stand for a weekday only when `dayLinesBack` (#337, r1/Q-2 (c)); "that week", "every day", "today" and
+ * "weekdays" are no weekday. `etOnly` is a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time
+ * no tool has returned yet, so it needs ET and no weekday.
  */
-export function unclaimedTimeLacks(text: string, t: UnclaimedTime): string | undefined {
+export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
   const end = t.index + t.raw.length;
   const rangeEnd = t.next !== undefined && RANGE_GAP.test(text.slice(end, t.next.index)) ? t.next : undefined;
   if (!zoneAfter(text, t, t.limit) && (rangeEnd === undefined || !zoneAfter(text, rangeEnd, rangeEnd.limit)))
     return "ET";
   const bound = BOUND_BEFORE.test(text.slice(0, t.index)) || BOUND_AFTER.test(text.slice(end));
-  return bound || WEEKDAY_RE.test(t.sentence) || THAT_DAY.test(t.sentence)
+  return bound ||
+    etOnly ||
+    WEEKDAY_RE.test(t.sentence) ||
+    THAT_DAY.test(t.sentence) ||
+    (SEVERAL_DAYS.test(t.sentence) && dayLinesBack(text, t.time))
     ? undefined
     : 'a weekday or "that day"';
 }
