@@ -124,3 +124,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-19 | [The grader reads "every day next week" and "on both days" as naming the days when day lines back them: PR #339's two gate failures pass](2026-10-19-backed-several-day-leadins-in-more-wordings.md) | 5. What the evals showed |
 | 2026-10-19 | [Seven suggested eval cases, and the pre-tool checks L1 can't make](2026-10-19-seven-suggested-cases-and-the-checks-l1-cannot-make.md) | 5. What the evals showed |
 | 2026-10-19 | [On replies from `system.v13`, `judge.v2` agrees with Nick on 47 of 47 pass/fail calls, and Nick scored none of them below 4](2026-10-19-judge-v2-agrees-with-nick-on-47-of-47-on-system-v13-replies.md) | 5. What the evals showed |
+| 2026-10-19 | [The boundary keeps only what a workload role grants, and the exec-role narrowing waits for a second PR](2026-10-19-the-boundary-keeps-only-what-a-workload-role-grants.md) | 5. What the evals showed |
