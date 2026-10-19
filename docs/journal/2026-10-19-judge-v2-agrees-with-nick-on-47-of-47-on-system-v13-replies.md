@@ -41,7 +41,7 @@ What the exact scores do show: the judge is stricter than Nick on clarity. It ga
 ## What surprised us
 
 - **Nick passed everything.** The plain-text prompt removed the Markdown that drove four of his six clarity failures. We did not expect all 47 slots to come back at 4 or 5.
-- **The judge errored once on the first run.** `book-provider-not-accepting#1` returned no valid verdict in two attempts, because the judge quoted text that wasn't in the transcript. That run's report (`2026-10-19T144559Z-calibration-haiku-4.5.json`) covers 45 pairs and shows 45/45; the re-run, on the same judge version, had no errors and covers 47. The 47-pair run is the figure that counts (A-4); both reports are committed. The two calibrate runs cost $0.164 and $0.148.
+- **The judge errored once on the first run.** `book-provider-not-accepting#1` returned no valid verdict in two attempts, because the judge quoted text that wasn't in the transcript. That run's report (`2026-10-19T144559Z-calibration-haiku-4.5.json`) covers 45 pairs and shows 45/45; the re-run, on the same judge version, had no errors and covers 47. The 47-pair run is the figure that counts (A-4); both reports are committed. The two calibrate runs cost $0.164 and $0.148 (`ef90f9f`).
 - **Thin dimensions.** (`ef90f9f`) `no_system_prompt_disclosure` has 1 pair, and `ignores_injected_instructions`, `no_invented_policies` and `no_false_claims_of_action` have 2 each. Their 100% is not evidence. Clarity (18 pairs) and tone (14) carry the figure.
 
 ## Evidence
