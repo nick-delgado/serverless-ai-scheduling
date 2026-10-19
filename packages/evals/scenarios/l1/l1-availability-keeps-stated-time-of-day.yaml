@@ -1,0 +1,92 @@
+id: l1-availability-keeps-stated-time-of-day
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-maria
+tags: []
+covers: [FR-030]
+notes: >
+  #306 (r1/Q-3 (a), r1/Q-4 (a)), modelled on Eval gate run 38958895946: the patient asked for an afternoon,
+  was offered Monday, Oct 12, and now asks for an earlier date with someone else. The next check_availability
+  must keep the afternoon: one call whose range ends on Thursday, Oct 8, or a call for Oct 8 alone (the per-day
+  search), each with time_of_day afternoon or start_time 12:00. The observed failure, the same dates with no
+  time, fails, and so do time_of_day morning or any. The gap: this checks that some call keeps the time, so a
+  reply with one timed call and other untimed ones passes. Provider and specialty are not pinned, because
+  "someone else" is searched either way.
+context:
+  - patient: "I need a dermatology visit next week, afternoon if possible."
+  - tool_call:
+      tool: check_availability
+      args:
+        specialty: dermatology
+        date_range: { start_date: 2026-10-12, end_date: 2026-10-16 }
+        time_of_day: afternoon
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: true
+        slots:
+          - slot_id: slot_lee_20261012T1600Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-12T16:00:00Z
+            start_local: Monday, October 12, 2026 at 12:00 PM ET
+          - slot_id: slot_okafor_20261012T1600Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-12T16:00:00Z
+            start_local: Monday, October 12, 2026 at 12:00 PM ET
+          - slot_id: slot_lee_20261012T1630Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-12T16:30:00Z
+            start_local: Monday, October 12, 2026 at 12:30 PM ET
+          - slot_id: slot_okafor_20261012T1630Z
+            provider_id: prov_okafor
+            provider_name: Dr. Samuel Okafor
+            specialty: dermatology
+            start_utc: 2026-10-12T16:30:00Z
+            start_local: Monday, October 12, 2026 at 12:30 PM ET
+          - slot_id: slot_lee_20261012T1700Z
+            provider_id: prov_lee
+            provider_name: Dr. Priya Lee
+            specialty: dermatology
+            start_utc: 2026-10-12T17:00:00Z
+            start_local: Monday, October 12, 2026 at 1:00 PM ET
+  - assistant: |-
+      Here are the afternoon dermatology openings:
+
+      Monday, October 12:
+      - 12:00 PM ET with Dr. Priya Lee
+      - 12:30 PM ET with Dr. Priya Lee
+      - 1:00 PM ET with Dr. Priya Lee
+
+      More times are available on other days if you'd like to see them.
+  - patient: "is there anything earlier that week, like Thu the 8th or sooner with someone else?"
+expect:
+  any_of:
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        date_range:
+          { start_date: { one_of: [2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08] }, end_date: 2026-10-08 }
+        time_of_day: afternoon
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        date_range:
+          { start_date: { one_of: [2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08] }, end_date: 2026-10-08 }
+        start_time: "12:00"
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        date_range: { start_date: 2026-10-08, end_date: 2026-10-08 }
+        time_of_day: afternoon
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        date_range: { start_date: 2026-10-08, end_date: 2026-10-08 }
+        start_time: "12:00"
