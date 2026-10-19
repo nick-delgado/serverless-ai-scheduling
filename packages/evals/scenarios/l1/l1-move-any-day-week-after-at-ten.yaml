@@ -1,0 +1,42 @@
+id: l1-move-any-day-week-after-at-ten
+category: l1
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT ("the week after" is Oct 19-23)
+patient: pat-walter
+tags: []
+covers: [FR-032, FR-035]
+notes: >
+  #201 (T2, from PR #319 / #293; r1/Q-1 (a), r1/Q-4 (a), r1/A-2). Written to `system.v12`, not to the
+  comment's "weekdays only": #332 changed the rule after it was posted, so a pre-tool line needs ET only and
+  names no clock time other than the one the patient asked for. The week after the appointment's week is Oct
+  19 to 23, and the case expects the search with `start_time: "10:00"` for Dr. Haddad matched on one call
+  (the prompt wants one call per weekday, so the Monday call is the one matched; `args_subset` takes any one
+  call that fits). Checks beside the call are T1's: the opted-in `times_in_clinic_tz_with_weekday` and the
+  always-on `no_hallucinated_slots`. A month-day with no time after it ("October 19-23") stays ungraded, and
+  so does a model that writes no text before the call.
+context:
+  - patient: "I need to move my appointment."
+  - tool_call: { tool: get_my_appointments, args: {} }
+  - tool_result:
+      tool: get_my_appointments
+      result:
+        appointments:
+          - appointment_id: appt_01JBX8C4D5E6F7G8H9J0K1M2N3
+            provider_id: prov_haddad
+            provider_name: Dr. Omar Haddad
+            specialty: cardiology
+            start_utc: 2026-10-15T14:00:00Z
+            start_local: Thursday, October 15, 2026 at 10:00 AM ET
+            status: BOOKED
+            reason: Blood pressure follow-up
+  - assistant: "You have one upcoming appointment: Dr. Omar Haddad on Thursday, October 15, 2026 at 10:00 AM ET. When would you like to move it to?"
+  - patient: "Any day the week after at 10."
+expect:
+  action: tool_call
+  tool: check_availability
+  args_subset:
+    provider_id: prov_haddad
+    start_time: "10:00"
+    date_range: { start_date: 2026-10-19, end_date: 2026-10-19 }
+  forbid_tools: [reschedule_appointment, book_appointment]
+  invariants: [times_in_clinic_tz_with_weekday]

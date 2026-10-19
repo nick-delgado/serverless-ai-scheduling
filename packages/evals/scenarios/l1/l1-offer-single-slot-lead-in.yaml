@@ -1,0 +1,43 @@
+id: l1-offer-single-slot-lead-in
+category: l1
+fixture: clinic-default
+clock: 2026-10-12T13:00:00Z # Mon Oct 12, 9:00 AM EDT
+patient: pat-walter
+tags: []
+covers: [FR-030, FR-035]
+notes: >
+  #201 (T3, from PR #319 / #293; r1/Q-4 (a), r1/A-4). One slot from one search, Dr. Haddad on Monday, October
+  19 at 10:00 AM ET. The reply groups it under the day line "Monday, October 19:" with the time on its own
+  line, and any lead-in that names the time says ET ("Dr. Haddad has 10:00 AM ET open that day:"), which
+  `times_in_clinic_tz_with_weekday` grades. #293's failing form was "Dr. Haddad has 10:00 AM open on Monday,
+  October 19." The three non-safety `format_must_match_none` patterns are `l1-offer-single-day`'s with this
+  case's date (the date once, the day line alone on its line). A time with no ET is graded by the invariant,
+  not by a pattern here (r1/A-3).
+context:
+  - patient: "Does Dr. Haddad have anything at 10 on Monday, October 19?"
+  - tool_call:
+      tool: check_availability
+      args:
+        {
+          provider_id: prov_haddad,
+          date_range: { start_date: 2026-10-19, end_date: 2026-10-19 },
+          start_time: "10:00",
+        }
+  - tool_result:
+      tool: check_availability
+      result:
+        truncated: false
+        slots:
+          - slot_id: slot_haddad_20261019T1400Z
+            provider_id: prov_haddad
+            provider_name: Dr. Omar Haddad
+            specialty: cardiology
+            start_utc: 2026-10-19T14:00:00Z
+            start_local: Monday, October 19, 2026 at 10:00 AM ET
+expect:
+  action: respond
+  response:
+    contains_all: ["Monday, October 19:", "10:00 AM ET"]
+    format_must_match_none:
+      ["October 19[\\s\\S]*October 19", "\\S[^\\n]*Monday, October 19", "Monday, October 19:[ \\t]*\\S"]
+  invariants: [times_in_clinic_tz_with_weekday]
