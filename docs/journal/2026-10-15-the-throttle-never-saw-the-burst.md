@@ -50,7 +50,7 @@ One step departs from r1/Q-3, which named Logs Insights for the marker search:
 
 ## What's next
 
-- #272: Nick decides on the Lambda concurrency quota and the commit-email setting.
+- #272: Nick decides on the Lambda concurrency quota and the commit-email setting. **Later (2026-10-19):** #272 closed, see [the #272 entry](2026-10-19-the-security-reviews-account-items-close-two-checked-one-accepted.md).
 - #273: per-client limits, WAF, a Transcribe cap, and the misleading "10 req/min" throttle comment. **Later (2026-10-16):** the comment is fixed, the chat function reserves 5, and Nick accepted the rest; see [Five chat turns at once per env](2026-10-16-five-chat-turns-at-once.md).
 - #270 (the bootstrap and `SchedDeployer` grants, applied by Nick) and #271 (escalation retention). **Later (2026-10-19):** #270's first PR narrowed every grant but the execution role's; see [The boundary keeps only what a workload role grants](2026-10-19-the-boundary-keeps-only-what-a-workload-role-grants.md).
 - #42: the runbook still says `SchedDeployer` calls `bedrock-mantle:CreateInference` (F-19). **Later (2026-10-16):** step 3 now names the four Bedrock actions the policy grants, and step 6 says to leave model invocation logging off; see [A new env from the runbook alone](2026-10-16-a-new-env-from-the-runbook-alone.md). **Later (2026-10-19):** the policy grants two Bedrock actions now, not four (the Mantle pair is dropped); see [The boundary keeps only what a workload role grants](2026-10-19-the-boundary-keeps-only-what-a-workload-role-grants.md).
