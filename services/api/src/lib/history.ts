@@ -23,7 +23,10 @@ export function needsClosingReply(messages: readonly { role: string }[]): boolea
  * A message to store. The patient's message carries the `clientMessageId` it was sent with (#104) and,
  * when it was spoken, `inputMode: "voice"` (#234).
  */
-export type OutgoingMessage = LlmMessage & { clientMessageId?: string; inputMode?: "voice" };
+export type OutgoingMessage = LlmMessage & {
+  clientMessageId?: string;
+  inputMode?: ConversationMessage["inputMode"];
+};
 
 /** Numbers messages for storage from `firstSeq`, all in one turn at one time. */
 export function toStoredMessages(

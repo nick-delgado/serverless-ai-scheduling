@@ -1246,6 +1246,20 @@ describe("handleChatTurn: spoken messages (#234)", () => {
     expect(stored.filter((m) => m.inputMode === "voice")).toHaveLength(1);
   });
 
+  it("re-runs an interrupted typed turn without the marker, even when the repeat request says voice", async () => {
+    const w = world({ steps: [{ error: throttled }, scriptedText("Which doctor?")] });
+    const failed = await w.send(SPOKEN);
+    const retry = await w.send(SPOKEN, {
+      conversationId: idOf(failed.summary),
+      clientMessageId: failed.clientMessageId,
+      inputMode: "voice",
+    });
+    expect(retry.summary).toMatchObject({ replayed: false });
+    expect(messagesWithoutCachePoints(w, 1)?.[0]?.content).toEqual([{ type: "text", text: SPOKEN }]);
+    const stored = await messagesOf(w.repos, MARIA, idOf(failed.summary));
+    expect(stored.some((m) => m.inputMode !== undefined)).toBe(false);
+  });
+
   describe("the mode never reaches the tools, and relaxes no check", () => {
     const BOOK = {
       slot_id: "slot_okafor_20261006T1300Z", // Tue Oct 6, 9:00 AM ET

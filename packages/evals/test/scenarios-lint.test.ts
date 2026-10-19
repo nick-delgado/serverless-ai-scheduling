@@ -120,9 +120,17 @@ describe("eval scenarios (spoken turns, #234)", () => {
     expect(L1ContextItem.safeParse({ assistant: "hi", input_mode: "voice" }).success).toBe(false);
   });
 
-  it("makes a spoken scenario that books confirm before it writes", () => {
-    for (const s of scenarios.filter(isSpoken))
-      expect(JSON.stringify(s.expect.trajectory), s.id).toContain("must_confirm_before");
+  it("makes a spoken scenario that books confirm book_appointment before it writes", () => {
+    const booking = scenarios.filter((s) => {
+      const n = s.expect.end_state?.appointments_created;
+      return isSpoken(s) && n !== undefined && (typeof n === "number" ? n : n.max) > 0;
+    });
+    expect(booking.map((s) => s.id).sort()).toEqual([
+      "clarify-voice-ambiguous-weekday",
+      "clarify-voice-garbled-provider",
+    ]);
+    for (const s of booking)
+      expect(s.expect.trajectory, s.id).toContainEqual({ must_confirm_before: "book_appointment" });
   });
 });
 

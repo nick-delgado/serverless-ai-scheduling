@@ -32,7 +32,7 @@ describe("estimateRunCost against recorded runs (#34, r1/A-9)", () => {
   });
 
   // The estimate counts the current prompt, which has grown since `system.v1` (the recorded runs): 1.484x at
-  // `4804c58` (`system.v9`), 1.532x at `43aa1b2` (`system.v10`, #321), 1.603x at `system.v13` (#234), so the L1 ceiling is 1.7x.
+  // `4804c58` (`system.v9`), 1.532x at `43aa1b2` (`system.v10`, #321), 1.603x at `96c87af` (`system.v13`, #234), so the L1 ceiling is 1.7x.
   it("L1 smoke: at least every cold run, at most 1.7x of them", () => {
     const estimate = estimateRunCost(selectSuite(loaded.l1, "smoke"), sonnet, 1);
     expect(estimate).toBeGreaterThanOrEqual(0.0572);

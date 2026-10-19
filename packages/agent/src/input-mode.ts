@@ -9,10 +9,12 @@
  * marker's words, or claims it was typed, is passed through unchanged and relaxes no rule (the prompt
  * says so).
  */
+import type { ChatInputMode } from "@sched/contracts";
+
 import type { ContentBlock, TextBlock } from "./llm/types";
 
 /** How a message was entered. Absent means typed. */
-export type InputMode = "text" | "voice";
+export type InputMode = ChatInputMode;
 
 /** The line a spoken patient message carries before the patient's own words. */
 export const SPOKEN_MESSAGE_MARKER =
