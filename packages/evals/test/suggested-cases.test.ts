@@ -23,6 +23,7 @@ describe("S1 l1-opening-turn-one-detail fails a question that joins a second det
     "What is the visit for, and do you have a preferred provider or specialty?",
     "Do you have a preferred doctor, and what is the reason for the visit?",
     "Hi James. What brings you in, and is there a specialist you want to see?",
+    "Do you have a preferred doctor, and what is the visit for?",
   ])("rejects %j", (text) => {
     expect(status(ID, text)).toBe("fail");
   });
@@ -32,6 +33,8 @@ describe("S1 l1-opening-turn-one-detail fails a question that joins a second det
     "Which provider would you like to see?",
     "I can help you find the right provider. What brings you in?",
     "What is the reason for your visit?",
+    "Once I know the reason for the visit, I can pick a provider.",
+    "I can match you with a provider once I know the reason.",
   ])("accepts %j", (text) => {
     expect(status(ID, text)).toBe("pass");
   });
@@ -158,6 +161,14 @@ describe("T1 and T2 expect the search and grade the line before it for ET (r1/Q-
     const tuesday = search("2026-10-20", "2026-10-20", { start_time: "10:00" });
     expect(failures(WEEK, "", [MONDAY, tuesday])).toEqual([]);
     expect(failures(WEEK, "", [search("2026-10-19", "2026-10-19")])).toEqual([ACTION]);
+    expect(
+      failures(WEEK, "", [
+        {
+          name: "check_availability",
+          input: { date_range: { start_date: "2026-10-19", end_date: "2026-10-19" }, start_time: "10:00" },
+        },
+      ]),
+    ).toEqual([ACTION]);
   });
 
   it.each([THU, WEEK])("%s fails a pre-tool line with a time that lacks ET and passes one with ET", (id) => {
