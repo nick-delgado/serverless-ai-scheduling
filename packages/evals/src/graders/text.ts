@@ -304,6 +304,8 @@ function pairsAndLaterTimes(text: string, times: readonly ClockTime[]): SlotMent
 export interface HeadingListTime extends SlotMention {
   /** The heading line that dates it, as written (the weekday check reads its weekday here, #236). */
   heading: string;
+  /** Where the heading line starts in the text, so two headings with the same text are two day lines (#340). */
+  headingStart: number;
   /** The rest of the time's own line, from the end of the clock time (the weekday check reads ET here, #236). */
   afterTime: string;
 }
@@ -322,11 +324,11 @@ export function headingListTimes(
   times: readonly ClockTime[] = clockTimesIn(text),
 ): HeadingListTime[] {
   const out: HeadingListTime[] = [];
-  let heading: { date: NamedDate; line: string } | undefined;
+  let heading: { date: NamedDate; line: string; start: number } | undefined;
   let lineStart = 0;
   for (const line of text.split("\n")) {
     const named = datesIn(line).at(-1);
-    if (named !== undefined) heading = { date: named, line };
+    if (named !== undefined) heading = { date: named, line, start: lineStart };
     else if (LIST_ITEM_PREFIX.test(line)) {
       const h = heading;
       if (h !== undefined)
@@ -336,6 +338,7 @@ export function headingListTimes(
             .map((t) => ({
               ...dated(h.date, t),
               heading: h.line,
+              headingStart: h.start,
               afterTime: line.slice(t.index - lineStart + t.raw.length),
             })),
         );
@@ -524,40 +527,59 @@ const EACH_OF_THOSE_DAYS = /\beach of those days\b/i;
 /** The weekdays a several-day phrase promises; a Saturday line beside them hurts nothing. */
 const WORKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 
+/** A day line (`dayLines`): a date heading, the date it names and the 24-hour `HH:MM` times listed under it. */
+interface DayLine {
+  heading: string;
+  /** The `MM-DD` date the heading names (`dateKey`). */
+  date: string;
+  times: Set<string>;
+}
+
 /**
- * Whether `text`'s day lines (`headingListTimes`) back a "that week" or "next week" phrase for `time` (24-hour
- * `HH:MM`, #337, r1/Q-2 (c); #340): each of Monday to Friday has a day line, and every day line that names one
- * lists `time`. A day line is a date heading with the list lines under it, so a lead-in in one text and day lines
- * in a later text don't back each other. The grader takes no clock, so it doesn't check the dates fall in the
- * week the phrase names.
+ * The day lines of `text` (#340, SPEC-1, SPEC-2 of the review of dcdf3ec): every line that names a month-day, in
+ * order, each with the times `headingListTimes` lists under it, none for a heading with no list line. Two headings
+ * with the same text are two day lines, because each is keyed by where it starts.
+ */
+function dayLines(text: string): DayLine[] {
+  const lines = new Map<number, DayLine>();
+  let start = 0;
+  for (const line of text.split("\n")) {
+    const named = datesIn(line).at(-1);
+    if (named !== undefined)
+      lines.set(start, { heading: line, date: dateKey(named.month, named.day), times: new Set() });
+    start += line.length + 1;
+  }
+  for (const m of headingListTimes(text)) lines.get(m.headingStart)?.times.add(m.time);
+  return [...lines.values()];
+}
+
+/**
+ * Whether `text`'s day lines back a "that week" or "next week" phrase for `time` (24-hour `HH:MM`, #337,
+ * r1/Q-2 (c); #340): each of Monday to Friday has a day line that lists a time, and every such day line lists
+ * `time`. A day line is a date heading with the list lines under it, so a lead-in in one text and day lines in
+ * a later text don't back each other. The grader takes no clock, so it doesn't check the dates fall in the week
+ * the phrase names.
  */
 function dayLinesBack(text: string, time: string): boolean {
-  const listed = new Map<string, Set<string>>();
-  for (const m of headingListTimes(text))
-    listed.set(m.heading, (listed.get(m.heading) ?? new Set()).add(m.time));
+  const listed = dayLines(text).filter((l) => l.times.size > 0);
   return WORKDAYS.every((day) => {
-    const lines = [...listed].filter(([heading]) => mentionsWeekday(heading, day));
-    return lines.length > 0 && lines.every(([, times]) => times.has(time));
+    const lines = listed.filter((l) => mentionsWeekday(l.heading, day));
+    return lines.length > 0 && lines.every((l) => l.times.has(time));
   });
 }
 
 /**
  * Whether `text`'s day lines back a two-date phrase for `time` (#340, r1/Q-2 (a)): the day lines name at least two
  * distinct dates, or exactly `exact` of them, and every day line lists `time`. Dates are counted by the date a
- * heading names (`headingListTimes`' `key`), not by its text, so two headings for one date count once, and each
- * of them must list the time. Weekdays aren't checked: each day line carries its date.
+ * heading names, not by its text, so two headings for one date count once, and each of them must list the time.
+ * A heading with no listed time is a date and a day line without the time (review decision dcdf3ec/SPEC-2 (b)).
+ * Weekdays aren't checked: each day line carries its date.
  */
 function datesBack(text: string, time: string, exact?: number): boolean {
-  const lines = new Map<string, { date: string; times: Set<string> }>();
-  for (const m of headingListTimes(text)) {
-    const line = lines.get(m.heading) ?? { date: m.key.replace(/ .*/, ""), times: new Set<string>() };
-    lines.set(m.heading, { ...line, times: line.times.add(m.time) });
-  }
-  const dates = new Set([...lines.values()].map((l) => l.date));
+  const lines = dayLines(text);
+  const dates = new Set(lines.map((l) => l.date));
   return (
-    dates.size >= 2 &&
-    (exact === undefined || dates.size === exact) &&
-    [...lines.values()].every((l) => l.times.has(time))
+    dates.size >= 2 && (exact === undefined || dates.size === exact) && lines.every((l) => l.times.has(time))
   );
 }
 /**
