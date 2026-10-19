@@ -508,18 +508,28 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
 const THAT_DAY = /\bthat day\b/i;
 /**
  * The several-day phrases that stand for a weekday in a time's sentence only when the same text's day lines back
- * them (`dayLinesBack`, #337, r1/Q-2 (c)), any case, whole words. The list is complete, like `BOUND_WORDS`:
- * "other days that week", "every day", "those days" and "every weekday" need a weekday.
+ * them (`dayLinesBack`), any case, whole words (#337, r1/Q-2 (c); "next week" added by #340, r1/Q-1 (c)): "every
+ * day", "each day" or "all five days", then "that week" or "next week". "this week" is left out on purpose: the
+ * prompt defines it as the rest of the current week, so a Monday-to-Friday backing would wrongly fail it. The
+ * list is complete, like `BOUND_WORDS`: "other days that week", "every day", "those days", "every weekday" and
+ * every "this week" form need a weekday.
  */
-const SEVERAL_DAYS = /\b(?:every day|each day|all five days) that week\b/i;
+const SEVERAL_DAYS = /\b(?:every day|each day|all five days) (?:that|next) week\b/i;
+/**
+ * The two-date phrases (#340, r1/Q-1 (c)), any case, whole words, backed by `datesBack`: "both days" needs day
+ * lines for exactly two dates, "each of those days" for at least two. Bare "those days" needs a weekday.
+ */
+const BOTH_DAYS = /\bboth days\b/i;
+const EACH_OF_THOSE_DAYS = /\beach of those days\b/i;
 /** The weekdays a several-day phrase promises; a Saturday line beside them hurts nothing. */
 const WORKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 
 /**
- * Whether `text`'s day lines (`headingListTimes`) back a several-day phrase for `time` (24-hour `HH:MM`, #337,
- * r1/Q-2 (c)): each of Monday to Friday has a day line, and every day line that names one lists `time`. A day
- * line is a date heading with the list lines under it, so a lead-in in one text and day lines in a later text
- * don't back each other.
+ * Whether `text`'s day lines (`headingListTimes`) back a "that week" or "next week" phrase for `time` (24-hour
+ * `HH:MM`, #337, r1/Q-2 (c); #340): each of Monday to Friday has a day line, and every day line that names one
+ * lists `time`. A day line is a date heading with the list lines under it, so a lead-in in one text and day lines
+ * in a later text don't back each other. The grader takes no clock, so it doesn't check the dates fall in the
+ * week the phrase names.
  */
 function dayLinesBack(text: string, time: string): boolean {
   const listed = new Map<string, Set<string>>();
@@ -529,6 +539,29 @@ function dayLinesBack(text: string, time: string): boolean {
     const lines = [...listed].filter(([heading]) => mentionsWeekday(heading, day));
     return lines.length > 0 && lines.every(([, times]) => times.has(time));
   });
+}
+
+/**
+ * Whether `text`'s day lines back a two-date phrase for `time` (#340, r1/Q-2 (a)): the day lines name at least two
+ * distinct dates, or exactly `exact` of them, and every day line lists `time`. Dates are counted by the date a
+ * heading names (`headingListTimes`' `key`), not by its text, so two headings for one date count once, and each
+ * of them must list the time. Weekdays aren't checked: each day line carries its date.
+ */
+function datesBack(text: string, time: string, exact?: number): boolean {
+  const lines = new Map<string, { date: string; times: Set<string> }>();
+  for (const m of headingListTimes(text)) {
+    const line = lines.get(m.heading) ?? {
+      date: m.key.slice(0, m.key.indexOf(" ")),
+      times: new Set<string>(),
+    };
+    lines.set(m.heading, { ...line, times: line.times.add(m.time) });
+  }
+  const dates = new Set([...lines.values()].map((l) => l.date));
+  return (
+    dates.size >= 2 &&
+    (exact === undefined || dates.size === exact) &&
+    [...lines.values()].every((l) => l.times.has(time))
+  );
 }
 /**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
@@ -574,9 +607,10 @@ const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
  * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start (a time followed by only "to",
  * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday
  * (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its sentence, unless the time is a bound
- * (`BOUND_BEFORE`, `BOUND_AFTER`) or `etOnly`. "every day that week", "each day that week" and "all five days that
- * week" stand for a weekday only when `dayLinesBack` (#337, r1/Q-2 (c)); "that week", "every day", "today" and
- * "weekdays" are no weekday. `etOnly` is a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time
+ * (`BOUND_BEFORE`, `BOUND_AFTER`) or `etOnly`. "every day", "each day" and "all five days", then "that week" or
+ * "next week", stand for a weekday only when `dayLinesBack` (#337, r1/Q-2 (c); #340); "both days" only when
+ * `datesBack` finds exactly two dates and "each of those days" when it finds at least two, each listing the time
+ * (#340, r1/Q-2 (a)); "that week", "every day", "today" and "weekdays" are no weekday. `etOnly` is a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time
  * no tool has returned yet, so it needs ET and no weekday.
  */
 export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
@@ -589,7 +623,9 @@ export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boole
     etOnly ||
     WEEKDAY_RE.test(t.sentence) ||
     THAT_DAY.test(t.sentence) ||
-    (SEVERAL_DAYS.test(t.sentence) && dayLinesBack(text, t.time))
+    (SEVERAL_DAYS.test(t.sentence) && dayLinesBack(text, t.time)) ||
+    (BOTH_DAYS.test(t.sentence) && datesBack(text, t.time, 2)) ||
+    (EACH_OF_THOSE_DAYS.test(t.sentence) && datesBack(text, t.time))
     ? undefined
     : 'a weekday or "that day"';
 }
