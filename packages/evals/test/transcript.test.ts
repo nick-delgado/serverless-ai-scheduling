@@ -1,12 +1,26 @@
 /**
  * `turnEvents`: how one agent turn's new messages become transcript events.
  */
-import type { LlmMessage } from "@sched/agent";
+import { SPOKEN_MESSAGE_MARKER, type LlmMessage } from "@sched/agent";
 import { describe, expect, it } from "vitest";
 
 import { textOf, turnEvents } from "../src";
 
 describe("turnEvents", () => {
+  it("leaves a spoken message's marker out of the patient's text (#234)", () => {
+    const messages: LlmMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: SPOKEN_MESSAGE_MARKER },
+          { type: "text", text: "doctor oh car" },
+        ],
+      },
+      { role: "assistant", content: [{ type: "text", text: "Which doctor?" }] },
+    ];
+    expect(turnEvents(1, messages, [])[0]).toEqual({ kind: "patient", turn: 1, text: "doctor oh car" });
+  });
+
   it("emits the patient's message, but no empty patient event for a tool-result message (8c21660/TEST-302)", () => {
     const messages: LlmMessage[] = [
       { role: "user", content: [{ type: "text", text: "what's my next appointment?" }] },

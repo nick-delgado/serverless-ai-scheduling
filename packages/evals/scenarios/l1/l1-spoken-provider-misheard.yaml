@@ -1,0 +1,21 @@
+id: l1-spoken-provider-misheard
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: [voice]
+covers: [FR-030, FR-031, adr9.no-invented-facts]
+notes: >
+  #234. The transcript misheard the provider's name ("doctor oh car"). The agent looks the name up or asks
+  which provider the patient means, and doesn't search availability for a provider it guessed, or book.
+context:
+  - patient: "hi can i see doctor oh car on tuesday morning for my eczema"
+    input_mode: voice
+expect:
+  any_of:
+    - { action: respond }
+    - { action: tool_call, tool: find_providers }
+  forbid_tools: [check_availability, book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1
+    format_must_not_contain: ["spell"]

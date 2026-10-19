@@ -38,3 +38,27 @@ describe.each(exportedSchemas)("%s", (name, schema) => {
     expect(twice).toEqual(once);
   });
 });
+
+describe("input mode (#234)", () => {
+  const request = EXAMPLES.ChatRequest;
+
+  it.each(["text", "voice"])("lets a chat request say inputMode %s", (inputMode) => {
+    expect(C.ChatRequest.parse({ ...request, inputMode }).inputMode).toBe(inputMode);
+  });
+
+  it("lets a chat request leave inputMode out, meaning text", () => {
+    const { inputMode: _omitted, ...without } = request;
+    expect(C.ChatRequest.parse(without)).not.toHaveProperty("inputMode");
+  });
+
+  it.each(["phone", "", "VOICE", null, 1])("rejects a chat request whose inputMode is %j", (inputMode) => {
+    expect(C.ChatRequest.safeParse({ ...request, inputMode }).success).toBe(false);
+  });
+
+  it("stores only voice on a message, and keeps it through parsing", () => {
+    const message = EXAMPLES.ConversationMessage;
+    expect(C.ConversationMessage.parse({ ...message, inputMode: "voice" }).inputMode).toBe("voice");
+    expect(C.ConversationMessage.safeParse({ ...message, inputMode: "text" }).success).toBe(false);
+    expect(C.ConversationMessage.parse(message)).not.toHaveProperty("inputMode");
+  });
+});

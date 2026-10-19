@@ -5,6 +5,7 @@
 import {
   estimateCostUsd,
   profileRequest,
+  withInputMode,
   type ContentBlock,
   type LlmClient,
   type LlmMessage,
@@ -56,7 +57,9 @@ export function l1Messages(c: L1Case): LlmMessage[] {
     else messages.push({ role, content: [block] });
   };
   for (const item of c.context) {
-    if ("patient" in item) push("user", { type: "text", text: item.patient });
+    if ("patient" in item)
+      for (const block of withInputMode([{ type: "text", text: item.patient }], item.input_mode))
+        push("user", block);
     else if ("assistant" in item) push("assistant", { type: "text", text: item.assistant });
     else if ("tool_call" in item) {
       const id = `tooluse_l1_${String(++seq).padStart(3, "0")}`;

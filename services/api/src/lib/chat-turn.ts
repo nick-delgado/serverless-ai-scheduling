@@ -16,7 +16,8 @@
  *    none (the turn failed before any tool ran), the agent runs again on it without storing it twice
  *    (a re-run). Neither counts a turn.
  * 4. The daily turn cap (ADR-009) is consumed atomically before any model call, for a new message only.
- * 5. The patient's message is stored, with its `clientMessageId`, BEFORE the agent loop runs, so an
+ * 5. The patient's message is stored, with its `clientMessageId` (and `inputMode: "voice"` when it was
+ *    spoken, #234), BEFORE the agent loop runs, so an
  *    escalation's staff transcript (read from storage, #23) includes it, and a failed turn never loses
  *    it (FR-015). A turn that opened a new conversation then names it in a `conversation` event, the
  *    first thing written (so under 200), before the model is called: a Retry after a cut stream
@@ -37,6 +38,7 @@ import {
   type AgentLimits,
   type AgentTurnResult,
   type Clock,
+  type InputMode,
   type LlmClient,
   type LlmMessage,
   type ModelProfile,
@@ -254,6 +256,7 @@ class ChatTurn {
         role: "user",
         content: [{ type: "text", text: request.text }],
         clientMessageId: request.clientMessageId,
+        ...(request.inputMode === "voice" ? { inputMode: "voice" as const } : {}),
       };
       if (!(await this.#append(turn, [...before, patientMessage]))) return;
       history = [...earlier, ...before];
@@ -263,7 +266,9 @@ class ChatTurn {
       }
     }
 
-    const result = await this.#runAgent(turn, request.text, history);
+    // A re-run renders the stored message's mode, not the repeat request's (#234, A-2).
+    const inputMode = send.kind === "interrupted" ? stored[send.index]?.inputMode : request.inputMode;
+    const result = await this.#runAgent(turn, request.text, inputMode, history);
     this.#summary.outcome = result.outcome;
     this.#recordTrace(result);
 
@@ -408,7 +413,12 @@ class ChatTurn {
   }
 
   /** 6. The agent loop, with tools bound to this patient and this (owned) conversation. */
-  async #runAgent(turn: OpenTurn, text: string, history: LlmMessage[]): Promise<AgentTurnResult> {
+  async #runAgent(
+    turn: OpenTurn,
+    text: string,
+    inputMode: InputMode | undefined,
+    history: LlmMessage[],
+  ): Promise<AgentTurnResult> {
     const { repos, clock, notifier, limits } = this.#deps;
     const { patientId, conversationId, turnId } = turn;
     const profileRecord = await repos.patients.get(patientId);
@@ -431,6 +441,7 @@ class ChatTurn {
     return runAgentTurn({
       history,
       userMessage: text,
+      ...(inputMode === undefined ? {} : { inputMode }),
       system: this.#deps.systemPrompt({
         now: clock.now(),
         patientFirstName: profileRecord?.firstName,

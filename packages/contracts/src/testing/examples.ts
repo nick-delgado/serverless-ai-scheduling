@@ -304,10 +304,12 @@ export const EXAMPLES = {
   ChatStreamEventList: [statusEvent, deltaEvent, doneEvent] satisfies In<"ChatStreamEventList">,
 
   // api
+  ChatInputMode: "voice",
   ChatRequest: {
     conversationId: CONVERSATION_ID,
     clientMessageId: CLIENT_MESSAGE_ID,
     text: "Do you have dermatology openings on Tuesday afternoon?",
+    inputMode: "voice",
   } satisfies In<"ChatRequest">,
   DisplayMessage: {
     id: "msg_000003",

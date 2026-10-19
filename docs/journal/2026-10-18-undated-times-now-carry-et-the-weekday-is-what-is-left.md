@@ -73,5 +73,5 @@ The agent also counted three things the grader doesn't see (A-9), over runs 2 an
 
 - #326: a lead-in covering several days names no time (blocked by this issue). Its rewrite of the offer rule also adds the pointer to the bullet that this entry says is missing. **Later (2026-10-18):** #326 took the pattern in `system.v11`: a lead-in that covers several days names no time; see [`system.v11` keeps a time out of a several-day lead-in](2026-10-18-several-day-offers-name-no-time.md).
 - #328: a test that keeps the prompt's bound-word list and the grader's `BOUND_BEFORE` and `BOUND_AFTER` in step.
-- #234 and #251 take the next prompt version and keep these rules unless they measure better ones.
+- #234 and #251 take the next prompt version and keep these rules unless they measure better ones. **Later (2026-10-19):** `system.v13` (#234) took its version and added the "Spoken messages" section; see [A spoken message reaches the model with a marker line](2026-10-19-a-spoken-message-carries-a-marker-and-nothing-else-changes.md).
 - Both gate runs above regressed a scenario case on the time check with ET present, one case each. Later gate runs on this PR are recorded in the PR body, not here.

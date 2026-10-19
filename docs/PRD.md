@@ -73,7 +73,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 | FR-020 | M | Mic button next to the text input | First tap triggers the browser mic-permission prompt. If denied, an inline explanation says how to enable it and that typing still works. The mic button is disabled while the agent responds, like Send (FR-011). |
 | FR-021 | M | Recording overlay | While recording, a modal overlay shows an elapsed timer (m:ss), a level/pulse indicator, **Send**, and **Cancel**. At 60 s the recording stops and is sent as if Send were pressed. Focus is trapped in the overlay; Esc cancels. |
 | FR-022 | M | Transcription feedback | After Send, a spinner/animation with "Transcribing…" shows until the final transcript is ready (target ≤ 2 s p95, NFR-002). If no final transcript arrives within 10 s of Send, the FR-024 error shows. |
-| FR-023 | M | Transcript posted as the patient's message | The final transcript appears as a patient chat bubble, then goes to the agent exactly like typed text. Empty transcript → "I didn't catch that", with nothing sent. |
+| FR-023 | M | Transcript posted as the patient's message | The final transcript appears as a patient chat bubble, then goes to the agent like typed text, marked as spoken: the model sees a fixed line before the patient's words saying the message was transcribed from voice, so names, dates, times and providers may be misheard, and the agent asks first when one could be heard two ways (#234). The marker can only add care; no rule is relaxed by it. Empty transcript → "I didn't catch that", with nothing sent. |
 | FR-024 | M | Transcription failure is recoverable | On error: a message plus options to retry recording or type instead. |
 
 ### 4.4 Agent capabilities
@@ -188,7 +188,7 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | FR-020 | #10, #28, #36, #40 |
 | FR-021 | #10, #28, #36, #40 |
 | FR-022 | #10, #28, #29, #36, #40 |
-| FR-023 | #10, #28, #29, #36, #40 |
+| FR-023 | #10, #28, #29, #36, #40, #234 |
 | FR-024 | #28, #29, #36, #40 |
 | FR-030 | #4, #16, #19, #33, #36, #40, #77, #80, #114, #170 |
 | FR-031 | #4, #16, #21, #33, #36, #40, #80, #313 |

@@ -18,7 +18,7 @@
  * - Retry is offered only for a stream `error` event with `retryable: true`, a network failure
  *   (anything `fetch` or the reader throws that isn't a `ChatHttpError` or `ChatProtocolError`), a 5xx
  *   without an `error` event, or a stream that ends without `done` or `error` (`ChatStreamEndedError`,
- *   #138). It resends the same text with the same `clientMessageId` and `conversationId`, without
+ *   #138). It resends the same text and input mode with the same `clientMessageId` and `conversationId`, without
  *   adding the message again; the server de-duplicates it (#104). Any other error shows its message
  *   without Retry (the daily cap's front-desk number); so do a 4xx without an event and a malformed
  *   stream. A first turn that failed before its `conversation` line arrived (a network failure
@@ -34,7 +34,7 @@
  * turn starts a new conversation. A failed session call shows the fallback greeting with an error and
  * Retry (a 401 instead routes to sign-in, as above).
  */
-import { CLINIC, type ChatStreamEvent, type ToolName } from "@sched/contracts";
+import { CLINIC, type ChatInputMode, type ChatStreamEvent, type ToolName } from "@sched/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { type ChatApi, ChatHttpError } from "./api";
@@ -99,7 +99,8 @@ export interface UseChatOptions {
 }
 
 /** What Retry repeats: a failed turn (its message is already in the list), or the session call. */
-type RetryTarget = { kind: "turn"; text: string; clientMessageId: string } | { kind: "session" };
+type RetryTarget =
+  { kind: "turn"; text: string; clientMessageId: string; inputMode: ChatInputMode } | { kind: "session" };
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof ChatHttpError && error.status === 401;
@@ -192,7 +193,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
 
   /** Run one turn for a message already in the list. Retry calls it again with the same arguments. */
   const runTurn = useCallback(
-    (text: string, clientMessageId: string) => {
+    (text: string, clientMessageId: string, inputMode: ChatInputMode) => {
       const controller = new AbortController();
       // Set by `done`, which is the only way a turn completes.
       let messageId = "";
@@ -211,7 +212,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
       const failTurn = (message: string, retryable: boolean) => {
         if (ended) return;
         end();
-        showError(message, retryable ? { kind: "turn", text, clientMessageId } : null);
+        showError(message, retryable ? { kind: "turn", text, clientMessageId, inputMode } : null);
       };
       // The sign-in has ended: say so, without Retry, and hand over to sign-in.
       const signedOut = () => {
@@ -283,7 +284,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
 
       api
         .sendChat(
-          { conversationId: conversationId.current, clientMessageId, text },
+          { conversationId: conversationId.current, clientMessageId, text, inputMode },
           onEvent,
           controller.signal,
         )
@@ -300,13 +301,13 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
   );
 
   const send = useCallback(
-    (raw: string): boolean => {
+    (raw: string, inputMode: ChatInputMode = "text"): boolean => {
       const text = raw.trim();
       if (text.length === 0 || active.current) return false;
       const clientMessageId = crypto.randomUUID();
       sent.current = true;
       setMessages((list) => [...list, { id: clientMessageId, role: "patient", text }]);
-      runTurn(text, clientMessageId);
+      runTurn(text, clientMessageId, inputMode);
       return true;
     },
     [runTurn],
@@ -318,7 +319,7 @@ export function useChat(api: ChatApi, options: UseChatOptions = {}) {
     // Nothing to retry, or a second call before the first re-rendered (it cleared the target).
     if (!target) return;
     if (target.kind === "turn") {
-      runTurn(target.text, target.clientMessageId);
+      runTurn(target.text, target.clientMessageId, target.inputMode);
       return;
     }
     clearError();

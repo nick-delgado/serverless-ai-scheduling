@@ -213,6 +213,7 @@ export async function runScenarioTrial(
     const result = await runAgentTurn({
       history,
       userMessage: message,
+      ...(scenario.input_mode === undefined ? {} : { inputMode: scenario.input_mode }),
       system,
       executor: env.executor,
       llm: agent.llm,
