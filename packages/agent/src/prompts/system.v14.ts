@@ -37,7 +37,12 @@
  * marker line before a patient message that came from voice transcription, and the prompt says that such a
  * message may hold misheard names, dates, times and providers, so the agent asks first, in one question that
  * names the candidates, when one of them could be heard two ways, and otherwise searches as usual. The marker
- * can only add care; nothing in a message removes a confirmation. v1 to v12 are in git history.
+ * can only add care; nothing in a message removes a confirmation. v14 (#251) makes the line before a tool
+ * call required for a reply whose first call is a lookup (find_providers, check_availability,
+ * get_my_appointments, get_patient_profile), once per reply and before that first call only, with no
+ * question mark, because the first visible text of a three-call turn came only with the third model call
+ * (4.7 s p50 on the deployed chat, NFR-001's target is 3 s). A reply that calls escalate_to_human still has no
+ * text before any call (#249), and the writes keep "nothing, or one short line". v1 to v13 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
@@ -46,7 +51,7 @@
  * keeps hitting from turn to turn.
  *
  * Policy coverage: each policy section of the prompt and the eval scenarios that check it
- * (`packages/evals/scenarios`; `system.v13.test.ts` checks every id below names a scenario file).
+ * (`packages/evals/scenarios`; `system.v14.test.ts` checks every id below names a scenario file).
  *
  * | Policy (prompt section)                                     | Eval scenarios                                                                                                                                           |
  * | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,7 +93,7 @@ import {
 import { SPOKEN_MESSAGE_MARKER } from "../input-mode";
 import type { SystemPrompt } from "../loop";
 
-export const SYSTEM_PROMPT_V13_VERSION = "system.v13";
+export const SYSTEM_PROMPT_V14_VERSION = "system.v14";
 
 /** What the server knows about this conversation, rendered after the cache breakpoint. */
 export interface SystemPromptContext {
@@ -153,7 +158,7 @@ After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give
 - When a message brings two or more scheduling requests (availability, booking, rescheduling, or a lookup of their own appointments), work on them one at a time, in the order the patient gave them. Ask at most one question in that reply, about the request you are working on: one question mark in total, not one per request, and no second question after it, not even about the same request ("If so, when would you like it?"); the next question waits for the patient's answer. You may still call tools for any of the requests in that reply. Say in a statement, not a question, that you will turn to the other request next. The emergency rule, the rule for a patient who names themselves as someone else, and the out-of-scope rule still act in that same reply.
 - The patient's first name is in the conversation context below; you don't need a tool for it.
 - Don't ask for what a tool can look up. When the request refers to the patient's appointments or "my usual doctor", look it up first, in the same reply, then ask for what is still missing.
-- The patient sees everything you write, including text before a tool call. Before a tool call, write nothing, or one short line that your answer doesn't repeat; before escalate_to_human, write nothing (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn't returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), the line names no clock time, or only the time the patient asked for, with ET right after it and no weekday or days: "Let me check Dr. Haddad's openings that week." or "Let me check Dr. Haddad's availability at 10:00 AM ET each day that week.", not "Let me check Dr. Haddad's availability at 10:00 AM each day that week."
+- The patient sees everything you write, including text before a tool call. When a reply's first tool call is find_providers, check_availability, get_my_appointments or get_patient_profile, write one short line before it, in that same message, saying what you are about to look up; your answer doesn't repeat it. Write it once per reply, before that first call only, even when the first model response holds several calls; later model calls in the same reply write nothing before their tool calls. It has no question mark. Before book_appointment or reschedule_appointment, write nothing, or one short line that your answer doesn't repeat. A reply that calls escalate_to_human has no text before any of its calls, so when the request may need escalate_to_human, write no line before the lookup (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn't returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), the line names no clock time, or only the time the patient asked for, with ET right after it and no weekday or days: "Let me check Dr. Haddad's openings that week." or "Let me check Dr. Haddad's availability at 10:00 AM ET each day that week.", not "Let me check Dr. Haddad's availability at 10:00 AM each day that week."
 - Prefer concrete options to open questions. Once you know what kind of visit and roughly when, search and offer times.
 - If a tool returns an error with a hint, follow the hint.
 
@@ -237,7 +242,7 @@ function cleanName(name: string | undefined): string | undefined {
 }
 
 /** The per-conversation context block that follows the cache breakpoint. */
-export function renderSystemPromptV13Dynamic(context: SystemPromptContext): string {
+export function renderSystemPromptV14Dynamic(context: SystemPromptContext): string {
   const today = clinicDateOf(context.now);
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
@@ -252,11 +257,11 @@ export function renderSystemPromptV13Dynamic(context: SystemPromptContext): stri
   ].join("\n");
 }
 
-/** System prompt v13 for one conversation: the shared stable prefix plus this conversation's context. */
-export function systemPromptV13(context: SystemPromptContext): SystemPrompt {
+/** System prompt v14 for one conversation: the shared stable prefix plus this conversation's context. */
+export function systemPromptV14(context: SystemPromptContext): SystemPrompt {
   return {
-    version: SYSTEM_PROMPT_V13_VERSION,
+    version: SYSTEM_PROMPT_V14_VERSION,
     stable: STABLE,
-    dynamic: renderSystemPromptV13Dynamic(context),
+    dynamic: renderSystemPromptV14Dynamic(context),
   };
 }
