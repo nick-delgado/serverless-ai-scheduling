@@ -4,10 +4,12 @@
  *   list-line time under a date heading, wherever it is;
  * - what each needs (r1/Q-2 (c)): ET within 16 characters after it (or after its range end), and a weekday or
  *   "that day" in its sentence, unless it is a bound (#337 r1/Q-3 (b): "and later" and "and earlier" too) or a
- *   several-day phrase its text's day lines back (#337 r1/Q-2 (c)); a pre-tool line without a day line needs ET only
+ *   several-day phrase its text's day lines back (#337 r1/Q-2 (c); "next week", "both days" and "each of
+ *   those days" added by #340, r1/Q-1 (c) and r1/Q-2 (a)); a pre-tool line without a day line needs ET only
  *   (#337 r1/Q-1 (b));
  * - what counts as a time (r1/Q-4 (a)): "h:mm AM/PM" only.
- * The sentences of #326's and #332's runs are fixtures too (#337, A-3), placed as they were in their trials.
+ * The sentences of #326's and #332's runs are fixtures too (#337, A-3), and so are #339's two gate-run sentences (#340,
+ * A-2), placed as they were in their trials.
  * The 12 sentences of #293's hand count (results comment on #293, 2026-10-17) are fixtures, placed as they were in
  * the trial, and so are `system.v9`'s own compliant examples. Pairs and day-line times keep their rule (A-2):
  * `offer-format.test.ts`.
@@ -682,6 +684,15 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
     ]);
   });
 
+  it("a Thursday date heading with no listed time beside its day line leaves the lead-in backed (#337's reading, unchanged by #340)", async () => {
+    const text = `${LEAD}
+
+${dayLines()}
+
+Thursday, October 29: none`;
+    expect(await offerCheck(text)).toEqual(["pass", undefined]);
+  });
+
   it("a second line for a day that lacks the time fails the lead-in", async () => {
     const text = `${LEAD}\n\n${dayLines()}\n\nThursday, October 29:\n- 11:00 AM ET`;
     expect(await offerCheck(text)).toEqual(FAILS_ON_WEEKDAY);
@@ -772,6 +783,235 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
     expect(await onText(sentence)).toMatchObject({
       status: "fail",
       detail: lacks("2:00 PM", "ET", sentence),
+    });
+  });
+});
+
+describe('#340: "next week", "both days" and "each of those days" name the days when day lines back them', () => {
+  const WED_THU_FRI: [string, string][] = [
+    ["Wednesday", "October 14"],
+    ["Thursday", "October 15"],
+    ["Friday", "October 16"],
+  ];
+  const TWO = WED_THU_FRI.slice(0, 2);
+  const textCheck = (text: string) => onText(text).then((r) => [r?.status, r?.detail]);
+  const PASSES = ["pass", undefined];
+  const failsOn = (sentence: string) => ["fail", lacks("10:00 AM", WEEKDAY, sentence)];
+  /** Two backing day lines and a third date heading with no listed time fail the phrase (SPEC-2 (b)). */
+  const expectTimelessHeadingFails = async (sentence: string) => {
+    const text = `${sentence}\n\n${dayLines(TWO)}\n\nFriday, October 16: none`;
+    expect(await textCheck(text)).toEqual(failsOn(sentence));
+  };
+  /** A glued phrase fails even with two backing day lines. */
+  const expectGluedFails = async (words: string) => {
+    const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
+    expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
+  };
+
+  describe("the sentences of #339's gate runs, whole texts placed as they were in their trials (A-2)", () => {
+    const RESCHEDULE_TEXT =
+      "Here are the times around 2:00 and 3:00 PM ET on both days:\n\nWednesday, October 14:\n- 2:00 PM ET\n- 3:00 PM ET\n\nThursday, October 15:\n- 2:00 PM ET\n- 3:00 PM ET\n\nMore times are available on these days if you'd like to see others. Which works for you?";
+    const PT_TEXT =
+      "Dr. Anna Kowalski has 8:00 AM ET open every day next week. Here are the options:\n\nMonday, November 2:\n- 8:00 AM ET\n\nTuesday, November 3:\n- 8:00 AM ET\n\nWednesday, November 4:\n- 8:00 AM ET\n\nThursday, November 5:\n- 8:00 AM ET\n\nFriday, November 6:\n- 8:00 AM ET\n\nMore times are available on these days if you'd like to see others. Which day works best for you, James, and what's the reason for the visit?";
+    /** What the trials' searches returned: Dr. Lee at 2:00 and 3:00 PM EDT, Dr. Kowalski at 8:00 AM EST. */
+    const RESCHEDULE_SLOTS = [14, 15].flatMap((d) => [18, 19].map((h) => `lee@2026-10-${d}T${h}:00:00Z`));
+    const PT_SLOTS = [2, 3, 4, 5, 6].map((d) => `kowalski@2026-11-0${d}T13:00:00Z`);
+    const RESCHEDULE_SENTENCE = "Here are the times around 2:00 and 3:00 PM ET on both days:";
+    const PT_SENTENCE = "Dr. Anna Kowalski has 8:00 AM ET open every day next week.";
+
+    it("reschedule-single-appointment, run 39184388331: both day lines list 3:00 PM, so it passes (2:00 has no AM/PM)", async () => {
+      const events = [
+        patient("Do you have anything later, like 2 or 3 PM on either day?"),
+        checked(...RESCHEDULE_SLOTS),
+        assistant(RESCHEDULE_TEXT),
+      ];
+      expect(await timesCheck(events)).toMatchObject({ status: "pass" });
+    });
+
+    it("book-pt-after-dst-est, run 39186778496: five day lines list 8:00 AM, so it passes", async () => {
+      const events = [
+        patient("I'd like a physical therapy appointment in the first week of November, at 8 AM."),
+        checked(...PT_SLOTS),
+        assistant(PT_TEXT),
+      ];
+      expect(await timesCheck(events)).toMatchObject({ status: "pass" });
+    });
+
+    it("the reschedule text with a third date fails, and so does one day line without 3:00 PM", async () => {
+      const third = `${RESCHEDULE_TEXT}\n\nFriday, October 16:\n- 2:00 PM ET\n- 3:00 PM ET`;
+      expect(await textCheck(third)).toEqual(["fail", lacks("3:00 PM", WEEKDAY, RESCHEDULE_SENTENCE)]);
+      const missing = RESCHEDULE_TEXT.replace(
+        "Thursday, October 15:\n- 2:00 PM ET\n- 3:00 PM ET",
+        "Thursday, October 15:\n- 2:00 PM ET",
+      );
+      expect(await textCheck(missing)).toEqual(["fail", lacks("3:00 PM", WEEKDAY, RESCHEDULE_SENTENCE)]);
+    });
+
+    it("the PT text with Friday's line dropped fails", async () => {
+      const dropped = PT_TEXT.replace("Friday, November 6:\n- 8:00 AM ET\n\n", "");
+      expect(await textCheck(dropped)).toEqual(["fail", lacks("8:00 AM", WEEKDAY, PT_SENTENCE)]);
+    });
+  });
+
+  describe('"every day", "each day" and "all five days", then "next week"', () => {
+    it.each([
+      "every day next week",
+      "each day next week",
+      "all five days next week",
+      "Every Day Next Week",
+      "for each day next week",
+    ])("%j with five matching day lines passes", async (phrase) => {
+      expect(await textCheck(`Dr. Haddad has 10:00 AM ET open ${phrase}:\n\n${dayLines()}`)).toEqual(PASSES);
+    });
+
+    it.each(["every day next week", "each day next week", "all five days next week"])(
+      "%j with only Monday to Thursday day lines fails",
+      async (phrase) => {
+        const sentence = `Dr. Haddad has 10:00 AM ET open ${phrase}:`;
+        expect(await textCheck(`${sentence}\n\n${dayLines(WEEK_DAYS.slice(0, 4))}`)).toEqual(
+          failsOn(sentence),
+        );
+      },
+    );
+
+    it('"every day next week" with a second Thursday heading of the same text that lacks the time fails (SPEC-1)', async () => {
+      const sentence = "Dr. Haddad has 10:00 AM ET open every day next week:";
+      const second = (time: string) => `${dayLines()}\n\nThursday, October 22:\n- ${time}`;
+      expect(await textCheck(`${sentence}\n\n${second("10:00 AM ET")}`)).toEqual(PASSES);
+      expect(await textCheck(`${sentence}\n\n${second("11:00 AM ET")}`)).toEqual(failsOn(sentence));
+    });
+
+    it('"every day next week" with one day line listing 11:00 AM ET instead fails', async () => {
+      const sentence = "Dr. Haddad has 10:00 AM ET open every day next week:";
+      const text = `${sentence}\n\n${dayLines(WEEK_DAYS, { Wednesday: "11:00 AM ET" })}`;
+      expect(await textCheck(text)).toEqual(failsOn(sentence));
+    });
+
+    it.each([
+      "every day this week",
+      "each day this week",
+      "all five days this week",
+      "every day next weekend",
+      "every weekday next week",
+      "all days next week",
+    ])("%j is no several-day phrase, even with five day lines", async (phrase) => {
+      const sentence = `Dr. Haddad has 10:00 AM ET open ${phrase}:`;
+      expect(await textCheck(`${sentence}\n\n${dayLines()}`)).toEqual(failsOn(sentence));
+    });
+  });
+
+  describe('"both days": exactly two dates, each listing the time', () => {
+    const SENTENCE = "Dr. Haddad has 10:00 AM ET open on both days:";
+
+    it("two day lines that list the time pass, in any case", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO)}`)).toEqual(PASSES);
+      expect(await textCheck(`Dr. Haddad has 10:00 AM ET open ON BOTH DAYS:\n\n${dayLines(TWO)}`)).toEqual(
+        PASSES,
+      );
+    });
+
+    it("two dates on the same weekday back it, because each day line carries its date", async () => {
+      const lines = dayLines([
+        ["Wednesday", "October 14"],
+        ["Wednesday", "October 21"],
+      ]);
+      expect(await textCheck(`${SENTENCE}\n\n${lines}`)).toEqual(PASSES);
+    });
+
+    it("a third date fails", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(WED_THU_FRI)}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("one date, or no day line, fails", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(failsOn(SENTENCE));
+      expect(await textCheck(SENTENCE)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a day line that lacks the time fails", async () => {
+      const text = `${SENTENCE}\n\n${dayLines(TWO, { Thursday: "11:00 AM ET" })}`;
+      expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("two headings for one date count once, and both must list the time", async () => {
+      const again = (time: string) => `Wednesday, October 14, 2026:\n- ${time}`;
+      const oneDateTwice = `${dayLines(TWO.slice(0, 1))}\n\n${again("10:00 AM ET")}`;
+      expect(await textCheck(`${SENTENCE}\n\n${oneDateTwice}`)).toEqual(failsOn(SENTENCE));
+      const bothListed = `${dayLines(TWO)}\n\n${again("10:00 AM ET")}`;
+      expect(await textCheck(`${SENTENCE}\n\n${bothListed}`)).toEqual(PASSES);
+      const secondLacks = `${dayLines(TWO)}\n\n${again("11:00 AM ET")}`;
+      expect(await textCheck(`${SENTENCE}\n\n${secondLacks}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a closing line that names a third date fails, though it is prose (review decision ea50048/VER-1 (a))", async () => {
+      const closing = "Your current appointment on Friday, October 16 at 9:00 AM ET stays until you choose.";
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO)}\n\n${closing}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a prose line that names one of the two dates without the time fails too (VER-1 (a), mixed case)", async () => {
+      const prose = "Wednesday, October 14 is also when your current appointment is.";
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO)}\n\n${prose}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a third date heading with no listed time fails (review decision dcdf3ec/SPEC-2 (b))", () =>
+      expectTimelessHeadingFails(SENTENCE));
+
+    it("two headings with the same text for one date count once, and each must list the time (SPEC-1)", async () => {
+      const heading = (time: string) => `Wednesday, October 14:\n- ${time}`;
+      const thursday = dayLines(TWO.slice(1));
+      const both = `${heading("10:00 AM ET")}\n\n${heading("10:00 AM ET")}\n\n${thursday}`;
+      expect(await textCheck(`${SENTENCE}\n\n${both}`)).toEqual(PASSES);
+      const second = `${heading("10:00 AM ET")}\n\n${heading("11:00 AM ET")}\n\n${thursday}`;
+      expect(await textCheck(`${SENTENCE}\n\n${second}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a day line that lists the time among others backs it", async () => {
+      const text = `${SENTENCE}\n\n${dayLines(TWO, { Wednesday: "10:00 AM ET\n- 11:00 AM ET" })}`;
+      expect(await textCheck(text)).toEqual(PASSES);
+    });
+
+    it.each(["on lboth days", "on both dayss"])("whole words only: %j fails", expectGluedFails);
+
+    it("day lines in a later text don't back it", async () => {
+      const later = [ASKS, assistant(SENTENCE), patient("Go on."), assistant(dayLines(TWO))];
+      expect(await timesCheck(later)).toMatchObject({
+        status: "fail",
+        detail: lacks("10:00 AM", WEEKDAY, SENTENCE),
+      });
+    });
+  });
+
+  describe('"each of those days": at least two dates, each listing the time', () => {
+    const SENTENCE = "Dr. Haddad has 10:00 AM ET open each of those days:";
+
+    it.each([
+      ["two", TWO],
+      ["three", WED_THU_FRI],
+    ])("%s day lines that list the time pass", async (_n, days) => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(days)}`)).toEqual(PASSES);
+    });
+
+    it("one date fails, and so does a day line without the time", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(failsOn(SENTENCE));
+      const text = `${SENTENCE}\n\n${dayLines(WED_THU_FRI, { Friday: "11:00 AM ET" })}`;
+      expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
+    });
+
+    it.each(["on each of those dayss", "oneach of those days"])(
+      "whole words only: %j fails",
+      expectGluedFails,
+    );
+
+    it("title case passes", async () => {
+      const sentence = "Dr. Haddad has 10:00 AM ET open Each Of Those Days:";
+      expect(await textCheck(`${sentence}\n\n${dayLines(TWO)}`)).toEqual(PASSES);
+    });
+
+    it("a date heading with no listed time fails, as a day line without the time (review decision dcdf3ec/SPEC-2 (b))", () =>
+      expectTimelessHeadingFails(SENTENCE));
+
+    it('"those days" alone still needs a weekday, even with two day lines', async () => {
+      const sentence = "Dr. Haddad has 10:00 AM ET open those days:";
+      expect(await textCheck(`${sentence}\n\n${dayLines(TWO)}`)).toEqual(failsOn(sentence));
     });
   });
 });
