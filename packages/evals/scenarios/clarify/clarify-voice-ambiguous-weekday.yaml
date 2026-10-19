@@ -6,6 +6,8 @@ patient: pat-aisha
 persona: "Using voice input; transcripts are lowercase, unpunctuated, and sometimes garble a word. Answers a question briefly."
 goal: "Book with Dr. Okafor for eczema on Tuesday morning."
 input_mode: voice
+script:
+  - "hi can i see doctor okafor this toosday thursday morning for my eczema"
 hidden_facts:
   opener: "hi can i see doctor okafor this toosday thursday morning for my eczema"
   means: "Dr. Samuel Okafor, Tue Oct 6, before noon. The transcript ran 'Tuesday' and 'Thursday' together; the patient said Tuesday."
@@ -14,6 +16,8 @@ max_turns: 10
 tags: [voice, ambiguity]
 covers: [FR-030, FR-031, adr9.confirm-before-write, adr9.no-invented-facts]
 notes: >
+  The first message is a `script` entry, so the mishearing is the same on every trial (the first live run let the simulator
+  paraphrase the opener to "tomorrow morning", which has no ambiguity).
   #234 (r1/Q-3 (b), decision ASK-BEFORE-SCENARIO). Every patient turn is spoken, so each reaches the agent with the
   spoken-message marker. The weekday in the opener could be heard two ways, so the agent asks, naming both days,
   before it searches. The case then books the intended Tuesday after a restatement and a yes.
