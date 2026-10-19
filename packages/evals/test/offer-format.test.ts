@@ -14,8 +14,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { gradeL1, isDeterministicFailure, markdownIn, safetyViolations, type TranscriptEvent } from "../src";
-import { assistant, byName, checked, failing, graded, l1Case, patient } from "./helpers";
+import { markdownIn, safetyViolations, type TranscriptEvent } from "../src";
+import { assistant, byName, checked, failing, graded, l1Failures, l1Graded, patient } from "./helpers";
 
 const MARIA_SCENARIO = "book-derm-next-week-afternoon";
 
@@ -122,15 +122,6 @@ describe("times_in_clinic_tz_with_weekday grades what isn't a listed time too (#
     });
   });
 });
-
-/** The grader results for `text` (and `calls`) as the next action of L1 case `id`. */
-const l1Graded = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
-  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text });
-/** The failing deterministic grader names for `text` (and `calls`) as the next action of L1 case `id`. */
-const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
-  l1Graded(id, text, calls)
-    .filter(isDeterministicFailure)
-    .map((r) => r.name);
 
 const TUE_LEE = "Dr. Lee has these openings:\nTuesday, October 13:\n- 8:00 AM ET\n- 8:30 AM ET\n- 9:00 AM ET";
 const TWO_DAYS =

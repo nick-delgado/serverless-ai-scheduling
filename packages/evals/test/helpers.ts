@@ -23,6 +23,8 @@ import {
   CalibrationSet,
   createTrialEnvironment,
   gradeInvariants,
+  gradeL1,
+  isDeterministicFailure,
   loadScenarios,
   QueuedPatientSimulator,
   runScenarioTrial,
@@ -102,6 +104,15 @@ export const byName = (
   name: string,
 ): GraderResult | undefined =>
   ("graders" in results ? results.graders : results).find((r) => r.name === name);
+
+/** The grader results for `text` (and `calls`) as the next action of L1 case `id`. */
+export const l1Graded = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text });
+/** The failing deterministic grader names for `text` (and `calls`) as the next action of L1 case `id`. */
+export const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  l1Graded(id, text, calls)
+    .filter(isDeterministicFailure)
+    .map((r) => r.name);
 
 export const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
 /** Maria's Dr. Lee dermatology visit, Tue Oct 13 2026, 2:30 PM ET. */
