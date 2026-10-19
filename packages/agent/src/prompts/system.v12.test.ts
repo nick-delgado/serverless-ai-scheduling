@@ -294,7 +294,7 @@ describe("system prompt v12: content guards", () => {
     );
   });
 
-  it("lets a line before a search over several days name no time, or the asked time with ET and no weekday or days, and keeps a one-day line to its weekday (#326, r1/Q-3; #332, r2/Q-1 (b))", () => {
+  it("lets a line before a search over several days name no time, or the asked time with ET and no weekday or days (#326, r1/Q-3; #332, r2/Q-1 (b))", () => {
     expect(stable).toContain(
       'For a search over several days (one call over a range, or several calls in one reply for different dates), the line names no clock time, or only the time the patient asked for, with ET right after it and no weekday or days: "Let me check Dr. Haddad\'s openings that week." or "Let me check Dr. Haddad\'s availability at 10:00 AM ET each day that week.", not "Let me check Dr. Haddad\'s availability at 10:00 AM each day that week."',
     );
@@ -363,7 +363,7 @@ describe("system prompt v12: content guards", () => {
     expect(stable).toContain(
       'Its lead-in is "Dr. Haddad has these openings:", with no time in it. This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line.',
     );
-    // #332: a run copied a quoted bad lead-in word for word, so none of them is in the prompt.
+    // #332: a run copied a quoted bad offer sentence (lead-in, single-time sentence or remark) word for word, so none of them is in the prompt.
     for (const bad of [
       "Dr. Haddad has 10:00 AM ET open every day that week:",
       "Dr. Haddad has 10:00 AM ET open all five days that week",

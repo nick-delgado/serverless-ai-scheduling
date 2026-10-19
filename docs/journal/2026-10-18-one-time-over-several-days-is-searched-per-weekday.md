@@ -1,4 +1,4 @@
-# 2026-10-18 — A specific time over several days is searched per weekday, and a line before that search may name the time with ET
+# 2026-10-18 — A specific time over several days is searched per weekday, and a line before that search may name the time with ET: the time check fails 0 of 15 trials in the measured run
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
@@ -13,7 +13,7 @@ The readiness review (round 1) found that the issue's Goal had the remark wrong.
 We then went round the prompt three times with the agent measuring on the five #321/#326 cases at k=3, `sonnet-4.6`:
 
 - `52cf880` (run 1): per-weekday search, and no clock time at all in a line before a search over several days.
-- `6bbd694` and `a124941` (run 2): one rewording after run 1, then the quoted bad sentences dropped from the offer and pre-tool rules, because a run copied one word for word.
+- `6bbd694` and `a124941` (run 2): one rewording after run 1, then the quoted bad time sentences that runs copied word for word dropped from the offer and pre-tool rules. The offer rule's two date contrasts stay ([Decision c4816a0/SPEC-5](https://github.com/nick-delgado/serverless-ai-scheduling/pull/339#issuecomment-6257854260): the removal covers the time sentences, not every "not" example).
 - #337 (PR #338) then changed the grader, after we read the failing sentences and found most were harmless: a pre-tool line now needs ET only, "every day that week" counts when five backing day lines list the time, and "ET and later" is a bound. See [A pre-tool line needs ET, not a weekday](2026-10-18-a-pre-tool-line-needs-et-not-a-weekday.md). Regraded under that rule, #332's runs fail 1 of 15 (run 1) and 3 of 15 (run 2), against 3 and 4 as recorded.
 
 Round 2 of the readiness review, against `42db5f0`, asked what `system.v12` should now say, and Nick accepted every recommendation:
@@ -32,7 +32,8 @@ Round 2 of the readiness review, against `42db5f0`, asked what `system.v12` shou
 
 ## Evidence
 
-- Code: `52cf880`, `6bbd694`, `a124941`, and this round's commit on top of `main` at `42db5f0`.
+- Code: `52cf880`, `6bbd694`, `a124941`, and `d3e3181` on top of `main` at `42db5f0`. The measured run used `d3e3181`.
+- Runs: #326's run 1 (`2026-10-18T113458Z-scenario-full-sonnet-4.6.json`) and run 2 (`2026-10-18T141208Z-scenario-full-sonnet-4.6.json`), #332's two runs at `52cf880` and `a124941`, the per-trial regrade table on [#337](https://github.com/nick-delgado/serverless-ai-scheduling/issues/337#issuecomment-6256191613), and the L1 run of `l1-availability-specific-later-time` at `52cf880` (`2026-10-18T172250Z-l1-full-sonnet-4.6.json`): five calls, one per weekday, each with `start_time: "11:30"`, accepted by the new `any_of` option.
 - Tests: `system.v12.test.ts`'s content guards (the pre-tool rule, the times rule's "one-day line", the per-weekday bullet, the lead-in, the remark) and its example guards (a timed example and a time-free example each).
 - Seen failing: the PR's `npm run mutate` table. Each changed sentence has a KILLED row that restores its `system.v11` or earlier-v12 text.
 - Measured run at `d3e3181` (results file `2026-10-19T004219Z-scenario-full-sonnet-4.6.json`; an earlier attempt at the same commit hit an expired SSO token and recorded 15 `error` trials at $0, which measured nothing): `invariant.times_in_clinic_tz_with_weekday` failed 0 of 15, against 2, 2, 3 and 4 as recorded in #326's two runs and #332's two (0, 2, 1 and 3 as #337 regraded them). Safety violations 0. One trial failed `trajectory.max_questions_per_turn` and `invariant.one_question_at_a_time`: `clarify-two-requests-one-message` t3's first reply asked "Is this the appointment you'd like to move? And when would you like to reschedule it to?", the lone-appointment rule v10 set and v12 does not touch. Under r1/Q-4 (a) any other failure misses the bar, so Nick accepted that trial as outside this change ([Decision #332/TWO-QUESTIONS](https://github.com/nick-delgado/serverless-ai-scheduling/issues/332#issuecomment-6257551937)) and the run counts as AC "Measured". The per-check table and the transcript reading are on #332.
@@ -41,6 +42,6 @@ Round 2 of the readiness review, against `42db5f0`, asked what `system.v12` shou
 
 ## What's next
 
-- The measured run on the PR head, then the Eval gate.
+- The Eval gate on the PR.
 - #201 gets any suggested several-day lead-in case.
 - #234, #251 and #306 take the next prompt versions and keep these rules unless they measure better ones.

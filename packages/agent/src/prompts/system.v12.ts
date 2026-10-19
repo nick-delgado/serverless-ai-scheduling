@@ -32,8 +32,8 @@
  * and lets a line before a search over several days name no time, or the time the patient asked for with ET
  * right after it and no weekday or days, because #326's runs still wrote one time for several days in such a
  * line and in a remark, and #337's grader needs ET only there. Its offer's lead-in still names no time, and a
- * one-day line keeps its weekday. It also drops the quoted bad sentences from the offer and pre-tool rules,
- * because a run copied one word for word. v1 to v11 are in git history.
+ * one-day line keeps its weekday. It also drops the quoted bad time sentences that runs copied one word for word from the offer and
+ * pre-tool rules (the offer rule's two date contrasts stay). v1 to v11 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
