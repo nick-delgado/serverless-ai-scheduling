@@ -8,7 +8,7 @@
 
 #159 measured the judge on 20 transcripts from a `system.v1` run, and four of the six replies Nick failed on clarity were Markdown-heavy. The prompt has asked for plain text since `system.v3`, so we worried that set over-represented one kind of clarity problem and flattered or punished the judge unfairly. #296 re-measures `judge.v2` (`llm:haiku-4.5`, unchanged) on a set from the current prompt.
 
-The task worker (Claude) ran the full scenario suite once, k=1, on `sonnet-4.6` at effort `high`, prompt `system.v13`, `--no-judge`, `--max-cost 6` (results file `2026-10-19T123642Z-scenario-full-sonnet-4.6.json`, commit `99cffe1`). The dry-run estimate was $2.24, under the $4.00 line Nick set, and the run came in at $3.32 (simulator $0.62), 48% over the estimate. 36 of 41 runnable cases passed and 5 failed (at least three on the weekday check and one on a missing `time_of_day`; the results file names each). The export took the 5 failing trials and 15 passing ones, 20 transcripts. Nick labelled them on a page built from the export, scoring 47 slots from 1 to 5, and the worker committed his file unchanged (`1ddcdf6`).
+The task worker (Claude) ran the full scenario suite once, k=1, on `sonnet-4.6` at effort `high`, prompt `system.v13`, `--no-judge`, `--max-cost 6` (results file `2026-10-19T123642Z-scenario-full-sonnet-4.6.json`, run on `2bf6581` and committed with its export as `99cffe1`). The dry-run estimate was $2.24, under the $4.00 line Nick set, and the run came in at $3.32 (simulator $0.62), 48% over the estimate. 36 of 41 runnable cases passed and 5 failed (at least three on the weekday check and one on a missing `time_of_day`; the results file names each). The export took the 5 failing trials and 15 passing ones, 20 transcripts. Nick labelled them on a page built from the export, scoring 47 slots from 1 to 5, and the worker committed his file unchanged (`1ddcdf6`).
 
 ## Result
 
@@ -42,14 +42,14 @@ What the exact scores do show: the judge is stricter than Nick on clarity. It ga
 
 - **Nick passed everything.** The plain-text prompt removed the Markdown that drove four of his six clarity failures. We did not expect all 47 slots to come back at 4 or 5.
 - **The judge errored once on the first run.** `book-provider-not-accepting#1` returned no valid verdict in two attempts, because the judge quoted text that wasn't in the transcript. That run's report (`2026-10-19T144559Z-calibration-haiku-4.5.json`) covers 45 pairs and shows 45/45; the re-run, on the same judge version, had no errors and covers 47. The 47-pair run is the figure that counts (A-4); both reports are committed. The two calibrate runs cost $0.164 and $0.148.
-- **Thin dimensions.** `no_system_prompt_disclosure` has 1 pair, and `ignores_injected_instructions`, `no_invented_policies` and `no_false_claims_of_action` have 2 each. Their 100% is not evidence. Clarity (18 pairs) and tone (14) carry the figure.
+- **Thin dimensions** (`ef90f9f`).** `no_system_prompt_disclosure` has 1 pair, and `ignores_injected_instructions`, `no_invented_policies` and `no_false_claims_of_action` have 2 each. Their 100% is not evidence. Clarity (18 pairs) and tone (14) carry the figure.
 
 ## Evidence
 
-- Run and export on one commit (`99cffe1`, A-1): `source.promptVersion` in `packages/evals/calibration/transcripts.json` is `system.v13`.
-- The set's mix: 15 pass and 5 fail trials; dimensions attached to the 20 transcripts are clarity 18, tone 14, no_medical_advice 5, no_claim_to_be_human 3, and the four thin ones above.
-- Human scores below 4: 0 in every dimension. Judge scores below 4: 0 in every dimension.
+- Run and export on one commit (`2bf6581`, committed as `99cffe1`, A-1): `source.promptVersion` in `packages/evals/calibration/transcripts.json` is `system.v13`. The results file is git-ignored, so `source.file` there names a session scratchpad path; the lasting copy is `~/.local/state/serverless-ai-scheduling/eval-results/296-recalibrate-judge/2026-10-19T123642Z-scenario-full-sonnet-4.6.json`.
+- The set's mix (`99cffe1`): 15 pass and 5 fail trials; dimensions attached to the 20 transcripts are clarity 18, tone 14, no_medical_advice 5, no_claim_to_be_human 3, and the four thin ones above.
+- Human scores below 4 (`1ddcdf6`): 0 in every dimension. Judge scores below 4: 0 in every dimension.
 
 ## What's next
 
-- #335 gets the figure. A judge that has never been shown a human-failed `system.v13` reply can't be called calibrated on failing ones; a set with real human fails (a prompt that regresses clarity, or hand-built weak replies) is a follow-up if we want that measured.
+- #335 gets the figure. A judge that has never been shown a human-failed `system.v13` reply can't be called calibrated on failing ones; a set with real human fails (a prompt that regresses clarity, or hand-built weak replies) is filed as #351.
