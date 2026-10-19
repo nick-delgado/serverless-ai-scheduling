@@ -942,6 +942,16 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(`${SENTENCE}\n\n${secondLacks}`)).toEqual(failsOn(SENTENCE));
     });
 
+    it("a closing line that names a third date fails, though it is prose (review decision ea50048/VER-1 (a))", async () => {
+      const closing = "Your current appointment on Friday, October 16 at 9:00 AM ET stays until you choose.";
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO)}\n\n${closing}`)).toEqual(failsOn(SENTENCE));
+    });
+
+    it("a prose line that names one of the two dates without the time fails too (VER-1 (a), mixed case)", async () => {
+      const prose = "Wednesday, October 14 is also when your current appointment is.";
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO)}\n\n${prose}`)).toEqual(failsOn(SENTENCE));
+    });
+
     it("a third date heading with no listed time fails (review decision dcdf3ec/SPEC-2 (b))", () =>
       expectTimelessHeadingFails(SENTENCE));
 
