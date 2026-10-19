@@ -6,7 +6,7 @@
 
 ## What happened
 
-The M3 security review (#39) could fix only `api.yaml`. Every grant it classed as avoidable in the admin-only bootstrap stack and in the `SchedDeployer` permission set went to #270, because only Nick can apply those files. The readiness review settled seven questions and ten assumptions on the issue, and Nick took every recommendation. The first of them split the work: this PR does everything except the CloudFormation execution role's service-wide actions (F-3), which come in a second PR from `main` once this one is merged, so that one apply carries only changes a deploy can't fail on.
+The M3 security review (#39) could fix only `api.yaml`. Every grant it classed as avoidable in the admin-only bootstrap stack and in the `SchedDeployer` permission set went to #270, because only Nick can apply those files. The readiness review settled seven questions and ten assumptions on the issue, and Nick took every recommendation. The first of them split the work: this PR does everything except the CloudFormation execution role's service-wide actions (F-3), which come in a second PR from `main` once this one is merged, so that a deploy failure after this apply can't come from the exec role. The CI roles' narrowed grants (F-22, F-24) can still break a CI deploy, so the post-apply `deploy.yml` and `e2e.yml` runs are the check for them.
 
 The agent (a task worker) changed:
 
@@ -17,7 +17,7 @@ The agent (a task worker) changed:
 
 ## Why we chose what we chose
 
-- **Two PRs, not one (r1/Q-1 (b)).** One PR would stay open through every apply-and-fix round of the riskiest change, the exec role's resource narrowing, and its deploys can only be tested after an apply. Splitting leaves the exact fixes, which can't break a deploy, to merge first.
+- **Two PRs, not one (r1/Q-1 (b)).** One PR would stay open through every apply-and-fix round of the riskiest change, the exec role's resource narrowing, and its deploys can only be tested after an apply. Splitting leaves the exact fixes, which don't touch the exec role, to merge first.
 - **Exact-list pins (r1/Q-7 (a)).** Presence and absence pins (no `index/*`, no Mantle) would pass a statement that gained some other action. An exact list fails on any added or removed entry, and each must reject the pre-change list.
 - **`DescribeStacks` stays on `"*"` for `SchedDeployer` (r1/Q-3 (a)).** `docs/runbooks/deploy-env.md` lists an env's stacks with `describe-stacks` and a `--query` filter, no name. Narrowing it there would break two runbook commands. The CI roles name their stacks, so theirs is scoped.
 - **The status read on `"*"` (r1/Q-5 (a)).** `DescribeStackDriftDetectionStatus` takes a detection ID, which is no ARN, so it can't be scoped to a stack. It sits in `CloudFormationReadAndValidate`. The first run after the apply confirms it.

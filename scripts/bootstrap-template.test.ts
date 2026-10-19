@@ -37,7 +37,7 @@ import { MODEL_PROFILES } from "@sched/agent";
 import { createTableInput } from "@sched/tools/dynamo";
 import { describe, expect, it } from "vitest";
 
-import { block, bodyLines, children, credentialsOf, entries, items, member, stepsOf } from "./test/yaml-text";
+import { block, children, credentialsOf, entries, items, member, stepsOf } from "./test/yaml-text";
 
 const lines = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "bootstrap", "bootstrap.yaml"),
@@ -51,27 +51,37 @@ const policy = JSON.parse(
   ),
 ) as { Statement: { Sid: string; Action: string | string[]; Resource: string | string[] }[] };
 
+/** A statement's `Action` and `Resource` as lists, whatever form each takes in the policy. */
+interface Grant {
+  Action: string[];
+  Resource: string[];
+}
+
 /** The `SchedDeployer` policy's statement `sid`; throws (failing the calling test) when there isn't exactly one. */
-const deployerStatement = (sid: string) => {
+const deployerGrant = (sid: string): Grant => {
   const found = policy.Statement.filter((st) => st.Sid === sid);
   if (found.length !== 1) throw new Error(`${String(found.length)} statements with Sid ${sid}`);
   const [only] = found;
-  return { Action: [only?.Action].flat(), Resource: [only?.Resource].flat() };
+  return { Action: [only?.Action].flat() as string[], Resource: [only?.Resource].flat() as string[] };
 };
 
-/** A statement of a bootstrap.yaml resource by its Sid, as the lines under its `- Sid:` line, comments dropped. */
+/** A statement of a bootstrap.yaml resource, by its Sid, read with the shared reader. */
 const yamlStatement = (logicalId: string, sid: string): string[] =>
-  bodyLines(block(new RegExp(`^\\s+- Sid: ${sid}$`), block(new RegExp(`^ {2}${logicalId}:$`), lines)));
+  block(new RegExp(`^\\s+- Sid: ${sid}$`), block(new RegExp(`^ {2}${logicalId}:$`), lines));
 
-/** The items of one key (`Action:` or `Resource:`) in `yamlStatement`'s output: a list's, without the dash, or a one-line value. */
-const listOf = (statement: string[], key: "Action" | "Resource"): string[] => {
-  const inline = statement.find((l) => l.startsWith(`  ${key}: `));
-  if (inline !== undefined) return [inline.slice(`  ${key}: `.length)];
-  const at = statement.indexOf(`  ${key}:`);
-  if (at === -1) throw new Error(`no ${key}`);
-  const rest = statement.slice(at + 1);
-  const end = rest.findIndex((l) => !l.startsWith("    - "));
-  return (end === -1 ? rest : rest.slice(0, end)).map((l) => l.slice("    - ".length));
+/** A statement's `Action` or `Resource`: a one-line value as a one-item list, or a list's items as their values. */
+const valuesOf = (statement: string[], key: "Action" | "Resource"): string[] => {
+  const one = entries(statement)[key];
+  if (one !== undefined) return [one];
+  return items(block(new RegExp(`^\\s+${key}:$`), statement)).map((item) =>
+    (item[0] ?? "").trim().replace(/^- /, ""),
+  );
+};
+
+/** A bootstrap.yaml statement's `Action` and `Resource`, as `deployerGrant` returns a JSON one's. */
+const yamlGrant = (logicalId: string, sid: string): Grant => {
+  const statement = yamlStatement(logicalId, sid);
+  return { Action: valuesOf(statement, "Action"), Resource: valuesOf(statement, "Resource") };
 };
 
 const REPO = "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382";
@@ -339,152 +349,195 @@ const bedrockArns = (keys: string[] | undefined, partition: string, region: stri
 const INDEX = (createTableInput("t").GlobalSecondaryIndexes ?? []).map((i) => String(i.IndexName));
 
 describe("the permissions boundary's WorkloadServices (#270; F-4, F-23)", () => {
-  const boundary = yamlStatement("WorkloadPermissionsBoundary", "WorkloadServices");
-
-  it("allows exactly the 14 actions a sched-* workload role grants (F-23)", () => {
-    expect(listOf(boundary, "Action")).toEqual([
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-      "xray:PutTraceSegments",
-      "xray:PutTelemetryRecords",
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
-      "dynamodb:Query",
-      "dynamodb:ConditionCheckItem",
-      "bedrock:InvokeModel",
-      "bedrock:InvokeModelWithResponseStream",
-      "ses:SendEmail",
-      "transcribe:StartStreamTranscriptionWebSocket",
-    ]);
-    expect(boundary).toEqual(expect.arrayContaining(["  Effect: Allow", '  Resource: "*"']));
+  it("allows exactly the 14 actions a sched-* workload role grants, on all resources (F-23)", () => {
+    const grant = yamlGrant("WorkloadPermissionsBoundary", "WorkloadServices");
+    expect(grant).toEqual({
+      Action: [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:ConditionCheckItem",
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "ses:SendEmail",
+        "transcribe:StartStreamTranscriptionWebSocket",
+      ],
+      Resource: ["*"],
+    });
+    expect(entries(yamlStatement("WorkloadPermissionsBoundary", "WorkloadServices")).Effect).toBe("Allow");
+    expect(grant.Action).not.toContain("ssm:GetParameter");
   });
 
   it("holds no Bedrock Mantle action, which nothing calls since ADR-010 (F-4)", () => {
-    expect(boundary.filter((l) => l.includes("bedrock-mantle"))).toEqual([]);
-    expect(listOf(boundary, "Action")).not.toContain("ssm:GetParameter");
+    const { Action } = yamlGrant("WorkloadPermissionsBoundary", "WorkloadServices");
+    expect(Action.filter((a) => a.startsWith("bedrock-mantle:"))).toEqual([]);
   });
 });
 
 describe("the CI roles' narrowed grants (#270; F-5, F-13, F-22, F-24)", () => {
   it("names the sonnet foundation model without a trailing wildcard in the evals role, for the eval profiles only (F-5)", () => {
-    const resources = listOf(yamlStatement("GitHubEvalsRole", "InvokeEvalModels"), "Resource");
-    expect(resources).toEqual(
-      bedrockArns(
+    expect(yamlGrant("GitHubEvalsRole", "InvokeEvalModels")).toEqual({
+      Action: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      Resource: bedrockArns(
         ["sonnet-4.6", "haiku-4.5"],
         "${AWS::Partition}",
         "${AWS::Region}",
         "${AWS::AccountId}",
       ).map((arn) => `!Sub ${arn}`),
-    );
-    expect(resources.filter((r) => r.endsWith("*"))).toEqual([]);
+    });
   });
 
   it("names only table/sched-e2e-*/index/GSI1, the table's one index, in the e2e seeding grant (F-13)", () => {
     expect(INDEX).toEqual(["GSI1"]);
-    const seed = yamlStatement("GitHubE2eRole", "SeedE2eData");
-    expect(listOf(seed, "Resource")).toEqual([
-      "!Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*",
-      ...INDEX.map(
-        (name) =>
-          `!Sub arn:\${AWS::Partition}:dynamodb:\${AWS::Region}:\${AWS::AccountId}:table/sched-e2e-*/index/${name}`,
-      ),
-    ]);
+    expect(yamlGrant("GitHubE2eRole", "SeedE2eData")).toEqual({
+      Action: [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:BatchGetItem",
+      ],
+      Resource: [
+        "!Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*",
+        ...INDEX.map(
+          (name) =>
+            `!Sub arn:\${AWS::Partition}:dynamodb:\${AWS::Region}:\${AWS::AccountId}:table/sched-e2e-*/index/${name}`,
+        ),
+      ],
+    });
   });
 
   it.each([
     { role: "GitHubDeployRole", sid: "ArtifactAndDevSiteBuckets", env: "dev" },
     { role: "GitHubE2eRole", sid: "ArtifactAndE2eSiteBuckets", env: "e2e" },
   ])("limits $role's artifact bucket objects to its own env's prefix (F-24)", ({ role, sid, env }) => {
-    const statement = yamlStatement(role, sid);
-    expect(listOf(statement, "Resource")).toEqual([
-      "!GetAtt ArtifactBucket.Arn",
-      `!Sub \${ArtifactBucket.Arn}/sched-${env}-*`,
-      `!Sub arn:\${AWS::Partition}:s3:::sched-${env}-web-*`,
-      `!Sub arn:\${AWS::Partition}:s3:::sched-${env}-web-*/*`,
-    ]);
-    expect(listOf(statement, "Action")).toEqual([
-      "s3:ListBucket",
-      "s3:GetBucketLocation",
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-    ]);
+    expect(yamlGrant(role, sid)).toEqual({
+      Action: ["s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      Resource: [
+        "!GetAtt ArtifactBucket.Arn",
+        `!Sub \${ArtifactBucket.Arn}/sched-${env}-*`,
+        `!Sub arn:\${AWS::Partition}:s3:::sched-${env}-web-*`,
+        `!Sub arn:\${AWS::Partition}:s3:::sched-${env}-web-*/*`,
+      ],
+    });
   });
 
   it.each([
     { role: "GitHubDeployRole", drive: "CloudFormationDriveDevStacks", env: "dev" },
     { role: "GitHubE2eRole", drive: "CloudFormationDriveE2eStacks", env: "e2e" },
   ])('grants $role DescribeStacks on its env\'s stacks only, not on "*" (F-22)', ({ role, drive, env }) => {
-    expect(listOf(yamlStatement(role, "CloudFormationReadAndValidate"), "Action")).toEqual([
-      "cloudformation:ValidateTemplate",
-      "cloudformation:GetTemplateSummary",
-      "cloudformation:ListStacks",
-      "cloudformation:ListExports",
-    ]);
-    const scoped = yamlStatement(role, drive);
-    expect(listOf(scoped, "Action")).toContain("cloudformation:DescribeStacks");
-    expect(listOf(scoped, "Resource")).toEqual([
-      `!Sub arn:\${AWS::Partition}:cloudformation:\${AWS::Region}:\${AWS::AccountId}:stack/sched-${env}-*/*`,
-    ]);
+    expect(yamlGrant(role, "CloudFormationReadAndValidate")).toEqual({
+      Action: [
+        "cloudformation:ValidateTemplate",
+        "cloudformation:GetTemplateSummary",
+        "cloudformation:ListStacks",
+        "cloudformation:ListExports",
+      ],
+      Resource: ["*"],
+    });
+    // No DeleteStack and no drift actions: those are SchedDeployer's alone.
+    expect(yamlGrant(role, drive)).toEqual({
+      Action: [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:ListChangeSets",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:ListStackResources",
+        "cloudformation:GetTemplate",
+        "cloudformation:TagResource",
+      ],
+      Resource: [
+        `!Sub arn:\${AWS::Partition}:cloudformation:\${AWS::Region}:\${AWS::AccountId}:stack/sched-${env}-*/*`,
+      ],
+    });
   });
 });
 
 describe("the SchedDeployer permission set (infra/bootstrap/sched-deployer-policy.json; #270)", () => {
   it("names the six entitled models' ARNs in SpikesAndEvals, and no Bedrock Mantle action (F-6)", () => {
-    const spikes = deployerStatement("SpikesAndEvals");
-    expect(spikes.Action).toEqual(["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]);
-    expect(spikes.Resource).toEqual(bedrockArns(undefined, "aws", "us-east-1", "<ACCOUNT_ID>"));
+    const spikes = deployerGrant("SpikesAndEvals");
+    expect(spikes).toEqual({
+      Action: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      Resource: bedrockArns(undefined, "aws", "us-east-1", "<ACCOUNT_ID>"),
+    });
+    // A tripwire: a newly entitled profile changes the derived list, and this count is then changed on purpose.
     expect(spikes.Resource).toHaveLength(10);
-    expect(spikes.Resource).not.toContain("*");
   });
 
   it('keeps the two Transcribe streaming actions on "*" in a statement of their own (F-6)', () => {
-    expect(deployerStatement("TranscribeStreaming")).toEqual({
+    expect(deployerGrant("TranscribeStreaming")).toEqual({
       Action: ["transcribe:StartStreamTranscription", "transcribe:StartStreamTranscriptionWebSocket"],
       Resource: ["*"],
     });
   });
 
   it("lets SeedDemoUsers create, set the password of and read a user, and nothing more (F-7)", () => {
-    expect(deployerStatement("SeedDemoUsers")).toEqual({
+    expect(deployerGrant("SeedDemoUsers")).toEqual({
       Action: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword", "cognito-idp:AdminGetUser"],
       Resource: ["arn:aws:cognito-idp:us-east-1:<ACCOUNT_ID>:userpool/*"],
     });
   });
 
-  it("names only table/sched-*/index/GSI1 in SeedAndEvalData (F-8)", () => {
-    const seed = deployerStatement("SeedAndEvalData");
-    expect(seed.Resource).toEqual([
-      "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*",
-      ...INDEX.map((name) => `arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*/index/${name}`),
-    ]);
-    expect(seed.Action).toHaveLength(8);
+  it("names only table/sched-*/index/GSI1 in SeedAndEvalData, with its eight item actions (F-8)", () => {
+    expect(deployerGrant("SeedAndEvalData")).toEqual({
+      Action: [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:BatchGetItem",
+      ],
+      Resource: [
+        "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*",
+        ...INDEX.map((name) => `arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*/index/${name}`),
+      ],
+    });
   });
 
   it("can run drift detection and read its status (F-9)", () => {
-    expect(deployerStatement("CloudFormationDriveSchedStacks").Action).toEqual([
-      "cloudformation:CreateStack",
-      "cloudformation:UpdateStack",
-      "cloudformation:DeleteStack",
-      "cloudformation:CreateChangeSet",
-      "cloudformation:ExecuteChangeSet",
-      "cloudformation:DeleteChangeSet",
-      "cloudformation:DescribeChangeSet",
-      "cloudformation:ListChangeSets",
-      "cloudformation:DescribeStackEvents",
-      "cloudformation:DescribeStackResource",
-      "cloudformation:DescribeStackResources",
-      "cloudformation:ListStackResources",
-      "cloudformation:GetTemplate",
-      "cloudformation:TagResource",
-      "cloudformation:DetectStackDrift",
-      "cloudformation:DetectStackResourceDrift",
-      "cloudformation:DescribeStackResourceDrifts",
-    ]);
+    expect(deployerGrant("CloudFormationDriveSchedStacks")).toEqual({
+      Action: [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:CreateChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:ListChangeSets",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
+        "cloudformation:ListStackResources",
+        "cloudformation:GetTemplate",
+        "cloudformation:TagResource",
+        "cloudformation:DetectStackDrift",
+        "cloudformation:DetectStackResourceDrift",
+        "cloudformation:DescribeStackResourceDrifts",
+      ],
+      Resource: ["arn:aws:cloudformation:us-east-1:<ACCOUNT_ID>:stack/sched-*/*"],
+    });
     // A detection ID is no ARN, so the status call can only be on "*" (verify first: the first run after the apply).
-    expect(deployerStatement("CloudFormationReadAndValidate")).toEqual({
+    expect(deployerGrant("CloudFormationReadAndValidate")).toEqual({
       Action: [
         "cloudformation:ValidateTemplate",
         "cloudformation:GetTemplateSummary",
