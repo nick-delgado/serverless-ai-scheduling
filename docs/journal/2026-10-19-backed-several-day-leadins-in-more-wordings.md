@@ -26,7 +26,7 @@ He settled three questions in the readiness review (round 1), accepting every re
 
 ## Evidence
 
-- Offline regrade, no model call, with a throwaway script (not committed): the two failing trials change from fail to pass and no trial changes the other way; the per-trial table and the per-file counts are on #340.
+- Offline regrade, no model call, with a throwaway script (not committed), run again after the review's fixes with the grader at `319f5c8`: the two failing trials change from fail to pass and no trial changes the other way; the per-trial table and the per-file counts are on #340.
 - Fixtures in `packages/evals/test/undated-times.test.ts`: each gate sentence's whole text, placed as it was in its trial, plus backed and unbacked synthetic cases for each added phrase (one, two and three dates, a day line missing the time, two headings for one date, whole-word edges). The existing fixtures keep their verdicts.
 - Seen failing: the PR's `npm run mutate` table.
 
