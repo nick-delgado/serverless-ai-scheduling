@@ -31,6 +31,7 @@ export {
   type ModelProfile,
   type ModelProfileName,
 } from "./profiles";
+export { SPOKEN_MESSAGE_MARKER, withInputMode, withoutInputMarker, type InputMode } from "./input-mode";
 export { FALLBACK_MESSAGES } from "./fallback-messages";
 export { buildSystemPrompt, type SystemPromptContext } from "./prompts";
 export {

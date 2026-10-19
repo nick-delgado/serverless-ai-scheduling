@@ -1,0 +1,23 @@
+id: l1-spoken-ambiguous-weekday
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-aisha
+tags: [voice]
+covers: [FR-030, FR-031, adr9.no-invented-facts]
+notes: >
+  #234. The transcript holds two readings of the weekday ("toosday thursday"). Searching for the wrong one
+  would show the patient days they didn't ask for, so the agent asks, in one question that names both days,
+  before any availability search. Checked as the single-step form of must_ask_before: the next action is a question or a provider lookup (find_providers is read-only and the provider isn't in doubt), never check_availability or a write. The first live run (k=3) had the model look the provider up in 2 of 3 trials, so text only was the wrong bar for L1; the scenario clarify-voice-ambiguous-weekday holds the ask-before-check_availability rule.
+context:
+  - patient: "hi can i see doctor okafor this toosday thursday morning for my eczema"
+    input_mode: voice
+expect:
+  any_of:
+    - { action: respond }
+    - { action: tool_call, tool: find_providers }
+  forbid_tools: [check_availability, book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    contains_all: [Tuesday, Thursday]
+    max_questions: 1
+    format_must_not_contain: ["spell"]

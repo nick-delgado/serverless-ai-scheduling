@@ -11,6 +11,7 @@ import {
   scriptedMalformed,
   scriptedText,
   scriptedToolUse,
+  SPOKEN_MESSAGE_MARKER,
 } from "@sched/agent";
 import { confirmedFor } from "@sched/contracts/testing";
 import { describe, expect, it } from "vitest";
@@ -236,6 +237,41 @@ describe("runScenarioTrial: skips, errors, faults, limits", () => {
     // The model sees the message and hint; the hint drives escalate-repeated-failure (2e22f79/TEST-204).
     const internal = await productionInternalError();
     expect(errors).toEqual([internal, internal]);
+  });
+
+  it("marks every patient turn of a voice scenario as spoken for the model, and leaves the marker out of the transcript (#234)", async () => {
+    const spoken = scenario("clarify-voice-garbled-provider");
+    expect(spoken.input_mode).toBe("voice");
+    const llm = new ScriptedLlmClient([scriptedText("Which doctor?"), scriptedText("Got it.")]);
+    const r = await runScenarioTrial(spoken, {
+      agent: { llm, profile },
+      simulator: new QueuedPatientSimulator(["first words", "second words"]),
+    });
+    const patientBlocks = (index: number) =>
+      llm.requests[index]?.messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content.filter((b) => b.type === "text").map((b) => b.text));
+    expect(patientBlocks(0)).toEqual([[SPOKEN_MESSAGE_MARKER, "first words"]]);
+    // The second turn: the first message is rendered the same way again, then the new spoken one.
+    expect(patientBlocks(1)).toEqual([
+      [SPOKEN_MESSAGE_MARKER, "first words"],
+      [SPOKEN_MESSAGE_MARKER, "second words"],
+    ]);
+    expect(r.events.filter((e) => e.kind === "patient").map((e) => e.text)).toEqual([
+      "first words",
+      "second words",
+    ]);
+  });
+
+  it("sends a typed scenario's patient turns without a marker (#234)", async () => {
+    const typed = scenario("book-derm-next-week-afternoon");
+    expect(typed.input_mode).toBeUndefined();
+    const llm = new ScriptedLlmClient([scriptedText("Hello.")]);
+    await runScenarioTrial(typed, {
+      agent: { llm, profile },
+      simulator: new QueuedPatientSimulator(["first words"]),
+    });
+    expect(JSON.stringify(llm.requests[0]?.messages)).not.toContain(SPOKEN_MESSAGE_MARKER);
   });
 
   it("stops at max_turns", async () => {

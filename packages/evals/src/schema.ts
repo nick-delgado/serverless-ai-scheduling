@@ -302,6 +302,12 @@ export const Scenario = z
     goal: z.string().min(1),
     /** Simulator-only facts. `null` when the key is present but empty. */
     hidden_facts: z.record(z.string(), z.unknown()).nullish(),
+    /**
+     * `voice` marks every patient turn as spoken (scripted, simulated and replayed): each reaches the
+     * agent with the spoken-message marker before it (#234). Write the mishearing into `script` or
+     * `hidden_facts.opener`, so it is the same on every run. Absent means typed.
+     */
+    input_mode: z.literal("voice").optional(),
     /** Patient messages sent verbatim as the first turns, before the simulator takes over. */
     script: z.array(z.string().min(1).max(LIMITS.chatTextMaxChars)).optional(),
     /**
@@ -356,7 +362,8 @@ export const coveredOutsideHarness = (path: string) => `covered outside the harn
 const ToolErrorBody = ToolError.shape.error;
 
 export const L1ContextItem = z.union([
-  z.strictObject({ patient: z.string().min(1) }),
+  /** `input_mode: voice` marks a spoken turn: the model sees the spoken-message marker before it (#234). */
+  z.strictObject({ patient: z.string().min(1), input_mode: z.literal("voice").optional() }),
   z.strictObject({ assistant: z.string().min(1) }),
   z.strictObject({ tool_call: z.strictObject({ tool: ToolName, args: z.record(z.string(), z.unknown()) }) }),
   z.strictObject({

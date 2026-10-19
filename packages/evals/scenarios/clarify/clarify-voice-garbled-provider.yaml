@@ -10,6 +10,7 @@ hidden_facts:
   means: "Dr. Samuel Okafor, Tue Oct 6, before noon"
   style: "all later messages are also lowercase voice transcripts"
 max_turns: 10
+input_mode: voice
 tags: [voice, ambiguity]
 covers: [FR-030, FR-031, adr9.confirm-before-write, adr9.no-invented-facts]
 expect:

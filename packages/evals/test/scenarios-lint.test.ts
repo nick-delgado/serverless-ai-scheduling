@@ -23,16 +23,17 @@ import {
   allStrings,
   CONVERSATION_OWNERSHIP_TEST,
   isWriteTool,
+  L1ContextItem,
   loadScenarios,
   SCENARIOS_DIR,
+  Scenario,
   selectSuite,
   unrubricedInUse,
   type L1Case,
-  type Scenario,
 } from "../src";
 
 /** ADR-008 scenario budget (v1). */
-const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 11 };
+const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 6, safety: 11 };
 const REQUIRED_FRS = ["FR-030", "FR-031", "FR-032", "FR-033", "FR-034", "FR-035", "FR-036", "FR-037"];
 /** ADR-009 "Agent behavior" + identity lines, as keyed in scenarios/README.md. */
 const REQUIRED_POLICIES = [
@@ -59,7 +60,7 @@ const windowEnd = windowStart + fixture.weeks * 7 * 86_400_000;
 
 describe("eval scenarios (schema)", () => {
   it("loads and validates every file", () => {
-    expect(scenarios.length).toBe(41);
+    expect(scenarios.length).toBe(42);
     expect(l1.length).toBeGreaterThanOrEqual(10);
   });
 
@@ -78,6 +79,58 @@ describe("eval scenarios (schema)", () => {
   it.each(all.map((s) => [s.id, s] as const))("%s: clock inside the fixture window", (_id, s) => {
     const clock = Date.parse(s.clock);
     expect(clock >= windowStart && clock < windowEnd).toBe(true);
+  });
+});
+
+describe("eval scenarios (spoken turns, #234)", () => {
+  /** True when a case marks its patient turns as spoken: a scenario's `input_mode`, or any L1 patient item's. */
+  const isSpoken = (c: Scenario | L1Case): boolean =>
+    c.category === "l1"
+      ? c.context.some((item) => "patient" in item && item.input_mode === "voice")
+      : (c as Scenario).input_mode === "voice";
+
+  it("marks every voice-tagged case as spoken, and no case that isn't voice-tagged", () => {
+    expect(all.filter((c) => c.tags.includes("voice") !== isSpoken(c)).map((c) => c.id)).toEqual([]);
+  });
+
+  it("has the spoken-turn cases #234 adds, none tagged smoke (r1/Q-5 (a))", () => {
+    const spoken = all.filter(isSpoken);
+    expect(spoken.map((c) => c.id).sort()).toEqual([
+      "clarify-voice-ambiguous-weekday",
+      "clarify-voice-garbled-provider",
+      "l1-other-patient-name-misheard",
+      "l1-spoken-ambiguous-weekday",
+      "l1-spoken-provider-misheard",
+      "l1-spoken-restate-before-booking",
+      "l1-spoken-yes-books",
+    ]);
+    expect(spoken.filter((c) => c.tags.includes("smoke"))).toEqual([]);
+  });
+
+  it("accepts only voice as an input mode, in a scenario and in an L1 patient item", () => {
+    const some = scenarios[0];
+    if (some === undefined) throw new Error("no scenarios");
+    for (const mode of ["text", "phone", ""]) {
+      expect(Scenario.safeParse({ ...some, input_mode: mode }).success, mode).toBe(false);
+      expect(L1ContextItem.safeParse({ patient: "hi", input_mode: mode }).success, mode).toBe(false);
+    }
+    expect(Scenario.safeParse({ ...some, input_mode: "voice" }).success).toBe(true);
+    expect(L1ContextItem.safeParse({ patient: "hi", input_mode: "voice" }).success).toBe(true);
+    // Only a patient item can be spoken.
+    expect(L1ContextItem.safeParse({ assistant: "hi", input_mode: "voice" }).success).toBe(false);
+  });
+
+  it("makes a spoken scenario that books confirm book_appointment before it writes", () => {
+    const booking = scenarios.filter((s) => {
+      const n = s.expect.end_state?.appointments_created;
+      return isSpoken(s) && n !== undefined && (typeof n === "number" ? n : n.max) > 0;
+    });
+    expect(booking.map((s) => s.id).sort()).toEqual([
+      "clarify-voice-ambiguous-weekday",
+      "clarify-voice-garbled-provider",
+    ]);
+    for (const s of booking)
+      expect(s.expect.trajectory, s.id).toContainEqual({ must_confirm_before: "book_appointment" });
   });
 });
 

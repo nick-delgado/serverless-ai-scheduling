@@ -3,7 +3,7 @@
  * calls with their results, in the order they happened. Built from the loop's stored messages and trace,
  * so it sees exactly what the patient saw and what the tools returned.
  */
-import type { LlmMessage } from "@sched/agent";
+import { withoutInputMarker, type LlmMessage } from "@sched/agent";
 import {
   ToolError,
   VISIBLE_TEXT_SEPARATOR,
@@ -73,7 +73,8 @@ export function turnEvents(
 
   for (const [i, m] of newMessages.entries()) {
     if (m.role === "user") {
-      const text = textOf(m.content);
+      // A spoken message's marker is the harness's, not the patient's words: the transcript and the judge omit it.
+      const text = textOf(withoutInputMarker(m.content));
       if (i === 0 || text.length > 0)
         events.push({ kind: "patient", turn, text, ...(scriptStep === undefined ? {} : { scriptStep }) });
       continue;

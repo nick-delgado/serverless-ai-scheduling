@@ -95,7 +95,13 @@ export function ChatPage({ api: apiProp, ...options }: ChatPageProps) {
           onSend={chat.send}
           responding={chat.responding}
           inputRef={inputRef}
-          accessory={<VoiceInput onTranscript={chat.send} responding={chat.responding} inputRef={inputRef} />}
+          accessory={
+            <VoiceInput
+              onTranscript={(transcript) => chat.send(transcript, "voice")}
+              responding={chat.responding}
+              inputRef={inputRef}
+            />
+          }
         />
       </div>
     </div>

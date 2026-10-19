@@ -52,6 +52,7 @@ import {
 } from "./llm/types";
 import { profileRequest, type RequestSystem } from "./llm/request";
 import type { Clock, ToolExecutionResult, ToolExecutor } from "./ports";
+import { withInputMode, type InputMode } from "./input-mode";
 import { fallbackProfileFor, type ModelProfile } from "./profiles";
 import { addUsage, zeroUsage } from "./usage";
 
@@ -73,8 +74,13 @@ export const DEFAULT_LIMITS: Readonly<AgentLimits> = { maxIterations: 8, maxTool
 export interface RunAgentTurnInput {
   /** Prior messages from storage, oldest first. Never modified. */
   history: readonly LlmMessage[];
-  /** The patient's new message. */
+  /** The patient's new message: their words only. */
   userMessage: string;
+  /**
+   * How it was entered. A `"voice"` message reaches the model with the spoken-message marker before it
+   * (`withInputMode`, #234); the marker is in the returned first message, which the caller doesn't store.
+   */
+  inputMode?: InputMode;
   system: SystemPrompt;
   /** Tools, pre-bound to the authenticated patient. */
   executor: ToolExecutor;
@@ -160,7 +166,12 @@ class AgentTurn {
     this.#monotonic = input.monotonicNow ?? (() => performance.now());
     this.#emit = input.onEvent ?? (() => undefined);
     this.#offered = new Set(input.executor.definitions.map((d) => d.name));
-    this.#newMessages = [{ role: "user", content: [{ type: "text", text: input.userMessage }] }];
+    this.#newMessages = [
+      {
+        role: "user",
+        content: withInputMode([{ type: "text", text: input.userMessage }], input.inputMode),
+      },
+    ];
     this.#profile = input.profile;
     this.#maxTokens = input.profile.maxTokens;
   }
