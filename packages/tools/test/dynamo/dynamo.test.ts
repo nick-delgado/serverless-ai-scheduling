@@ -7,12 +7,12 @@
  */
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import type { SlotId } from "@sched/contracts";
+import type { EscalationId, SlotId } from "@sched/contracts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { FrozenClock } from "../../src/clock";
 import { createDocumentClient, createDynamoRepositories, writeSeed } from "../../src/repos/dynamo";
-import { keys } from "../../src/repos/dynamo/items";
+import { ESCALATION_TTL_DAYS, escalationFrom, escalationItem, keys } from "../../src/repos/dynamo/items";
 import { sequentialIds } from "../../src/repos/ids";
 import type { RescheduleResult, Repositories } from "../../src/repos/types";
 import { runRepositoryContract } from "../contract/repositories.contract";
@@ -367,7 +367,10 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
         content: JSON.stringify(message(CONV_A, 0).content),
         expiresAt: Date.parse(NOW) / 1000 + 30 * 24 * 3600,
       });
-      expect(await raw(keys.conversationMeta(MARIA, NOW, CONV_A))).toMatchObject({ conversationId: CONV_A });
+      expect(await raw(keys.conversationMeta(MARIA, NOW, CONV_A))).toMatchObject({
+        conversationId: CONV_A,
+        expiresAt: Date.parse(NOW) / 1000 + 30 * 24 * 3600,
+      });
     });
 
     it("stores a patient message's clientMessageId and reads it back; other messages have no such attribute", async () => {
@@ -408,14 +411,36 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       expect(await repos.conversations.listMessages(WALTER, CONV_A)).toEqual([]);
     });
 
-    it("stores the escalation under the fixed ESC key", async () => {
+    it("stores the escalation under the fixed ESC key, expiring 30 days after it was recorded (#271)", async () => {
       await repos.escalations.record({
         patientId: MARIA,
         conversationId: CONV_A,
         reason: "patient_requested",
         summary: "Patient asked to speak with a person about a dermatology visit.",
       });
-      expect(await raw({ PK: `CONV#${CONV_A}`, SK: "ESC" })).toMatchObject({ patientId: MARIA });
+      expect(await raw({ PK: `CONV#${CONV_A}`, SK: "ESC" })).toMatchObject({
+        patientId: MARIA,
+        createdAt: NOW,
+        expiresAt: Date.parse(NOW) / 1000 + 30 * 24 * 3600,
+      });
     });
+  });
+});
+
+describe("escalation items (no DynamoDB Local)", () => {
+  it("an escalation item's expiresAt is its createdAt floored to epoch seconds plus ESCALATION_TTL_DAYS (pinned at 30), and reading the item back drops it (#271)", () => {
+    const createdAt = "2026-11-01T08:30:15.900Z";
+    const item = escalationItem({
+      escalationId: "esc_0123456789ab" as EscalationId,
+      conversationId: CONV_A,
+      patientId: MARIA,
+      reason: "patient_requested",
+      summary: "Patient asked to speak with a person about a dermatology visit.",
+      createdAt,
+      notification: { status: "PENDING" },
+    });
+    expect(ESCALATION_TTL_DAYS).toBe(30);
+    expect(item.expiresAt).toBe(1_796_113_815);
+    expect(escalationFrom(item)).not.toHaveProperty("expiresAt");
   });
 });
