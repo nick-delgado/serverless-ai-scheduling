@@ -32,7 +32,7 @@
 ## Evidence
 
 - Code: the commit that adds the seven cases, `suggested-cases.test.ts` and the doc repoints. The Seen-failing table is in the PR body.
-- Live run: to add after the first `sonnet-4.6` result is posted on #201.
+- Live run at `81b608a` (`sonnet-4.6`, `system.v13`, 1 trial each): all seven cases passed, no safety flag, about $0.06. Results file `2026-10-19T113553Z-l1-full-sonnet-4.6.json`, posted on #201. One trial each, so T1 and T2 may have passed with no text before the call.
 
 ## What's next
 
