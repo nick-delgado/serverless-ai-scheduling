@@ -9,6 +9,13 @@ import { AppointmentId, ConversationId, MessageId } from "./ids";
 import { IsoDateTimeUtc } from "./primitives";
 import { ChatErrorCode } from "./stream";
 
+/**
+ * How a patient's message was entered. Client-supplied and untrusted (ADR-009): it can only make the
+ * agent more careful (a spoken turn reaches the model with a marker, #234), never less.
+ */
+export const ChatInputMode = z.enum(["text", "voice"]);
+export type ChatInputMode = z.infer<typeof ChatInputMode>;
+
 /** `POST /api/chat` body. Response: a stream of ChatStreamEvent (stream.ts). */
 export const ChatRequest = z.strictObject({
   /** Omit to start a new conversation; the `done` event returns the new ID. */
@@ -16,6 +23,8 @@ export const ChatRequest = z.strictObject({
   /** Client-generated; lets the server de-duplicate a retried send (FR-015). */
   clientMessageId: z.uuid(),
   text: z.string().trim().min(1).max(LIMITS.chatTextMaxChars),
+  /** Omitted means `"text"`. `"voice"` marks a transcript from the voice overlay (#234). */
+  inputMode: ChatInputMode.optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 

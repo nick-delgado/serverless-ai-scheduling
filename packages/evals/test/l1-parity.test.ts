@@ -67,6 +67,36 @@ describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
   },
 );
 
+describe("l1Request renders a spoken patient item like the agent loop (#234)", () => {
+  it("equals the loop's request for a spoken message (marker included), and differs from the typed one", async () => {
+    const profile = MODEL_PROFILES["sonnet-4.6"];
+    const words = "hi can i see doctor oh car on tuesday";
+    const spoken: L1Case = { ...c, context: [{ patient: words, input_mode: "voice" }] };
+    const typed: L1Case = { ...c, context: [{ patient: words }] };
+    const env = await createTrialEnvironment(spoken);
+    const system = interimSystemPrompt(env.clock.now(), "Walter");
+
+    const llm = new ScriptedLlmClient([scriptedText("ok")]);
+    await runAgentTurn({
+      history: [],
+      userMessage: words,
+      inputMode: "voice",
+      system,
+      executor: env.executor,
+      llm,
+      profile,
+      clock: env.clock,
+      conversationId: env.conversationId,
+      turnId: env.uuid(),
+    });
+    const loop = llm.requests[0];
+    if (loop === undefined) throw new Error("the loop made no request");
+
+    expect(withoutCachePoints(l1Request(spoken, profile, system))).toEqual(withoutCachePoints(loop));
+    expect(withoutCachePoints(l1Request(typed, profile, system))).not.toEqual(withoutCachePoints(loop));
+  });
+});
+
 describe("l1Request renders tool calls and results like the agent loop (2e22f79/TEST-304)", () => {
   it("the loop's second request equals L1's for the same tool call and result", async () => {
     const profile = MODEL_PROFILES["sonnet-4.6"];

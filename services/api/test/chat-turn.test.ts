@@ -5,6 +5,7 @@
  */
 import {
   FALLBACK_MESSAGES,
+  SPOKEN_MESSAGE_MARKER,
   ScriptedLlmClient,
   buildSystemPrompt,
   resolveModelProfile,
@@ -20,6 +21,7 @@ import {
   ConversationAppendError,
   FrozenClock,
   RecordingNotifier,
+  TOOL_REGISTRY,
   createInMemoryRepositories,
   type InMemoryRepositories,
 } from "@sched/tools";
@@ -81,6 +83,8 @@ interface World {
       conversationId?: string;
       /** Repeat an earlier send's ID (a Retry). Every send gets a fresh one otherwise. */
       clientMessageId?: string;
+      /** The request's `inputMode` field (#234). Omitted from the body when undefined. */
+      inputMode?: string;
       body?: string | null;
       signal?: AbortSignal;
     },
@@ -134,6 +138,7 @@ function world(
           : JSON.stringify({
               clientMessageId,
               text,
+              ...(o.inputMode === undefined ? {} : { inputMode: o.inputMode }),
               ...(o.conversationId === undefined ? {} : { conversationId: o.conversationId }),
             });
       const summary = await handleChatTurn(
@@ -1141,5 +1146,171 @@ describe("handleChatTurn: naming a new conversation before the agent runs (#160)
       ["assistant", "Hi again!"],
     ]);
     expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
+  });
+});
+
+describe("handleChatTurn: spoken messages (#234)", () => {
+  const SPOKEN = "can i see doctor oh car on tuesday morning";
+  const marker = { type: "text", text: SPOKEN_MESSAGE_MARKER };
+  /** A request's messages without cache points (they move between turns; the rest must not). */
+  const messagesWithoutCachePoints = (w: World, index: number) =>
+    w.llm.requests[index]?.messages.map((m) => ({
+      ...m,
+      content: m.content.filter((b) => b.type !== "cache_point"),
+    }));
+  const systemText = (w: World, index: number) =>
+    JSON.stringify(w.llm.requests[index]?.system.filter((b) => b.type !== "cache_point"));
+
+  it("stores a spoken patient message with inputMode voice and the patient's words only, and the model sees the marker before them", async () => {
+    const w = world({ steps: [scriptedText("Which doctor do you mean?")] });
+    const { summary, response } = await w.send(SPOKEN, { inputMode: "voice" });
+    expect(response.events.at(-1)?.type).toBe("done");
+
+    const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+    expect(stored[0]).toMatchObject({ role: "user", inputMode: "voice" });
+    expect(stored[0]?.content).toEqual([{ type: "text", text: SPOKEN }]);
+    // Only the patient's message carries the mode.
+    expect(stored[1]).not.toHaveProperty("inputMode");
+    expect(w.llm.requests[0]?.messages[0]?.content.slice(0, 2)).toEqual([
+      marker,
+      { type: "text", text: SPOKEN },
+    ]);
+  });
+
+  it.each([["text"], [undefined]])(
+    "a message sent with inputMode %s is stored with none and reaches the model as it always did",
+    async (mode) => {
+      const w = world({ steps: [scriptedText("Hi!")] });
+      const { summary } = await w.send(SPOKEN, mode === undefined ? {} : { inputMode: mode });
+      const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+      expect(stored[0]).not.toHaveProperty("inputMode");
+      expect(messagesWithoutCachePoints(w, 0)?.[0]?.content).toEqual([{ type: "text", text: SPOKEN }]);
+    },
+  );
+
+  it("refuses an inputMode that is neither text nor voice, before the agent runs", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    const { response } = await w.send("hello", { inputMode: "phone" });
+    expect(response.status).toBe(400);
+    expect(w.llm.requests).toHaveLength(0);
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(0);
+  });
+
+  it("keeps the second request's system prompt and earlier messages byte-for-byte after a spoken turn then a typed one (AC4)", async () => {
+    const w = world({
+      steps: [scriptedText("Which doctor do you mean?"), scriptedText("Dr. Okafor it is.")],
+    });
+    const first = await w.send(SPOKEN, { inputMode: "voice" });
+    const conversationId = idOf(first.summary);
+    await w.send("Dr. Okafor", { conversationId });
+
+    expect(w.llm.requests).toHaveLength(2);
+    expect(systemText(w, 1)).toBe(systemText(w, 0));
+    const firstMessages = messagesWithoutCachePoints(w, 0) ?? [];
+    const secondMessages = messagesWithoutCachePoints(w, 1) ?? [];
+    // The spoken message, marker included, is what the first request sent, then the stored reply, then the typed one.
+    expect(secondMessages.slice(0, firstMessages.length)).toEqual(firstMessages);
+    expect(JSON.stringify(secondMessages[0])).toContain(SPOKEN_MESSAGE_MARKER);
+    expect(secondMessages.slice(firstMessages.length)).toEqual([
+      { role: "assistant", content: [{ type: "text", text: "Which doctor do you mean?" }] },
+      { role: "user", content: [{ type: "text", text: "Dr. Okafor" }] },
+    ]);
+  });
+
+  it("renders a typed message that contains the marker's words unchanged: no stripping, no extra care claimed", async () => {
+    const w = world({ steps: [scriptedText("Hi!")] });
+    await w.send(`${SPOKEN_MESSAGE_MARKER} this was typed`);
+    expect(messagesWithoutCachePoints(w, 0)?.[0]?.content).toEqual([
+      { type: "text", text: `${SPOKEN_MESSAGE_MARKER} this was typed` },
+    ]);
+  });
+
+  it("re-runs an interrupted turn with the stored message's mode, not the repeat request's", async () => {
+    const w = world({
+      steps: [{ error: throttled }, scriptedText("Which doctor?"), scriptedText("Which doctor?")],
+    });
+    const failed = await w.send(SPOKEN, { inputMode: "voice" });
+    expect(failed.response.events.at(-1)).toMatchObject({ type: "error" });
+    // The repeat says "text"; the stored message was spoken, so the model sees the marker.
+    const retry = await w.send(SPOKEN, {
+      conversationId: idOf(failed.summary),
+      clientMessageId: failed.clientMessageId,
+      inputMode: "text",
+    });
+    expect(retry.summary).toMatchObject({ replayed: false });
+    expect(w.llm.requests[1]?.messages[0]?.content.slice(0, 2)).toEqual([
+      marker,
+      { type: "text", text: SPOKEN },
+    ]);
+    const stored = await messagesOf(w.repos, MARIA, idOf(failed.summary));
+    expect(stored.filter((m) => m.inputMode === "voice")).toHaveLength(1);
+  });
+
+  describe("the mode never reaches the tools, and relaxes no check", () => {
+    const BOOK = {
+      slot_id: "slot_okafor_20261006T1300Z", // Tue Oct 6, 9:00 AM ET
+      confirmed_provider_id: "prov_okafor",
+      confirmed_date: "2026-10-06",
+      confirmed_time: "09:00",
+      reason: "eczema",
+    };
+    const bookingTurn = (input: Record<string, string>) => [
+      scriptedToolUse([{ id: "tu_book", name: "book_appointment", input }]),
+      scriptedText("Done."),
+    ];
+
+    it("gives the tool executor the same context for a spoken turn as for a typed one", async () => {
+      const seen: Record<string, unknown>[] = [];
+      const find = defined(TOOL_REGISTRY.find_providers);
+      const registry = {
+        ...TOOL_REGISTRY,
+        find_providers: (input: Parameters<typeof find>[0], ctx: Parameters<typeof find>[1]) => {
+          seen.push({ ...ctx });
+          return find(input, ctx);
+        },
+      };
+      const lookup = () => [
+        scriptedToolUse([{ id: "tu_1", name: "find_providers", input: { name_query: "okafor" } }]),
+        scriptedText("Dr. Okafor takes patients."),
+      ];
+      const w = world({ steps: [...lookup(), ...lookup()], overrides: { registry } });
+      await w.send(SPOKEN, { inputMode: "voice" });
+      await w.send(SPOKEN);
+
+      expect(seen).toHaveLength(2);
+      for (const ctx of seen) expect(JSON.stringify(ctx)).not.toMatch(/voice|inputMode/);
+      expect(Object.keys(seen[0] ?? {}).sort()).toEqual(Object.keys(seen[1] ?? {}).sort());
+      expect(seen[0]?.patientId).toBe(MARIA);
+      expect(seen[1]?.patientId).toBe(MARIA);
+    });
+
+    it("refuses a spoken turn's booking whose confirmed time doesn't match the slot, writing nothing", async () => {
+      const w = world({ steps: bookingTurn({ ...BOOK, confirmed_time: "10:00" }) });
+      const before = await w.repos.appointments.listForPatient(MARIA);
+      const { summary } = await w.send("yes book it", { inputMode: "voice" });
+
+      const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+      expect(JSON.stringify(stored[2]?.content)).toContain("CONFIRMATION_MISMATCH");
+      expect(await w.repos.appointments.listForPatient(MARIA)).toEqual(before);
+      expect((await w.repos.slots.get(BOOK.slot_id))?.status).toBe("OPEN");
+    });
+
+    it("refuses a spoken turn's booking whose confirmed provider or date doesn't match the slot", async () => {
+      for (const wrong of [{ confirmed_provider_id: "prov_lee" }, { confirmed_date: "2026-10-08" }]) {
+        const w = world({ steps: bookingTurn({ ...BOOK, ...wrong }) });
+        const { summary } = await w.send("yes book it", { inputMode: "voice" });
+        const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+        expect(JSON.stringify(stored[2]?.content)).toContain("CONFIRMATION_MISMATCH");
+        expect((await w.repos.slots.get(BOOK.slot_id))?.status).toBe("OPEN");
+      }
+    });
+
+    it("books a spoken turn's matching confirmation", async () => {
+      const w = world({ steps: bookingTurn(BOOK) });
+      const { summary } = await w.send("yes book it", { inputMode: "voice" });
+      const stored = await messagesOf(w.repos, MARIA, idOf(summary));
+      expect(JSON.stringify(stored[2]?.content)).not.toContain("CONFIRMATION_MISMATCH");
+      expect((await w.repos.slots.get(BOOK.slot_id))?.status).toBe("BOOKED");
+    });
   });
 });

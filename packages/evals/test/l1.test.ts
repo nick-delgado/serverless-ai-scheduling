@@ -10,6 +10,7 @@ import {
   scriptedMaxTokens,
   scriptedText,
   scriptedToolUse,
+  SPOKEN_MESSAGE_MARKER,
 } from "@sched/agent";
 import { FIXTURE_PATIENT_IDS } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
@@ -299,6 +300,24 @@ describe("L1 context rendering", () => {
       );
     expect(ids("tool_use")).toEqual(["tooluse_l1_001", "tooluse_l1_002"]);
     expect(ids("tool_result")).toEqual(["tooluse_l1_001", "tooluse_l1_002"]);
+  });
+
+  it("renders a spoken patient item with the marker block before its text, and a typed one without (#234)", () => {
+    const c = l1Case("l1-restate-before-booking");
+    const spoken: L1Case = {
+      ...c,
+      context: [
+        { patient: "typed first" },
+        { assistant: "ok" },
+        { patient: "doctor oh car", input_mode: "voice" },
+      ],
+    };
+    const [first, , last] = l1Messages(spoken);
+    expect(first?.content).toEqual([{ type: "text", text: "typed first" }]);
+    expect(last?.content).toEqual([
+      { type: "text", text: SPOKEN_MESSAGE_MARKER },
+      { type: "text", text: "doctor oh car" },
+    ]);
   });
 
   it("rejects a tool result with no preceding call", () => {

@@ -140,6 +140,8 @@ export const messageItem = (patientId: PatientId, m: ConversationMessage): Item 
   createdAt: m.createdAt,
   // Retry de-duplication (#104): on patient messages only, so the attribute is absent, not null, otherwise.
   ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),
+  // Spoken patient messages only (#234); absent, not null, otherwise.
+  ...(m.inputMode === undefined ? {} : { inputMode: m.inputMode }),
   expiresAt: expiresAtFor(m.createdAt),
 });
 export const messageFrom = (item: Item): ConversationMessage => {

@@ -2,13 +2,16 @@
  * Stored conversation messages ↔ the agent loop's history (append-only, CLAUDE.md rule 4).
  *
  * Stored `content` is the loop's provider-neutral content blocks, verbatim (reasoning blocks and their
- * signatures included), so the mapping is a field projection both ways. Nothing is ever edited.
+ * signatures included), so the mapping is a field projection both ways, with one rendering: a spoken
+ * patient message (`inputMode: "voice"`) gets the spoken-message marker before its text (`withInputMode`,
+ * #234), the same way the loop rendered it when it was sent. The stored text is never changed.
+ * Nothing is ever edited.
  */
-import { FALLBACK_MESSAGES, type LlmMessage } from "@sched/agent";
+import { FALLBACK_MESSAGES, withInputMode, type LlmMessage } from "@sched/agent";
 import type { ConversationId, ConversationMessage, TurnId } from "@sched/contracts";
 
 export function toLlmHistory(messages: readonly ConversationMessage[]): LlmMessage[] {
-  return messages.map((m) => ({ role: m.role, content: m.content }));
+  return messages.map((m) => ({ role: m.role, content: withInputMode(m.content, m.inputMode) }));
 }
 
 /** True when the last stored message is the patient's (or tool results) with no assistant reply after it. */
@@ -16,8 +19,11 @@ export function needsClosingReply(messages: readonly { role: string }[]): boolea
   return messages.at(-1)?.role === "user";
 }
 
-/** A message to store. The patient's message carries the `clientMessageId` it was sent with (#104). */
-export type OutgoingMessage = LlmMessage & { clientMessageId?: string };
+/**
+ * A message to store. The patient's message carries the `clientMessageId` it was sent with (#104) and,
+ * when it was spoken, `inputMode: "voice"` (#234).
+ */
+export type OutgoingMessage = LlmMessage & { clientMessageId?: string; inputMode?: "voice" };
 
 /** Numbers messages for storage from `firstSeq`, all in one turn at one time. */
 export function toStoredMessages(
@@ -32,6 +38,7 @@ export function toStoredMessages(
     turnId: at.turnId,
     createdAt: at.createdAt,
     ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),
+    ...(m.inputMode === undefined ? {} : { inputMode: m.inputMode }),
   }));
 }
 

@@ -1,6 +1,6 @@
 /**
  * The pre-run estimate against recorded runs (#34, r1/A-9): conservative, between 1.0x and 1.5x of what each
- * recorded `sonnet-4.6` run cost (1.6x for L1 smoke, since #321). The figures are the runs' own totals (the judge included in scenario mode):
+ * recorded `sonnet-4.6` run cost (1.7x for L1 smoke, since #234). The figures are the runs' own totals (the judge included in scenario mode):
  * - scenario smoke, 2026-10-07T140228Z and T142126Z (prompt `system.v1`, 8 cases, k=1): $0.3400 and $0.3856;
  * - scenario full, PR #165 (`40dbee6`, k=1): $2.16 (agent $1.36, simulator $0.59, judge $0.22);
  * - L1 smoke, five runs on 2026-10-07 (8 cases, k=1): $0.0567 to $0.0572 with a cold cache, $0.0403 warm.
@@ -32,10 +32,10 @@ describe("estimateRunCost against recorded runs (#34, r1/A-9)", () => {
   });
 
   // The estimate counts the current prompt, which has grown since `system.v1` (the recorded runs): 1.484x at
-  // `4804c58` (`system.v9`), 1.532x at `43aa1b2` (`system.v10`, #321), so the L1 ceiling is 1.6x.
-  it("L1 smoke: at least every cold run, at most 1.6x of them", () => {
+  // `4804c58` (`system.v9`), 1.532x at `43aa1b2` (`system.v10`, #321), 1.603x at `system.v13` (#234), so the L1 ceiling is 1.7x.
+  it("L1 smoke: at least every cold run, at most 1.7x of them", () => {
     const estimate = estimateRunCost(selectSuite(loaded.l1, "smoke"), sonnet, 1);
     expect(estimate).toBeGreaterThanOrEqual(0.0572);
-    expect(estimate / 0.0567).toBeLessThanOrEqual(1.6);
+    expect(estimate / 0.0567).toBeLessThanOrEqual(1.7);
   });
 });

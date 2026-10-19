@@ -90,6 +90,13 @@ export const ConversationMessage = z.strictObject({
    * #104 have none and never match.
    */
   clientMessageId: z.uuid().optional(),
+  /**
+   * Set to `"voice"` on a patient message that was spoken (`ChatRequest.inputMode`, #234), and absent
+   * otherwise (typed, or written before #234). `content` stays the patient's words only; the agent
+   * renders the mode into what the model sees (`withInputMode` in `@sched/agent`), so history stays
+   * append-only and restore, retry matching and the staff transcript read the words unchanged.
+   */
+  inputMode: z.literal("voice").optional(),
 });
 export type ConversationMessage = z.infer<typeof ConversationMessage>;
 

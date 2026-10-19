@@ -383,6 +383,18 @@ describe.skipIf(!available)("DynamoDB repositories (DynamoDB Local)", () => {
       expect(stored[1]).not.toHaveProperty("clientMessageId");
     });
 
+    it("stores a spoken patient message's inputMode and reads it back; other messages have no such attribute (#234)", async () => {
+      await repos.conversations.append(MARIA, [
+        { ...message(CONV_A, 0), inputMode: "voice" },
+        message(CONV_A, 1),
+      ]);
+      expect(await raw(keys.message(CONV_A, 0))).toMatchObject({ inputMode: "voice" });
+      expect(await raw(keys.message(CONV_A, 1))).not.toHaveProperty("inputMode");
+      const stored = await repos.conversations.listMessages(MARIA, CONV_A);
+      expect(stored[0]?.inputMode).toBe("voice");
+      expect(stored[1]).not.toHaveProperty("inputMode");
+    });
+
     it("hides a whole conversation if any item in it belongs to someone else", async () => {
       await repos.conversations.append(MARIA, [message(CONV_A, 0), message(CONV_A, 1)]);
       // A corrupted or injected item (not writable through the repository) must not leak or merge.

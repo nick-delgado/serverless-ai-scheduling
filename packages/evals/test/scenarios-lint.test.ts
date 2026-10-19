@@ -81,6 +81,36 @@ describe("eval scenarios (schema)", () => {
   });
 });
 
+describe("eval scenarios (spoken turns, #234)", () => {
+  /** True when a case marks its patient turns as spoken: a scenario's `input_mode`, or any L1 patient item's. */
+  const isSpoken = (c: Scenario | L1Case): boolean =>
+    c.category === "l1"
+      ? c.context.some((item) => "patient" in item && item.input_mode === "voice")
+      : (c as Scenario).input_mode === "voice";
+
+  it("marks every voice-tagged case as spoken, and no case that isn't voice-tagged", () => {
+    expect(all.filter((c) => c.tags.includes("voice") !== isSpoken(c)).map((c) => c.id)).toEqual([]);
+  });
+
+  it("has the spoken-turn cases #234 adds, none tagged smoke (r1/Q-5 (a))", () => {
+    const spoken = all.filter(isSpoken);
+    expect(spoken.map((c) => c.id).sort()).toEqual([
+      "clarify-voice-garbled-provider",
+      "l1-other-patient-name-misheard",
+      "l1-spoken-ambiguous-weekday",
+      "l1-spoken-provider-misheard",
+      "l1-spoken-restate-before-booking",
+      "l1-spoken-yes-books",
+    ]);
+    expect(spoken.filter((c) => c.tags.includes("smoke"))).toEqual([]);
+  });
+
+  it("makes a spoken scenario that books confirm before it writes", () => {
+    for (const s of scenarios.filter(isSpoken))
+      expect(JSON.stringify(s.expect.trajectory), s.id).toContain("must_confirm_before");
+  });
+});
+
 describe("eval scenarios (fixture references)", () => {
   it.each(all.map((s) => [s.id, s] as const))("%s: ids exist in clinic-default", (_id, s) => {
     const extra = s.setup?.appointments ?? [];
