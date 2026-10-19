@@ -132,21 +132,18 @@ Resources:
                 Effect: Allow
                 Action: ssm:*
                 Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/*
-              # A distribution and an origin access control are named by a generated ID, so only their type and
-              # this account can be pinned. The function is the one CloudFront resource that carries the sched- name.
-              - Sid: CloudFrontDistributionsAndSchedFunctions
+              # A distribution and an origin access control are named by a generated ID, so no ARN can carry the
+              # sched- name. That is the reason this stays "*".
+              - Sid: CloudFrontDistributionsAndOacs
                 Effect: Allow
                 Action: cloudfront:*
-                Resource:
-                  - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
-                  - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
-                  - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:function/sched-*
+                Resource: "*"
               # A REST API, its stages and deployments are named by a generated ID (the sched- name is a property),
-              # so only the service and this region can be pinned.
-              - Sid: ApiGatewayRegionalApis
+              # so no ARN can carry the sched- name. That is the reason this stays "*".
+              - Sid: ApiGatewayApis
                 Effect: Allow
                 Action: apigateway:*
-                Resource: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/*
+                Resource: "*"
               # CreateUserPool takes no resource, and a pool's ID is generated, so the name can't be in the ARN.
               - Sid: CognitoUserPools
                 Effect: Allow

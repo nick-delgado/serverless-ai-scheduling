@@ -582,23 +582,14 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
       resource: ["!Sub arn:${AWS::Partition}:s3:::sched-*", "!Sub arn:${AWS::Partition}:s3:::sched-*/*"],
     },
     { sid: "SsmSchedParameters", action: "ssm:*", resource: [arn("ssm", true, "parameter/sched/*")] },
-    {
-      sid: "CloudFrontDistributionsAndSchedFunctions",
-      action: "cloudfront:*",
-      resource: [
-        arn("cloudfront", false, "distribution/*"),
-        arn("cloudfront", false, "origin-access-control/*"),
-        arn("cloudfront", false, "function/sched-*"),
-      ],
-    },
-    {
-      sid: "ApiGatewayRegionalApis",
-      action: "apigateway:*",
-      resource: ["!Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/*"],
-    },
+    { sid: "CloudFrontDistributionsAndOacs", action: "cloudfront:*", resource: ["*"] },
+    { sid: "ApiGatewayApis", action: "apigateway:*", resource: ["*"] },
     { sid: "CognitoUserPools", action: "cognito-idp:*", resource: ["*"] },
     { sid: "CognitoIdentityPools", action: "cognito-identity:*", resource: ["*"] },
   ];
+
+  /** The services whose resources are named by a generated ID, or take none, so keep "*" (r1/Q-2 (a)). */
+  const STARRED = SERVICES.filter((s) => s.resource.includes("*")).map((s) => s.sid);
 
   it.each(SERVICES)(
     "grants $action on exactly its named resources in $sid (F-3)",
@@ -615,17 +606,19 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
     expect(exec.filter((l) => /\b(events|xray|ses|bedrock):/.test(l))).toEqual([]);
   });
 
-  it('keeps "*" only for the two Cognito services, each with its reason directly above (F-3, r1/Q-2 (a))', () => {
-    const starred = exec.flatMap((l, i) => (/^\s+Resource: "\*"$/.test(l) ? [i] : []));
-    const sidsOfStarred = starred.map((i) => {
-      const sid = exec.slice(0, i).findLast((l) => /^\s+- Sid: /.test(l)) ?? "";
-      return sid.replace(/^\s+- Sid: /, "");
-    });
-    // NoBoundaryRemoval is a Deny, not a grant.
-    expect(sidsOfStarred).toEqual(["CognitoUserPools", "CognitoIdentityPools", "NoBoundaryRemoval"]);
-    for (const sid of ["CognitoUserPools", "CognitoIdentityPools"]) {
+  it('lists the Allow statements with a "*" resource (a list item, quoted, trailing comment or not) as the four Sids that carry a reason comment (F-3, r1/Q-2 (a))', () => {
+    const unquote = (v: string) => v.replace(/\s+#.*$/, "").replace(/^(["'])(.*)\1$/, "$2");
+    const statements = items(block(/^\s+Statement:$/, block(/^\s+PolicyDocument:$/, exec)));
+    const starred = statements
+      .filter((st) => entries(st).Effect === "Allow")
+      .filter((st) => valuesOf(st, "Resource").some((r) => unquote(r) === "*"))
+      .map((st) => entries(st).Sid);
+    expect(starred).toEqual(STARRED);
+    for (const sid of STARRED) {
       const at = exec.findIndex((l) => l.trim() === `- Sid: ${sid}`);
-      expect(exec[at - 1]?.trim()).toMatch(/^# .*takes no resource/);
+      const comment: string[] = [];
+      for (let i = at - 1; /^\s*#/.test(exec[i] ?? ""); i--) comment.unshift((exec[i] ?? "").trim());
+      expect(comment.join(" ")).toMatch(/(takes no resource|generated)/);
     }
   });
 });

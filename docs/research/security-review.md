@@ -111,9 +111,9 @@ Each table lists every statement whose action or resource contains `*`.
 
 | Statement | `*` | Class |
 |---|---|---|
-| `DynamoDbSchedTables`, `LambdaSchedFunctions`, `LogsSchedLambdaLogGroups`, `CloudWatchSchedAlarmsAndDashboards`, `S3SchedBuckets`, `SsmSchedParameters` | `table/sched-*` (and its indexes), `function:sched-*`, `log-group:/aws/lambda/sched-*`, `alarm:sched-*` and `dashboard/sched-*`, `sched-*` buckets and objects, `parameter/sched/*` | **fixed in #270 (second PR, F-3)**: each keeps its `service:*` action (r1/Q-2 (a)) on resources that carry the `sched-` name. The SSM pattern is `parameter/sched/*` because parameter names start with `/sched/`. |
-| `CloudFrontDistributionsAndSchedFunctions` | `distribution/*` and `origin-access-control/*` in this account, `function/sched-*` | **justified** for the first two: a distribution and an OAC are named by a generated ID, so only the type and the account can be pinned. The CloudFront function carries the `sched-` name. |
-| `ApiGatewayRegionalApis` | `arn:…:apigateway:<region>::/*` | **justified**: a REST API and its stages are named by a generated ID (the `sched-` name is a property), so only the service and region can be pinned. |
+| `DynamoDbSchedTables`, `LambdaSchedFunctions`, `LogsSchedLambdaLogGroups`, `CloudWatchSchedAlarmsAndDashboards`, `S3SchedBuckets`, `SsmSchedParameters` | `table/sched-*` (and its indexes), `function:sched-*`, `log-group:/aws/lambda/sched-*`, `alarm:sched-*` and `dashboard/sched-*`, `sched-*` buckets and objects, `parameter/sched/*` | **pending Nick's apply and the post-apply deploys (#270 second PR, F-3)**: each keeps its `service:*` action (r1/Q-2 (a)) on resources that carry the `sched-` name. The SSM pattern is `parameter/sched/*` because parameter names start with `/sched/`. |
+| `CloudFrontDistributionsAndOacs` | `Resource: "*"` | **justified**: a distribution and an origin access control are named by a generated ID, so no ARN can carry the `sched-` name. The reason is a comment above the statement. |
+| `ApiGatewayApis` | `Resource: "*"` | **justified**: a REST API, its stages and deployments are named by a generated ID (the `sched-` name is a property), so no ARN can carry it. The reason is a comment above the statement. |
 | `CognitoUserPools`, `CognitoIdentityPools` | `Resource: "*"` | **justified**: `CreateUserPool` and `CreateIdentityPool` take no resource, and the pools' IDs are generated. The reason is a comment above each statement. |
 | (dropped in #270) `events:*`, `xray:*`, `ses:*`, `bedrock:GetFoundationModel`, `bedrock:ListFoundationModels` | | **removed**: no stack declares an Events, X-Ray, SES or Bedrock resource (Lambda's `Tracing: Active` and the SES send grant belong to the function's own role, not CloudFormation). An action that takes no resource and that a deploy shows is needed gets its own `"*"` statement then. |
 | `CreateWorkloadRolesOnlyWithBoundary` | `role/sched-*` | **justified**: name prefix plus the `iam:PermissionsBoundary` condition. |
@@ -255,7 +255,7 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 |---|---|---|---|
 | F-1 | medium | The chat role granted `…/index/*`; the table has one index, `GSI1`. | fixed (`572297e`) |
 | F-2 | medium | The chat role's `foundation-model/anthropic.claude-sonnet-4-6*` matched any model ID with that prefix. | fixed (`572297e`) |
-| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | fixed in #270 (second PR): one statement per service, resources named; Events, X-Ray and SES dropped |
+| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | pending Nick's apply and the post-apply deploy, update and teardown (#270 second PR): one statement per service, resources named; Events, X-Ray, SES and Bedrock dropped |
 | F-4 | low | The boundary allows `bedrock-mantle:*` actions nothing calls since ADR-010. | fixed in #270 (first PR) |
 | F-5 | medium | The evals role copies the `sonnet-4-6*` suffix. | fixed in #270 (first PR) |
 | F-6 | medium | `SchedDeployer`'s `SpikesAndEvals` grants Bedrock and Transcribe on `"*"`, plus unused `bedrock-mantle:*`. | fixed in #270 (first PR) |
