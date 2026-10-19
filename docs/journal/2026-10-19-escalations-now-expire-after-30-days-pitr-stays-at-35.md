@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #271, #39, ADR-004 (amendment of 2026-10-19), ADR-009 (amendment of 2026-10-19), PRD NFR-004, FR-034, `docs/research/security-review.md` F-10
+**Related:** #271, PR #349, #39, ADR-004 (amendment of 2026-10-19), ADR-009 (amendment of 2026-10-19), PRD NFR-004, FR-034, `docs/research/security-review.md` F-10
 
 ## What happened
 
