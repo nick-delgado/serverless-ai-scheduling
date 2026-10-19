@@ -24,7 +24,7 @@ The M3 security review (#39) found that escalation items were the one record typ
 
 ## What surprised us
 
-- **The mutation run found an equivalent mutant of our own making.** With a default of 30 on `expiresAtFor`, replacing the escalation's argument by nothing changed no behaviour, because `ESCALATION_TTL_DAYS` is 30. Removing the default made the argument load-bearing, and the replacement by 7 days is killed.
+- **The mutation run found an equivalent mutant of our own making.** With a default of 30 on `expiresAtFor`, replacing the escalation's argument by nothing changed no behaviour, because `ESCALATION_TTL_DAYS` is 30. Removing the default made the argument load-bearing, and a replacement period is now killed (the PR's mutate table has the rows).
 - **Nothing in the evals can change.** The eval harness runs on the in-memory repositories, which model no TTL. The Eval gate still runs because `packages/tools/**` is a gated path.
 
 ## Evidence
