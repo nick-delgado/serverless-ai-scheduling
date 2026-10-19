@@ -15,7 +15,8 @@
         "cloudformation:GetTemplateSummary",
         "cloudformation:ListStacks",
         "cloudformation:DescribeStacks",
-        "cloudformation:ListExports"
+        "cloudformation:ListExports",
+        "cloudformation:DescribeStackDriftDetectionStatus"
       ],
       "Resource": "*"
     },
@@ -38,6 +39,7 @@
         "cloudformation:GetTemplate",
         "cloudformation:TagResource",
         "cloudformation:DetectStackDrift",
+        "cloudformation:DetectStackResourceDrift",
         "cloudformation:DescribeStackResourceDrifts"
       ],
       "Resource": "arn:aws:cloudformation:us-east-1:<ACCOUNT_ID>:stack/sched-*/*"
@@ -175,7 +177,7 @@
       ],
       "Resource": [
         "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*",
-        "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*/index/*"
+        "arn:aws:dynamodb:us-east-1:<ACCOUNT_ID>:table/sched-*/index/GSI1"
       ]
     },
     {
@@ -184,23 +186,31 @@
       "Action": [
         "cognito-idp:AdminCreateUser",
         "cognito-idp:AdminSetUserPassword",
-        "cognito-idp:AdminGetUser",
-        "cognito-idp:AdminDeleteUser",
-        "cognito-idp:ListUsers"
+        "cognito-idp:AdminGetUser"
       ],
       "Resource": "arn:aws:cognito-idp:us-east-1:<ACCOUNT_ID>:userpool/*"
     },
     {
       "Sid": "SpikesAndEvals",
       "Effect": "Allow",
-      "Action": [
-        "bedrock-mantle:CreateInference",
-        "bedrock-mantle:CountTokens",
-        "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream",
-        "transcribe:StartStreamTranscription",
-        "transcribe:StartStreamTranscriptionWebSocket"
-      ],
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": [
+        "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:inference-profile/us.anthropic.claude-sonnet-4-6",
+        "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:inference-profile/us.amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:inference-profile/us.amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/openai.gpt-oss-120b-1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/openai.gpt-oss-20b-1:0"
+      ]
+    },
+    {
+      "Sid": "TranscribeStreaming",
+      "Effect": "Allow",
+      "Action": ["transcribe:StartStreamTranscription", "transcribe:StartStreamTranscriptionWebSocket"],
       "Resource": "*"
     }
   ]
