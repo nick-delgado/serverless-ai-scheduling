@@ -912,9 +912,17 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(`${SENTENCE}\n\n${secondLacks}`)).toEqual(failsOn(SENTENCE));
     });
 
-    it("whole words only, and day lines in a later text don't back it", async () => {
-      const glued = "Dr. Haddad has 10:00 AM ET open on lboth days:";
+    it("a day line that lists the time among others backs it", async () => {
+      const text = `${SENTENCE}\n\n${dayLines(TWO, { Wednesday: "10:00 AM ET\n- 11:00 AM ET" })}`;
+      expect(await textCheck(text)).toEqual(PASSES);
+    });
+
+    it.each(["on lboth days", "on both dayss"])("whole words only: %j fails", async (words) => {
+      const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
       expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
+    });
+
+    it("day lines in a later text don't back it", async () => {
       const later = [ASKS, assistant(SENTENCE), patient("Go on."), assistant(dayLines(TWO))];
       expect(await timesCheck(later)).toMatchObject({
         status: "fail",
@@ -938,6 +946,14 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       const text = `${SENTENCE}\n\n${dayLines(TUE_WED_THU, { Friday: "11:00 AM ET" })}`;
       expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
     });
+
+    it.each(["on each of those dayss", "oneach of those days"])(
+      "whole words only: %j fails",
+      async (words) => {
+        const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
+        expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
+      },
+    );
 
     it('"those days" alone still needs a weekday, even with two day lines', async () => {
       const sentence = "Dr. Haddad has 10:00 AM ET open those days:";

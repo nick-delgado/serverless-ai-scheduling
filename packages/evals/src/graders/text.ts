@@ -550,10 +550,7 @@ function dayLinesBack(text: string, time: string): boolean {
 function datesBack(text: string, time: string, exact?: number): boolean {
   const lines = new Map<string, { date: string; times: Set<string> }>();
   for (const m of headingListTimes(text)) {
-    const line = lines.get(m.heading) ?? {
-      date: m.key.slice(0, m.key.indexOf(" ")),
-      times: new Set<string>(),
-    };
+    const line = lines.get(m.heading) ?? { date: m.key.split(" ")[0], times: new Set<string>() };
     lines.set(m.heading, { ...line, times: line.times.add(m.time) });
   }
   const dates = new Set([...lines.values()].map((l) => l.date));
