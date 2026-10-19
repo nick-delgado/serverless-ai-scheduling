@@ -788,6 +788,11 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
   const textCheck = (text: string) => timesCheck([ASKS, assistant(text)]).then((r) => [r?.status, r?.detail]);
   const PASSES = ["pass", undefined];
   const failsOn = (sentence: string) => ["fail", lacks("10:00 AM", WEEKDAY, sentence)];
+  /** A glued phrase fails even with two backing day lines. */
+  const expectGluedFails = async (words: string) => {
+    const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
+    expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
+  };
 
   describe("the sentences of #339's gate runs, whole texts placed as they were in their trials (A-2)", () => {
     const RESCHEDULE_TEXT =
@@ -917,10 +922,7 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(text)).toEqual(PASSES);
     });
 
-    it.each(["on lboth days", "on both dayss"])("whole words only: %j fails", async (words) => {
-      const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
-      expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
-    });
+    it.each(["on lboth days", "on both dayss"])("whole words only: %j fails", expectGluedFails);
 
     it("day lines in a later text don't back it", async () => {
       const later = [ASKS, assistant(SENTENCE), patient("Go on."), assistant(dayLines(TWO))];
@@ -949,10 +951,7 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
 
     it.each(["on each of those dayss", "oneach of those days"])(
       "whole words only: %j fails",
-      async (words) => {
-        const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
-        expect(await textCheck(`${glued}\n\n${dayLines(TWO)}`)).toEqual(failsOn(glued));
-      },
+      expectGluedFails,
     );
 
     it('"those days" alone still needs a weekday, even with two day lines', async () => {
