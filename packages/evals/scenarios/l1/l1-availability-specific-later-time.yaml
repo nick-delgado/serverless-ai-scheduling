@@ -6,7 +6,9 @@ patient: pat-sofia
 tags: []
 covers: [FR-030]
 # #170: the first search returned the five earliest morning slots (truncated), so 11:30 AM never came
-# back. The next call must ask for it with start_time instead of guessing or giving up.
+# back. The next call must ask for it with start_time instead of guessing or giving up: one call over the
+# week, or (#332, one specific time over a range gets a search per weekday) a call for each weekday, of
+# which the first, Monday, is the one this case checks.
 context:
   - patient: "Does Dr. Alvarez have a morning appointment the week of November 2?"
   - tool_call:
@@ -59,4 +61,10 @@ expect:
       args_subset:
         provider_id: prov_alvarez
         date_range: { start_date: 2026-11-02, end_date: 2026-11-06 }
+        start_time: { one_of: ["11:00", "11:15", "11:30"] }
+    - action: tool_call
+      tool: check_availability
+      args_subset:
+        provider_id: prov_alvarez
+        date_range: { start_date: 2026-11-02, end_date: 2026-11-02 }
         start_time: { one_of: ["11:00", "11:15", "11:30"] }
