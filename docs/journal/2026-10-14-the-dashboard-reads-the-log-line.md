@@ -50,6 +50,6 @@ The spec left these open, and the agent settled them:
 
 ## What's next
 
-- #251 reads TTFT from the `TimeToFirstTextMs` widget, or from the ADR-002 amendment's query.
+- #251 reads TTFT from the `TimeToFirstTextMs` widget, or from the ADR-002 amendment's query. **Later (2026-10-19):** #251 read it from the query, with a `promptVersion` filter; see [A line before the first lookup](2026-10-19-a-line-before-the-first-lookup.md).
 - `BookingConflictRetries` is the number to read before tuning `MAX_ATTEMPTS` (journal 2026-09-29). Tuning it stays out of #38.
 - The failed-notification alarm only changes state. If someone needs to be paged, that's an SNS topic and a bootstrap change, which Nick chose against on Q-1.

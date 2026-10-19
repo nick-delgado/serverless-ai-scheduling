@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295)); 2026-10-19 (a required line before a lookup, #251; see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -214,7 +214,7 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
 - The production default stays a Claude model at 10 requests per minute (the 2026-10-09 amendment).
 - Revisit if:
   - #159's calibration moves the rubric below 4.0; *(it didn't: the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))*
-  - #251 changes NFR-001's first-text result;
+  - #251 changes NFR-001's first-text result; *(AFTER-RESULT-PENDING: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
 
@@ -249,3 +249,12 @@ The production profile stands. #295 revised the judge's clarity and `no_medical_
 - **The run.** `sonnet-4.6` at effort `high`, prompt `system.v10` (the matrix used `system.v3`), k=1, 40 runnable cases, judge `llm:haiku-4.5:judge.v2`. It cost $2.97 plus $0.22 for the judge. Results file `2026-10-18T132008Z-scenario-full-sonnet-4.6.json` (git-ignored).
 - **The figure.** The rubric average (tone, clarity) is **4.77 / 5** (tone 4.89, clarity 4.65) over 39 judged trials, which meets PRD §7's ≥ 4.0. It is not comparable with the matrix's 4.89 (k=3, `judge.v1`, `system.v3`): one trial per case, a different judge version and prompt.
 - **The table above,** "Judge rubric average (tone, clarity)": 4.77 / 5 on `judge.v2`, met. The judge stays report-only. Details: [the journal entry](../journal/2026-10-18-the-judge-now-fails-one-of-nicks-six-clarity-3s.md).
+
+## Amendment (2026-10-19): a line before the first lookup (#251)
+
+The production profile stands. #251 took the first-text miss (4,735 ms p50 against NFR-001's 3,000 ms, r4/N-2 on #37) with a prompt-only change (r1/Q-1 (a)): `system.v14` requires one short line before a reply's first tool call when that call is `find_providers`, `check_availability`, `get_my_appointments` or `get_patient_profile` (r1/Q-2 (a)). It comes once per reply, before that first call only, and has no question mark. A reply that calls `escalate_to_human` has no text before any call, and the writes keep "nothing, or one short line". The measured turn made three model calls and its first text came with the third; with the line it should come with the first.
+
+- **Method.** The same 30 turns as #37 (`spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`) as `skeleton-tester` on `dev`, `sonnet-4.6` at effort `high`, the two runs on different clinic-local days (r1/Q-4 (a)). Read with the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)'s query, adding `and promptVersion = "<version>"`, over each run's window.
+- **Before** (`main` at `cb5ca45`, `system.v13`, window 2026-10-19 11:25:44 to 11:35:45 UTC, no Eval gate job running): 30 `done` turns, p50 first `text_delta` 4,250 ms, p95 first `text_delta` 7,003 ms, p50 `done` 5,353 ms, p95 `done` 7,805 ms. A first attempt at 11:14 UTC was stopped after 11 turns: 5 turns ended in `RATE_LIMITED` while another PR's Eval gate job shared the Bedrock quota, and its 6 `done` turns aren't in the figures.
+- **After** (the branch, `system.v14`): AFTER-RESULT-PENDING.
+- **Context.** #37 measured p50 first text 4,735 ms and p95 `done` 7,259 ms on `system.v3`; the before-run is `system.v13`, after v4 to v13 landed.

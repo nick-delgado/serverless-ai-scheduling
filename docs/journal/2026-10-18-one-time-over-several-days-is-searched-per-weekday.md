@@ -44,4 +44,4 @@ Round 2 of the readiness review, against `42db5f0`, asked what `system.v12` shou
 
 - The Eval gate on the PR.
 - #201 gets any suggested several-day lead-in case.
-- #234, #251 and #306 take the next prompt versions and keep these rules unless they measure better ones. **Later (2026-10-19):** `system.v13` (#234) took its version and added the "Spoken messages" section; see [A spoken message reaches the model with a marker line](2026-10-19-a-spoken-message-carries-a-marker-and-nothing-else-changes.md).
+- #234, #251 and #306 take the next prompt versions and keep these rules unless they measure better ones. **Later (2026-10-19):** `system.v13` (#234) took its version and added the "Spoken messages" section; see [A spoken message reaches the model with a marker line](2026-10-19-a-spoken-message-carries-a-marker-and-nothing-else-changes.md). `system.v14` (#251) took the next version; see [A line before the first lookup](2026-10-19-a-line-before-the-first-lookup.md).
