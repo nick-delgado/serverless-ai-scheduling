@@ -1,7 +1,7 @@
 # ADR-009: Safety, privacy, and abuse controls
 
 - **Status:** Accepted
-- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123)); 2026-10-04 (the SES grant as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-as-built-35)); 2026-10-15 (the M3 security review, #39; see [Amendment](#amendment-2026-10-15-the-m3-security-review-39)); 2026-10-16 (the booking tools check the confirmed time, #313; see [Amendment](#amendment-2026-10-16-the-booking-tools-check-the-confirmed-time-313))
+- **Amended:** 2026-10-03 (Lambda roles as built, #17, #18, #35; see [Amendment](#amendment-2026-10-03-lambda-roles-as-built-123)); 2026-10-04 (the SES grant as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-as-built-35)); 2026-10-15 (the M3 security review, #39; see [Amendment](#amendment-2026-10-15-the-m3-security-review-39)); 2026-10-16 (the booking tools check the confirmed time, #313; see [Amendment](#amendment-2026-10-16-the-booking-tools-check-the-confirmed-time-313)); 2026-10-19 (escalation retention and PITR, #271; see [Amendment](#amendment-2026-10-19-escalation-retention-and-point-in-time-recovery-271))
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-035…FR-037, NFR-004, ADR-004, ADR-005, ADR-008
@@ -19,7 +19,7 @@ The domain is healthcare, even though the data is fake. The system has to behave
 
 **Data**
 - **Synthetic data only.** The clinic ("Cedar Ridge Health"), providers, and patients are fictional. The UI shows a "demo, not a real clinic" banner.
-- Conversation messages are kept for 30 days (TTL). No audio is stored (ADR-006).
+- Conversation messages are kept for 30 days (TTL). No audio is stored (ADR-006). *(Refined by the [2026-10-19 amendment](#amendment-2026-10-19-escalation-retention-and-point-in-time-recovery-271): escalations expire too, and point-in-time recovery keeps expired items restorable for 35 days.)*
 - CloudWatch logs carry IDs, timings, and token counts, **not** message text. *(Refined by the [2026-10-15 amendment](#amendment-2026-10-15-the-m3-security-review-39): an error's message is logged only for AWS SDK errors.)*
 
 **Identity and authorization**
@@ -91,3 +91,11 @@ The decision stands, and confirmation before a write is now enforced by the tool
 - **A slot that doesn't match is refused with `CONFIRMATION_MISMATCH`**, and nothing is written. The tool compares the slot's provider and its clinic-local date and `HH:MM` start with the three fields, as plain strings. For a reschedule it checks only the new slot (r1/Q-4 (a)). The check runs after the patient's own retry answer (`already_booked`, `already_rescheduled`) and before the new-patient rules and the rule that the slot must still be ahead (r1/A-2). For a reschedule, the rule that an appointment that has already started can't be moved runs first. The hint tells the model to find the confirmed slot, restate it and get a new yes.
 - **The graders don't change** (r1/Q-2 (a)). A call that the tool refuses is still an unconfirmed write attempt in ADR-008's checks, so the evals keep measuring what the model chose. The tool check is a second layer.
 - **The prompt** (`system.v6`) tells the model to pass the confirmed values from its restatement, not from the slot it picked, and what to do on a mismatch.
+
+## Amendment (2026-10-19): escalation retention and point-in-time recovery (#271)
+
+The decision stands, and the "Data" line's 30 days now covers escalations (security review F-10, owner decisions r1/Q-1 and r1/Q-4 on #271).
+
+- **Escalation items expire 30 days after they were recorded**, as messages do (ADR-004 amendment of the same date). Items written before that change have no expiry and stay until deleted by hand.
+- **TTL is not erasure.** DynamoDB deletes an expired item "typically within a few days" ([AWS](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html)), and the table's point-in-time recovery (`infra/stacks/data.yaml`) is left at its default window of 35 days ([AWS](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Point-in-time-recovery.html); `describe-continuous-backups` on `dev` reports `ENABLED`, 35). Items deleted by TTL can therefore be restored for that window: messages, conversation meta, turn traces and turn counters, and escalations. A patient's `reason` and `summary` stay recoverable for about 65 days after the escalation (30 + 35), plus the deletion lag. We accept that for synthetic data; shortening the window is `RecoveryPeriodInDays` (1 to 35) if the data ever stops being synthetic.
+- **The staff email is outside the table** and keeps the summary and transcript by design (`escalate_to_human`), so its retention is the mailbox's.

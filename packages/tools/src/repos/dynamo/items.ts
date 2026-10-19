@@ -30,6 +30,12 @@ export interface Key {
 /** Message items expire 30 days after the message was written (ADR-009). */
 export const MESSAGE_TTL_DAYS = 30;
 
+/**
+ * Escalation items expire 30 days after the escalation was recorded, as long as messages are kept
+ * (ADR-004 amendment, #271). Items written before #271 have no `expiresAt` and stay until deleted by hand.
+ */
+export const ESCALATION_TTL_DAYS = MESSAGE_TTL_DAYS;
+
 export const PROVIDERS_GSI1PK = "PROVIDERS";
 
 export const keys = {
@@ -120,7 +126,7 @@ export const conversationMetaItem = (
   conversationId,
   patientId,
   createdAt,
-  expiresAt: expiresAtFor(createdAt),
+  expiresAt: expiresAtFor(createdAt, MESSAGE_TTL_DAYS),
 });
 
 /**
@@ -142,7 +148,7 @@ export const messageItem = (patientId: PatientId, m: ConversationMessage): Item 
   ...(m.clientMessageId === undefined ? {} : { clientMessageId: m.clientMessageId }),
   // Spoken patient messages only (#234); absent, not null, otherwise.
   ...(m.inputMode === undefined ? {} : { inputMode: m.inputMode }),
-  expiresAt: expiresAtFor(m.createdAt),
+  expiresAt: expiresAtFor(m.createdAt, MESSAGE_TTL_DAYS),
 });
 export const messageFrom = (item: Item): ConversationMessage => {
   const rest = fields(item, ["patientId"]);
@@ -154,10 +160,11 @@ export const escalationItem = (e: Escalation): Item => ({
   ...keys.escalation(e.conversationId),
   entityType: "ESCALATION",
   ...e,
+  expiresAt: expiresAtFor(e.createdAt, ESCALATION_TTL_DAYS),
 });
 export const escalationFrom = (item: Item): Escalation => Escalation.parse(fields(item));
 
 /** DynamoDB TTL wants epoch seconds. */
-function expiresAtFor(createdAt: string): number {
-  return Math.floor(Date.parse(createdAt) / 1000) + MESSAGE_TTL_DAYS * 24 * 60 * 60;
+function expiresAtFor(createdAt: string, days: number): number {
+  return Math.floor(Date.parse(createdAt) / 1000) + days * 24 * 60 * 60;
 }
