@@ -107,7 +107,7 @@ Each table lists every statement whose action or resource contains `*`.
 |---|---|---|
 | `transcribe-streaming-only` | `Resource: "*"` | **justified**: Transcribe streaming has no resource-level permissions. Only authenticated identities of this env's pool can assume the role (`amr: authenticated`, `aud` = the pool). There is no per-patient cap: F-16, accepted (owner decision r1/Q-3 (a) on #273). |
 
-### CloudFormation execution role (`CfnExecutionRole`, `infra/bootstrap/bootstrap.yaml:80-208`)
+### CloudFormation execution role (`CfnExecutionRole`, `infra/bootstrap/bootstrap.yaml:80-205`)
 
 | Statement | `*` | Class |
 |---|---|---|
