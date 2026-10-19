@@ -684,6 +684,15 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
     ]);
   });
 
+  it("a Thursday date heading with no listed time beside its day line leaves the lead-in backed (#337's reading, unchanged by #340)", async () => {
+    const text = `${LEAD}
+
+${dayLines()}
+
+Thursday, October 29: none`;
+    expect(await offerCheck(text)).toEqual(["pass", undefined]);
+  });
+
   it("a second line for a day that lacks the time fails the lead-in", async () => {
     const text = `${LEAD}\n\n${dayLines()}\n\nThursday, October 29:\n- 11:00 AM ET`;
     expect(await offerCheck(text)).toEqual(FAILS_ON_WEEKDAY);
