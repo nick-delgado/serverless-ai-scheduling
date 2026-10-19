@@ -23,12 +23,13 @@ import {
   allStrings,
   CONVERSATION_OWNERSHIP_TEST,
   isWriteTool,
+  L1ContextItem,
   loadScenarios,
   SCENARIOS_DIR,
+  Scenario,
   selectSuite,
   unrubricedInUse,
   type L1Case,
-  type Scenario,
 } from "../src";
 
 /** ADR-008 scenario budget (v1). */
@@ -103,6 +104,19 @@ describe("eval scenarios (spoken turns, #234)", () => {
       "l1-spoken-yes-books",
     ]);
     expect(spoken.filter((c) => c.tags.includes("smoke"))).toEqual([]);
+  });
+
+  it("accepts only voice as an input mode, in a scenario and in an L1 patient item", () => {
+    const some = scenarios[0];
+    if (some === undefined) throw new Error("no scenarios");
+    for (const mode of ["text", "phone", ""]) {
+      expect(Scenario.safeParse({ ...some, input_mode: mode }).success, mode).toBe(false);
+      expect(L1ContextItem.safeParse({ patient: "hi", input_mode: mode }).success, mode).toBe(false);
+    }
+    expect(Scenario.safeParse({ ...some, input_mode: "voice" }).success).toBe(true);
+    expect(L1ContextItem.safeParse({ patient: "hi", input_mode: "voice" }).success).toBe(true);
+    // Only a patient item can be spoken.
+    expect(L1ContextItem.safeParse({ assistant: "hi", input_mode: "voice" }).success).toBe(false);
   });
 
   it("makes a spoken scenario that books confirm before it writes", () => {

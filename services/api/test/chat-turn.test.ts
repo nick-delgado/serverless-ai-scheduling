@@ -1284,26 +1284,23 @@ describe("handleChatTurn: spoken messages (#234)", () => {
       expect(seen[1]?.patientId).toBe(MARIA);
     });
 
-    it("refuses a spoken turn's booking whose confirmed time doesn't match the slot, writing nothing", async () => {
-      const w = world({ steps: bookingTurn({ ...BOOK, confirmed_time: "10:00" }) });
-      const before = await w.repos.appointments.listForPatient(MARIA);
-      const { summary } = await w.send("yes book it", { inputMode: "voice" });
-
-      const stored = await messagesOf(w.repos, MARIA, idOf(summary));
-      expect(JSON.stringify(stored[2]?.content)).toContain("CONFIRMATION_MISMATCH");
-      expect(await w.repos.appointments.listForPatient(MARIA)).toEqual(before);
-      expect((await w.repos.slots.get(BOOK.slot_id))?.status).toBe("OPEN");
-    });
-
-    it("refuses a spoken turn's booking whose confirmed provider or date doesn't match the slot", async () => {
-      for (const wrong of [{ confirmed_provider_id: "prov_lee" }, { confirmed_date: "2026-10-08" }]) {
+    it.each([
+      ["time", { confirmed_time: "10:00" }],
+      ["provider", { confirmed_provider_id: "prov_lee" }],
+      ["date", { confirmed_date: "2026-10-08" }],
+    ])(
+      "refuses a spoken turn's booking whose confirmed %s doesn't match the slot, writing nothing",
+      async (_field, wrong) => {
         const w = world({ steps: bookingTurn({ ...BOOK, ...wrong }) });
+        const before = await w.repos.appointments.listForPatient(MARIA);
         const { summary } = await w.send("yes book it", { inputMode: "voice" });
+
         const stored = await messagesOf(w.repos, MARIA, idOf(summary));
         expect(JSON.stringify(stored[2]?.content)).toContain("CONFIRMATION_MISMATCH");
+        expect(await w.repos.appointments.listForPatient(MARIA)).toEqual(before);
         expect((await w.repos.slots.get(BOOK.slot_id))?.status).toBe("OPEN");
-      }
-    });
+      },
+    );
 
     it("books a spoken turn's matching confirmation", async () => {
       const w = world({ steps: bookingTurn(BOOK) });

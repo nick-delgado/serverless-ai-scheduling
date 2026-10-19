@@ -1,7 +1,7 @@
 # ADR-006: Voice transcription — browser streams to Amazon Transcribe during recording
 
 - **Status:** Accepted (2026-10-08). Spike S-3 (#10) confirmed it on all four measured browsers; see Validation.
-- **Amended:** 2026-10-09 (settled while building the real Transcriber, #29; see [Amendment](#amendment-2026-10-09-settled-while-building-the-real-transcriber-29))
+- **Amended:** 2026-10-09 (settled while building the real Transcriber, #29; see [Amendment](#amendment-2026-10-09-settled-while-building-the-real-transcriber-29)); 2026-10-19 (a spoken turn reaches the agent with a marker, #234; see [Amendment](#amendment-2026-10-19-a-spoken-turn-reaches-the-agent-with-a-marker-234))
 - **Date:** 2026-09-28 (proposed), 2026-10-08 (accepted)
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-020…FR-024, NFR-002, ADR-005
@@ -117,3 +117,13 @@ Results: [summary](../../spikes/s3-transcribe-browser/results/summary-2026-10-08
 | Firefox, Edge (best effort) | not run | | | | |
 
   The "Revisit if" rule wasn't triggered, so no browser takes the batch fallback. A deliberate hidden-page check on iOS Safari and on Android Chrome each ended in the FR-024 error, as decided above. The same Identity Pool credentials were refused `transcribe:ListTranscriptionJobs` (`AccessDeniedException`) on every browser.
+
+## Amendment (2026-10-19): a spoken turn reaches the agent with a marker (#234)
+
+This changes one line of the decision above: the transcript no longer goes to the agent "exactly like typed text". Nick raised it on 2026-10-09 while reviewing #230: transcription mishears names, weekdays and numbers ("Tuesday" for "Thursday", "Dr. Lee" for "Dr. Li"), and the agent couldn't tell a spoken message from a typed one.
+
+- **The request says how the message was entered.** `POST /api/chat` takes an optional `inputMode` (`"text"` or `"voice"`, absent means text). The web app sends `voice` from the recording overlay and `text` from the composer, and a Retry resends the same mode. The field is client-supplied, so it is untrusted (ADR-009): it can only make the agent more careful, and the tool executor never sees it.
+- **The stored message keeps it.** A spoken patient message is stored with `inputMode: "voice"` beside its content; the content stays the patient's words only, so restore, the retry match and the staff transcript read what they read before. Showing "spoken" on a restored bubble or in the staff email is a follow-up, not part of this.
+- **The model sees a marker.** One pure function in `packages/agent` (`withInputMode`) puts a fixed text block before a spoken message's words: `[Spoken message: transcribed from voice, so names, dates, times and providers may be misheard.]`. The agent loop, the API's history rebuild and the eval harness call it, so the message reads the same in the turn that sent it and in every later turn. That keeps the system prompt and the earlier history byte-for-byte stable for prompt caching (CLAUDE.md rule 4). A typed message's request is unchanged.
+- **The prompt says what to do with it** (`system.v13`, "Spoken messages"): search as usual, but ask first, in one question that names the candidates, when a provider name, weekday, date or time could be heard two ways. No confirmation rule is relaxed, and the marker is never built from client text.
+- Transcribe confidence scores and alternative transcripts are still not used.

@@ -8,7 +8,9 @@
  * `maxTokens` override. That compares L1 with the builder, not with the loop.
  */
 import {
+  type LlmMessage,
   MODEL_PROFILES,
+  type ModelProfile,
   profileRequest,
   runAgentTurn,
   ScriptedLlmClient,
@@ -21,6 +23,29 @@ import { createTrialEnvironment, interimSystemPrompt, l1Messages, l1Request, typ
 import { l1Case, withoutCachePoints } from "./helpers";
 
 const c = l1Case("l1-emergency-911");
+
+/** The request the real loop makes for one new patient message after `history`. */
+async function loopRequest(
+  profile: ModelProfile,
+  env: Awaited<ReturnType<typeof createTrialEnvironment>>,
+  system: ReturnType<typeof interimSystemPrompt>,
+  turn: { history: LlmMessage[]; userMessage: string; inputMode?: "voice" },
+) {
+  const llm = new ScriptedLlmClient([scriptedText("ok")]);
+  await runAgentTurn({
+    ...turn,
+    system,
+    executor: env.executor,
+    llm,
+    profile,
+    clock: env.clock,
+    conversationId: env.conversationId,
+    turnId: env.uuid(),
+  });
+  const request = llm.requests[0];
+  if (request === undefined) throw new Error("the loop made no request");
+  return request;
+}
 
 describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
   "l1Request matches the agent loop (%s)",
@@ -35,20 +60,10 @@ describe.each(["sonnet-4.6", "nova-pro", "gpt-oss-20b"] as const)(
       if (last?.role !== "user" || lastText?.type !== "text")
         throw new Error("case must end with a patient message");
 
-      const llm = new ScriptedLlmClient([scriptedText("ok")]);
-      await runAgentTurn({
+      const loop = await loopRequest(profile, env, system, {
         history: messages.slice(0, -1),
         userMessage: lastText.text,
-        system,
-        executor: env.executor,
-        llm,
-        profile,
-        clock: env.clock,
-        conversationId: env.conversationId,
-        turnId: env.uuid(),
       });
-      const loop = llm.requests[0];
-      if (loop === undefined) throw new Error("the loop made no request");
       const ours = l1Request(c, profile, system);
 
       expect(ours.tools).toEqual(loop.tools);
@@ -76,21 +91,11 @@ describe("l1Request renders a spoken patient item like the agent loop (#234)", (
     const env = await createTrialEnvironment(spoken);
     const system = interimSystemPrompt(env.clock.now(), "Walter");
 
-    const llm = new ScriptedLlmClient([scriptedText("ok")]);
-    await runAgentTurn({
+    const loop = await loopRequest(profile, env, system, {
       history: [],
       userMessage: words,
       inputMode: "voice",
-      system,
-      executor: env.executor,
-      llm,
-      profile,
-      clock: env.clock,
-      conversationId: env.conversationId,
-      turnId: env.uuid(),
     });
-    const loop = llm.requests[0];
-    if (loop === undefined) throw new Error("the loop made no request");
 
     expect(withoutCachePoints(l1Request(spoken, profile, system))).toEqual(withoutCachePoints(loop));
     expect(withoutCachePoints(l1Request(typed, profile, system))).not.toEqual(withoutCachePoints(loop));
