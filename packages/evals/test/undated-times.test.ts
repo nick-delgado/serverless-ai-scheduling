@@ -797,6 +797,11 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
   const textCheck = (text: string) => onText(text).then((r) => [r?.status, r?.detail]);
   const PASSES = ["pass", undefined];
   const failsOn = (sentence: string) => ["fail", lacks("10:00 AM", WEEKDAY, sentence)];
+  /** Two backing day lines and a third date heading with no listed time fail the phrase (SPEC-2 (b)). */
+  const expectTimelessHeadingFails = async (sentence: string) => {
+    const text = `${sentence}\n\n${dayLines(TWO)}\n\nFriday, October 16: none`;
+    expect(await textCheck(text)).toEqual(failsOn(sentence));
+  };
   /** A glued phrase fails even with two backing day lines. */
   const expectGluedFails = async (words: string) => {
     const glued = `Dr. Haddad has 10:00 AM ET open ${words}:`;
@@ -937,10 +942,8 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(`${SENTENCE}\n\n${secondLacks}`)).toEqual(failsOn(SENTENCE));
     });
 
-    it("a third date heading with no listed time fails (review decision dcdf3ec/SPEC-2 (b))", async () => {
-      const text = `${SENTENCE}\n\n${dayLines(TWO)}\n\nFriday, October 16: none`;
-      expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
-    });
+    it("a third date heading with no listed time fails (review decision dcdf3ec/SPEC-2 (b))", () =>
+      expectTimelessHeadingFails(SENTENCE));
 
     it("two headings with the same text for one date count once, and each must list the time (SPEC-1)", async () => {
       const heading = (time: string) => `Wednesday, October 14:\n- ${time}`;
@@ -988,15 +991,13 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expectGluedFails,
     );
 
-    it("any case counts", async () => {
+    it("title case passes", async () => {
       const sentence = "Dr. Haddad has 10:00 AM ET open Each Of Those Days:";
       expect(await textCheck(`${sentence}\n\n${dayLines(TWO)}`)).toEqual(PASSES);
     });
 
-    it("a date heading with no listed time fails, as a day line without the time (review decision dcdf3ec/SPEC-2 (b))", async () => {
-      const text = `${SENTENCE}\n\n${dayLines(TWO)}\n\nFriday, October 16: none`;
-      expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
-    });
+    it("a date heading with no listed time fails, as a day line without the time (review decision dcdf3ec/SPEC-2 (b))", () =>
+      expectTimelessHeadingFails(SENTENCE));
 
     it('"those days" alone still needs a weekday, even with two day lines', async () => {
       const sentence = "Dr. Haddad has 10:00 AM ET open those days:";
