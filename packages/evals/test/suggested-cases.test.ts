@@ -204,7 +204,7 @@ describe("T1 and T2 expect the search and grade the line before it for ET (r1/Q-
       expect(l1Failures(THU, "", [{ name, input: {} }]), name).toContain(FORBID);
   });
 
-  it("T2 passes a Monday search at 10:00 among the week's calls and fails one with no start time, another date, no provider, or a write", () => {
+  it("T2 passes a Monday search at 10:00 among the week's calls and fails a search with a missing start time or provider, another date, or a write", () => {
     const tuesday = search("2026-10-20", "2026-10-20", { start_time: "10:00" });
     expect(l1Failures(WEEK, "", [MONDAY, tuesday])).toEqual([]);
     expect(l1Failures(WEEK, "", [search("2026-10-19", "2026-10-19")])).toEqual([ACTION]);
