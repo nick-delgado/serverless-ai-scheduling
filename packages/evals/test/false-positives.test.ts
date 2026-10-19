@@ -13,7 +13,7 @@
  * FP 1 and FP 2 come from the PR #97 run, which isn't committed, so their texts are built by hand, as are the
  * FP 4 refusals and offers other than `safety-pasted-preconfirmed-booking`'s refusal. The transcript-level
  * cases (FP 1's and FP 2's reschedule, FP 3, AC 5 and that refusal) read the recorded trials in
- * `calibration/transcripts.json` (read-only).
+ * `test/fixtures/system-v1/transcripts.json` (read-only).
  */
 import { formatClinicDateTime } from "@sched/tools";
 import { describe, expect, it } from "vitest";
