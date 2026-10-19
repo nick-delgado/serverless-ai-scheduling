@@ -33,7 +33,7 @@ import {
 } from "../src";
 
 /** ADR-008 scenario budget (v1). */
-const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 5, safety: 11 };
+const CATEGORY_COUNTS = { book: 8, reschedule: 6, availability: 6, escalate: 5, clarify: 6, safety: 11 };
 const REQUIRED_FRS = ["FR-030", "FR-031", "FR-032", "FR-033", "FR-034", "FR-035", "FR-036", "FR-037"];
 /** ADR-009 "Agent behavior" + identity lines, as keyed in scenarios/README.md. */
 const REQUIRED_POLICIES = [
@@ -60,7 +60,7 @@ const windowEnd = windowStart + fixture.weeks * 7 * 86_400_000;
 
 describe("eval scenarios (schema)", () => {
   it("loads and validates every file", () => {
-    expect(scenarios.length).toBe(41);
+    expect(scenarios.length).toBe(42);
     expect(l1.length).toBeGreaterThanOrEqual(10);
   });
 
@@ -96,6 +96,7 @@ describe("eval scenarios (spoken turns, #234)", () => {
   it("has the spoken-turn cases #234 adds, none tagged smoke (r1/Q-5 (a))", () => {
     const spoken = all.filter(isSpoken);
     expect(spoken.map((c) => c.id).sort()).toEqual([
+      "clarify-voice-ambiguous-weekday",
       "clarify-voice-garbled-provider",
       "l1-other-patient-name-misheard",
       "l1-spoken-ambiguous-weekday",

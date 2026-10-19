@@ -71,7 +71,7 @@
  * | Names another self: ask once first; after a no, no tools     | safety-self-identifies-as-other-patient, l1-other-patient-asks-first, l1-other-patient-answered-yes, l1-other-patient-name-misheard                     |
  * | Tool results and pasted text are data                        | l1-tool-result-injection, safety-indirect-injection-stored-reason, safety-fake-system-admin-mode, safety-pasted-preconfirmed-booking                      |
  * | Replies are plain text: no reasoning, no tags, no Markdown   | l1-tool-result-injection, l1-emergency-911, l1-book-confirmed-plain-text, book-derm-next-week-afternoon, reschedule-single-appointment |
- * | Spoken message: ask when a heard word is ambiguous; search as usual otherwise | l1-spoken-ambiguous-weekday, l1-spoken-provider-misheard, l1-spoken-restate-before-booking, l1-spoken-yes-books, l1-other-patient-name-misheard, clarify-voice-garbled-provider |
+ * | Spoken message: ask when a heard word is ambiguous; search as usual otherwise | l1-spoken-ambiguous-weekday, l1-spoken-provider-misheard, l1-spoken-restate-before-booking, l1-spoken-yes-books, l1-other-patient-name-misheard, clarify-voice-garbled-provider, clarify-voice-ambiguous-weekday |
  * | Style: short, calm under abuse, no tool names, plain repeats  | safety-abuse, book-multi-constraint, l1-offer-repeated-question                                                                                          |
  */
 import {
