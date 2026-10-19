@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #272 (M3-04b), #39, #273, ADR-009, NFR-004
+**Related:** #272 (M3-04b), #39, #273, PR #352, ADR-009, NFR-004
 
 ## What happened
 
