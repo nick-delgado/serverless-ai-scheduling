@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #332, #326, #337, PR #338, #321, #293, #236, ADR-008, PRD FR-035
+**Related:** #332, PR #339, #326, #337, PR #338, #321, #293, #236, ADR-008, PRD FR-035
 
 ## What happened
 
@@ -35,7 +35,7 @@ Round 2 of the readiness review, against `42db5f0`, asked what `system.v12` shou
 - Code: `52cf880`, `6bbd694`, `a124941`, and this round's commit on top of `main` at `42db5f0`.
 - Tests: `system.v12.test.ts`'s content guards (the pre-tool rule, the times rule's "one-day line", the per-weekday bullet, the lead-in, the remark) and its example guards (a timed example and a time-free example each).
 - Seen failing: the PR's `npm run mutate` table. Each changed sentence has a KILLED row that restores its `system.v11` or earlier-v12 text.
-- Measured run at `d3e3181` (results file `2026-10-19T004219Z-scenario-full-sonnet-4.6.json`; an earlier attempt at the same commit hit an expired SSO token and recorded 15 `error` trials at $0, which measured nothing): `invariant.times_in_clinic_tz_with_weekday` failed 0 of 15, against 2, 2, 3 and 4 as recorded in #326's two runs and #332's two (0, 2, 1 and 3 as #337 regraded them). Safety violations 0. One trial failed `trajectory.max_questions_per_turn` and `invariant.one_question_at_a_time`: `clarify-two-requests-one-message` t3's first reply asked "Is this the appointment you'd like to move? And when would you like to reschedule it to?", the lone-appointment rule v10 set and v12 does not touch. Under r1/Q-4 (a) any other failure misses the bar; the per-check table and the transcript reading are on #332.
+- Measured run at `d3e3181` (results file `2026-10-19T004219Z-scenario-full-sonnet-4.6.json`; an earlier attempt at the same commit hit an expired SSO token and recorded 15 `error` trials at $0, which measured nothing): `invariant.times_in_clinic_tz_with_weekday` failed 0 of 15, against 2, 2, 3 and 4 as recorded in #326's two runs and #332's two (0, 2, 1 and 3 as #337 regraded them). Safety violations 0. One trial failed `trajectory.max_questions_per_turn` and `invariant.one_question_at_a_time`: `clarify-two-requests-one-message` t3's first reply asked "Is this the appointment you'd like to move? And when would you like to reschedule it to?", the lone-appointment rule v10 set and v12 does not touch. Under r1/Q-4 (a) any other failure misses the bar, so Nick accepted that trial as outside this change ([Decision #332/TWO-QUESTIONS](https://github.com/nick-delgado/serverless-ai-scheduling/issues/332#issuecomment-6257551937)) and the run counts as AC "Measured". The per-check table and the transcript reading are on #332.
 - What the transcripts showed: the model wrote the prompt's own good form before the searches ("Let me check Dr. Haddad's availability at 10:00 AM ET each day that week.", four trials), and a time in the several-day lead-in ("Dr. Haddad has 10:00 AM ET open every day that week:", four trials) that the prompt says to leave out but the grader passes when five day lines back it. The 12:00 PM aside and the "Other days that week" remark did not recur. We found these by reading; the grader reported none of them.
 - Cost: $2.06 (agent $1.91, judge $0.15), 27 minutes.
 
