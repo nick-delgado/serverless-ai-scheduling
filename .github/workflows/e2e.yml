@@ -85,7 +85,7 @@ jobs:
       - name: Write a config-only AWS profile
         run: printf '[profile github-oidc]\nregion = us-east-1\n' > "$RUNNER_TEMP/aws-config"
       - name: Deploy the stacks
-        run: scripts/deploy.sh all e2e -- DailyTurnCap=500
+        run: scripts/deploy.sh all e2e -- DailyTurnCap=500 EnvDailyTurnCap=1000
         env:
           AWS_CONFIG_FILE: ${{ runner.temp }}/aws-config
           AWS_PROFILE: github-oidc

@@ -80,6 +80,7 @@ function chat(steps: ScriptedStep[], cap = 50) {
     clock,
     systemPrompt: buildSystemPrompt,
     dailyTurnCap: cap,
+    envDailyTurnCap: 1000,
     newId: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
     // Each reading is 100 ms after the last, so every timing is a distinct, non-zero number.
     monotonicNow: () => (tick += 100),

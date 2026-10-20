@@ -10,6 +10,7 @@ export const PACKAGE_NAME = "@sched/api";
 
 export {
   DEFAULT_DAILY_TURN_CAP,
+  DEFAULT_ENV_DAILY_TURN_CAP,
   handleChatTurn,
   type ChatTurnDeps,
   type ChatTurnInput,
@@ -17,13 +18,14 @@ export {
   type SystemPromptFactory,
 } from "./lib/chat-turn";
 export { classifyAgentError } from "./lib/agent-errors";
-export { FAILURES, type ChatFailure } from "./lib/errors";
+export { ENV_CAP_MESSAGE, FAILURES, type ChatFailure } from "./lib/errors";
 export { errorSummary, silentLogger, type LogEntry, type Logger } from "./lib/log";
 export { bodyText, parseJsonBody, patientIdFromEvent, type RestApiProxyEvent } from "./lib/request";
 export { EventWriter, NDJSON_HEADERS, memorySink, type CapturedResponse, type EventSink } from "./lib/stream";
 export {
   createInMemoryTurnStore,
   type ConsumeTurnResult,
+  type DailyTurnCaps,
   type InMemoryTurnStore,
   type TurnStore,
 } from "./lib/turn-store";

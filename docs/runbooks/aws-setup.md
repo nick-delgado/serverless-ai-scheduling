@@ -323,10 +323,10 @@ The Playwright journeys (#40, `apps/web/e2e/`) run against **`e2e`**, a standing
 - **The patient.** The suite signs in as Sofia Marquez (`pat-sofia`, username `sofia.marquez`). Only #40's suite and its manual pass (`apps/web/e2e/MANUAL.md`) sign in as Sofia on `e2e`; other demos and #44 use other patients or envs. Her password is `DEMO_PASSWORD_SOFIA`: the main checkout's `.env` locally, and the `e2e` environment secret of that name in CI.
 - **What a run does.** Reseed once (`seed-users.ts`, then `seed-data.ts --reset`; resetting `e2e` is pre-approved, unlike `dev` and `demo`), then the projects one after another with no retries: login and login → book on Chromium, WebKit and Firefox (each booking a different provider), then reschedule and escalation on Chromium. A turn the account's Bedrock quota throttles is retried with the app's Retry button. The log names each turn's tools (never its text) and each test's appointment IDs before and after, and ends with `Estimated Bedrock cost (list prices): $<x> over <n> turns`. A full run is about 13 turns, about $0.12.
 - **The escalation email is on.** Each run sends one escalation email to the staff address, and the test waits for its `ESC` record to show `SENT`. Every deploy of `e2e` carries the SES identity: the workflow passes the repository secrets, and a local `scripts/deploy.sh` reads them from the main checkout's `.env`.
-- **The turn cap.** Every deploy of `e2e` passes `-- DailyTurnCap=500`; `--reset` doesn't clear the day's counter.
+- **The turn caps.** Every deploy of `e2e` passes `-- DailyTurnCap=500 EnvDailyTurnCap=1000` (the per-patient and the env-wide cap; the template's env default of 200 would stop a day of runs); `--reset` doesn't clear the day's counters.
 - **One run at a time.** A second reseed deletes the first run's appointments mid-test. `e2e.yml` queues runs (`concurrency: e2e`), but it can't see a local run: don't start one while a CI run is in progress, or the other way round.
 
-**In CI** (Nick): `gh workflow run e2e.yml --ref main`, then `gh run watch`. It deploys the dispatched ref (`scripts/deploy.sh all e2e -- DailyTurnCap=500`, `scripts/deploy-web.sh e2e`), reseeds and runs the suite. It uploads no report, trace, video or storage state; read failures from the log. To re-run, dispatch again (it reseeds). A run before the settings are in place stops at its first step with the missing secret's name: `AWS_E2E_ROLE_ARN` and `DEMO_PASSWORD_SOFIA` (`e2e` environment, step 4 of "CI credentials (GitHub OIDC)"), `SES_SENDER` and `SES_STAFF_RECIPIENT` (repository, step 5).
+**In CI** (Nick): `gh workflow run e2e.yml --ref main`, then `gh run watch`. It deploys the dispatched ref (`scripts/deploy.sh all e2e -- DailyTurnCap=500 EnvDailyTurnCap=1000`, `scripts/deploy-web.sh e2e`), reseeds and runs the suite. It uploads no report, trace, video or storage state; read failures from the log. To re-run, dispatch again (it reseeds). A run before the settings are in place stops at its first step with the missing secret's name: `AWS_E2E_ROLE_ARN` and `DEMO_PASSWORD_SOFIA` (`e2e` environment, step 4 of "CI credentials (GitHub OIDC)"), `SES_SENDER` and `SES_STAFF_RECIPIENT` (repository, step 5).
 
 **First-run checks** (post the run's link and both results on #40):
 
@@ -336,7 +336,7 @@ The Playwright journeys (#40, `apps/web/e2e/`) run against **`e2e`**, a standing
 **Locally** (an agent or Nick, as `sched-dev`, from the checkout to test):
 
 ```bash
-scripts/deploy.sh all e2e -- DailyTurnCap=500          # when the app changed since the last deploy
+scripts/deploy.sh all e2e -- DailyTurnCap=500 EnvDailyTurnCap=1000          # when the app changed since the last deploy
 scripts/deploy-web.sh e2e                               # needs a clean tree
 main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 export DEMO_PASSWORD_SOFIA="$(node -p 'require("node:util").parseEnv(require("node:fs").readFileSync(process.argv[1], "utf8")).DEMO_PASSWORD_SOFIA' "$main/.env")"   # never echo it

@@ -3,8 +3,8 @@
  * boundary, concurrent calls, the write-once trace) is checked against DynamoDB Local in
  * `dynamo-turn-store.local.test.ts`.
  */
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
-import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
+import { PutCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { TurnTrace } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -45,37 +45,93 @@ const trace: TurnTrace = {
 };
 
 describe("createDynamoTurnStore", () => {
-  it("counts a turn with a conditional ADD on the patient's day item", async () => {
-    const { doc, sent } = fakeDoc(() => ({ Attributes: { turns: 3 } }));
+  const caps = { patient: 50, env: 200 };
+  const cancelled = (...codes: string[]) =>
+    new TransactionCanceledException({
+      message: "Transaction cancelled",
+      $metadata: {},
+      CancellationReasons: codes.map((Code) => ({ Code })),
+    });
+  /** Fails with each of `failures` in turn, then succeeds. */
+  const failing = (...failures: Error[]) => {
+    let n = 0;
+    return fakeDoc(() => {
+      const failure = failures[n++];
+      if (failure) throw failure;
+      return {};
+    });
+  };
+
+  it("counts a turn in one transaction: a conditional ADD on the patient's day item, then on the env's", async () => {
+    const { doc, sent } = fakeDoc();
     const store = createDynamoTurnStore({ tableName: "t", doc });
 
-    expect(await store.consumeDailyTurn(PATIENT, "2026-10-05", 50)).toEqual({ ok: true, used: 3 });
-    const command = sent[0] as UpdateCommand;
-    expect(command).toBeInstanceOf(UpdateCommand);
-    expect(command.input).toMatchObject({
-      TableName: "t",
-      Key: turnKeys.dailyTurns(PATIENT, "2026-10-05"),
-      UpdateExpression: "ADD turns :one SET expiresAt = :exp, entityType = :type",
-      ConditionExpression: "attribute_not_exists(turns) OR turns < :cap",
-      ExpressionAttributeValues: { ":one": 1, ":cap": 50 },
+    expect(await store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).toEqual({ ok: true });
+    expect(sent).toHaveLength(1);
+    const command = sent[0] as TransactWriteCommand;
+    expect(command).toBeInstanceOf(TransactWriteCommand);
+    // Two days after the day ends, for both items.
+    const exp = Date.parse("2026-10-08T00:00:00Z") / 1000;
+    const update = (key: object, cap: number, type: string) => ({
+      Update: {
+        TableName: "t",
+        Key: key,
+        UpdateExpression: "ADD turns :one SET expiresAt = :exp, entityType = :type",
+        ConditionExpression: "attribute_not_exists(turns) OR turns < :cap",
+        ExpressionAttributeValues: { ":one": 1, ":cap": cap, ":exp": exp, ":type": type },
+      },
     });
-    expect(command.input.Key).toEqual({ PK: `PATIENT#${PATIENT}`, SK: "TURNS#2026-10-05" });
-    // Expires two days after the day ends.
-    expect(command.input.ExpressionAttributeValues?.[":exp"]).toBe(Date.parse("2026-10-08T00:00:00Z") / 1000);
+    expect(command.input.TransactItems).toEqual([
+      update({ PK: `PATIENT#${PATIENT}`, SK: "TURNS#2026-10-05" }, 50, "TURN_COUNTER"),
+      update({ PK: "ENV", SK: "TURNS#2026-10-05" }, 200, "ENV_TURN_COUNTER"),
+    ]);
+    expect(turnKeys.envDailyTurns("2026-10-05")).toEqual({ PK: "ENV", SK: "TURNS#2026-10-05" });
   });
 
-  it("throws instead of guessing when the update returns no turns attribute", async () => {
-    const { doc } = fakeDoc(() => ({}));
+  it.each([
+    ["the patient's cap", ["ConditionalCheckFailed", "None"], "patient"],
+    ["the env's cap", ["None", "ConditionalCheckFailed"], "env"],
+    [
+      "the patient's cap first when both refuse",
+      ["ConditionalCheckFailed", "ConditionalCheckFailed"],
+      "patient",
+    ],
+    [
+      "the env's cap even when the patient's item only conflicted",
+      ["TransactionConflict", "ConditionalCheckFailed"],
+      "env",
+    ],
+  ] as const)("refuses on %s, without retrying", async (_name, codes, refusedBy) => {
+    const { doc, sent } = failing(cancelled(...codes));
     const store = createDynamoTurnStore({ tableName: "t", doc });
-    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", 50)).rejects.toThrow(/no turns attribute/);
+    expect(await store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).toEqual({ ok: false, refusedBy });
+    expect(sent).toHaveLength(1);
   });
 
-  it("refuses when the condition fails", async () => {
-    const { doc } = fakeDoc(() => {
-      throw new ConditionalCheckFailedException({ message: "no", $metadata: {} });
-    });
+  it("tries again when only a conflict cancelled the transaction, and counts the turn", async () => {
+    const { doc, sent } = failing(
+      cancelled("TransactionConflict", "None"),
+      cancelled("None", "TransactionConflict"),
+    );
     const store = createDynamoTurnStore({ tableName: "t", doc });
-    expect(await store.consumeDailyTurn(PATIENT, "2026-10-05", 50)).toEqual({ ok: false, used: 50 });
+    expect(await store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).toEqual({ ok: true });
+    expect(sent).toHaveLength(3);
+  });
+
+  it("rethrows after 5 attempts that all conflicted", async () => {
+    const conflict = cancelled("TransactionConflict", "None");
+    const { doc, sent } = failing(conflict, conflict, conflict, conflict, conflict, conflict);
+    const store = createDynamoTurnStore({ tableName: "t", doc });
+    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toBe(conflict);
+    expect(sent).toHaveLength(5);
+  });
+
+  it("rethrows a cancellation that is neither a refusal nor a conflict, without retrying", async () => {
+    const other = cancelled("ValidationError", "None");
+    const { doc, sent } = failing(other, other);
+    const store = createDynamoTurnStore({ tableName: "t", doc });
+    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toBe(other);
+    expect(sent).toHaveLength(1);
   });
 
   it("rethrows other errors", async () => {
@@ -83,7 +139,7 @@ describe("createDynamoTurnStore", () => {
       throw new Error("network");
     });
     const store = createDynamoTurnStore({ tableName: "t", doc });
-    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", 50)).rejects.toThrow("network");
+    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toThrow("network");
   });
 
   it("writes the trace once, under the conversation, with the owner and a 30-day TTL", async () => {

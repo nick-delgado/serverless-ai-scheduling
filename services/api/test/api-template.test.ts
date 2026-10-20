@@ -12,7 +12,7 @@ import { createTableInput } from "@sched/tools/dynamo";
 import { NOTIFICATION_FAILED_METRIC } from "@sched/tools/ses";
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_DAILY_TURN_CAP } from "../src/lib/chat-turn";
+import { DEFAULT_DAILY_TURN_CAP, DEFAULT_ENV_DAILY_TURN_CAP } from "../src/lib/chat-turn";
 import { ENV_DIMENSION, ERROR_CODE_DIMENSION, METRIC } from "../src/lib/observability/metrics";
 
 import { block, bodyLines, childBlocks, entries, items, text } from "../../../scripts/test/yaml-text";
@@ -315,6 +315,18 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
     });
     expect(entries(block(/^\s+Variables:$/, chatLines))).toMatchObject({
       DAILY_TURN_CAP: "!Ref DailyTurnCap",
+    });
+  });
+
+  it("caps the whole env at 200 turns a day unless it overrides, and passes the cap to the chat function (#356, owner decision r1/Q-2 (a))", () => {
+    expect(DEFAULT_ENV_DAILY_TURN_CAP).toBe(200);
+    expect(entries(block(/^ {2}EnvDailyTurnCap:$/, lines))).toMatchObject({
+      Type: "Number",
+      Default: String(DEFAULT_ENV_DAILY_TURN_CAP),
+      MinValue: "1",
+    });
+    expect(entries(block(/^\s+Variables:$/, chatLines))).toMatchObject({
+      ENV_DAILY_TURN_CAP: "!Ref EnvDailyTurnCap",
     });
   });
 });

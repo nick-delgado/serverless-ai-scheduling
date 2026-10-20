@@ -4,7 +4,7 @@
  */
 import { modelProfileFromEnv, type ModelProfile } from "@sched/agent";
 
-import { DEFAULT_DAILY_TURN_CAP } from "./chat-turn";
+import { DEFAULT_DAILY_TURN_CAP, DEFAULT_ENV_DAILY_TURN_CAP } from "./chat-turn";
 import { positiveIntEnv, requireEnv, type Env } from "./env";
 
 export { positiveIntEnv, requireEnv, type Env } from "./env";
@@ -16,6 +16,8 @@ export interface ChatConfig {
   profile: ModelProfile;
   /** `DAILY_TURN_CAP`, default 50 (ADR-009). */
   dailyTurnCap: number;
+  /** `ENV_DAILY_TURN_CAP`, default 200: new turns the whole env accepts per clinic-local day (#356). */
+  envDailyTurnCap: number;
 }
 
 export function chatConfigFromEnv(env: Env = process.env): ChatConfig {
@@ -23,5 +25,6 @@ export function chatConfigFromEnv(env: Env = process.env): ChatConfig {
     tableName: requireEnv(env, "TABLE_NAME"),
     profile: modelProfileFromEnv(env),
     dailyTurnCap: positiveIntEnv(env, "DAILY_TURN_CAP", DEFAULT_DAILY_TURN_CAP),
+    envDailyTurnCap: positiveIntEnv(env, "ENV_DAILY_TURN_CAP", DEFAULT_ENV_DAILY_TURN_CAP),
   };
 }

@@ -283,7 +283,9 @@ describe("the E2E workflow (.github/workflows/e2e.yml; 607c339/TEST-201 (a) on P
   });
 
   it("deploys e2e with the turn cap and the escalation email's SES secrets (r1/A-7, r1/Q-5 (b))", () => {
-    expect(entries(step("Deploy the stacks")).run).toBe("scripts/deploy.sh all e2e -- DailyTurnCap=500");
+    expect(entries(step("Deploy the stacks")).run).toBe(
+      "scripts/deploy.sh all e2e -- DailyTurnCap=500 EnvDailyTurnCap=1000",
+    );
     expect(env("Deploy the stacks")).toMatchObject({
       SES_SENDER: "${{ secrets.SES_SENDER }}",
       SES_STAFF_RECIPIENT: "${{ secrets.SES_STAFF_RECIPIENT }}",

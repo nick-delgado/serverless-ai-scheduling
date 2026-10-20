@@ -18,10 +18,19 @@ function failure(httpStatus: number, code: ChatErrorCode, message: string, retry
   return { httpStatus, event: { type: "error", code, message, retryable } };
 }
 
+/**
+ * What a patient sees when the whole env has used today's turns (#356, owner decision r1/Q-3 (a)). It never
+ * names the front desk (`DAILY_CAP_MESSAGE` does, for the patient's own cap): the demo being full is no
+ * reason to phone the clinic. The README's contact line is #44's.
+ */
+export const ENV_CAP_MESSAGE =
+  "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author.";
+
 export const FAILURES = {
   unauthorized: () => failure(401, "UNAUTHORIZED", "Please sign in again.", false),
   badRequest: () => failure(400, "BAD_REQUEST", "The message couldn't be read. Please try again.", false),
   dailyCap: () => failure(429, "RATE_LIMITED", DAILY_CAP_MESSAGE, false),
+  envCap: () => failure(429, "RATE_LIMITED", ENV_CAP_MESSAGE, false),
   throttled: () =>
     failure(429, "RATE_LIMITED", "The assistant is busy right now. Please try again in a moment.", true),
   unavailable: () =>

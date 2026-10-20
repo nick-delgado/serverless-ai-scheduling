@@ -15,7 +15,9 @@
  *    has a reply, the reply's visible text is streamed again with no model call (a replay); if it has
  *    none (the turn failed before any tool ran), the agent runs again on it without storing it twice
  *    (a re-run). Neither counts a turn.
- * 4. The daily turn cap (ADR-009) is consumed atomically before any model call, for a new message only.
+ * 4. The daily turn caps (ADR-009, #356), the patient's and the whole env's, are consumed together,
+ *    atomically, before any model call, for a new message only. A turn either cap refuses counts
+ *    against neither; when both refuse, the patient's own message is the one shown.
  * 5. The patient's message is stored, with its `clientMessageId` (and `inputMode: "voice"` when it was
  *    spoken, #234), BEFORE the agent loop runs, so an
  *    escalation's staff transcript (read from storage, #23) includes it, and a failed turn never loses
@@ -89,6 +91,9 @@ export type SystemPromptFactory = (context: SystemPromptContext) => SystemPrompt
 /** ADR-009's example cap: 50 agent turns per patient per clinic-local day. */
 export const DEFAULT_DAILY_TURN_CAP = 50;
 
+/** The `demo` env's cap (#356): 200 new turns per clinic-local day, across all patients. */
+export const DEFAULT_ENV_DAILY_TURN_CAP = 200;
+
 export interface ChatTurnDeps {
   repos: Repositories;
   turns: TurnStore;
@@ -96,7 +101,10 @@ export interface ChatTurnDeps {
   profile: ModelProfile;
   clock: Clock;
   systemPrompt: SystemPromptFactory;
+  /** Turns one patient may use per clinic-local day. */
   dailyTurnCap: number;
+  /** Turns the whole env accepts per clinic-local day, across all patients (#356). */
+  envDailyTurnCap: number;
   /** Staff notifications for `escalate_to_human`. Without one, escalations are recorded as FAILED (#23). */
   notifier?: Notifier;
   /** Defaults to `TOOL_REGISTRY`. The eval harness passes its fault-injecting registry. */
@@ -310,13 +318,20 @@ class ChatTurn {
     return { kind: index === stored.length - 1 ? "interrupted" : "answered", index };
   }
 
-  /** 4. The daily cap (ADR-009), consumed atomically. False when the patient has reached it. */
+  /**
+   * 4. The daily caps (ADR-009, #356), consumed together and atomically: the patient's, then the env's.
+   * False when either is reached (the patient's message wins when both are), and then neither is used.
+   */
   async #consumeDailyTurn(patientId: PatientId): Promise<boolean> {
-    const { turns, clock, dailyTurnCap } = this.#deps;
-    const quota = await turns.consumeDailyTurn(patientId, clinicDateOf(clock.now()), dailyTurnCap);
-    this.#facts.turnsUsedToday = quota.used;
-    if (!quota.ok) this.#fail(FAILURES.dailyCap());
-    return quota.ok;
+    const { turns, clock, dailyTurnCap, envDailyTurnCap } = this.#deps;
+    const quota = await turns.consumeDailyTurn(patientId, clinicDateOf(clock.now()), {
+      patient: dailyTurnCap,
+      env: envDailyTurnCap,
+    });
+    if (quota.ok) return true;
+    this.#facts.capRefusedBy = quota.refusedBy;
+    this.#fail(quota.refusedBy === "env" ? FAILURES.envCap() : FAILURES.dailyCap());
+    return false;
   }
 
   /** The conversation this turn writes to: the requested one if it read as this patient's, else a new one. */

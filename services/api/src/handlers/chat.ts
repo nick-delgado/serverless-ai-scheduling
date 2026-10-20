@@ -143,6 +143,7 @@ export const handler = awslambda.streamifyResponse(
       systemPrompt: buildSystemPrompt,
       ...(notifier ? { notifier } : {}),
       dailyTurnCap: config.dailyTurnCap,
+      envDailyTurnCap: config.envDailyTurnCap,
       log,
     }),
     { logger, metrics },

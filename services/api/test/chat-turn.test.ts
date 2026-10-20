@@ -16,7 +16,13 @@ import {
   scriptedToolUse,
   type ScriptedStep,
 } from "@sched/agent";
-import { isTerminalEvent, visibleText, type ConversationMessage, type PatientId } from "@sched/contracts";
+import {
+  DAILY_CAP_MESSAGE,
+  isTerminalEvent,
+  visibleText,
+  type ConversationMessage,
+  type PatientId,
+} from "@sched/contracts";
 import {
   ConversationAppendError,
   FrozenClock,
@@ -29,6 +35,7 @@ import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
+  ENV_CAP_MESSAGE,
   createInMemoryTurnStore,
   handleChatTurn,
   memorySink,
@@ -97,7 +104,13 @@ interface World {
 }
 
 function world(
-  options: { steps?: ScriptedStep[]; cap?: number; now?: string; overrides?: Partial<ChatTurnDeps> } = {},
+  options: {
+    steps?: ScriptedStep[];
+    cap?: number;
+    envCap?: number;
+    now?: string;
+    overrides?: Partial<ChatTurnDeps>;
+  } = {},
 ): World {
   const clock = new FrozenClock(options.now ?? NOW);
   const repos = createInMemoryRepositories({ clock, seed: buildClinicFixture() });
@@ -114,6 +127,7 @@ function world(
     clock,
     systemPrompt: buildSystemPrompt,
     dailyTurnCap: options.cap ?? 50,
+    envDailyTurnCap: options.envCap ?? 1000,
     notifier,
     newId: uuidSequence(),
     log: (entry) => logs.push(entry),
@@ -461,6 +475,63 @@ describe("handleChatTurn: rejections before the agent runs", () => {
     // The next clinic day starts fresh (04:00 UTC is midnight ET in October).
     w.clock.set("2026-10-06T04:00:00Z");
     expect((await w.send("four")).response.status).toBe(200);
+  });
+});
+
+describe("handleChatTurn: the env-wide daily turn cap (#356)", () => {
+  const front = "1-800-555-0199";
+  const turnLog = (w: World, n: number) => w.logs.filter((l) => l.msg === "chat turn")[n];
+
+  it("answers the Nth new turn of the day across patients and refuses the next with the env message, never the front desk's", async () => {
+    const w = world({ envCap: 2, steps: [scriptedText("1"), scriptedText("2"), scriptedText("W")] });
+    expect((await w.send("one")).response.status).toBe(200);
+    expect((await w.send("two", { patientId: WALTER })).response.status).toBe(200);
+    const third = await w.send("three");
+
+    expectWellFormed(third.response);
+    expect(third.response.status).toBe(429);
+    expect(third.response.events).toEqual([
+      { type: "error", code: "RATE_LIMITED", message: ENV_CAP_MESSAGE, retryable: false },
+    ]);
+    expect(JSON.stringify(third.response.events)).not.toContain(front);
+    // No model call, nothing stored, and the refused patient's own count is as it was.
+    expect(w.llm.requests).toHaveLength(2);
+    expect(w.repos.snapshot().conversations).toHaveLength(2);
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
+    expect(w.turns.envTurnsUsed("2026-10-05")).toBe(2);
+    expect(turnLog(w, 2)).toMatchObject({ capRefusedBy: "env" });
+  });
+
+  it("resets with the clinic-local day, like the patient's cap", async () => {
+    const w = world({ envCap: 1, steps: [scriptedText("1"), scriptedText("2")] });
+    await w.send("one");
+    // 02:00 UTC on the 6th is still 10 PM on the 5th in Eastern Time.
+    w.clock.set("2026-10-06T02:00:00Z");
+    expect((await w.send("late", { patientId: WALTER })).response.status).toBe(429);
+    w.clock.set("2026-10-06T04:00:00Z");
+    expect((await w.send("next day", { patientId: WALTER })).response.status).toBe(200);
+  });
+
+  it("shows the patient's own message when both caps refuse (A-3)", async () => {
+    const w = world({ cap: 1, envCap: 1, steps: [scriptedText("1")] });
+    await w.send("one");
+    const second = await w.send("two");
+    expect(second.response.events).toEqual([
+      { type: "error", code: "RATE_LIMITED", message: DAILY_CAP_MESSAGE, retryable: false },
+    ]);
+    expect(turnLog(w, 1)).toMatchObject({ capRefusedBy: "patient" });
+  });
+
+  it("counts a replay and a re-run against neither cap (A-5)", async () => {
+    const w = world({ cap: 1, envCap: 1, steps: [{ error: throttled }, scriptedText("Back now.")] });
+    const first = await w.send("Hello");
+    const conversationId = idOf(first.summary);
+    const rerun = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+    expect(rerun.response.events.at(-1)).toMatchObject({ type: "done" });
+    const replay = await w.send("Hello", { conversationId, clientMessageId: first.clientMessageId });
+    expect(replay.response.events.at(-1)).toMatchObject({ type: "done" });
+    expect(w.turns.envTurnsUsed("2026-10-05")).toBe(1);
+    expect(w.turns.turnsUsed(MARIA, "2026-10-05")).toBe(1);
   });
 });
 

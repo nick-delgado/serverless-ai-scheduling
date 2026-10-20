@@ -1,7 +1,7 @@
 /** Environment parsing for the API Lambdas (`lib/config.ts`). */
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_DAILY_TURN_CAP } from "../src";
+import { DEFAULT_DAILY_TURN_CAP, DEFAULT_ENV_DAILY_TURN_CAP } from "../src";
 import { chatConfigFromEnv, positiveIntEnv, requireEnv } from "../src/lib/config";
 
 describe("requireEnv", () => {
@@ -46,6 +46,15 @@ describe("chatConfigFromEnv", () => {
     expect(config.tableName).toBe("sched-dev-table");
     expect(config.profile.name).toBe("sonnet-4.6");
     expect(config.dailyTurnCap).toBe(DEFAULT_DAILY_TURN_CAP);
+    expect(config.envDailyTurnCap).toBe(DEFAULT_ENV_DAILY_TURN_CAP);
+    expect(DEFAULT_ENV_DAILY_TURN_CAP).toBe(200);
+  });
+
+  it("takes ENV_DAILY_TURN_CAP from the environment, and refuses a value that isn't a positive integer", () => {
+    expect(chatConfigFromEnv({ TABLE_NAME: "t", ENV_DAILY_TURN_CAP: "7" }).envDailyTurnCap).toBe(7);
+    expect(() => chatConfigFromEnv({ TABLE_NAME: "t", ENV_DAILY_TURN_CAP: "0" })).toThrow(
+      "ENV_DAILY_TURN_CAP",
+    );
   });
 
   it("takes DAILY_TURN_CAP and AGENT_MODEL_PROFILE from the environment", () => {
