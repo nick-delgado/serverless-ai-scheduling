@@ -85,7 +85,7 @@ describe("system prompt v14: cache split", () => {
  * escalation and multi-request rules, #249; v6's confirmed-slot rule, #313; v7's dateless lead-in and remark line,
  * #284; v8's one-question bullet, #314; v9's times outside an offer's day and time lines,
  * the relative-date exception and the lone-appointment rule, #293; v10's one rule for every clock time,
- * #321; v11's offer rule, remark and pre-tool line for several days, #326; v12's per-weekday search for a specific time and ET-only line before a several-day search, #332; v14's spoken-message section, #234), never as a side effect of a helper change.
+ * #321; v11's offer rule, remark and pre-tool line for several days, #326; v12's per-weekday search for a specific time and ET-only line before a several-day search, #332; v13's spoken-message section, #234; v14's required line before a reply's first lookup, #251), never as a side effect of a helper change.
  */
 describe("system prompt v14: rendered text is pinned (#114)", () => {
   const OCT_26_WEEK =
@@ -233,6 +233,9 @@ describe("system prompt v14: rendered text is pinned (#114)", () => {
 
 describe("system prompt v14: content guards", () => {
   const { stable } = systemPromptV14({ now: MON_9AM });
+  const bullet = stable
+    .split("\n")
+    .find((line) => line.startsWith("- The patient sees everything you write"));
 
   it("passes the confirmed provider, date and time from the restatement, and re-confirms on CONFIRMATION_MISMATCH (#313)", () => {
     expect(stable).toContain(
@@ -569,9 +572,6 @@ describe("system prompt v14: content guards", () => {
   });
 
   it("requires one short line before a reply's first lookup call, once per reply, with no question mark (#251, r1/Q-2 (a))", () => {
-    const bullet = stable
-      .split("\n")
-      .find((line) => line.startsWith("- The patient sees everything you write"));
     expect(bullet).toBeDefined();
     expect(bullet).toContain(
       "When a reply's first tool call is find_providers, check_availability, get_my_appointments or get_patient_profile, write one short line before it",
@@ -583,22 +583,19 @@ describe("system prompt v14: content guards", () => {
   });
 
   it("keeps 'nothing, or one short line' for the writes and no text before any call of a reply that escalates (#251, #249)", () => {
-    const bullet = stable
-      .split("\n")
-      .find((line) => line.startsWith("- The patient sees everything you write"));
     expect(bullet).toContain(
       "Before book_appointment or reschedule_appointment, write nothing, or one short line that your answer doesn't repeat.",
     );
     expect(bullet).toContain(
       "A reply that calls escalate_to_human has no text before any of its calls, so when the request may need escalate_to_human, write no line before the lookup",
     );
-    // The required line names only lookups: the writes and escalation are not in the list that requires it.
-    expect(bullet).not.toMatch(
-      /first tool call is [^,]*(book_appointment|reschedule_appointment|escalate_to_human)/,
+    // The list that requires the line holds the four lookups and nothing else: no write, no escalation.
+    expect(bullet?.match(/first tool call is (.*?), write one short line before it/)?.[1]).toBe(
+      "find_providers, check_availability, get_my_appointments or get_patient_profile",
     );
   });
 
-  it("keeps text before a tool call to one short line the answer doesn't repeat, merged with the 'check' rule (#233, #251)", () => {
+  it("pins the whole pre-tool bullet word for word: the required lookup line, the writes, the escalation exception and the 'check' rule (#233, #249, #251)", () => {
     expect(stable).toContain(
       '- The patient sees everything you write, including text before a tool call. When a reply\'s first tool call is find_providers, check_availability, get_my_appointments or get_patient_profile, write one short line before it, in that same message, saying what you are about to look up; your answer doesn\'t repeat it. Write it once per reply, before that first call only, even when the first model response holds several calls; later model calls in the same reply write nothing before their tool calls. It has no question mark. Before book_appointment or reschedule_appointment, write nothing, or one short line that your answer doesn\'t repeat. A reply that calls escalate_to_human has no text before any of its calls, so when the request may need escalate_to_human, write no line before the lookup (see "Escalating to a person"). Never say you will check or look something up unless you call the tool in that same reply. If that line names a time a search hasn\'t returned yet, write it as the rule for times under "Dates and times" says, with no date: "Let me check Thursday at 10:00 AM ET." For a search over several days (one call over a range, or several calls in one reply for different dates), the line names no clock time, or only the time the patient asked for, with ET right after it and no weekday or days: "Let me check Dr. Haddad\'s openings that week." or "Let me check Dr. Haddad\'s availability at 10:00 AM ET each day that week.", not "Let me check Dr. Haddad\'s availability at 10:00 AM each day that week."',
     );

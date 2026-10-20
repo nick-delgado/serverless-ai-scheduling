@@ -178,7 +178,7 @@ Two cells measure a defect rather than the model:
 
 **How the choice was made (Nick's decisions on #37):**
 - **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success: `sonnet-4.6@medium` comes closest at 83%, 7 points short of 90%, and every other cell misses by more (corrected 2026-10-13: 8 → 7 points, #259).
-- **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`).
+- **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`). *(#251 closed the first-text miss on `system.v14`: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
 
 **The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below):
 
@@ -191,7 +191,7 @@ Two cells measure a defect rather than the model:
 | Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(met: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* *(Re-measured by #295 as 4.77 on `judge.v2`: see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295).)* |
 | Judge–human agreement | pending #159 *(42/49, 86%: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* | ≥ 80% | pending *(met)* |
 | Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
-| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
+| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met *(met on `system.v14`, 2,478 ms p50: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))* |
 
 **NFR-001 on `dev`:**
 - Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
@@ -202,7 +202,7 @@ Two cells measure a defect rather than the model:
 | `high` | 30 | 4,735 ms | 6,372 ms | 7,259 ms |
 | `medium` | 30 | 4,102 ms | 7,007 ms | 7,946 ms |
 
-Each turn made three model calls (`find_providers`, `check_availability`, then the answer) before any visible text, so the miss is mostly the turn's shape, not the effort level.
+Each turn made three model calls (`find_providers`, `check_availability`, then the answer) before any visible text, so the miss is mostly the turn's shape, not the effort level. *(`system.v14`'s line before the first lookup moved the first text to model call 1: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
 
 **The refusal fallback:**
 - `REFUSAL_FALLBACKS` keeps `sonnet-4.6` → `haiku-4.5`.
