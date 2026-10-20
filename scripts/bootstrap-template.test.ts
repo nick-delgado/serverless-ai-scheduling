@@ -27,6 +27,11 @@
  * steps, the deploy's turn caps and SES secrets, which steps get the config-only profile or an empty `AWS_PROFILE`, and
  * the patient's password: from which secret the env-file step writes `$RUNNER_TEMP/e2e.env` (owner-only), which the
  * Cognito reseed reads, and which the suite's step gets.
+ *   - the demo spend backstop (#356, r1/Q-4 (a), r1/Q-5 (a), r1/Q-6 (b)): nothing is created while
+ *     `DemoTranscribeRoleName` is empty; the budget's filter, limit parameter and 80% email; the action's 100% ACTUAL
+ *     threshold, automatic approval and its one target, demo's Identity Pool role; the deny policy's exact action; the
+ *     execution role's trust and its attach and detach rights, limited to that role and that policy; and the
+ *     execution role's place on the deny list.
  * The files are read with the shared reader, scripts/test/yaml-text.ts (#157).
  * It doesn't check that AWS accepts the subject strings: the format was seen in a probe run's tokens (journal,
  * 2026-10-08), and the first run of each workflow shows the rest (runbook, "CI credentials (GitHub OIDC)"). Whether a
@@ -40,7 +45,17 @@ import { MODEL_PROFILES } from "@sched/agent";
 import { createTableInput } from "@sched/tools/dynamo";
 import { describe, expect, it } from "vitest";
 
-import { block, children, credentialsOf, entries, items, member, stepsOf } from "./test/yaml-text";
+import {
+  block,
+  bodyLines,
+  children,
+  credentialsOf,
+  entries,
+  items,
+  member,
+  stepsOf,
+  text,
+} from "./test/yaml-text";
 
 const lines = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "infra", "bootstrap", "bootstrap.yaml"),
@@ -96,6 +111,17 @@ const SUB = "token.actions.githubusercontent.com:sub";
 const protectDeny = (): string[] =>
   block(/^\s+- Sid: ProtectBootstrapIdentities$/, block(/^ {2}CfnExecutionRole:$/, lines));
 
+/** That `roleName` is on sched-cfn-exec's ProtectBootstrapIdentities deny, which is unconditional and denies `iam:*`. */
+const expectProtected = (roleName: string): void => {
+  const deny = protectDeny();
+  expect(deny).toContain("                Effect: Deny");
+  expect(deny).toContain("                Action: iam:*");
+  expect(deny.some((l) => /^\s+Condition:/.test(l))).toBe(false);
+  expect(block(/^\s+Resource:$/, deny)).toContain(
+    `                  - !Sub arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/${roleName}`,
+  );
+};
+
 const ROLES = [
   {
     logicalId: "GitHubDeployRole",
@@ -149,13 +175,7 @@ describe.each(ROLES)("$logicalId (bootstrap.yaml)", ({ logicalId, roleName, oper
   });
 
   it("is on sched-cfn-exec's unconditional ProtectBootstrapIdentities deny", () => {
-    const deny = protectDeny();
-    expect(deny).toContain("                Effect: Deny");
-    expect(deny).toContain("                Action: iam:*");
-    expect(deny.some((l) => /^\s+Condition:/.test(l))).toBe(false);
-    expect(block(/^\s+Resource:$/, deny)).toContain(
-      `                  - !Sub arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/${roleName}`,
-    );
+    expectProtected(roleName);
   });
 });
 
@@ -622,5 +642,175 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
       for (let i = at - 1; /^\s*#/.test(exec[i] ?? ""); i--) comment.unshift((exec[i] ?? "").trim());
       expect(comment.join(" ")).toMatch(/(takes no resource|generated)/);
     }
+  });
+});
+
+describe("the demo spend backstop (#356; r1/Q-4 (a), r1/Q-5 (a), r1/Q-6 (b))", () => {
+  const BACKSTOP = [
+    "DemoBackstopDenyPolicy",
+    "DemoBackstopExecutionRole",
+    "DemoBackstopBudget",
+    "DemoBackstopAction",
+  ] as const;
+  const resource = (logicalId: string): string[] => block(new RegExp(`^ {2}${logicalId}:$`), lines);
+  const properties = (logicalId: string): string[] => block(/^ {4}Properties:$/, resource(logicalId));
+  const parameter = (name: string): string[] => block(new RegExp(`^ {2}${name}:$`), lines);
+  const statementsOf = (logicalId: string, section: string): string[][] =>
+    items(block(/^\s+Statement:$/, block(new RegExp(`^\\s+${section}:$`), resource(logicalId))));
+
+  it("creates nothing while DemoTranscribeRoleName is empty (r1/Q-5 (a))", () => {
+    expect(entries(parameter("DemoTranscribeRoleName")).Type).toBe("String");
+    expect(parameter("DemoTranscribeRoleName")).toContain('    Default: ""');
+    expect(lines).toContain('  HasDemoBackstop: !Not [!Equals [!Ref DemoTranscribeRoleName, ""]]');
+    for (const id of BACKSTOP) expect(entries(resource(id)).Condition, id).toBe("HasDemoBackstop");
+  });
+
+  it("accepts only an IAM role name for DemoTranscribeRoleName, or nothing", () => {
+    const pattern = new RegExp(entries(parameter("DemoTranscribeRoleName")).AllowedPattern ?? "(missing)");
+    for (const ok of [
+      "",
+      "sched-demo-auth-TranscribeBrowserRole-AbC123xyz",
+      "a_b+c=d,e.f@g-h",
+      "a".repeat(64),
+    ])
+      expect(pattern.test(ok), ok).toBe(true);
+    for (const bad of ["a/b", "role/x", "x*", "has space", "a".repeat(65), "x\n"])
+      expect(pattern.test(bad), bad).toBe(false);
+  });
+
+  it("takes the budget's limit from DemoBackstopUsd, default 10 and at least 1 (r1/Q-4 (a))", () => {
+    expect(entries(parameter("DemoBackstopUsd"))).toMatchObject({
+      Type: "Number",
+      Default: "10",
+      MinValue: "1",
+    });
+    expect(entries(block(/^\s+BudgetLimit:$/, properties("DemoBackstopBudget")))).toEqual({
+      Amount: "!Ref DemoBackstopUsd",
+      Unit: "USD",
+    });
+  });
+
+  it("counts Transcribe by default, in the budget's one Service filter (r1/Q-6 (b))", () => {
+    expect(entries(parameter("DemoBackstopServices"))).toMatchObject({
+      Type: "CommaDelimitedList",
+      Default: "Transcribe",
+    });
+    const budget = block(/^\s+Budget:$/, properties("DemoBackstopBudget"));
+    expect(bodyLines(block(/^\s+CostFilters:$/, budget))).toEqual(["  Service: !Ref DemoBackstopServices"]);
+  });
+
+  it("is one monthly COST budget named sched-demo-backstop (r1/Q-4 (a))", () => {
+    const budget = entries(block(/^\s+Budget:$/, properties("DemoBackstopBudget")));
+    expect(budget).toMatchObject({
+      BudgetName: "sched-demo-backstop",
+      BudgetType: "COST",
+      TimeUnit: "MONTHLY",
+    });
+  });
+
+  it("emails BudgetAlertEmail at 80% of ACTUAL spend, and has no other notification (r1/Q-4 (a))", () => {
+    const notifications = items(
+      block(/^\s+NotificationsWithSubscribers:$/, properties("DemoBackstopBudget")),
+    );
+    expect(notifications).toHaveLength(1);
+    const [only = []] = notifications;
+    expect(member(only, "Notification")).toEqual({
+      NotificationType: "ACTUAL",
+      ComparisonOperator: "GREATER_THAN",
+      Threshold: "80",
+      ThresholdType: "PERCENTAGE",
+    });
+    expect(items(block(/^\s+Subscribers:$/, only)).map((sub) => entries(sub))).toEqual([
+      { SubscriptionType: "EMAIL", Address: "!Ref BudgetAlertEmail" },
+    ]);
+  });
+
+  it("runs its action at 100% of ACTUAL spend, with no approval step, never on a forecast (r1/Q-4 (a))", () => {
+    const action = properties("DemoBackstopAction");
+    expect(entries(action)).toMatchObject({
+      BudgetName: "!Ref DemoBackstopBudget",
+      ActionType: "APPLY_IAM_POLICY",
+      ApprovalModel: "AUTOMATIC",
+      NotificationType: "ACTUAL",
+      ExecutionRoleArn: "!GetAtt DemoBackstopExecutionRole.Arn",
+    });
+    expect(entries(block(/^\s+ActionThreshold:$/, action))).toEqual({ Type: "PERCENTAGE", Value: "100" });
+    expect(text(action)).not.toMatch(/FORECASTED/);
+  });
+
+  it("targets demo's Identity Pool role and no other principal (E-3, r1/Q-5 (a))", () => {
+    const definition = block(/^\s+Definition:$/, properties("DemoBackstopAction"));
+    expect(bodyLines(definition)).toEqual([
+      "  IamActionDefinition:",
+      "    PolicyArn: !Ref DemoBackstopDenyPolicy",
+      "    Roles:",
+      "      - !Ref DemoTranscribeRoleName",
+    ]);
+  });
+
+  it("notifies BudgetAlertEmail when the action runs", () => {
+    const subscribers = items(block(/^\s+Subscribers:$/, properties("DemoBackstopAction")));
+    expect(subscribers.map((sub) => entries(sub))).toEqual([
+      { Type: "EMAIL", Address: "!Ref BudgetAlertEmail" },
+    ]);
+  });
+
+  it("denies exactly one Transcribe action, on all resources, in one statement (E-3, r1/Q-6 (b))", () => {
+    expect(entries(properties("DemoBackstopDenyPolicy")).ManagedPolicyName).toBe("sched-demo-backstop-deny");
+    const statements = statementsOf("DemoBackstopDenyPolicy", "PolicyDocument");
+    expect(statements).toHaveLength(1);
+    const [only = []] = statements;
+    expect(entries(only).Effect).toBe("Deny");
+    expect(valuesOf(only, "Action")).toEqual(["transcribe:StartStreamTranscriptionWebSocket"]);
+    expect(valuesOf(only, "Resource")).toEqual(["*"]);
+    // Nothing else narrows or widens the statement: no Condition, NotAction, NotResource or Principal.
+    expect(only.map((l) => l.trim())).toEqual([
+      "- Sid: DenyTranscribeStreaming",
+      "Effect: Deny",
+      "Action:",
+      "- transcribe:StartStreamTranscriptionWebSocket",
+      'Resource: "*"',
+    ]);
+  });
+
+  it("is assumed only by AWS Budgets, for a budget of this account (confused-deputy guard)", () => {
+    const statements = statementsOf("DemoBackstopExecutionRole", "AssumeRolePolicyDocument");
+    expect(statements).toHaveLength(1);
+    const [only = []] = statements;
+    expect(entries(only)).toMatchObject({ Effect: "Allow", Action: "sts:AssumeRole" });
+    expect(entries(block(/^\s+Principal:$/, only))).toEqual({ Service: "budgets.amazonaws.com" });
+    const condition = block(/^\s+Condition:$/, only);
+    expect(entries(block(/^\s+StringEquals:$/, condition))).toEqual({
+      "aws:SourceAccount": "!Ref AWS::AccountId",
+    });
+    expect(entries(block(/^\s+ArnLike:$/, condition))).toEqual({
+      "aws:SourceArn": "!Sub arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/*",
+    });
+  });
+
+  it("can attach and detach only the deny policy, on only demo's Identity Pool role (r1/Q-5 (a))", () => {
+    // No other key may grant anything (a ManagedPolicyArns list, say): the inline policy below is the only grant.
+    expect(children(properties("DemoBackstopExecutionRole")).map((l) => l.trim().split(":")[0])).toEqual([
+      "RoleName",
+      "Description",
+      "AssumeRolePolicyDocument",
+      "Policies",
+    ]);
+    const statements = statementsOf("DemoBackstopExecutionRole", "Policies");
+    expect(statements).toHaveLength(1);
+    const [only = []] = statements;
+    expect(entries(only).Effect).toBe("Allow");
+    expect(valuesOf(only, "Action")).toEqual(["iam:AttachRolePolicy", "iam:DetachRolePolicy"]);
+    expect(valuesOf(only, "Resource")).toEqual([
+      "!Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${DemoTranscribeRoleName}",
+    ]);
+    expect(entries(block(/^\s+ArnEquals:$/, only))).toEqual({
+      "iam:PolicyARN": "!Ref DemoBackstopDenyPolicy",
+    });
+  });
+
+  it("names its role sched-budgets-action, and that role is on sched-cfn-exec's unconditional ProtectBootstrapIdentities deny (r1/Q-5 (a))", () => {
+    expect(entries(properties("DemoBackstopExecutionRole")).RoleName).toBe("sched-budgets-action");
+    expectProtected("sched-budgets-action");
   });
 });

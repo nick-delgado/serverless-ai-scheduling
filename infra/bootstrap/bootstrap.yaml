@@ -3,8 +3,10 @@ Description: >-
   sched-bootstrap — one-time, admin-deployed foundation for the AI scheduling assistant.
   Creates the CloudFormation execution role (and the permissions boundary every
   workload role must carry), the SAM artifact bucket, a monthly budget alarm and a
-  Bedrock budget alarm, and GitHub's OIDC provider with one short-lived role per
-  CI workflow (deploy, eval gate, E2E).
+  Bedrock budget alarm, GitHub's OIDC provider with one short-lived role per
+  CI workflow (deploy, eval gate, E2E), and, once DemoTranscribeRoleName is set,
+  the demo spend backstop (a Transcribe budget whose 100% action denies voice to
+  demo's Identity Pool role).
   See docs/runbooks/aws-setup.md and docs/adr/0003-iac-layout.md.
 
 Parameters:
@@ -28,6 +30,31 @@ Parameters:
     Description: >-
       The Cost Explorer service names the Bedrock budget counts. Read the names past Claude spend appears under in
       Cost Explorer (group by Service) and pass them on the first apply (runbook, "CI credentials", step 1).
+  DemoBackstopUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: >-
+      Monthly Amazon Transcribe budget (USD) behind the demo spend backstop (#356): an email at 80% actual, and at
+      100% actual an action that attaches a deny policy to demo's Identity Pool role. Only used when
+      DemoTranscribeRoleName is set.
+  DemoBackstopServices:
+    Type: CommaDelimitedList
+    Default: Transcribe
+    Description: >-
+      The Cost Explorer service names the backstop budget counts ("Transcribe", as Nick read it in Cost Explorer's
+      Service grouping on 2026-10-20). Account-wide, since Transcribe spend can't be
+      attributed to demo; valid only while no CI or eval job calls Transcribe.
+  DemoTranscribeRoleName:
+    Type: String
+    Default: ""
+    AllowedPattern: '^$|^[\w+=,.@-]{1,64}$'
+    Description: >-
+      The name of demo's Identity Pool role (the physical name of the auth stack's TranscribeBrowserRole). Empty
+      creates no backstop. Read it with the runbook's command, and re-apply when demo's auth stack replaces the role.
+
+Conditions:
+  HasDemoBackstop: !Not [!Equals [!Ref DemoTranscribeRoleName, ""]]
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -187,8 +214,9 @@ Resources:
                   - iam:UpdateAssumeRolePolicy
                   - iam:PassRole
                 Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-*
-              # The CI roles below are sched-* roles too, so ManageWorkloadRoles would otherwise let a stack
-              # rewrite their trust (UpdateAssumeRolePolicy) or delete them.
+              # The CI roles below and the demo backstop's execution role (sched-budgets-action) are sched-* roles
+              # too, so ManageWorkloadRoles would otherwise let a stack rewrite their trust (UpdateAssumeRolePolicy)
+              # or delete them.
               - Sid: ProtectBootstrapIdentities
                 Effect: Deny
                 Action: iam:*
@@ -198,6 +226,7 @@ Resources:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-deploy
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-evals
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-github-e2e
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-budgets-action
                   - !Ref GitHubOidcProvider
               - Sid: NoBoundaryRemoval
                 Effect: Deny
@@ -311,6 +340,113 @@ Resources:
           Subscribers:
             - SubscriptionType: EMAIL
               Address: !Ref BudgetAlertEmail
+
+  # ---------------------------------------------------------------------------
+  # Demo spend backstop (#356, ADR-009's second 2026-10-20 amendment). One monthly COST budget on Amazon Transcribe,
+  # and at 100% of ACTUAL spend, with no approval step, an action that attaches a deny policy to demo's Identity
+  # Pool role. Budgets data lags by hours, so the action runs some time after the threshold is crossed. Nothing here
+  # is created while DemoTranscribeRoleName is empty.
+  #
+  # Transcribe only (r1/Q-6 (b)): the budget counts the account's Transcribe spend, because nothing attributes
+  # Transcribe to demo, and no CI or eval job calls it. Bedrock is left out: its cross-region inference profile
+  # can't carry a cost allocation tag, an application inference profile would change the model ID the agent
+  # calls, and Budgets documents no IAM-principal filter. Nick decided not to automate it (#356, comment of
+  # 2026-10-20): he stops demo's Bedrock spend by hand (runbook, "Stopping demo's spend by hand").
+  #
+  # The deny policy and the execution role name no role but demo's. The execution role can attach and detach
+  # only this policy, on only that role.
+  # ---------------------------------------------------------------------------
+  DemoBackstopDenyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: HasDemoBackstop
+    Properties:
+      ManagedPolicyName: sched-demo-backstop-deny
+      Description: Attached by the demo spend backstop (#356); denies a Transcribe streaming connection.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyTranscribeStreaming
+            Effect: Deny
+            Action:
+              - transcribe:StartStreamTranscriptionWebSocket
+            Resource: "*"
+
+  DemoBackstopExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: HasDemoBackstop
+    Properties:
+      RoleName: sched-budgets-action
+      Description: Assumed by AWS Budgets to attach and detach the demo backstop's deny policy on demo's Identity Pool role.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: budgets.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/*
+      Policies:
+        - PolicyName: attach-the-backstop-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AttachAndDetachTheDenyPolicy
+                Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${DemoTranscribeRoleName}
+                Condition:
+                  ArnEquals:
+                    iam:PolicyARN: !Ref DemoBackstopDenyPolicy
+
+  DemoBackstopBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasDemoBackstop
+    Properties:
+      Budget:
+        BudgetName: sched-demo-backstop
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref DemoBackstopUsd
+          Unit: USD
+        CostFilters:
+          Service: !Ref DemoBackstopServices
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+  DemoBackstopAction:
+    Type: AWS::Budgets::BudgetsAction
+    Condition: HasDemoBackstop
+    Properties:
+      BudgetName: !Ref DemoBackstopBudget
+      ActionType: APPLY_IAM_POLICY
+      ApprovalModel: AUTOMATIC
+      NotificationType: ACTUAL
+      ActionThreshold:
+        Type: PERCENTAGE
+        Value: 100
+      ExecutionRoleArn: !GetAtt DemoBackstopExecutionRole.Arn
+      Definition:
+        IamActionDefinition:
+          PolicyArn: !Ref DemoBackstopDenyPolicy
+          Roles:
+            - !Ref DemoTranscribeRoleName
+      Subscribers:
+        - Type: EMAIL
+          Address: !Ref BudgetAlertEmail
 
   # ---------------------------------------------------------------------------
   # CI credentials (#41): GitHub's OIDC provider and one role per workflow, each with its own grants, so no

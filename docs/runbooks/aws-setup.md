@@ -86,6 +86,7 @@ This creates:
 - the `sched-artifacts-<account>-us-east-1` bucket;
 - the `sched-monthly` budget (alerts at 80% actual and 100% forecast);
 - the `sched-bedrock-monthly` budget, Amazon Bedrock spend only (`BedrockBudgetLimitUsd`, default 10 USD; the same alerts and email);
+- when `DemoTranscribeRoleName` is set, the demo spend backstop (#356, "The demo spend backstop", below): the `sched-demo-backstop` budget, its deny policy `sched-demo-backstop-deny`, its action and its execution role `sched-budgets-action`;
 - GitHub's IAM OIDC provider (`token.actions.githubusercontent.com`) and the three CI roles `sched-github-deploy`, `sched-github-evals` and `sched-github-e2e` (outputs `GitHubDeployRoleArn`, `GitHubEvalsRoleArn`, `GitHubE2eRoleArn`);
 - SSM parameters under `/sched/bootstrap/`.
 
@@ -102,6 +103,70 @@ aws cloudformation deploy --profile sched-admin --region us-east-1 \
 ```
 
 When a PR changes `infra/bootstrap/sched-deployer-policy.json`, check the CI roles in `bootstrap.yaml` that copy its statements (each copy says so), then go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>`, `<SES_IDENTITY>` and `<SES_RECIPIENT>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
+
+### The demo spend backstop (#356)
+
+Bootstrap creates it only when `DemoTranscribeRoleName` is set, so no env but `demo` has one (ADR-009's second 2026-10-20 amendment). It is a monthly cost budget, `sched-demo-backstop`, on **Amazon Transcribe** spend only; it counts the whole account's Transcribe spend, since nothing attributes Transcribe to one env. At 80% of actual spend it emails `BudgetAlertEmail`. At 100% of actual spend, with no approval step, AWS Budgets attaches the policy `sched-demo-backstop-deny` (it denies `transcribe:StartStreamTranscriptionWebSocket`) to `demo`'s Identity Pool role, so voice stops and text chat keeps working. There is no Bedrock backstop (the ADR says why; Nick stops Bedrock spend by hand, "Stopping `demo`'s spend by hand", below).
+
+**Turn it on** (admin; the first apply after #356's PR merges). Read the role's name from `demo`'s auth stack, then apply with it. `DemoBackstopUsd` defaults to 10 USD and keeps its value on later applies:
+
+```bash
+aws sso login --profile sched-admin
+ROLE=$(aws cloudformation describe-stack-resource --profile sched-admin --region us-east-1 \
+  --stack-name sched-demo-auth --logical-resource-id TranscribeBrowserRole \
+  --query StackResourceDetail.PhysicalResourceId --output text)
+echo "$ROLE"     # sched-demo-auth-TranscribeBrowserRole-<suffix>
+aws cloudformation deploy --profile sched-admin --region us-east-1 \
+  --stack-name sched-bootstrap --template-file infra/bootstrap/bootstrap.yaml --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides DemoTranscribeRoleName="$ROLE"
+```
+
+The budget counts the Cost Explorer service `Transcribe` (`DemoBackstopServices`), the name Nick read in Cost Explorer's Service grouping on 2026-10-20; if a later look shows the charges under another name, add `DemoBackstopServices="<name>"` to the overrides. The apply also creates the role `sched-budgets-action` (the `CAPABILITY_NAMED_IAM` it already needs).
+
+**Check it is on standby.** After the apply, and after any `demo` redeploy of the `auth` stack (which can replace the Identity Pool role: then the name above is stale, the action fails to attach, and you re-run the apply with the new name):
+
+```bash
+ACCT=$(aws sts get-caller-identity --profile sched-admin --query Account --output text)
+aws budgets describe-budget-actions-for-budget --profile sched-admin --account-id "$ACCT" \
+  --budget-name sched-demo-backstop \
+  --query 'Actions[].{id:ActionId,type:ActionType,approval:ApprovalModel,when:NotificationType,threshold:ActionThreshold.ActionThresholdValue,thresholdType:ActionThreshold.ActionThresholdType,status:Status}'
+aws iam list-attached-role-policies --profile sched-admin --role-name "$ROLE"
+```
+
+This needs `sched-admin`: `SchedDeployer` is denied both calls. (The API names the threshold `ActionThresholdValue`; `Value` is the CloudFormation property's name, and a query on it returns `null`.) Expect one action, `APPLY_IAM_POLICY`, `AUTOMATIC`, `ACTUAL`, threshold 100 `PERCENTAGE`, status `STANDBY`, and no `sched-demo-backstop-deny` among the role's attached policies. Any other status is the action's state: `EXECUTION_SUCCESS` means it has run (below); `EXECUTION_FAILURE` means it could not attach, usually a stale role name.
+
+**When it trips.** You get the 80% email first, and an email when the action runs. A patient's voice recording then fails as a failed Transcribe connection does today (the mic button reports an error); chat is unaffected. The action runs some hours after the spend crosses 100% (Budgets data lags), and AWS's Budgets Actions blog (not its reference documentation) says an action that applies a policy is reset at the beginning of each budget period, so voice should return on the first of the month with no step from you (not yet seen live: we haven't tripped it). To restore voice sooner, raise the limit or reverse the action:
+
+```bash
+ACTION=$(aws budgets describe-budget-actions-for-budget --profile sched-admin --account-id "$ACCT" \
+  --budget-name sched-demo-backstop --query 'Actions[0].ActionId' --output text)
+aws budgets execute-budget-action --profile sched-admin --account-id "$ACCT" --budget-name sched-demo-backstop \
+  --action-id "$ACTION" --execution-type REVERSE_BUDGET_ACTION     # detaches the policy; not re-evaluated this month
+aws iam list-attached-role-policies --profile sched-admin --role-name "$ROLE"   # the deny policy is gone
+# To arm it again for the rest of the month (after raising DemoBackstopUsd, say):
+aws budgets execute-budget-action --profile sched-admin --account-id "$ACCT" --budget-name sched-demo-backstop \
+  --action-id "$ACTION" --execution-type RESET_BUDGET_ACTION
+```
+
+Raising the limit is `--parameter-overrides DemoBackstopUsd=<n>` on the bootstrap apply. To remove the backstop, apply with `DemoTranscribeRoleName=""`: CloudFormation deletes the budget, the action, the policy and the role (reverse the action first if it has run, since a managed policy that is still attached can't be deleted).
+
+### Stopping `demo`'s spend by hand
+
+There is no automated Bedrock backstop (Nick's decision on [#356](https://github.com/nick-delgado/serverless-ai-scheduling/issues/356#issuecomment-6298468468)): a budget that counted only `demo`'s Bedrock spend can't be built without changing the model IDs the agent calls (ADR-009, second 2026-10-20 amendment). Nick stops it himself. **The budget emails don't say which env is spending.** `sched-bedrock-monthly` counts the CI eval gate and local eval runs too, and `sched-monthly` counts the whole account, so an email is a reason to look, not proof that `demo` is the cause. `demo` also runs a lower `EnvDailyTurnCap` than the template default of 200 as an interim bound: 75, deployed on Nick's approval on 2026-10-20 ([record](https://github.com/nick-delgado/serverless-ai-scheduling/issues/356#issuecomment-6298712536)).
+
+1. **In-band: lower the env's daily turn cap** (preferred: reversible, leaves no drift). `EnvDailyTurnCap` has a minimum of 1, so this allows one new turn a day, across all patients, from the next request:
+
+   ```bash
+   scripts/deploy.sh api demo -- EnvDailyTurnCap=1
+   ```
+
+   It takes about 2 minutes. The stack's template and its parameters still agree, so nothing drifts. Undo it by deploying again with a higher value (`scripts/deploy.sh api demo -- EnvDailyTurnCap=<n>`). The value persists across later deploys until it is changed (`sam deploy` reuses the stack's previous value for a parameter the command doesn't name: `deploy-env.md`, "Daily turn caps", verified on #356's first PR), so a routine `demo` redeploy keeps the low cap. It doesn't stop Transcribe; the voice backstop above, or the same deny policy attached by hand, does.
+
+2. **Out-of-band, if the in-band route isn't enough or can't run.** Each of these changes a resource CloudFormation owns, so the stack no longer matches what is deployed (drift CloudFormation doesn't know about), and a later `deploy.sh` may or may not put it back; undo it by hand before the next `demo` deploy.
+   - **Disable `demo`'s CloudFront distribution.** The distribution is in `sched-demo-web`; find its ID in that stack's resources. The CloudFront API replaces the whole configuration ([AWS CLI `update-distribution`](https://docs.aws.amazon.com/cli/latest/reference/cloudfront/update-distribution.html)): read it with `aws cloudfront get-distribution-config --id <id>`, keep the returned `ETag`, set `Enabled` to `false` in the returned `DistributionConfig`, and send it back with `aws cloudfront update-distribution --id <id> --distribution-config <file> --if-match <ETag>`. This takes the SPA and anything served through the distribution offline. Undo: the same steps with `Enabled` set back to `true`, with the new `ETag`.
+   - **Change the API stage's throttling.** `aws apigateway update-stage --rest-api-id <id> --stage-name <stage> --patch-operations ...` changes a stage's method settings ([AWS CLI `update-stage`](https://docs.aws.amazon.com/cli/latest/reference/apigateway/update-stage.html)); the stage's throttle (rate 5, burst 10 on every method) is one of them. The CLI page gives no throttling example, so read the stage's current settings first (`aws apigateway get-stage`), change the rate and burst limits there, and note the original values (5 and 10) to restore. Undo: patch them back to 5 and 10, or redeploy `api`.
+
+Check what `demo` holds before and after: `aws cloudformation describe-stacks --stack-name sched-demo-api --query "Stacks[0].Parameters"` shows the cap. Nothing in this section has been run against `demo`.
 
 ### CI credentials (GitHub OIDC)
 
@@ -214,6 +279,7 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | GitHub-side CI settings: the OIDC subject customization, the `dev` and `e2e` Environments, the secrets `AWS_DEPLOY_ROLE_ARN`, `AWS_E2E_ROLE_ARN`, `DEMO_PASSWORD_SOFIA` (environment), `AWS_EVAL_ROLE_ARN`, `SES_SENDER`, `SES_STAFF_RECIPIENT` (repository), and required SHA pinning | GitHub settings, not AWS resources; a workflow can't read the role ARNs from SSM before it has credentials | Nick ("CI credentials (GitHub OIDC)") |
 | SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh <env>`, after the env's auth and web stacks; builds with the Cognito IDs from SSM, see the `sam-deploy` skill), or the deploy workflow for `dev` and the E2E workflow for `e2e` |
 | Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`), or the E2E workflow for `e2e` |
+| Reversing or re-arming the demo spend backstop after it ran | Budgets runs the action, not CloudFormation, so reversing it is a Budgets call ("The demo spend backstop", above) | Nick |
 | Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 
 ## Teardown
