@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #345, PR #TBD, #37, #251, #306, #295, #296, #320, #326, #332, #337, #340, #347, #351, ADR-002 (amendment of 2026-10-20), ADR-008, PRD §7 and §8
+**Related:** #345, PR #364, #360, #361, #362, #363, #37, #251, #306, #295, #296, #320, #326, #332, #337, #340, #347, #351, ADR-002 (amendment of 2026-10-20), ADR-008, PRD §7 and §8
 
 ## What happened
 
@@ -17,7 +17,7 @@ The table (the `--exit-report` output, in the comment on #345) misses three of i
 - **Raw verdict, then triage (r1/Q-2 (a)).** The 4 safety violations are posted as the tool counted them. We didn't carry ADR-002's "false positive, not counted" rule over, because none of the four matches a known class (#239's clinic-hours reading, #347's refused call). Nick decides, and he didn't discount them.
 - **Ask on errors, never re-run on our own (r1/Q-3 (a)).** After the outages the orchestrator asked Nick each time. The alternative, one automatic whole-run re-run, would have spent the cap on an outage twice.
 - **A full amendment to ADR-002 (r1/Q-4 (a)).** Any changed figure in the exit table's rows triggers a dated amendment with pointers, not only a changed verdict. The record the amendment keeps is that the production profile stands (Nick's "both" accepts the exit; he did not reopen the profile).
-- **Fix issues per cause, none filed here (A-6).** This issue fixes nothing. The findings are grouped by cause on #345 and four fix issues are drafted for the orchestrator to file.
+- **Fix issues per cause, none fixed here (A-6).** This issue fixes nothing. The findings are grouped by cause on #345, and Nick decided "both": M3's exit is accepted with these misses as known gaps, and each cause gets a fix issue. The orchestrator filed them: #360 (the clock-time invariant) and #361 (the restatement that omits the visit reason) in M4, because `demo` reviewers would notice them, and #362 (the possessive provider name) and #363 (`book-multi-constraint`'s `time_of_day`) in Future.
 
 ## What surprised us
 
