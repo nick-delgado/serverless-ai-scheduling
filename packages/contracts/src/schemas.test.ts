@@ -62,3 +62,29 @@ describe("input mode (#234)", () => {
     expect(C.ConversationMessage.parse(message)).not.toHaveProperty("inputMode");
   });
 });
+
+describe("request access (#357)", () => {
+  it.each(["user-x7k2m9qa", "user-00000000"])("accepts the username %s", (username) => {
+    expect(C.RequestAccessResponse.safeParse({ ...EXAMPLES.RequestAccessResponse, username }).success).toBe(
+      true,
+    );
+  });
+
+  it.each(["reviewer-x7k2m9qa", "user-X7K2M9QA", "user-x7k2m9q", "user-x7k2m9qab", "maria.santos"])(
+    "rejects the username %s, which is not user- and 8 lowercase letters or digits",
+    (username) => {
+      expect(C.RequestAccessResponse.safeParse({ ...EXAMPLES.RequestAccessResponse, username }).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it("takes the bot-check token and nothing else from the reviewer", () => {
+    expect(C.RequestAccessRequest.safeParse({ turnstileToken: "t", email: "a@example.com" }).success).toBe(
+      false,
+    );
+    expect(C.RequestAccessRequest.safeParse({ turnstileToken: "" }).success).toBe(false);
+    expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x".repeat(2048) }).success).toBe(true);
+    expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x".repeat(2049) }).success).toBe(false);
+  });
+});

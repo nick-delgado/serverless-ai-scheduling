@@ -339,6 +339,18 @@ export const EXAMPLES = {
     messages: [],
   } satisfies In<"SessionResponse">,
   ApiError: { error: { code: "UNAUTHORIZED", message: "Please sign in again." } } satisfies In<"ApiError">,
+  RequestAccessRequest: { turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" } satisfies In<"RequestAccessRequest">,
+  RequestAccessResponse: {
+    username: "user-x7k2m9qa",
+    password: "Sample-Only-Pw-0000",
+    firstName: "Noor",
+    lastName: "Vance",
+    expiresAt: "2026-10-21T10:00:00Z",
+  } satisfies In<"RequestAccessResponse">,
+  RequestAccessErrorCode: "CAP_REACHED" satisfies In<"RequestAccessErrorCode">,
+  RequestAccessError: {
+    error: { code: "BOT_CHECK_FAILED", message: "The check didn't pass. Please try again." },
+  } satisfies In<"RequestAccessError">,
 } as const;
 
 /** The `confirmed_*` fields of book_appointment and reschedule_appointment (#313). */
