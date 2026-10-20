@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #306, #301, ADR-008, PRD FR-030, #293, #332, #234, #251
+**Related:** #306, PR #355, #301, ADR-008, PRD FR-030, #293, #332, #234, #251
 
 ## What happened
 
@@ -36,7 +36,8 @@ All runs: `--mode l1 --suite full --ids l1-availability-keeps-stated-time-of-day
 
 - **Before, first wording**, `system.v13` (`main` at `96bf912`): pass, pass, pass, `$0.0706` estimated. Every trial kept `time_of_day: afternoon`. Results file `2026-10-19T161645Z-l1-full-sonnet-4.6.json`.
 - **Before, reworded last patient line**, `system.v13` (`main` at `96bf912`): pass, fail, fail, `$0.0505`. Both failures: `l1.action: args.time_of_day: expected "afternoon", got undefined`, and likewise `start_time`, for a call over Oct 5 to 8 with no time. Results file `2026-10-19T161724Z-l1-full-sonnet-4.6.json`.
-- **After, on `system.v13` plus this rule** (named `system.v14` then, `14387d9`): pass, pass, pass, `$0.0855`. Every trial carried `time_of_day: afternoon`: one with a call per weekday Oct 5 to 8, two with one call for Oct 5 to 8. Results file `2026-10-19T161842Z-l1-full-sonnet-4.6.json`.
+- **After, first built on `system.v13` plus this rule** (named `system.v14` then, `14387d9`): pass, pass, pass, `$0.0855`. Every trial carried `time_of_day: afternoon`: one with a call per weekday Oct 5 to 8, two with one call for Oct 5 to 8. Results file `2026-10-19T161842Z-l1-full-sonnet-4.6.json`.
+- **After, on `system.v15`** (`55d0c28`, on #251's `system.v14`): pass, pass, pass, `$0.0799`. Every trial carried `time_of_day: afternoon`: one with a call per weekday Oct 5 to 8, two with one call for Oct 5 to 8. Results file `2026-10-20T112000Z-l1-full-sonnet-4.6.json`. This is the result the PR stands on.
 - The prompt took one wording, with no rewording of the rule needed.
 
 ## What's next
