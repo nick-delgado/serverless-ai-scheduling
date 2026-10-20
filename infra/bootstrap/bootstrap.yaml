@@ -48,7 +48,7 @@ Parameters:
   DemoTranscribeRoleName:
     Type: String
     Default: ""
-    AllowedPattern: "^$|^[\\w+=,.@-]{1,64}$"
+    AllowedPattern: '^$|^[\w+=,.@-]{1,64}$'
     Description: >-
       The name of demo's Identity Pool role (the physical name of the auth stack's TranscribeBrowserRole). Empty
       creates no backstop. Read it with the runbook's command, and re-apply when demo's auth stack replaces the role.
@@ -214,8 +214,9 @@ Resources:
                   - iam:UpdateAssumeRolePolicy
                   - iam:PassRole
                 Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/sched-*
-              # The CI roles below are sched-* roles too, so ManageWorkloadRoles would otherwise let a stack
-              # rewrite their trust (UpdateAssumeRolePolicy) or delete them.
+              # The CI roles below and the demo backstop's execution role (sched-budgets-action) are sched-* roles
+              # too, so ManageWorkloadRoles would otherwise let a stack rewrite their trust (UpdateAssumeRolePolicy)
+              # or delete them.
               - Sid: ProtectBootstrapIdentities
                 Effect: Deny
                 Action: iam:*
@@ -349,7 +350,8 @@ Resources:
   # Transcribe only (r1/Q-6 (b)): the budget counts the account's Transcribe spend, because nothing attributes
   # Transcribe to demo, and no CI or eval job calls it. Bedrock is left out: its cross-region inference profile
   # can't carry a cost allocation tag, an application inference profile would change the model ID the agent
-  # calls, and Budgets documents no IAM-principal filter. The gap is filed (journal, 2026-10-20).
+  # calls, and Budgets documents no IAM-principal filter. Nick decided not to automate it (#356, comment of
+  # 2026-10-20): he stops demo's Bedrock spend by hand (runbook, "Stopping demo's spend by hand").
   #
   # The deny policy and the execution role name no role but demo's. The execution role can attach and detach
   # only this policy, on only that role.
