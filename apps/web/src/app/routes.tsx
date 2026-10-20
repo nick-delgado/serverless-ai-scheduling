@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from "react-router";
 
+import { requestAccessEnabled } from "../access/config";
 import { AuthProvider } from "../auth/AuthProvider";
 import type { AuthService } from "../auth/authService";
 import { RequireAuth } from "../auth/RequireAuth";
@@ -7,6 +8,7 @@ import { getIdToken } from "../auth/session";
 import { createChatApi } from "../chat/api";
 import { ChatApiContext, ChatPage } from "../chat/ChatPage";
 import { LoginPage } from "../pages/LoginPage";
+import { RequestAccessPage } from "../pages/RequestAccessPage";
 import { ErrorPage } from "./ErrorPage";
 import { Layout } from "./Layout";
 import { NotFoundPage } from "./NotFoundPage";
@@ -21,26 +23,33 @@ const chatApi = createChatApi({ getToken: getIdToken });
 
 /**
  * The pages under the layout. /chat needs a signed-in patient (FR-003). "/" goes to /chat, so a
- * signed-in patient lands in the chat and everyone else ends up on /login via the guard.
+ * signed-in patient lands in the chat and everyone else ends up on /login via the guard. /request-access
+ * (#357) is the one other public page, and exists only in a build whose env turns it on; elsewhere it is
+ * the not-found page.
  */
-export const pageRoutes: RouteObject[] = [
-  { index: true, element: <Navigate to="/chat" replace /> },
-  { path: "login", element: <LoginPage /> },
-  {
-    element: <RequireAuth />,
-    children: [
-      {
-        path: "chat",
-        element: (
-          <ChatApiContext value={chatApi}>
-            <ChatPage />
-          </ChatApiContext>
-        ),
-      },
-    ],
-  },
-  { path: "*", element: <NotFoundPage /> },
-];
+export function pageRoutesFor(requestAccess: boolean): RouteObject[] {
+  return [
+    { index: true, element: <Navigate to="/chat" replace /> },
+    { path: "login", element: <LoginPage /> },
+    ...(requestAccess ? [{ path: "request-access", element: <RequestAccessPage /> }] : []),
+    {
+      element: <RequireAuth />,
+      children: [
+        {
+          path: "chat",
+          element: (
+            <ChatApiContext value={chatApi}>
+              <ChatPage />
+            </ChatApiContext>
+          ),
+        },
+      ],
+    },
+    { path: "*", element: <NotFoundPage /> },
+  ];
+}
+
+export const pageRoutes: RouteObject[] = pageRoutesFor(requestAccessEnabled(import.meta.env));
 
 /**
  * The route tree. The error boundary sits on a pathless route inside the layout, so a page that

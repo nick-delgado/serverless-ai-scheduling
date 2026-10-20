@@ -9,7 +9,7 @@ import type { AuthService } from "../auth/authService";
 import { fakeAuthService } from "../auth/testing";
 import { DISCLAIMER_TEXT } from "./DisclaimerBanner";
 import { pageTitle } from "./pageTitle";
-import { appRoutes, pageRoutes } from "./routes";
+import { appRoutes, pageRoutes, pageRoutesFor } from "./routes";
 
 const signedIn = () => fakeAuthService({ username: "maria.santos" });
 
@@ -38,6 +38,27 @@ describe("app shell", () => {
     expectDisclaimer();
     expect(within(screen.getByRole("banner")).getByText(CLINIC.name)).toBeVisible();
     expect(document.title).toBe(pageTitle(heading));
+  });
+
+  it("has no /request-access page in a build whose env leaves it off (#357): it is the not-found page", async () => {
+    expect(pageRoutes.map((r) => r.path)).not.toContain("request-access");
+    renderAt("/request-access");
+    expect(await screen.findByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+  });
+
+  it("has the /request-access page, without a sign-in, when the env turns it on (#357)", async () => {
+    renderAt("/request-access", pageRoutesFor(true));
+    expect(await screen.findByRole("heading", { level: 1, name: "Request demo access" })).toBeVisible();
+    expect(document.title).toBe(pageTitle("Request demo access"));
+    expectDisclaimer();
+  });
+
+  it("turns the page route on from the build's VITE_REQUEST_ACCESS", async () => {
+    vi.stubEnv("VITE_REQUEST_ACCESS", "on");
+    vi.resetModules();
+    const fresh = await import("./routes");
+    expect(fresh.pageRoutes.map((r) => r.path)).toContain("request-access");
+    vi.unstubAllEnvs();
   });
 
   it("uses the FR-016 wording exactly", () => {

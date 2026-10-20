@@ -4,23 +4,31 @@
  * real shapes without a test failing.
  *
  * - `POST /api/session`: a `SessionResponse`.
+ * - `POST /api/request-access` (#357): a `RequestAccessResponse` for the fixed mock token, naming a user the Cognito
+ *   mock accepts (`MOCK_ISSUED_USER`, `MOCK_PASSWORD`); any other token is a bot-check failure.
  * - `POST /api/chat`: `ChatStreamEvent`s as NDJSON, ending in `done` or `error` (ADR-007). A turn
  *   that starts a conversation (no `conversationId`, or one this mock hasn't seen, which the real API
  *   reads as empty) opens with a `conversation` event once the message is "stored", as the chat
  *   handler does (#160), and its agent failures then answer 200 with an `error` event.
  */
 import {
+  ACCESS_CAP_MESSAGE,
   type ApiError,
   ChatRequest,
   type ChatStreamEvent,
   DAILY_CAP_MESSAGE,
   encodeStreamEvent,
   messageIdForSeq,
+  RequestAccessError,
+  RequestAccessRequest,
+  RequestAccessResponse,
   SessionResponse,
 } from "@sched/contracts";
 import { http, HttpResponse } from "msw";
 
+import { MOCK_BOT_CHECK_TOKEN } from "../access/config";
 import { cognitoHandlers } from "./cognito";
+import { MOCK_ISSUED_USER, MOCK_PASSWORD } from "./cognitoUsers";
 import { REPLIES, RESTORE_CONVERSATION_ID, SAMPLE_USAGE, SESSIONS } from "./fixtures";
 import type { MockApiOptions } from "./options";
 
@@ -223,5 +231,40 @@ export function createMockApi(getOptions: () => MockApiOptions): MockApi {
     return ndjsonStream(events, options.eventIntervalMs, request.signal);
   });
 
-  return { handlers: [session, chat, ...cognitoHandlers], reset };
+  const accessError = (
+    code: RequestAccessError["error"]["code"],
+    message: string,
+    status: number,
+  ): Response => HttpResponse.json(RequestAccessError.parse({ error: { code, message } }), { status });
+
+  const requestAccess = http.post("/api/request-access", async ({ request }) => {
+    const options = getOptions();
+    await sleep(options.latencyMs);
+    if (options.accessFault === "network") return HttpResponse.error();
+    const parsed = RequestAccessRequest.safeParse(await request.json().catch(() => undefined));
+    if (!parsed.success)
+      return accessError("BAD_REQUEST", "The request body must be a bot-check token.", 400);
+    if (options.accessFault === "bot_check" || parsed.data.turnstileToken !== MOCK_BOT_CHECK_TOKEN) {
+      return accessError("BOT_CHECK_FAILED", "The check didn't pass. Please try again.", 403);
+    }
+    if (options.accessFault === "capped") return accessError("CAP_REACHED", ACCESS_CAP_MESSAGE, 429);
+    if (options.accessFault === "retry") {
+      return accessError(
+        "TRY_AGAIN",
+        "We couldn't create access just now. Please try again in a moment.",
+        503,
+      );
+    }
+    return HttpResponse.json(
+      RequestAccessResponse.parse({
+        username: MOCK_ISSUED_USER.username,
+        password: MOCK_PASSWORD,
+        firstName: MOCK_ISSUED_USER.givenName,
+        lastName: MOCK_ISSUED_USER.familyName,
+        expiresAt: new Date(Date.now() + 24 * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z"),
+      }),
+    );
+  });
+
+  return { handlers: [session, chat, requestAccess, ...cognitoHandlers], reset };
 }

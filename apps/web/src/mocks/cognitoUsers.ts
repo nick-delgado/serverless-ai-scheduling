@@ -23,6 +23,14 @@ export interface MockCognitoUser {
   status: "CONFIRMED" | "FORCE_CHANGE_PASSWORD";
 }
 
+/** The temporary patient the mock's `POST /api/request-access` issues (#357); it signs in with MOCK_PASSWORD. */
+export const MOCK_ISSUED_USER = {
+  username: "user-mock0001",
+  sub: "5c4b3a29-1807-4f6e-9d5c-3b2a19087f6e",
+  givenName: "Noor",
+  familyName: "Vance",
+} as const;
+
 export const MOCK_COGNITO_USERS: readonly MockCognitoUser[] = [
   {
     username: "maria.santos",
@@ -35,5 +43,11 @@ export const MOCK_COGNITO_USERS: readonly MockCognitoUser[] = [
     sub: "9a8b7c6d-5e4f-4031-9213-a4b5c6d7e8f9",
     givenName: "Sam",
     status: "FORCE_CHANGE_PASSWORD",
+  },
+  {
+    username: MOCK_ISSUED_USER.username,
+    sub: MOCK_ISSUED_USER.sub,
+    givenName: MOCK_ISSUED_USER.givenName,
+    status: "CONFIRMED",
   },
 ];
