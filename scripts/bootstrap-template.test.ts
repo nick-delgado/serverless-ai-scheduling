@@ -15,8 +15,8 @@
  *     changed, the `Action` and `Resource` lists equal fixed lists, so an added or removed entry fails the test named
  *     for its finding;
  *   - the exec role's service grants (#270's second PR, F-3; r1/Q-2 (a), r1/Q-7 (a)): one statement per service,
- *     its `service:*` action and its resources fixed, no Events, X-Ray, SES or Bedrock grant, and a comment directly
- *     above each statement that keeps `"*"`.
+ *     its `service:*` action and its resources fixed, no X-Ray, SES or Bedrock grant, Events only as the five rule
+ *     actions on `sched-*` rules (#357), and a comment directly above each statement that keeps `"*"`.
  * It also reads `.github/workflows/deploy.yml` as text: its only trigger is `workflow_dispatch`, it has one job, which
  * runs only on `refs/heads/main` in the `dev` environment (which the deploy role's `sub` names) with
  * `id-token: write`, its one credentials step (found as an item of `steps:` whatever its first key, `- uses:` or
@@ -374,7 +374,7 @@ const bedrockArns = (keys: string[] | undefined, partition: string, region: stri
 const INDEX = (createTableInput("t").GlobalSecondaryIndexes ?? []).map((i) => String(i.IndexName));
 
 describe("the permissions boundary's WorkloadServices (#270; F-4, F-23)", () => {
-  it("allows exactly the 14 actions a sched-* workload role grants, on all resources (F-23)", () => {
+  it("allows exactly the 20 actions a sched-* workload role grants, on all resources (F-23, #357)", () => {
     const grant = yamlGrant("WorkloadPermissionsBoundary", "WorkloadServices");
     expect(grant).toEqual({
       Action: [
@@ -392,6 +392,13 @@ describe("the permissions boundary's WorkloadServices (#270; F-4, F-23)", () => 
         "bedrock:InvokeModelWithResponseStream",
         "ses:SendEmail",
         "transcribe:StartStreamTranscriptionWebSocket",
+        // Reviewer access (#357): the request function's four calls, the expiry job's sign-out, and its DeleteItem.
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:AdminUserGlobalSignOut",
+        "dynamodb:DeleteItem",
       ],
       Resource: ["*"],
     });
@@ -594,6 +601,18 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
       resource: [arn("logs", true, "log-group:/aws/lambda/sched-*")],
     },
     {
+      // The expiry job's SAM Schedule event (#357): the five actions a rule and its target need, on sched-* rules.
+      sid: "EventsSchedRules",
+      action: [
+        "events:PutRule",
+        "events:PutTargets",
+        "events:DescribeRule",
+        "events:DeleteRule",
+        "events:RemoveTargets",
+      ],
+      resource: [arn("events", true, "rule/sched-*")],
+    },
+    {
       sid: "CloudWatchSchedAlarmsAndDashboards",
       action: "cloudwatch:*",
       resource: [arn("cloudwatch", true, "alarm:sched-*"), arn("cloudwatch", false, "dashboard/sched-*")],
@@ -616,16 +635,20 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
   it.each(SERVICES)(
     "grants $action on exactly its named resources in $sid (F-3)",
     ({ sid, action, resource }) => {
-      expect(yamlGrant("CfnExecutionRole", sid)).toEqual({ Action: [action], Resource: resource });
+      expect(yamlGrant("CfnExecutionRole", sid)).toEqual({ Action: [action].flat(), Resource: resource });
       expect(entries(yamlStatement("CfnExecutionRole", sid)).Effect).toBe("Allow");
     },
   );
 
-  it("has no WorkloadServiceControlPlanes statement and no Events, X-Ray, SES or Bedrock action (F-3, A-3)", () => {
+  it("has no WorkloadServiceControlPlanes statement, no X-Ray, SES or Bedrock action, and Events only in EventsSchedRules (F-3, A-3, #357)", () => {
     const sids = exec.flatMap((l) => /^\s+- Sid: (\w+)$/.exec(l)?.[1] ?? []);
     expect(sids).not.toContain("WorkloadServiceControlPlanes");
     expect(sids.slice(0, SERVICES.length)).toEqual(SERVICES.map((s) => s.sid));
-    expect(exec.filter((l) => /\b(events|xray|ses|bedrock):/.test(l))).toEqual([]);
+    expect(exec.filter((l) => /\b(xray|ses|bedrock):/.test(l))).toEqual([]);
+    const eventsLines = exec.filter((l) => /\bevents:/.test(l));
+    const inStatement = block(/^\s+- Sid: EventsSchedRules$/, exec).filter((l) => /\bevents:/.test(l));
+    expect(eventsLines.length).toBeGreaterThan(0);
+    expect(eventsLines).toEqual(inStatement);
   });
 
   it('lists the Allow statements with a "*" resource (a list item, quoted, trailing comment or not) as the four Sids that carry a reason comment (F-3, r1/Q-2 (a))', () => {

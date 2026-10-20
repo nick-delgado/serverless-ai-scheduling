@@ -63,6 +63,8 @@ Resources:
   # the effective permissions can never exceed this. WorkloadServices lists only what a sched-*
   # workload role grants today (#270): SAM's log and X-Ray writes, the chat role's DynamoDB item
   # actions, the two Bedrock invokes and SendEmail, and the Identity Pool role's Transcribe call.
+  # Reviewer access (#357) adds the request function's four Cognito admin calls, the expiry job's
+  # sign-out, and DeleteItem for the job (the job is the second part of #357, unused until it lands).
   # A role that needs another action needs a line here first.
   # ---------------------------------------------------------------------------
   WorkloadPermissionsBoundary:
@@ -90,6 +92,12 @@ Resources:
               - bedrock:InvokeModelWithResponseStream
               - ses:SendEmail
               - transcribe:StartStreamTranscriptionWebSocket
+              - cognito-idp:AdminCreateUser
+              - cognito-idp:AdminSetUserPassword
+              - cognito-idp:AdminGetUser
+              - cognito-idp:AdminDeleteUser
+              - cognito-idp:AdminUserGlobalSignOut
+              - dynamodb:DeleteItem
             Resource: "*"
           - Sid: NeverIamOrAccountLevel
             Effect: Deny
@@ -140,6 +148,17 @@ Resources:
                 Effect: Allow
                 Action: logs:*
                 Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sched-*
+              # The SAM Schedule event of the expiry job (#357, second part) creates an EventBridge rule named
+              # from the stack, so it starts with sched-. The five actions are the ones a rule and its target need.
+              - Sid: EventsSchedRules
+                Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:DescribeRule
+                  - events:DeleteRule
+                  - events:RemoveTargets
+                Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/sched-*
               # A dashboard's ARN has no region.
               - Sid: CloudWatchSchedAlarmsAndDashboards
                 Effect: Allow
