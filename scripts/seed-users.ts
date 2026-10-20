@@ -26,14 +26,9 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import {
-  AdminCreateUserCommand,
-  AdminGetUserCommand,
-  AdminSetUserPasswordCommand,
-  CognitoIdentityProviderClient,
-  UsernameExistsException,
-} from "@aws-sdk/client-cognito-identity-provider";
+import { CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { type CognitoAdmin, cognitoAdmin, passwordProblems } from "@sched/api/cognito-admin";
 import { buildClinicFixture, FIXTURE_PATIENT_IDS, type FixturePatientAlias } from "@sched/tools/fixtures";
 
 export const PASSWORD_VAR_PREFIX = "DEMO_PASSWORD_";
@@ -65,16 +60,6 @@ export interface UserMapping {
 /** `pat-maria` → `DEMO_PASSWORD_MARIA`. */
 export function passwordVar(alias: FixturePatientAlias): string {
   return PASSWORD_VAR_PREFIX + alias.replace(/^pat-/, "").toUpperCase();
-}
-
-/** Mirrors the User Pool's policy in infra/stacks/auth.yaml, so a bad .env fails before any AWS call. */
-export function passwordProblems(password: string): string[] {
-  const problems: string[] = [];
-  if (password.length < 12) problems.push("is shorter than 12 characters");
-  if (!/[a-z]/.test(password)) problems.push("has no lowercase letter");
-  if (!/[A-Z]/.test(password)) problems.push("has no uppercase letter");
-  if (!/[0-9]/.test(password)) problems.push("has no number");
-  return problems;
 }
 
 /**
@@ -122,54 +107,6 @@ export function planDemoUsers(vars: Readonly<Record<string, string | undefined>>
     throw new Error(`No demo users configured: set at least one of ${[...known].join(", ")} in .env`);
   }
   return specs;
-}
-
-/** The three User Pool admin operations the seed needs, so tests can run without AWS. */
-export interface CognitoAdmin {
-  /** Creates the user without sending any message. Resolves false when the username already exists. */
-  createUser(spec: DemoUserSpec): Promise<boolean>;
-  getSub(username: string): Promise<string>;
-  setPermanentPassword(username: string, password: string): Promise<void>;
-}
-
-export function cognitoAdmin(client: CognitoIdentityProviderClient, userPoolId: string): CognitoAdmin {
-  return {
-    async createUser(spec) {
-      try {
-        await client.send(
-          new AdminCreateUserCommand({
-            UserPoolId: userPoolId,
-            Username: spec.username,
-            MessageAction: "SUPPRESS",
-            UserAttributes: [
-              { Name: "given_name", Value: spec.givenName },
-              { Name: "family_name", Value: spec.familyName },
-            ],
-          }),
-        );
-        return true;
-      } catch (err) {
-        if (err instanceof UsernameExistsException) return false;
-        throw err;
-      }
-    },
-    async getSub(username) {
-      const out = await client.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: username }));
-      const sub = out.UserAttributes?.find((a) => a.Name === "sub")?.Value;
-      if (!sub) throw new Error(`User ${username} has no sub attribute`);
-      return sub;
-    },
-    async setPermanentPassword(username, password) {
-      await client.send(
-        new AdminSetUserPasswordCommand({
-          UserPoolId: userPoolId,
-          Username: username,
-          Password: password,
-          Permanent: true,
-        }),
-      );
-    },
-  };
 }
 
 /** Creates (or finds) each user, sets the permanent password, and returns the alias → sub rows. */

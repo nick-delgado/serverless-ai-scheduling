@@ -6,7 +6,9 @@ Description: >-
   over the single table and Bedrock Converse, and streams NDJSON events. POST /api/session (S3-04, #18)
   returns the templated greeting and the current conversation, read-only, with no model call. The chat
   function may send the escalation email through SES (#35), and an alarm watches failed sends. A
-  dashboard shows the chat function's metrics, and X-Ray traces the chat function (#38).
+  dashboard shows the chat function's metrics, and X-Ray traces the chat function (#38). Where RequestAccess is
+  "on", POST /api/request-access (#357) is the API's one public route: it checks a Cloudflare Turnstile token, then
+  creates a temporary synthetic reviewer patient, within a daily cap and an active cap.
 
 Parameters:
   Env:
@@ -49,11 +51,52 @@ Parameters:
     Default: ""
     NoEcho: true
     Description: Front-desk address that receives escalation emails (a verified identity in the SES sandbox).
+  # The reviewer access page (#357). Off everywhere unless an env turns it on; PR 1 turns it on only for the
+  # ephemeral check env (`-- RequestAccess=on`). The expiry job (PR 2) must exist before any env that keeps state
+  # does: accounts that never expire contradict the issue's expiry criterion (r1/Q-2 (b)).
+  RequestAccess:
+    Type: String
+    Default: "off"
+    AllowedValues: ["on", "off"]
+    Description: >-
+      "on" creates POST /api/request-access (the API's one public route) and its function. scripts/deploy.sh
+      refuses "on" without TURNSTILE_SECRET. The web stack's build reads the result from
+      /sched/<env>/api/request-access (scripts/deploy-web.sh).
+  RequestAccessDailyCap:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Temporary accounts issued per clinic-local day (ADR-009, #357). The ephemeral live check passes 2.
+  RequestAccessActiveCap:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    Description: Temporary accounts in the registry at once (ADR-009, #357). The ephemeral live check passes 2.
+  RequestAccessExpiryHours:
+    Type: Number
+    Default: 24
+    MinValue: 1
+    Description: Hours before a temporary account is due for deletion (the registry's expiry; the job is PR 2 of #357).
+  # Cloudflare Turnstile's secret key (r1/Q-1 (a)). scripts/deploy.sh passes it from TURNSTILE_SECRET (the
+  # git-ignored .env), the way it passes the SES addresses. It reaches the function as an environment variable.
+  TurnstileSecret:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Cloudflare Turnstile secret key that the request-access function verifies tokens with.
+  # The hostname Cloudflare must report for a valid token (the env's CloudFront domain, which the web stack, deployed
+  # after this one, creates). Empty skips the check; Cloudflare's test secret keys report "localhost".
+  TurnstileExpectedHostname:
+    Type: String
+    Default: ""
+    Description: Hostname a Turnstile token must have been issued on. Empty means not checked.
 
 Conditions:
   SesConfigured: !And
     - !Not [!Equals [!Ref SesSender, ""]]
     - !Not [!Equals [!Ref SesStaffRecipient, ""]]
+  # PR 2 of #357 adds `Env is demo` (r1/Q-4 (a)) when the expiry job lands; until then only the parameter turns it on.
+  RequestAccessOn: !Equals [!Ref RequestAccess, "on"]
 
 Globals:
   Function:
@@ -347,6 +390,75 @@ Resources:
               Resource:
                 - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
 
+  # ---------------------------------------------------------------------------------------------
+  # POST /api/request-access: the one public route (#357). Only where RequestAccess is "on".
+  # No authorizer: the bot check and the two caps are its gates, and the stage throttle covers it. It grants only
+  # what it calls: the two item writes of its transactions on the base table (no read, no delete, no index) and
+  # four Cognito admin calls on this env's pool. The permissions boundary (bootstrap.yaml) lists the same actions.
+  # ---------------------------------------------------------------------------------------------
+  RequestAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: RequestAccessOn
+    Properties:
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-request-access
+      RetentionInDays: 14
+
+  RequestAccessFunction:
+    Type: AWS::Serverless::Function
+    Condition: RequestAccessOn
+    Metadata:
+      BuildMethod: makefile
+      WorkingDirectory: ../..
+    Properties:
+      FunctionName: !Sub sched-${Env}-api-request-access
+      Description: POST /api/request-access (#357). Bot check, then a temporary synthetic patient with its sign-in details, once.
+      CodeUri: ../../services/api
+      Handler: index.handler
+      Timeout: 20
+      Environment:
+        Variables:
+          TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
+          USER_POOL_ID: !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-id}}"
+          TURNSTILE_SECRET: !Ref TurnstileSecret
+          TURNSTILE_EXPECTED_HOSTNAME: !Ref TurnstileExpectedHostname
+          ACCESS_DAILY_CAP: !Ref RequestAccessDailyCap
+          ACCESS_ACTIVE_CAP: !Ref RequestAccessActiveCap
+          ACCESS_EXPIRY_HOURS: !Ref RequestAccessExpiryHours
+          NODE_OPTIONS: --enable-source-maps
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref RequestAccessLogGroup
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            # Its transactions write items: Put (the registry entry, the profile) and Update (the counters, the
+            # entry's sub). Nothing is read, deleted or queried here.
+            - Sid: RegistryAndProfileWrites
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
+            - Sid: CreateAndDeleteTemporaryUsers
+              Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminDeleteUser
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"
+
+  RequestAccessApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: RequestAccessOn
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt RequestAccessFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/request-access
+
   ChatApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -397,6 +509,17 @@ Resources:
                 httpMethod: POST
                 uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SessionFunction.Arn}/invocations
                 timeoutInMillis: 10000
+          # The API's one public method (#357): no `security`, so API Gateway runs no authorizer. Only where the page is on.
+          /api/request-access: !If
+            - RequestAccessOn
+            - post:
+                summary: Request a temporary demo patient (RequestAccessResponse). Body is a Turnstile token.
+                x-amazon-apigateway-integration:
+                  type: aws_proxy
+                  httpMethod: POST
+                  uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RequestAccessFunction.Arn}/invocations
+                  timeoutInMillis: 20000
+            - !Ref AWS::NoValue
         components:
           securitySchemes:
             # No OAuth scopes on the method, so the authorizer validates the Cognito *ID* token.
@@ -457,6 +580,14 @@ Resources:
       Name: !Sub /sched/${Env}/api/stage-name
       Type: String
       Value: !Ref ChatApi.Stage
+
+  # Whether the request page is on (#357, r1/Q-4 (a)). scripts/deploy-web.sh reads it to set VITE_REQUEST_ACCESS.
+  RequestAccessParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sched/${Env}/api/request-access
+      Type: String
+      Value: !If [RequestAccessOn, "on", "off"]
 
 Outputs:
   RestApiId:
