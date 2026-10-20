@@ -130,4 +130,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-19 | [Escalations now expire after 30 days, and PITR probably keeps them restorable for 35 more](2026-10-19-escalations-now-expire-after-30-days-pitr-stays-at-35.md) | 5. What the evals showed |
 | 2026-10-19 | [The exec role gets one statement per service](2026-10-19-the-exec-role-gets-one-statement-per-service.md) | 5. What the evals showed |
 | 2026-10-19 | [A line before the first lookup: one required sentence, measured on two clinic-local days](2026-10-19-a-line-before-the-first-lookup.md) | 5. What the evals showed |
-| 2026-10-20 | [The whole env gets its own daily turn cap, counted in the same transaction as the patient's](2026-10-20-the-env-gets-its-own-daily-turn-cap.md) | 5. What the evals showed |
+| 2026-10-20 | [The whole env gets its own daily turn cap, counted in the same transaction as the patient's](2026-10-20-the-env-gets-its-own-daily-turn-cap.md) | 6. What I'd do next |

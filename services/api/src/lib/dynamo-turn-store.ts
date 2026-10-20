@@ -7,7 +7,7 @@
  * | Env-wide daily turn counter (#356) | `ENV` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`, `expiresAt` as above |
  * | Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `trace` (JSON string), `expiresAt` = start + 30 days |
  *
- * Neither prefix collides with an existing query: patient queries use `APPT#`/`CONV#`, conversation
+ * None of these keys collides with an existing query: patient queries use `APPT#`/`CONV#`, conversation
  * reads use `MSG#`, and the escalation is the fixed `ESC` key. `ENV` is no prefix of any `keys` partition key.
  *
  * Counting a turn is one `TransactWriteItems` with two conditional updates (patient, then env), so a
@@ -39,7 +39,10 @@ const counterExpiresAt = (day: string): number =>
 const backoff = (attempt: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt + Math.random() * 20));
 
-/** Partition keys come from `@sched/tools/dynamo`'s `keys`, so the prefixes have one definition. */
+/**
+ * The patient and trace partition keys come from `@sched/tools/dynamo`'s `keys`, so those prefixes have one
+ * definition. The env counter's `ENV` is this store's own literal: no other item has it.
+ */
 export const turnKeys = {
   dailyTurns: (patientId: PatientId, day: string) => ({ PK: keys.patient(patientId).PK, SK: `TURNS#${day}` }),
   /** The whole env's turns for the day (#356, ADR-004 amendment). */

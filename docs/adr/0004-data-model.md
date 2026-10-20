@@ -118,7 +118,7 @@ The chat handler (#17) adds two item types for ADR-009's daily turn cap and FR-0
 
 | Entity | PK | SK | Notes |
 |---|---|---|---|
-| Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`; `UpdateItem` `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap`, so concurrent turns can't overshoot; `expiresAt` = two days after the day ends (UTC) | *(Counted with the env counter in one transaction since #356: see the [amendment of 2026-10-20](#amendment-2026-10-20-the-env-wide-turn-counter-356).)*
+| Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`; `UpdateItem` `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap`, so concurrent turns can't overshoot; `expiresAt` = two days after the day ends (UTC) *(Counted with the env counter in one transaction since #356: see the [amendment of 2026-10-20](#amendment-2026-10-20-the-env-wide-turn-counter-356).)* |
 | Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `outcome`, the `TurnTrace` as an opaque JSON string; `PutItem` with `attribute_not_exists(PK)`; `expiresAt` = turn start + 30 days |
 
 Neither prefix collides with an existing query: patient queries use `APPT#` and `CONV#`, conversation reads use `MSG#`, and the escalation is the fixed `ESC` key. Traces hold tool inputs (patient free text), so they stay out of CloudWatch (ADR-009).

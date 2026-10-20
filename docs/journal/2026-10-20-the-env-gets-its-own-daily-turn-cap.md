@@ -1,7 +1,7 @@
 # 2026-10-20 — The whole env gets its own daily turn cap, counted in the same transaction as the patient's
 
-**Chapter:** 5. What the evals showed
-**Milestone:** M3
+**Chapter:** 6. What I'd do next
+**Milestone:** M4
 **Related:** #356 (first of two PRs), PR #358, #44, #357, #273, ADR-009, ADR-004, PRD FR-015, FR-017, NFR-004
 
 ## What happened
@@ -19,14 +19,14 @@ Decisions Nick settled on #356 (r1/Q-1, Q-2, Q-3, Q-7, A-1 to A-8) are on the is
 - **One call counts both caps: `consumeDailyTurn(patientId, day, { patient, env })`.** The alternative, a second store method for the env counter called after the patient's, would let a turn the env refuses still use up the patient's count, which the issue forbids.
 - **The result says which cap refused: `{ ok: false, refusedBy: "patient" | "env" }`.** A transaction returns no attributes, so the old `used` count is gone (A-2). The log carries `capRefusedBy` where it carried `turnsUsedToday`, because a refusal is the fact an operator wants.
 - **A cancellation with `ConditionalCheckFailed` in either position is a refusal, even when the other item only conflicted.** A conflict on the patient's item with a failed condition on the env's reads as an env refusal and is never retried. The alternative, retrying until both items report cleanly, could spin on a cap that will not open.
-- **A conflict-only cancellation is retried at most 5 times, with the backoff of the tools package, then rethrown (Q-7 (b)).** The copy is local, as the answer says. The turn then fails as any thrown store error does.
+- **A conflict-only cancellation is attempted at most 5 times (4 retries), with the backoff of the tools package, then rethrown (Q-7 (b)).** The copy is local, as the answer says. The turn then fails as any thrown store error does.
 - **The env message is the same on every env.** "This demo has reached today's limit" is true wherever it shows (Q-3), and the SPA needs no change: it shows a non-retryable message as it is.
 - **FR-017 gets the env cap too, not only FR-015's list of messages.** A-4 names FR-015; FR-017 is the PRD's "usage limits" row and would otherwise read as if the patient's cap were the only one. The agent added a sentence there and traceability rows for FR-015, FR-017 and NFR-004.
 - **The ADR amendments need two edits outside the issue's list:** `docs/adr/README.md`'s two index rows, because `scripts/adr-history.test.ts` requires each amendment's date in the ADR's row.
 
 ## What surprised us
 
-- **DynamoDB Local never reports `TransactionConflict`.** A-1 asked us to confirm that concurrent transactions on the env item can be cancelled with it. The agent sent 20 simultaneous turns from 20 patients at one env item on DynamoDB Local: all 20 counted, no cancellation at all (a scratch test, not kept). That is what [the retry-path entry](2026-09-29-dynamodb-local-is-too-polite.md) found for bookings: Local doesn't produce the cancellation the real service does. So the retry is tested with a fake `send` that throws a conflict-only `TransactionCanceledException` and then succeeds, and the race test (N-1 of N used, two patients at once) shows exactly one counted whether or not a conflict occurred. Whether the real service cancels is for the live check.
+- **DynamoDB Local never reports `TransactionConflict`.** A-1 asked us to confirm that concurrent transactions on the env item can be cancelled with it. The agent sent 20 simultaneous turns from 20 patients at one env item on DynamoDB Local: all 20 counted, no cancellation at all (a scratch test against the store as committed in `2ceb9d5`, not kept; no result file recorded the run, so the count is the agent's report). That is what [the retry-path entry](2026-09-29-dynamodb-local-is-too-polite.md) found for bookings: Local doesn't produce the cancellation the real service does. So the retry is tested with a fake `send` that throws a conflict-only `TransactionCanceledException` and then succeeds, and the race test (N-1 of N used, two patients at once) shows exactly one counted whether or not a conflict occurred. Whether the real service cancels is for the live check.
 - **The first transaction in `aws.local.test.ts` was no longer the booking's.** That test injects one `TransactionConflict` into the first transaction and expects the booking to retry once. The turn counter is now a transaction too, so it took the injected conflict (and its own retry absorbed it) and the booking's retry count read 0. The turn count moved after the booking in the test.
 - **Our first mutation run read KILLED-OTHER on every row.** `npm test -w services/api` isn't recognised as Vitest by `npm run mutate`, so no failed-test names came back to match the `expect` lists. `npx vitest run --root services/api` is.
 
