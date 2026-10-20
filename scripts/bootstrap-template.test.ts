@@ -24,7 +24,7 @@
  * under `scripts/` but the two calls with `dev`, which are two steps' `run:` values (one line or a `run: |` body).
  * It reads `.github/workflows/e2e.yml` the same way (#40, decision 607c339/TEST-201 (a) on PR #262): its trigger, its
  * concurrency group, its one job and environment, its credentials step, the order of its deploy, reseed and test
- * steps, the deploy's turn cap and SES secrets, which steps get the config-only profile or an empty `AWS_PROFILE`, and
+ * steps, the deploy's turn caps and SES secrets, which steps get the config-only profile or an empty `AWS_PROFILE`, and
  * the patient's password: from which secret the env-file step writes `$RUNNER_TEMP/e2e.env` (owner-only), which the
  * Cognito reseed reads, and which the suite's step gets.
  * The files are read with the shared reader, scripts/test/yaml-text.ts (#157).
@@ -282,7 +282,7 @@ describe("the E2E workflow (.github/workflows/e2e.yml; 607c339/TEST-201 (a) on P
     expect(names.filter((n) => order.includes(n))).toEqual(order);
   });
 
-  it("deploys e2e with the turn cap and the escalation email's SES secrets (r1/A-7, r1/Q-5 (b))", () => {
+  it("deploys e2e with both turn caps and the escalation email's SES secrets (r1/A-7, r1/Q-5 (b))", () => {
     expect(entries(step("Deploy the stacks")).run).toBe(
       "scripts/deploy.sh all e2e -- DailyTurnCap=500 EnvDailyTurnCap=1000",
     );
