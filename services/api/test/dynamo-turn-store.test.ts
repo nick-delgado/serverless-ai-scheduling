@@ -154,6 +154,15 @@ describe("createDynamoTurnStore", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("rethrows a cancellation that names no reasons, without retrying", async () => {
+    const bare = cancelled();
+    delete (bare as { CancellationReasons?: unknown }).CancellationReasons;
+    const { doc, sent } = failing(bare, bare);
+    const store = createDynamoTurnStore({ tableName: "t", doc });
+    await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toBe(bare);
+    expect(sent).toHaveLength(1);
+  });
+
   it("rethrows other errors", async () => {
     const { doc } = fakeDoc(() => {
       throw new Error("network");

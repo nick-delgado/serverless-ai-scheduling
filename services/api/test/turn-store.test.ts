@@ -47,6 +47,7 @@ describe("createInMemoryTurnStore", () => {
     });
     expect(store.turnsUsed(OTHER, "2026-10-05")).toBe(1);
     expect(store.envTurnsUsed("2026-10-05")).toBe(2);
+    expect(store.envTurnsUsed("2026-10-09")).toBe(0);
     // The next day starts fresh.
     expect(await store.consumeDailyTurn(OTHER, "2026-10-06", caps(5, 2))).toEqual({ ok: true });
   });
