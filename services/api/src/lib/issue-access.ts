@@ -29,7 +29,7 @@ import {
 import { clinicDateOf, type Clock } from "@sched/tools";
 
 import type { AccessCaps, AccessReservation, AccessStore } from "./access-store";
-import { cryptoRandomInt, newIdentity, newPassword, newUsername, type RandomInt } from "./access-identity";
+import { newIdentity, newPassword, newUsername, type RandomInt } from "./access-identity";
 import type { BotVerifier } from "./bot-check";
 import type { CognitoAdmin } from "./cognito-admin";
 import { jsonResponse, type ProxyResult } from "./http";
