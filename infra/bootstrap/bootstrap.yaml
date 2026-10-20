@@ -40,9 +40,10 @@ Parameters:
       DemoTranscribeRoleName is set.
   DemoBackstopServices:
     Type: CommaDelimitedList
-    Default: Amazon Transcribe
+    Default: Transcribe
     Description: >-
-      The Cost Explorer service names the backstop budget counts. Account-wide, since Transcribe spend can't be
+      The Cost Explorer service names the backstop budget counts ("Transcribe", as Nick read it in Cost Explorer's
+      Service grouping on 2026-10-20). Account-wide, since Transcribe spend can't be
       attributed to demo; valid only while no CI or eval job calls Transcribe.
   DemoTranscribeRoleName:
     Type: String

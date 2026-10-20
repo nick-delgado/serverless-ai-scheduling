@@ -104,7 +104,7 @@ Two caps count new turns per clinic-local day (ADR-009 and its 2026-10-20 amendm
 Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's second 2026-10-20 amendment). It lives in the bootstrap stack, not in an env's stacks, so no `deploy.sh` command sets it: Nick sets its threshold and target with the bootstrap apply (`DemoBackstopUsd`, default 10; `DemoTranscribeRoleName`, `demo`'s Identity Pool role), and the steps are in [`aws-setup.md`](aws-setup.md), "The demo spend backstop".
 
 - **Redeploying `demo`'s `auth` stack** can replace the Identity Pool role the backstop targets. After such a deploy, run the standby check there; if the role's name changed, re-apply the bootstrap with the new one.
-- **What a patient sees when it trips:** voice recording fails as a failed Transcribe connection does today; text chat is unaffected. Chat spend is bounded by the caps above, not by the backstop; there is no Bedrock backstop.
+- **What a patient sees when it trips:** voice recording fails as a failed Transcribe connection does today; text chat is unaffected. Chat spend is bounded by the caps above, not by the backstop; there is no Bedrock backstop; to stop `demo`'s spend by hand see [`aws-setup.md`](aws-setup.md), "Stopping `demo`'s spend by hand".
 - **Reset:** Nick reverses the action with `aws budgets execute-budget-action ... REVERSE_BUDGET_ACTION` (`aws-setup.md` has the commands). AWS documents that the action resets at the start of the next budget month.
 
 ## Teardown

@@ -106,7 +106,7 @@ When a PR changes `infra/bootstrap/sched-deployer-policy.json`, check the CI rol
 
 ### The demo spend backstop (#356)
 
-Bootstrap creates it only when `DemoTranscribeRoleName` is set, so no env but `demo` has one (ADR-009's second 2026-10-20 amendment). It is a monthly cost budget, `sched-demo-backstop`, on **Amazon Transcribe** spend only; it counts the whole account's Transcribe spend, since nothing attributes Transcribe to one env. At 80% of actual spend it emails `BudgetAlertEmail`. At 100% of actual spend, with no approval step, AWS Budgets attaches the policy `sched-demo-backstop-deny` (it denies `transcribe:StartStreamTranscriptionWebSocket`) to `demo`'s Identity Pool role, so voice stops and text chat keeps working. There is no Bedrock backstop (the ADR says why; the follow-up is tracked in the journal entry).
+Bootstrap creates it only when `DemoTranscribeRoleName` is set, so no env but `demo` has one (ADR-009's second 2026-10-20 amendment). It is a monthly cost budget, `sched-demo-backstop`, on **Amazon Transcribe** spend only; it counts the whole account's Transcribe spend, since nothing attributes Transcribe to one env. At 80% of actual spend it emails `BudgetAlertEmail`. At 100% of actual spend, with no approval step, AWS Budgets attaches the policy `sched-demo-backstop-deny` (it denies `transcribe:StartStreamTranscriptionWebSocket`) to `demo`'s Identity Pool role, so voice stops and text chat keeps working. There is no Bedrock backstop (the ADR says why; Nick stops Bedrock spend by hand, "Stopping `demo`'s spend by hand", below).
 
 **Turn it on** (admin; the first apply after #356's PR merges). Read the role's name from `demo`'s auth stack, then apply with it. `DemoBackstopUsd` defaults to 10 USD and keeps its value on later applies:
 
@@ -121,7 +121,7 @@ aws cloudformation deploy --profile sched-admin --region us-east-1 \
   --parameter-overrides DemoTranscribeRoleName="$ROLE"
 ```
 
-Before the apply, check the service name the budget counts: in **Billing and Cost Management → Cost Explorer**, group by **Service** over a month with voice use, and look for the name Transcribe charges appear under. If it isn't `Amazon Transcribe`, add `DemoBackstopServices="<name>"` to the overrides. The apply also creates the role `sched-budgets-action` (the `CAPABILITY_NAMED_IAM` it already needs).
+The budget counts the Cost Explorer service `Transcribe` (`DemoBackstopServices`), the name Nick read in Cost Explorer's Service grouping on 2026-10-20; if a later look shows the charges under another name, add `DemoBackstopServices="<name>"` to the overrides. The apply also creates the role `sched-budgets-action` (the `CAPABILITY_NAMED_IAM` it already needs).
 
 **Check it is on standby.** After the apply, and after any `demo` redeploy of the `auth` stack (which can replace the Identity Pool role: then the name above is stale, the action fails to attach, and you re-run the apply with the new name):
 
@@ -149,6 +149,24 @@ aws budgets execute-budget-action --profile sched-admin --account-id "$ACCT" --b
 ```
 
 Raising the limit is `--parameter-overrides DemoBackstopUsd=<n>` on the bootstrap apply. To remove the backstop, apply with `DemoTranscribeRoleName=""`: CloudFormation deletes the budget, the action, the policy and the role (reverse the action first if it has run, since a managed policy that is still attached can't be deleted).
+
+### Stopping `demo`'s spend by hand
+
+There is no automated Bedrock backstop (Nick's decision on [#356](https://github.com/nick-delgado/serverless-ai-scheduling/issues/356#issuecomment-6298468468)): a budget that counted only `demo`'s Bedrock spend can't be built without changing the model IDs the agent calls (ADR-009, second 2026-10-20 amendment). Nick stops it himself. **The budget emails don't say which env is spending.** `sched-bedrock-monthly` counts the CI eval gate and local eval runs too, and `sched-monthly` counts the whole account, so an email is a reason to look, not proof that `demo` is the cause. `demo` also gets a lower `EnvDailyTurnCap` than the template default of 200 on its next deploy, as an interim bound (the value and the deploy are Nick's).
+
+1. **In-band: lower the env's daily turn cap** (preferred: reversible, leaves no drift). `EnvDailyTurnCap` has a minimum of 1, so this allows one new turn a day, across all patients, from the next request:
+
+   ```bash
+   scripts/deploy.sh api demo -- EnvDailyTurnCap=1
+   ```
+
+   It takes about 2 minutes. The stack's template and its parameters still agree, so nothing drifts. Undo it by deploying again with a higher value (`scripts/deploy.sh api demo -- EnvDailyTurnCap=<n>`). The value persists across later deploys until it is changed (`sam deploy` reuses the stack's previous value for a parameter the command doesn't name: `deploy-env.md`, "Daily turn caps", verified on #356's first PR), so a routine `demo` redeploy keeps the low cap. It doesn't stop Transcribe; the voice backstop above, or the same deny policy attached by hand, does.
+
+2. **Out-of-band, if the in-band route isn't enough or can't run.** Each of these changes a resource CloudFormation owns, so the stack no longer matches what is deployed (drift CloudFormation doesn't know about), and a later `deploy.sh` may or may not put it back; undo it by hand before the next `demo` deploy.
+   - **Disable `demo`'s CloudFront distribution.** The distribution is in `sched-demo-web`; find its ID in that stack's resources. The CloudFront API replaces the whole configuration ([AWS CLI `update-distribution`](https://docs.aws.amazon.com/cli/latest/reference/cloudfront/update-distribution.html)): read it with `aws cloudfront get-distribution-config --id <id>`, keep the returned `ETag`, set `Enabled` to `false` in the returned `DistributionConfig`, and send it back with `aws cloudfront update-distribution --id <id> --distribution-config <file> --if-match <ETag>`. This takes the SPA and anything served through the distribution offline. Undo: the same steps with `Enabled` set back to `true`, with the new `ETag`.
+   - **Change the API stage's throttling.** `aws apigateway update-stage --rest-api-id <id> --stage-name <stage> --patch-operations ...` changes a stage's method settings ([AWS CLI `update-stage`](https://docs.aws.amazon.com/cli/latest/reference/apigateway/update-stage.html)); the stage's throttle (rate 5, burst 10 on every method) is one of them. The CLI page gives no throttling example, so read the stage's current settings first (`aws apigateway get-stage`), change the rate and burst limits there, and note the original values (5 and 10) to restore. Undo: patch them back to 5 and 10, or redeploy `api`.
+
+Check what `demo` holds before and after: `aws cloudformation describe-stacks --stack-name sched-demo-api --query "Stacks[0].Parameters"` shows the cap. Nothing in this section has been run against `demo`.
 
 ### CI credentials (GitHub OIDC)
 

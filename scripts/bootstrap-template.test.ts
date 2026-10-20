@@ -682,10 +682,10 @@ describe("the demo spend backstop (#356; r1/Q-4 (a), r1/Q-5 (a), r1/Q-6 (b))", (
     });
   });
 
-  it("counts Amazon Transcribe by default, in the budget's one Service filter (r1/Q-6 (b))", () => {
+  it("counts Transcribe by default, in the budget's one Service filter (r1/Q-6 (b))", () => {
     expect(entries(parameter("DemoBackstopServices"))).toMatchObject({
       Type: "CommaDelimitedList",
-      Default: "Amazon Transcribe",
+      Default: "Transcribe",
     });
     const budget = block(/^\s+Budget:$/, properties("DemoBackstopBudget"));
     expect(bodyLines(block(/^\s+CostFilters:$/, budget))).toEqual(["  Service: !Ref DemoBackstopServices"]);
