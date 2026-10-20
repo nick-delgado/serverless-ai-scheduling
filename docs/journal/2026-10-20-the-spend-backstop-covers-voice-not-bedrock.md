@@ -2,7 +2,7 @@
 
 **Chapter:** 6. What I'd do next
 **Milestone:** M4
-**Related:** #356 (second of two PRs), PR #TBD, PR #358, #357, #44, ADR-009, PRD NFR-004
+**Related:** #356 (second of two PRs), PR #359, PR #358, #357, #44, ADR-009, PRD NFR-004
 
 ## What happened
 
