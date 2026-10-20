@@ -79,11 +79,14 @@ export function Turnstile({ siteKey, onToken, onUnavailable, ref }: TurnstilePro
   }));
 
   useEffect(() => {
+    const element = container.current;
+    if (!element) return;
     let cancelled = false;
     loadTurnstile().then(
       (api) => {
-        if (cancelled || !container.current) return;
-        const id = api.render(container.current, {
+        // The page went away (or the key changed) while the script loaded.
+        if (cancelled) return;
+        const id = api.render(element, {
           sitekey: siteKey,
           callback: (token) => callbacks.current.onToken(token),
           "expired-callback": () => callbacks.current.onToken(undefined),

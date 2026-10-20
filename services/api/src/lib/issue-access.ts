@@ -121,7 +121,7 @@ async function issue(
       : { outcome: "try_again", result: failure("TRY_AGAIN") };
   }
 
-  const random = deps.random ?? cryptoRandomInt;
+  const { random } = deps;
   const now = deps.clock.now();
   const accessExpiresAt = isoSeconds(new Date(now.getTime() + deps.config.expiryHours * 3_600_000));
   const reservation: AccessReservation = {

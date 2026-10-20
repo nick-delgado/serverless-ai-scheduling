@@ -107,7 +107,11 @@ function setup(
       return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
     })(),
     log: (entry) => logs.push(entry),
-    monotonicNow: () => 0,
+    // Two reads per request (start and end), 12.4 ms apart: the log rounds the difference.
+    monotonicNow: (() => {
+      let t = 100;
+      return () => (t += 12.4);
+    })(),
   };
   return { deps, store, steps, logs, users, verifierCalls };
 }
@@ -137,6 +141,12 @@ describe("issuing an account", () => {
     expect(res.headers["Cache-Control"]).toBe("no-store");
     // The password in the response is the one set on the user.
     expect(f.users.get(body.username)?.password).toBe(body.password);
+  });
+
+  it("keys the registry entry on the request ID it was given", async () => {
+    const f = setup();
+    await call(f);
+    expect(f.store.issued[0]?.requestId).toBe("00000000-0000-4000-8000-000000000001");
   });
 
   it("writes a profile the Patient contract accepts, keyed on the sub, with the same name the page shows", async () => {
@@ -420,7 +430,7 @@ describe("what is logged (A-7)", () => {
   it("carries the request ID, the outcome and timings, and nothing else", async () => {
     const f = setup();
     await call(f);
-    expect(f.logs).toEqual([{ msg: "request-access", requestId: "req-1", outcome: "issued", totalMs: 0 }]);
+    expect(f.logs).toEqual([{ msg: "request-access", requestId: "req-1", outcome: "issued", totalMs: 12 }]);
   });
 
   it.each([
