@@ -17,7 +17,7 @@ const POOL = SSM["/sched/dev/auth/user-pool-id"] ?? "";
 
 // Writes apps/web/dist like Vite does, unless FAKE_BUILD says otherwise.
 const FAKE_NPM = `#!/usr/bin/env bash
-echo "npm $* VITE_USER_POOL_ID=\${VITE_USER_POOL_ID-unset} VITE_SPA_CLIENT_ID=\${VITE_SPA_CLIENT_ID-unset} VITE_IDENTITY_POOL_ID=\${VITE_IDENTITY_POOL_ID-unset}" >> "$FAKE_LOG"
+echo "npm $* VITE_USER_POOL_ID=\${VITE_USER_POOL_ID-unset} VITE_SPA_CLIENT_ID=\${VITE_SPA_CLIENT_ID-unset} VITE_IDENTITY_POOL_ID=\${VITE_IDENTITY_POOL_ID-unset} VITE_REQUEST_ACCESS=\${VITE_REQUEST_ACCESS-unset} VITE_TURNSTILE_SITE_KEY=\${VITE_TURNSTILE_SITE_KEY-unset}" >> "$FAKE_LOG"
 [[ "\${FAKE_BUILD:-}" == "none" ]] && exit 0
 mkdir -p apps/web/dist/assets
 [[ "\${FAKE_BUILD:-}" == "no-index" ]] || echo '<!doctype html><script src="/assets/index-abc123.js"></script>' > apps/web/dist/index.html
@@ -26,7 +26,9 @@ pool="$VITE_USER_POOL_ID"
 [[ "\${FAKE_BUILD:-}" == "no-pool" ]] && pool=""
 identity_pool="$VITE_IDENTITY_POOL_ID"
 [[ "\${FAKE_BUILD:-}" == "no-identity-pool" ]] && identity_pool=""
-echo "const c={userPoolId:\\"$pool\\",identityPoolId:\\"$identity_pool\\"}" > apps/web/dist/assets/index-abc123.js
+site_key="$VITE_TURNSTILE_SITE_KEY"
+[[ "\${FAKE_BUILD:-}" == "no-site-key" ]] && site_key=""
+echo "const c={userPoolId:\\"$pool\\",identityPoolId:\\"$identity_pool\\",turnstileSiteKey:\\"$site_key\\"}" > apps/web/dist/assets/index-abc123.js
 `;
 
 let sb: Sandbox;
@@ -58,7 +60,7 @@ beforeEach(() => {
   sb = sandbox({
     prefix: "sched-deploy-web-",
     files: ["scripts/deploy-web.sh"],
-    write: { ".gitignore": "apps/web/dist/\n" },
+    write: { ".gitignore": "apps/web/dist/\n.env\n" },
     standIns: { npm: FAKE_NPM },
   });
   setSsm(SSM);
@@ -75,7 +77,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     expect(status, out).toBe(0);
 
     expect(builds(calls)).toEqual([
-      `npm run build -w apps/web VITE_USER_POOL_ID=${POOL} VITE_SPA_CLIENT_ID=${SSM["/sched/dev/auth/spa-client-id"] ?? ""} VITE_IDENTITY_POOL_ID=${SSM["/sched/dev/auth/identity-pool-id"] ?? ""}`,
+      `npm run build -w apps/web VITE_USER_POOL_ID=${POOL} VITE_SPA_CLIENT_ID=${SSM["/sched/dev/auth/spa-client-id"] ?? ""} VITE_IDENTITY_POOL_ID=${SSM["/sched/dev/auth/identity-pool-id"] ?? ""} VITE_REQUEST_ACCESS=off VITE_TURNSTILE_SITE_KEY=`,
     ]);
     const bucket = "s3://sched-dev-web-000000000000";
     expect(syncs(calls)).toEqual([
@@ -240,5 +242,86 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
     const { status, out } = run([env, "--dry-run"]);
     expect(status).toBe(1);
     expect(out).toContain(`missing SSM parameters (deploy the auth and web stacks for '${env}' first)`);
+  });
+  describe("the reviewer access page (#357)", () => {
+    // Cloudflare's documented always-passes test site key; public, and it names no real widget.
+    const SITE_KEY = "1x00000000000000000000AA";
+    const DOTENV_KEY = "dotenv-site-key-0000000000";
+    const REQUEST = "/sched/dev/api/request-access";
+    const lastBuild = (calls: string[]) => builds(calls).at(-1) ?? "";
+
+    it("builds with the page off when the parameter is missing, and ignores a site key it was given", () => {
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain("VITE_REQUEST_ACCESS=off VITE_TURNSTILE_SITE_KEY=");
+      expect(lastBuild(r.calls)).not.toContain(SITE_KEY);
+    });
+
+    it("builds with the page off when the parameter says off", () => {
+      setSsm({ ...SSM, [REQUEST]: "off" });
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain("VITE_REQUEST_ACCESS=off VITE_TURNSTILE_SITE_KEY=");
+    });
+
+    it("reads anything but exactly 'on' as off", () => {
+      setSsm({ ...SSM, [REQUEST]: "ON " });
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain("VITE_REQUEST_ACCESS=off");
+    });
+
+    it("builds with the page on and the site key from the environment when the parameter says on", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain(`VITE_REQUEST_ACCESS=on VITE_TURNSTILE_SITE_KEY=${SITE_KEY}`);
+    });
+
+    it("reads the site key from .env when the environment has none, and prefers the environment", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      writeFileSync(join(sb.repo.dir, ".env"), `TURNSTILE_SITE_KEY=${DOTENV_KEY}\n`);
+      expect(lastBuild(run(["dev"]).calls)).toContain(`VITE_TURNSTILE_SITE_KEY=${DOTENV_KEY}`);
+      sb.clearCalls();
+      expect(lastBuild(run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY }).calls)).toContain(
+        `VITE_TURNSTILE_SITE_KEY=${SITE_KEY}`,
+      );
+    });
+
+    it("refuses to build with the page on and no site key, before the build and any sync", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      const r = run(["dev"]);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TURNSTILE_SITE_KEY must be set");
+      expect(builds(r.calls)).toEqual([]);
+      expect(syncs(r.calls)).toEqual([]);
+    });
+
+    it("refuses a site key that spans lines", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: `${SITE_KEY}\nx` });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TURNSTILE_SITE_KEY must be set");
+      expect(builds(r.calls)).toEqual([]);
+    });
+
+    it("refuses to publish a build whose bundle lacks the site key", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      const r = run(["dev"], { TURNSTILE_SITE_KEY: SITE_KEY, FAKE_BUILD: "no-site-key" });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("Turnstile site key");
+      expect(syncs(r.calls)).toEqual([]);
+    });
+
+    it("builds with the page off when the parameter can't be read", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      const r = run(["dev"], {
+        FAKE_SSM_ERROR: "boom",
+        FAKE_SSM_ERROR_NAME: REQUEST,
+        TURNSTILE_SITE_KEY: SITE_KEY,
+      });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain("VITE_REQUEST_ACCESS=off");
+    });
   });
 });
