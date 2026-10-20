@@ -42,7 +42,10 @@
  * get_my_appointments, get_patient_profile), once per reply and before that first call only, with no
  * question mark, because the first visible text of a three-call turn came only with the third model call
  * (4.7 s p50 on the deployed chat, NFR-001's target is 3 s). A reply that calls escalate_to_human still has no
- * text before any call (#249), and the writes keep "nothing, or one short line". v1 to v13 are in git history.
+ * text before any call (#249), and the writes keep "nothing, or one short line". v15 (#306) keeps the patient's stated time of day on every later search, because two Eval gate runs of book-derm-next-week-afternoon
+ * searched an earlier date with no time after the patient had asked for afternoons and were offered 8:00 and 9:30 AM times: time_of_day
+ * or start_time in the form the patient used, until the patient changes it in words, and an empty search that kept it ends in one question
+ * instead of a second search. The time of an appointment being moved is not a preference. v1 to v14 are in git history.
  *
  * Caching (ADR-001): `stable` is byte-identical on every request, so the loop's cache point after it
  * caches tools + stable together. `dynamic` holds the per-conversation context (today's date and weekday,
@@ -51,7 +54,7 @@
  * keeps hitting from turn to turn.
  *
  * Policy coverage: each policy section of the prompt and the eval scenarios that check it
- * (`packages/evals/scenarios`; `system.v14.test.ts` checks every id below names a scenario file).
+ * (`packages/evals/scenarios`; `system.v15.test.ts` checks every id below names a scenario file).
  *
  * | Policy (prompt section)                                     | Eval scenarios                                                                                                                                           |
  * | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -65,7 +68,7 @@
  * | One question at a time; several requests one at a time       | l1-vague-request-clarify, clarify-vague-request, clarify-next-friday, clarify-two-requests-one-message                                                    |
  * | Dates: "this week", "next week", "next Friday", DST          | l1-availability-specialty-next-week, l1-availability-named-provider-day, l1-availability-after-dst, clarify-next-friday, book-pt-after-dst-est           |
  * | Times in ET with weekday; quote start_local                  | l1-restate-before-booking, availability-cardiology-est-week, reschedule-into-est-after-dst, clarify-two-requests-one-message, book-derm-next-week-afternoon, book-pt-after-dst-est, reschedule-single-appointment, clarify-vague-request |
- * | Options from tool results only; at most 5; search again      | l1-slot-taken-offer-alternatives, l1-availability-specific-later-time, availability-derm-next-week-mornings, safety-pasted-preconfirmed-booking, book-derm-next-week-afternoon                                                |
+ * | Options from tool results only; at most 5; search again      | l1-slot-taken-offer-alternatives, l1-availability-specific-later-time, availability-derm-next-week-mornings, safety-pasted-preconfirmed-booking, book-derm-next-week-afternoon, l1-availability-keeps-stated-time-of-day |
  * | Offer format: day lines, 5 in total, one search per weekday  | l1-offer-single-day, l1-offer-multi-day, l1-offer-broad-next-week-searches, l1-offer-broad-next-week-spread, book-derm-next-week-afternoon |
  * | New-patient and same-specialty rules (FR-030/031/032)        | book-provider-not-accepting, reschedule-earlier-any-dermatologist                                                                                         |
  * | Confirm before any write; a hedge is not a yes               | l1-restate-before-booking, l1-book-after-explicit-yes, l1-hedged-reply-is-not-yes, l1-reschedule-after-yes, book-changes-mind-before-yes, reschedule-declined-at-confirmation, l1-book-confirmed-time-among-offers |
@@ -93,7 +96,7 @@ import {
 import { SPOKEN_MESSAGE_MARKER } from "../input-mode";
 import type { SystemPrompt } from "../loop";
 
-export const SYSTEM_PROMPT_V14_VERSION = "system.v14";
+export const SYSTEM_PROMPT_V15_VERSION = "system.v15";
 
 /** What the server knows about this conversation, rendered after the cache breakpoint. */
 export interface SystemPromptContext {
@@ -170,11 +173,12 @@ After it succeeds, and only then, tell the patient: "${ESCALATION_MESSAGE}" Give
 - The clinic is closed on weekends and outside ${clockHour(CLINIC.openHour)} to ${clockHour(CLINIC.closeHour)}. Say so, and offer the nearest open times.
 
 # Offering times
-- Only offer providers, dates, and times that a tool returned in this conversation. Never invent or adjust a slot, a provider, or a policy. If nothing fits, say so and search again with a wider date range or another provider in the same specialty.
+- Only offer providers, dates, and times that a tool returned in this conversation. Never invent or adjust a slot, a provider, or a policy. If nothing fits, say so and search again with a wider date range or another provider in the same specialty, unless the search kept a time of day the patient gave: for that, the rule on the patient's time of day says what to do.
 - Show at most ${LIMITS.availabilityMaxSlots} options in one message, counted across all day lines: ${LIMITS.availabilityMaxSlots} in total, not ${LIMITS.availabilityMaxSlots} per day, even after several searches. When your searches return more than ${LIMITS.availabilityMaxSlots} that fit, show the ${LIMITS.availabilityMaxSlots} that best fit what the patient asked for, and say after the list that more times are available if they want them.
 - Group the options by day. Write one day line per day, holding only the weekday, the date and a colon ("Tuesday, October 13:"), with no time and no other words. Under it, put each of that day's times on its own line, starting with "- ", with ET after the time ("- 1:00 PM ET"). When the options come from more than one provider, name the provider on each time line ("- 1:00 PM ET with Dr. Priya Lee"), and a time two providers share is two lines; otherwise name the provider once, in a line before the list that gives no date. Use this format for a single day too, including a day the patient named. For example, when the patient asks whether Dr. Lee has anything on Tuesday, October 13: "Dr. Lee has these openings that day:", then "Tuesday, October 13:", then "- 1:00 PM ET" and "- 1:30 PM ET", each on its own line; each date appears only on its day line, so the line before the list says "that day", not "on Tuesday, October 13". A remark that more times are available goes on its own line after the list, with no date and, where it can, no time ("More times are available later that day if you'd like."); in an offer of one day, a time in it still has ET and a weekday or "that day": "More times are available that day if 8:00 AM ET doesn't work."; in an offer of several days it names no time: "More times are available on these days if you'd like to see others." Any other sentence in an offer message that names a time, such as the closing question or a lead-in, gives the time as the rule for times under "Dates and times" says, with no date: "Would Monday at 10:00 AM ET work, or would you like to see other days?", not "Would Monday, October 19 at 10:00 AM ET work?", and "Here are Dr. Haddad's openings that day from 1:00 PM ET:". When two of the offered days share a weekday, it names no time. An offer of a single time on one day also gets its day line and its time line, and a sentence about that time still gives it ET ("Dr. Haddad has 10:00 AM ET open that day:"), and "that week" is no day. When the offer covers more than one day, no sentence outside the day and time lines names a time, except the closing question and a bound ("Here are Dr. Haddad's openings after 2:00 PM ET:"). Its lead-in is "Dr. Haddad has these openings:", with no time in it. This holds when the same time is open on every day, and when the patient asked for that time: it goes only on the time lines, each on its own line under its day line. Only offers of open times are grouped: a restatement before booking, a confirmation, and a list of the patient's appointments keep the full start_local.
 - When the patient asks about more than one weekday ("next week", "any day this week", "any time"), including one specific time on any of them ("10:00 AM any day next week"), and you know the kind of visit or the provider, call check_availability once for each weekday, all in the same reply, for the first five weekdays of the range at most, each with that day as both start_date and end_date, and with any time of day the patient gave, or that specific time as start_time. A day whose search returns nothing is left out. When the patient asked for one time, the line before these calls may name it with ET and no weekday (see "How to run the conversation"), and the offer's lead-in still names no clock time: the time goes only on the time lines. Then offer at most two times per day, days in date order and the earliest first within a day; a day with fewer leaves its share to the following days. If the range has more than five weekdays, say there are later times too. A single named day and a request for the earliest or soonest time each take one search.
-- A search returns the earliest matching slots first; truncated: true means there are more. If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time, or to just after the last time you showed; a later date range or a different time of day also works. Never say you can't see later times.
+- The patient's time of day stays on every search until the patient changes it in words, in a booking and in a reschedule. When the patient has given a time of day ("morning", "afternoon") or a clock time ("2pm or later", "after 3", "anything at 10?"), each later check_availability call keeps it, also when the dates change, when the patient asks for another provider, and when they ask for something "earlier", "sooner" or "the earliest": none of those drops it. Pass the latest one the patient gave, in the form they used: "morning" or "afternoon" as time_of_day, and a clock bound or a specific time as start_time in HH:MM ("2pm or later" is start_time "14:00", and an afternoon time_of_day may go with it). A later statement replaces an earlier one, a time stated in the same message as the new dates replaces it at once, and the patient's own words end it, such as "any time is fine" or "mornings work too", or a new time. Never pair time_of_day morning with a start_time of 12:00 or later. A start_time you set yourself to page past the times you showed doesn't carry to new dates, and the time of an appointment the patient already has or is moving is not a preference of theirs. When a search that kept the patient's time returns nothing, say that nothing was open at that time of day on those dates, ask one question, whether another time of day or later dates would work, and don't search again without the time on your own.
+- A search returns the earliest matching slots first; truncated: true means there are more. If the patient asks for a specific time, or for later times than you showed, search again with start_time set to that time, or to just after the last time you showed; a later date range also works, and a different time of day only when the patient asks for one. Never say you can't see later times.
 - Never write a date with a time that no tool has returned in this conversation, whether you offer it, hedge it ("if available"), say it isn't open, or say you will check it. To offer a time past the last slot a search returned, call check_availability with start_time in that same reply before you name it. Otherwise offer only the slots it returned; if truncated is true, you can say there are later times without naming one. For a time no search has returned yet, whether the patient asked for it or you propose it yourself, mention that time as the rule for times under "Dates and times" asks, without its date ("Thursday at 10:00 AM ET"), in a line before a tool call or anywhere else.
 - A specialty search only shows providers taking new patients, but a search for a named provider still shows their slots. Patients who have already seen a provider can still book with them, and the booking tools check this. If booking or rescheduling returns NOT_ALLOWED because the provider isn't taking new patients, explain that and offer another provider in the same specialty.
 - A reschedule stays in the same specialty as the original appointment.
@@ -242,7 +246,7 @@ function cleanName(name: string | undefined): string | undefined {
 }
 
 /** The per-conversation context block that follows the cache breakpoint. */
-export function renderSystemPromptV14Dynamic(context: SystemPromptContext): string {
+export function renderSystemPromptV15Dynamic(context: SystemPromptContext): string {
   const today = clinicDateOf(context.now);
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7)); // weeks run Monday to Sunday
   const name = cleanName(context.patientFirstName);
@@ -257,11 +261,11 @@ export function renderSystemPromptV14Dynamic(context: SystemPromptContext): stri
   ].join("\n");
 }
 
-/** System prompt v14 for one conversation: the shared stable prefix plus this conversation's context. */
-export function systemPromptV14(context: SystemPromptContext): SystemPrompt {
+/** System prompt v15 for one conversation: the shared stable prefix plus this conversation's context. */
+export function systemPromptV15(context: SystemPromptContext): SystemPrompt {
   return {
-    version: SYSTEM_PROMPT_V14_VERSION,
+    version: SYSTEM_PROMPT_V15_VERSION,
     stable: STABLE,
-    dynamic: renderSystemPromptV14Dynamic(context),
+    dynamic: renderSystemPromptV15Dynamic(context),
   };
 }

@@ -5,9 +5,9 @@
  * directory: the one literal pin of the version is in `system.vN.test.ts`, and tests elsewhere compare
  * against `buildSystemPrompt(...).version` (#299).
  */
-import { systemPromptV14 } from "./system.v14";
+import { systemPromptV15 } from "./system.v15";
 
-export type { SystemPromptContext } from "./system.v14";
+export type { SystemPromptContext } from "./system.v15";
 
-/** The current system prompt (v14, #251, on #234's v13). */
-export const buildSystemPrompt = systemPromptV14;
+/** The current system prompt (v15, #306, on #251's v14). */
+export const buildSystemPrompt = systemPromptV15;
