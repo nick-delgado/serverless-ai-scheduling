@@ -8,7 +8,7 @@
 
 #301's runs of `book-derm-next-week-afternoon` showed a miss that wasn't what failed the case. The patient had asked for an afternoon (once "afternoon if possible", once "anything 2pm or later?"). When the patient then asked for an earlier date, the agent searched the new dates with only `date_range` and `specialty` and offered 8:00 to 9:30 AM times. The prompt said "with any time of day the patient gave" only in the several-weekday bullet, so nothing said the preference outlives a change of dates.
 
-We (Nick and the agent) built `system.v14`, renamed in place from `system.v13`, with one new bullet in "Offering times" and two small rewordings. The wording that ships:
+We (Nick and the agent) built `system.v15` on #251's `system.v14` (first built as `system.v14` on `system.v13`, then renumbered when #251 merged), with one new bullet in "Offering times" and two small rewordings. The wording that ships:
 
 - **The bullet.** "The patient's time of day stays on every search until the patient changes it in words, in a booking and in a reschedule." Each later `check_availability` call keeps it when the dates change, when the patient asks for another provider and when they ask for "earlier", "sooner" or "the earliest". The latest time carries in the form the patient used: "morning" or "afternoon" as `time_of_day`, a clock bound or a specific time as `start_time` in HH:MM ("2pm or later" is `"14:00"`, and an afternoon `time_of_day` may go with it). A later statement replaces an earlier one, and a time in the same message as the new dates replaces it at once. Only "any time is fine", "mornings work too" or a new time ends it. The agent never pairs morning with a `start_time` from 12:00, a `start_time` it set itself to page past times it showed doesn't carry, and the time of an appointment the patient has or is moving is not their preference.
 - **An empty search.** When a search that kept the time returns nothing, the reply says nothing was open at that time of day on those dates and asks one question, whether another time of day or later dates would work. It doesn't search again without the time on its own.
@@ -28,7 +28,7 @@ The new L1 case is `l1-availability-keeps-stated-time-of-day`, modelled on run 3
 
 - **The prompt in `main` passed the first draft of the case three times out of three.** The patient's last line there was "is there anything earlier, like Thu the 8th or sooner with someone else?", and the agent kept `time_of_day: afternoon` every time, because the context's own earlier call showed it. Under r1/Q-4 (a) we reworded that one line toward the evidence's words ("earlier that week", with no check loosened) and measured again.
 - **The model dropped the time in two trials out of three after that.** Both failing trials searched Oct 5 to 8 with `specialty` and `date_range` only, which is the miss from the Eval gate runs. The third kept `afternoon`.
-- **The empty-search question isn't measured by any eval.** The case measures only the carry. The empty-search reply and the drop wording are pinned by content guards in `system.v14.test.ts`, each seen failing, but no live run has shown the model asking that question.
+- **The empty-search question isn't measured by any eval.** The case measures only the carry. The empty-search reply and the drop wording are pinned by content guards in `system.v15.test.ts`, each seen failing, but no live run has shown the model asking that question.
 
 ## Evidence
 
@@ -36,7 +36,7 @@ All runs: `--mode l1 --suite full --ids l1-availability-keeps-stated-time-of-day
 
 - **Before, first wording**, `system.v13` (`main` at `96bf912`): pass, pass, pass, `$0.0706` estimated. Every trial kept `time_of_day: afternoon`. Results file `2026-10-19T161645Z-l1-full-sonnet-4.6.json`.
 - **Before, reworded last patient line**, `system.v13` (`main` at `96bf912`): pass, fail, fail, `$0.0505`. Both failures: `l1.action: args.time_of_day: expected "afternoon", got undefined`, and likewise `start_time`, for a call over Oct 5 to 8 with no time. Results file `2026-10-19T161724Z-l1-full-sonnet-4.6.json`.
-- **After**, `system.v14` (`14387d9`): pass, pass, pass, `$0.0855`. Every trial carried `time_of_day: afternoon`: one with a call per weekday Oct 5 to 8, two with one call for Oct 5 to 8. Results file `2026-10-19T161842Z-l1-full-sonnet-4.6.json`.
+- **After, on `system.v13` plus this rule** (named `system.v14` then, `14387d9`): pass, pass, pass, `$0.0855`. Every trial carried `time_of_day: afternoon`: one with a call per weekday Oct 5 to 8, two with one call for Oct 5 to 8. Results file `2026-10-19T161842Z-l1-full-sonnet-4.6.json`.
 - The prompt took one wording, with no rewording of the rule needed.
 
 ## What's next

@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295)); 2026-10-19 (a required line before a lookup, #251; see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -178,7 +178,7 @@ Two cells measure a defect rather than the model:
 
 **How the choice was made (Nick's decisions on #37):**
 - **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success: `sonnet-4.6@medium` comes closest at 83%, 7 points short of 90%, and every other cell misses by more (corrected 2026-10-13: 8 → 7 points, #259).
-- **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`).
+- **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`). *(#251 closed the first-text miss on `system.v14`: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
 
 **The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below):
 
@@ -191,7 +191,7 @@ Two cells measure a defect rather than the model:
 | Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(met: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* *(Re-measured by #295 as 4.77 on `judge.v2`: see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295).)* |
 | Judge–human agreement | pending #159 *(42/49, 86%: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* | ≥ 80% | pending *(met)* |
 | Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
-| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met |
+| NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met *(met on `system.v14`, 2,478 ms p50: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))* |
 
 **NFR-001 on `dev`:**
 - Command: `scripts/deploy.sh api dev -- AgentModelProfile=sonnet-4.6`, then `spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`.
@@ -202,7 +202,7 @@ Two cells measure a defect rather than the model:
 | `high` | 30 | 4,735 ms | 6,372 ms | 7,259 ms |
 | `medium` | 30 | 4,102 ms | 7,007 ms | 7,946 ms |
 
-Each turn made three model calls (`find_providers`, `check_availability`, then the answer) before any visible text, so the miss is mostly the turn's shape, not the effort level.
+Each turn made three model calls (`find_providers`, `check_availability`, then the answer) before any visible text, so the miss is mostly the turn's shape, not the effort level. *(`system.v14`'s line before the first lookup moved the first text to model call 1: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
 
 **The refusal fallback:**
 - `REFUSAL_FALLBACKS` keeps `sonnet-4.6` → `haiku-4.5`.
@@ -214,7 +214,7 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
 - The production default stays a Claude model at 10 requests per minute (the 2026-10-09 amendment).
 - Revisit if:
   - #159's calibration moves the rubric below 4.0; *(it didn't: the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))*
-  - #251 changes NFR-001's first-text result;
+  - #251 changes NFR-001's first-text result; *(it did, 4,250 ms to 2,478 ms: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
 
@@ -249,3 +249,12 @@ The production profile stands. #295 revised the judge's clarity and `no_medical_
 - **The run.** `sonnet-4.6` at effort `high`, prompt `system.v10` (the matrix used `system.v3`), k=1, 40 runnable cases, judge `llm:haiku-4.5:judge.v2`. It cost $2.97 plus $0.22 for the judge. Results file `2026-10-18T132008Z-scenario-full-sonnet-4.6.json` (git-ignored).
 - **The figure.** The rubric average (tone, clarity) is **4.77 / 5** (tone 4.89, clarity 4.65) over 39 judged trials, which meets PRD §7's ≥ 4.0. It is not comparable with the matrix's 4.89 (k=3, `judge.v1`, `system.v3`): one trial per case, a different judge version and prompt.
 - **The table above,** "Judge rubric average (tone, clarity)": 4.77 / 5 on `judge.v2`, met. The judge stays report-only. Details: [the journal entry](../journal/2026-10-18-the-judge-now-fails-one-of-nicks-six-clarity-3s.md).
+
+## Amendment (2026-10-19): a line before the first lookup (#251)
+
+The production profile stands. #251 took the first-text miss (4,735 ms p50 against NFR-001's 3,000 ms, r4/N-2 on #37) with a prompt-only change (r1/Q-1 (a)): `system.v14` requires one short line before a reply's first tool call when that call is `find_providers`, `check_availability`, `get_my_appointments` or `get_patient_profile` (r1/Q-2 (a)). It comes once per reply, before that first call only, and has no question mark. A reply that calls `escalate_to_human` has no text before any call, and the writes keep "nothing, or one short line". The measured turn made three model calls and its first text came with the third; with the line it should come with the first.
+
+- **Method.** The same 30 turns as #37 (`spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`) as `skeleton-tester` on `dev`, `sonnet-4.6` at effort `high`, the two runs on different clinic-local days (r1/Q-4 (a)). Read with the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)'s query, adding `and promptVersion = "<version>"`, over each run's window.
+- **Before** (`main` at `cb5ca45`, `system.v13`, window 2026-10-19 11:25:44 to 11:35:45 UTC, no Eval gate job running): 30 `done` turns, p50 first `text_delta` 4,250 ms, p95 first `text_delta` 7,003 ms, p50 `done` 5,353 ms, p95 `done` 7,805 ms. A first attempt at 11:14 UTC was stopped after 11 turns: 5 turns ended in `RATE_LIMITED` while another PR's Eval gate job shared the Bedrock quota, and its 6 `done` turns aren't in the figures.
+- **After** (the branch, `system.v14`): 30 `done` turns, p50 first `text_delta` 2,478 ms, p95 4,453 ms, p50 `done` 5,739 ms, p95 `done` 7,261 ms (branch `feat/251-line-before-lookups` merged with `origin/main` at `ffc6e27`, `system.v14`, window 2026-10-20 10:23:17 to 10:33:21 UTC, 06:23 ET on the next clinic-local day, no Eval gate job running). Each of the 30 turns still made three model calls, and in each `firstTextMs` is within 30 ms of the first model call's `durationMs` (`llmCalls[0]`; the handler starts about 27 ms before the call), so the first text came with model call 1, not call 2 or 3. We read these timings, not the text, so "the line was written before `find_providers`" is inferred from them. The p50 first text fell 1,772 ms (42%) and meets NFR-001's 3,000 ms; p95 `done` is unchanged within noise and well inside 15,000 ms.
+- **Context.** #37 measured p50 first text 4,735 ms and p95 `done` 7,259 ms on `system.v3`; the before-run is `system.v13`, after v4 to v13 landed.
