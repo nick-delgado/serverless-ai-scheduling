@@ -2,7 +2,7 @@
 
 - **Status:** Client decision superseded by [ADR-010](0010-provider-neutral-llm-layer.md) (2026-09-29): Bedrock Converse is the single transport, and the `AnthropicBedrock` client is retired. The model-selection method below (profiles as configuration, chosen by the M3 eval matrix) still stands. Interim development path accepted 2026-09-28 (Sonnet 4.6). Model-selection decision accepted 2026-10-12 (#37): `sonnet-4.6` at effort `high` (see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)).
 - **Date:** 2026-09-28
-- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295)); 2026-10-19 (a required line before a lookup, #251; see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))
+- **Amended:** 2026-10-09 (AWS declined the entitlement and quota increases, #227; see [Amendment](#amendment-2026-10-09-aws-declined-the-entitlement-and-quota-increases-227)); 2026-10-12 (production profile, #37; see the [2026-10-12 amendment](#amendment-2026-10-12-production-profile-37)); 2026-10-14 (reading NFR-001 after #38; see the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)); 2026-10-16 (judge calibration, #159; see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159)); 2026-10-18 (rubric average re-measured with `judge.v2`, #295; see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295)); 2026-10-19 (a required line before a lookup, #251; see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251)); 2026-10-20 (the §7 exit table re-run on `system.v15`, #345; see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-001, ADR-008, research note `docs/research/2026-09-28-desk-research.md`
 
@@ -180,17 +180,17 @@ Two cells measure a defect rather than the model:
 - **r2/M-1 (a):** `sonnet-4.6@high` is the only cell within reach of §7. Its one safety violation is `no_hallucinated_slots` reading "the latest the clinic is open is 5:00 PM ET" (the clinic's closing time, in a refusal) as a quoted slot. Nick counted it as a grader false positive (#244), so the cell meets every §7 target the matrix measures, and there's no fix round. Every other cell misses task success: `sonnet-4.6@medium` comes closest at 83%, 7 points short of 90%, and every other cell misses by more (corrected 2026-10-13: 8 → 7 points, #259).
 - **r3/N-1 (a), r4/N-2 (a):** NFR-001 was measured on `dev` (below). Neither effort level meets the first-text target, so Nick accepted the miss and kept `high`. The latency follow-up is #251. He also accepted the simulator running at `high`, about +$0.02 to $0.03 per Eval gate run (estimated from the agent's own cost rise; the matrix ran the simulator at `medium`). *(#251 closed the first-text miss on `system.v14`: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
 
-**The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below):
+**The chosen cell's exit table** (from the matrix's per-cell `--exit-report`; NFR-001 is measured on the deployed stack below) *(re-run on `system.v15` by #345, with different results: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))*:
 
 | Metric | Value | Target | Verdict |
 |---|---|---|---|
-| Task success, scenario mode, core categories, pass@1 | 92% (book 92%, reschedule 100%, availability 94%, escalate 93%, clarify 80%) | ≥ 90% | met |
-| Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met |
-| Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) |
+| Task success, scenario mode, core categories, pass@1 | 92% (book 92%, reschedule 100%, availability 94%, escalate 93%, clarify 80%) | ≥ 90% | met *(86%, not met on `system.v15`: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
+| Reliability, scenario mode, core categories, pass^3 | 87% | ≥ 80% | met *(74%, not met on `system.v15`: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
+| Safety violations, both modes | 1 (l1 0, scenario 1), the clinic-hours false positive (#244) | 0 | met by r2/M-1 (a) *(4, not met on `system.v15`: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
 | Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
-| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(met: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* *(Re-measured by #295 as 4.77 on `judge.v2`: see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295).)* |
-| Judge–human agreement | pending #159 *(42/49, 86%: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* | ≥ 80% | pending *(met)* |
-| Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met |
+| Judge rubric average (tone, clarity), before calibration | 4.89 / 5 | ≥ 4.0 / 5 after calibration | met, pending #159 *(met: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* *(Re-measured by #295 as 4.77 on `judge.v2`: see the [2026-10-18 amendment](#amendment-2026-10-18-rubric-average-re-measured-with-judgev2-295).)* *(4.79, met, on `judge.v2` and `system.v15`: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
+| Judge–human agreement | pending #159 *(42/49, 86%: see the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))* | ≥ 80% | pending *(met)* *(47/47 on a held-out set, met: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
+| Agent cost per completed conversation (NFR-003) | $0.0400 | ≤ $0.25 | met *($0.0729 on `system.v15`, met: see the [2026-10-20 amendment](#amendment-2026-10-20-the-exit-table-re-run-on-systemv15-345))* |
 | NFR-001 (deployed) | first text p50 4,735 ms; `done` p95 7,259 ms | ≤ 3 s; ≤ 15 s | first text not met (accepted, r4/N-2); `done` met *(met on `system.v14`, 2,478 ms p50: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))* |
 
 **NFR-001 on `dev`:**
@@ -258,3 +258,24 @@ The production profile stands. #251 took the first-text miss (4,735 ms p50 again
 - **Before** (`main` at `cb5ca45`, `system.v13`, window 2026-10-19 11:25:44 to 11:35:45 UTC, no Eval gate job running): 30 `done` turns, p50 first `text_delta` 4,250 ms, p95 first `text_delta` 7,003 ms, p50 `done` 5,353 ms, p95 `done` 7,805 ms. A first attempt at 11:14 UTC was stopped after 11 turns: 5 turns ended in `RATE_LIMITED` while another PR's Eval gate job shared the Bedrock quota, and its 6 `done` turns aren't in the figures.
 - **After** (the branch, `system.v14`): 30 `done` turns, p50 first `text_delta` 2,478 ms, p95 4,453 ms, p50 `done` 5,739 ms, p95 `done` 7,261 ms (branch `feat/251-line-before-lookups` merged with `origin/main` at `ffc6e27`, `system.v14`, window 2026-10-20 10:23:17 to 10:33:21 UTC, 06:23 ET on the next clinic-local day, no Eval gate job running). Each of the 30 turns still made three model calls, and in each `firstTextMs` is within 30 ms of the first model call's `durationMs` (`llmCalls[0]`; the handler starts about 27 ms before the call), so the first text came with model call 1, not call 2 or 3. We read these timings, not the text, so "the line was written before `find_providers`" is inferred from them. The p50 first text fell 1,772 ms (42%) and meets NFR-001's 3,000 ms; p95 `done` is unchanged within noise and well inside 15,000 ms.
 - **Context.** #37 measured p50 first text 4,735 ms and p95 `done` 7,259 ms on `system.v3`; the before-run is `system.v13`, after v4 to v13 landed.
+
+## Amendment (2026-10-20): the exit table re-run on `system.v15` (#345)
+
+The production profile stands. #345 re-ran PRD §7's two exit runs on the prompt M3 ships, because the table above is from `system.v3` and the graders have changed five times since (#320, #326, #332, #337, #340). The table above stays as the 2026-10-13 record; its re-measured rows point here.
+
+- **The runs.** `main` at `df05687`, prompt `system.v15`, `sonnet-4.6` at effort `high`, full suite, k=3, simulator `sonnet-4.6` (at `high`; the matrix ran it at `medium`), judge `llm:haiku-4.5:judge.v2`. Scenario: 41 of 42 runnable cases (123 trials), 0 errors, $9.49 plus $0.82 for the judge. L1: 55 cases (165 trials), 0 errors, $1.51. Two earlier scenario attempts stopped on Bedrock outages and don't count.
+- **The table.**
+
+| Metric | Value | Target | Verdict |
+|---|---|---|---|
+| Task success, scenario mode, core categories, pass@1 | 86% (book 83%, reschedule 94%, availability 83%, escalate 93%, clarify 78%) | ≥ 90% | not met |
+| Reliability, scenario mode, core categories, pass^3 | 74% | ≥ 80% | not met |
+| Safety violations, both modes | 4 (l1 0, scenario 4): one case, two trials, `clarify-voice-garbled-provider`, a restatement that omits the reason the patient gives with the yes | 0 | not met |
+| Emergency cases pass every trial, both modes | l1 2/2, scenario 2/2 | 100% | met |
+| Judge rubric average (tone, clarity) | 4.79 / 5 on `judge.v2` | ≥ 4.0 / 5 | met |
+| Judge–human agreement | 47/47 pass/fail on the held-out `system.v13` set (#296; zero human-failed pairs, #351) | ≥ 80% | met |
+| Agent cost per completed conversation (NFR-003) | $0.0729 | ≤ $0.25 | met |
+
+- **The decision.** Nick accepted the M3 exit with these results as known gaps and asked for a fix issue per cause (his word on #345: "both"). The profile and its effort level are unchanged, and the matrix's choice stands: this run measured only `sonnet-4.6@high`, so it says nothing new about the other cells. The 2026-10-13 verdicts "met" for task success, reliability and safety no longer hold on `system.v15`, partly because the graders are stricter, not only the prompt (the [journal entry](../journal/2026-10-20-the-exit-rerun-on-system-v15-misses-three-of-six-targets.md) lists what differs).
+- **Not re-measured.** NFR-001's rows (#251's amendment) and the revisit triggers are untouched by this run.
+
