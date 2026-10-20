@@ -105,7 +105,7 @@ Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's 
 
 - **Redeploying `demo`'s `auth` stack** can replace the Identity Pool role the backstop targets. After such a deploy, run the standby check there; if the role's name changed, re-apply the bootstrap with the new one.
 - **What a patient sees when it trips:** voice recording fails as a failed Transcribe connection does today; text chat is unaffected. Chat spend is bounded by the caps above, not by the backstop; there is no Bedrock backstop; to stop `demo`'s spend by hand see [`aws-setup.md`](aws-setup.md), "Stopping `demo`'s spend by hand".
-- **Reset:** Nick reverses the action with `aws budgets execute-budget-action ... REVERSE_BUDGET_ACTION` (`aws-setup.md` has the commands). AWS documents that the action resets at the start of the next budget month.
+- **Reset:** Nick reverses the action with `aws budgets execute-budget-action ... REVERSE_BUDGET_ACTION` (`aws-setup.md` has the commands). AWS's Budgets Actions blog says an action that applies a policy is reset at the beginning of each budget period, so voice should return on the first of the month by itself (not yet seen live: we haven't tripped it).
 
 ## Teardown
 
