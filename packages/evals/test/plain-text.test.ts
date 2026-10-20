@@ -4,7 +4,7 @@
  * Both are core, non-safety invariants (r1/Q-1 (a)), and `no_markdown` also runs on every L1 case.
  *
  * Seen failing on recorded `system.v1` replies (r1/A-3): the trials come read-only from
- * `calibration/transcripts.json` (the 2026-10-05 full run, `system.v1` on `sonnet-4.6`).
+ * `test/fixtures/system-v1/transcripts.json` (the 2026-10-05 full run, `system.v1` on `sonnet-4.6`).
  */
 import { describe, expect, it } from "vitest";
 

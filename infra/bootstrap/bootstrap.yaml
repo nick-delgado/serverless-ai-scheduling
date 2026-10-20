@@ -33,7 +33,10 @@ Resources:
   # ---------------------------------------------------------------------------
   # Permissions boundary: the ceiling for every IAM role created by sched-* stacks
   # (Lambda roles, Identity Pool role, ...). Even if a template asks for more,
-  # the effective permissions can never exceed this.
+  # the effective permissions can never exceed this. WorkloadServices lists only what a sched-*
+  # workload role grants today (#270): SAM's log and X-Ray writes, the chat role's DynamoDB item
+  # actions, the two Bedrock invokes and SendEmail, and the Identity Pool role's Transcribe call.
+  # A role that needs another action needs a line here first.
   # ---------------------------------------------------------------------------
   WorkloadPermissionsBoundary:
     Type: AWS::IAM::ManagedPolicy
@@ -51,32 +54,15 @@ Resources:
               - logs:PutLogEvents
               - xray:PutTraceSegments
               - xray:PutTelemetryRecords
-              - cloudwatch:PutMetricData
               - dynamodb:GetItem
               - dynamodb:PutItem
               - dynamodb:UpdateItem
-              - dynamodb:DeleteItem
               - dynamodb:Query
-              - dynamodb:BatchGetItem
-              - dynamodb:BatchWriteItem
               - dynamodb:ConditionCheckItem
-              - dynamodb:DescribeTable
-              - bedrock-mantle:CreateInference
-              - bedrock-mantle:CountTokens
               - bedrock:InvokeModel
               - bedrock:InvokeModelWithResponseStream
               - ses:SendEmail
-              - ses:SendRawEmail
-              - transcribe:StartStreamTranscription
               - transcribe:StartStreamTranscriptionWebSocket
-              - ssm:GetParameter
-              - ssm:GetParameters
-              - ssm:GetParametersByPath
-              - s3:GetObject
-              - s3:PutObject
-              - lambda:InvokeFunction
-              - cognito-identity:GetId
-              - cognito-identity:GetCredentialsForIdentity
             Resource: "*"
           - Sid: NeverIamOrAccountLevel
             Effect: Deny
@@ -108,24 +94,65 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: WorkloadServiceControlPlanes
+              # One statement per service (#270 F-3, r1/Q-2 (a)): the actions stay service-wide, the resources are
+              # named where the ARN carries the sched- name. No stack declares an Events, X-Ray or SES resource, and
+              # none a Bedrock one, so those grants are gone. Where a statement below holds no sched- name, its
+              # comment says why. An action that takes no resource gets its own "*" statement once a deploy shows
+              # the AccessDenied.
+              - Sid: DynamoDbSchedTables
                 Effect: Allow
-                Action:
-                  - apigateway:*
-                  - cloudfront:*
-                  - cloudwatch:*
-                  - cognito-identity:*
-                  - cognito-idp:*
-                  - dynamodb:*
-                  - events:*
-                  - lambda:*
-                  - logs:*
-                  - s3:*
-                  - ses:*
-                  - ssm:*
-                  - xray:*
-                  - bedrock:GetFoundationModel
-                  - bedrock:ListFoundationModels
+                Action: dynamodb:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-*
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-*/index/*
+              - Sid: LambdaSchedFunctions
+                Effect: Allow
+                Action: lambda:*
+                Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:sched-*
+              - Sid: LogsSchedLambdaLogGroups
+                Effect: Allow
+                Action: logs:*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sched-*
+              # A dashboard's ARN has no region.
+              - Sid: CloudWatchSchedAlarmsAndDashboards
+                Effect: Allow
+                Action: cloudwatch:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:sched-*
+                  - !Sub arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/sched-*
+              # The web and artifact buckets are both sched-* (the artifact bucket is read for templates and code).
+              - Sid: S3SchedBuckets
+                Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::sched-*
+                  - !Sub arn:${AWS::Partition}:s3:::sched-*/*
+              # Parameter names start with /sched/, so the ARN is parameter/sched/..., not parameter/sched-*.
+              - Sid: SsmSchedParameters
+                Effect: Allow
+                Action: ssm:*
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sched/*
+              # A distribution and an origin access control are named by a generated ID, so no ARN can carry the
+              # sched- name. That is the reason this stays "*".
+              - Sid: CloudFrontDistributionsAndOacs
+                Effect: Allow
+                Action: cloudfront:*
+                Resource: "*"
+              # A REST API, its stages and deployments are named by a generated ID (the sched- name is a property),
+              # so no ARN can carry the sched- name. That is the reason this stays "*".
+              - Sid: ApiGatewayApis
+                Effect: Allow
+                Action: apigateway:*
+                Resource: "*"
+              # CreateUserPool takes no resource, and a pool's ID is generated, so the name can't be in the ARN.
+              - Sid: CognitoUserPools
+                Effect: Allow
+                Action: cognito-idp:*
+                Resource: "*"
+              # CreateIdentityPool takes no resource, and a pool's ID is generated, so the name can't be in the ARN.
+              - Sid: CognitoIdentityPools
+                Effect: Allow
+                Action: cognito-identity:*
                 Resource: "*"
               # With --role-arn, CloudFormation expands the SAM transform as this role (found in #6).
               - Sid: ExpandSamTransform
@@ -326,7 +353,9 @@ Resources:
       Policies:
         # Copied from infra/bootstrap/sched-deployer-policy.json (the statements the two scripts use), narrowed
         # to dev and without DeleteStack, drift, debugging, seeding, Bedrock or SES. Keep in sync with it and with
-        # GitHubE2eRole's copy below (the same statements for e2e, plus seeding).
+        # GitHubE2eRole's copy below (the same statements for e2e, plus seeding). DescribeStacks differs: here it
+        # is in the stack-scoped statement, while SchedDeployer keeps it on "*" for the runbook's unnamed listing
+        # (F-22, #270).
         - PolicyName: sched-github-deploy
           PolicyDocument:
             Version: "2012-10-17"
@@ -341,7 +370,6 @@ Resources:
                   - cloudformation:ValidateTemplate
                   - cloudformation:GetTemplateSummary
                   - cloudformation:ListStacks
-                  - cloudformation:DescribeStacks
                   - cloudformation:ListExports
                 Resource: "*"
               - Sid: CloudFormationDriveDevStacks
@@ -352,6 +380,7 @@ Resources:
                   - cloudformation:CreateChangeSet
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
                   - cloudformation:DescribeChangeSet
                   - cloudformation:ListChangeSets
                   - cloudformation:DescribeStackEvents
@@ -382,7 +411,7 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
-                  - !Sub ${ArtifactBucket.Arn}/*
+                  - !Sub ${ArtifactBucket.Arn}/sched-dev-*
                   - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*
                   - !Sub arn:${AWS::Partition}:s3:::sched-dev-web-*/*
               # Distribution IDs are random, so this is every distribution in the account (other envs' too);
@@ -440,7 +469,7 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-6
                   - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0
-                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6*
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6
                   - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
 
   # .github/workflows/e2e.yml (#40): on-demand E2E against the `e2e` env, in the `e2e` GitHub Environment,
@@ -468,7 +497,8 @@ Resources:
                 token.actions.githubusercontent.com:sub: "repo:nick-delgado@25354284/serverless-ai-scheduling@1391507382:environment:e2e:job_workflow_ref:nick-delgado/serverless-ai-scheduling/.github/workflows/e2e.yml@refs/heads/*"
       Policies:
         # Copied from infra/bootstrap/sched-deployer-policy.json, narrowed to e2e. Keep in sync with it and with
-        # GitHubDeployRole's copy above (the same statements for dev, without seeding).
+        # GitHubDeployRole's copy above (the same statements for dev, without seeding). DescribeStacks differs, as
+        # there (F-22, #270).
         - PolicyName: sched-github-e2e
           PolicyDocument:
             Version: "2012-10-17"
@@ -483,7 +513,6 @@ Resources:
                   - cloudformation:ValidateTemplate
                   - cloudformation:GetTemplateSummary
                   - cloudformation:ListStacks
-                  - cloudformation:DescribeStacks
                   - cloudformation:ListExports
                 Resource: "*"
               - Sid: CloudFormationDriveE2eStacks
@@ -494,6 +523,7 @@ Resources:
                   - cloudformation:CreateChangeSet
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
                   - cloudformation:DescribeChangeSet
                   - cloudformation:ListChangeSets
                   - cloudformation:DescribeStackEvents
@@ -524,7 +554,7 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
-                  - !Sub ${ArtifactBucket.Arn}/*
+                  - !Sub ${ArtifactBucket.Arn}/sched-e2e-*
                   - !Sub arn:${AWS::Partition}:s3:::sched-e2e-web-*
                   - !Sub arn:${AWS::Partition}:s3:::sched-e2e-web-*/*
               - Sid: SpaInvalidation
@@ -556,7 +586,7 @@ Resources:
                   - dynamodb:BatchGetItem
                 Resource:
                   - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*
-                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*/index/*
+                  - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/sched-e2e-*/index/GSI1
               # The calls scripts/seed-users.ts makes. User pool ARNs carry a random ID, so the pool is chosen by the
               # `env` tag that scripts/deploy.sh puts on the stack (verify first: that the auth stack's pool carries
               # it and that Cognito evaluates it for these calls; #40's first run shows it).

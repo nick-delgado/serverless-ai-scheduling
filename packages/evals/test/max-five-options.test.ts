@@ -2,7 +2,7 @@
  * `max_five_options` counts the clock times on list lines (#181, r1/Q-1 (a)): a time the reply only
  * repeats in prose, such as a search floor, the patient's own time or the clinic's hours, is not an
  * option. A message with no list line that carries a time counts every time, as before. Recorded text
- * comes read-only from `calibration/transcripts.json`; the PR #179 rerun's trial 2 is hand-built
+ * comes read-only from `test/fixtures/system-v1/transcripts.json`; the PR #179 rerun's trial 2 is hand-built
  * (r1/Q-3 (b)), because its results file wasn't kept.
  */
 import { describe, expect, it } from "vitest";

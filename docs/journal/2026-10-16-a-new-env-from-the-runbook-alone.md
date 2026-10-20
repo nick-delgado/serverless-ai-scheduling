@@ -12,7 +12,7 @@ FR-050 asks that a new environment deploy "from the runbook alone". Until today 
 - **"Deployed"** means all four stacks complete, `/chat` and `/login` return 200 `text/html`, an unauthenticated `POST /api/chat` returns 401, `seed-users.ts --verify` signs every patient in, and one availability turn typed in the deployed SPA offers slots (Q-3 (b)).
 - **Three runs** (Q-1 (a)). A rehearsal on the ephemeral env `rb42` met the friction, and we fixed it in the runbook. `scripts/teardown.sh rb42 --yes` removed it. A timed redeploy of `rb42` ran at `e144d95`, which held the fixes for F-1 to F-4, and was torn down again. Last, `demo` was deployed once from this branch at the same commit, seeded with its own passwords from `.env.demo` (Q-4 (b)), checked the same way, and left standing. Both later runs met F-5 again, because its runbook text (`8f1bf35`) was written after them; Nick accepted that order on the PR's review (SPEC-2, option (a)).
 - **`aws-setup.md`** got the runbook pass the comments asked for:
-  - step 3 names the four Bedrock actions `SchedDeployer` grants: `bedrock:InvokeModel*` for Converse, and the `bedrock-mantle:*` pair, which nothing calls and #270 drops (F-19);
+  - step 3 names the four Bedrock actions `SchedDeployer` grants: `bedrock:InvokeModel*` for Converse, and the `bedrock-mantle:*` pair, which nothing calls and #270 drops (F-19; **Later (2026-10-19):** dropped, step 3 now names two);
   - step 6 and step 8 cover the six entitled models, not Opus 5 and Sonnet 5 (Q-6 (b)), and step 6 says to leave model invocation logging off (#272);
   - the teardown section points to `teardown.sh` (A-2), and a new appendix documents `scripts/trace.ts`.
 - **One table lookup.** The three operator scripts, `seed-data.ts`, `retry-escalations.ts` and `trace.ts`, now share one table lookup, `resolveTable` in `scripts/seed-data.ts` (Q-5 (a)).
@@ -118,4 +118,4 @@ What r1/Q-5's edge asked us to record: `retry-escalations.ts` still loads `.env`
 
 - `demo`: #286 tops up its seed before the 4-week window ends (the runbook's "Keeping a standing env seeded"). #44 handles reviewer access and the credential process; the `demo` passwords live only in `.env.demo`.
 - #43: `README.md`'s "Local development and deploys: *coming with M1*" can now link to `docs/runbooks/deploy-env.md`.
-- #270: once the `bedrock-mantle:*` pair is dropped, step 3's summary drops it too.
+- #270: once the `bedrock-mantle:*` pair is dropped, step 3's summary drops it too. **Later (2026-10-19):** #270's first PR dropped the pair and rewrote step 3's Bedrock sentence; see [The boundary keeps only what a workload role grants](2026-10-19-the-boundary-keeps-only-what-a-workload-role-grants.md).

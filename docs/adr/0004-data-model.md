@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-014, FR-030…FR-034, FR-037, NFR-004, NFR-008, ADR-001, ADR-009, issues #5, #13, #56
-- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation-56)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces-17)); 2026-10-03 (key details as built, and the conversation list, #13, #18; see [Amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123))
+- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation-56)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces-17)); 2026-10-03 (key details as built, and the conversation list, #13, #18; see [Amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123)); 2026-10-19 (escalations expire, #271; see [Amendment](#amendment-2026-10-19-escalations-expire-after-30-days-271))
 
 ## Context
 
@@ -85,7 +85,7 @@ The decision above stands: single table, same keys, and the same booking transac
   - Options were the meta item or message n-1. We chose **message n-1**: its key is computable from the batch, whereas the meta item's SK embeds `createdIso`, which the appender would first have to read. The n-1 check also enforces "no gaps" in the same condition.
 - **Callers never trust a body `conversationId`** without going through these methods. The chat handler (#17) loads and appends only through the repository with the JWT `sub`. A red-team eval scenario (#33) sends another patient's conversation ID.
 
-**2. At most one escalation per conversation.** A key of `ESC#<createdIso>` can't stop a second escalation atomically. Two concurrent `escalate_to_human` calls get different timestamps and both succeed.
+**2. At most one escalation per conversation.** *(Qualified by the [2026-10-19 amendment](#amendment-2026-10-19-escalations-expire-after-30-days-271): while the item exists; it expires after 30 days.)* A key of `ESC#<createdIso>` can't stop a second escalation atomically. Two concurrent `escalate_to_human` calls get different timestamps and both succeed.
 
 - **The escalation key is a fixed `ESC` per conversation** (`CONV#<convId> / ESC`), written with `PutItem` and `attribute_not_exists(PK)`. The item stores `patientId`.
 - If the condition fails, the existing record is returned. If it belongs to the caller, the result is `alreadyEscalated: true`. Otherwise the result is `NOT_OWNER` and nothing is shown.
@@ -97,7 +97,7 @@ The decision above stands: single table, same keys, and the same booking transac
 |---|---|---|---|
 | Message | `CONV#<convId>` | `MSG#<seq:06d>` | Content blocks as an opaque JSON string, `patientId`, `turnId`; `expiresAt` = message `createdAt` + 30 days |
 | Conversation meta | `PATIENT#<sub>` | `CONV#<createdIso>#<convId>` | Unchanged; written in the same transaction as seq 0 |
-| Escalation | `CONV#<convId>` | `ESC` | `patientId`, reason, summary, notification status and SES message ID |
+| Escalation | `CONV#<convId>` | `ESC` | `patientId`, reason, summary, notification status and SES message ID; `expiresAt` = `createdAt` + 30 days (amendment 2026-10-19, #271) |
 
 | # | Pattern | Operation |
 |---|---|---|
@@ -131,3 +131,13 @@ The decision stands. The DynamoDB repositories (#13) and the session call (#18) 
 - **Slot GSI1PK's day is the clinic-local date** (`America/New_York`) of the slot's start, so AP-5 "on a day" means a clinic day (#13). GSI1SK and the base-table SK stay UTC.
 - **Message content** is ADR-010's neutral content blocks, stored as an opaque JSON string, not Anthropic blocks (#60).
 - **AP-10, list a patient's conversations, newest first:** Query `PATIENT#sub`, `begins_with(SK, "CONV#")`, `ScanIndexForward: false`, consistent read. `POST /api/session` takes the newest (limit 1) as the current conversation (ADR-007, #18).
+
+## Amendment (2026-10-19): escalations expire after 30 days (#271)
+
+The M3 security review (#39, finding F-10) found that escalation items had no `expiresAt`, so the patient's `reason` and the model's `summary` stayed in the table indefinitely while messages, conversation meta and traces expired after 30 days. Owner decisions r1/Q-1 to Q-4 on #271:
+
+- **Escalations expire.** `escalationItem` writes `expiresAt` = the escalation's `createdAt` + 30 days, in epoch seconds like the other items, from `ESCALATION_TTL_DAYS = MESSAGE_TTL_DAYS` (`packages/tools/src/repos/dynamo/items.ts`). The constant is its own name so the two periods can diverge later. The `Escalation` schema doesn't change: the repository drops `expiresAt` when it reads an item.
+- **A second escalation is possible after 30 days, and that's accepted.** AP-9's `attribute_not_exists(PK)` is what keeps a conversation to one escalation (FR-034). A conversation still being continued more than 30 days after its escalation (its latest message is newer than the escalation) can escalate again once DynamoDB has deleted the first item. Deletion isn't exact, so the window opens some time after day 30 (see below).
+- **Retry behaviour, with no change to `scripts/retry-escalations.ts` (Q-2 (a)).** The script finds a `FAILED` escalation with a Scan, and a Scan still returns an item after its `expiresAt` until DynamoDB deletes it. AWS: items "might be deleted by the system at any time, typically within a few days after their expiration" ([Using time to live (TTL) in DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html)); the same page tells callers to use filter expressions to remove expired items from Scan and Query results, which implies they are returned until then. So a `FAILED` escalation is re-sent while its item exists, including after `expiresAt`, and once deleted it is gone and never sent. If the item is deleted between the send and the status update, the run prints "status not recorded". By day 30 the messages up to the escalation have expired, so the transcript holds only messages written after it, if any.
+- **No backfill (Q-3 (a)).** Items written before this change keep no `expiresAt` and stay until deleted by hand. The data is synthetic.
+- **Point-in-time recovery is unchanged** (Q-4 (a)); see the ADR-009 amendment of the same date.
