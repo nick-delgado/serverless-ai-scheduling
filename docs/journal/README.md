@@ -128,3 +128,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-19 | [The security review's three account items close: a quota of 1000, an email we keep public, and logging still off](2026-10-19-the-security-reviews-account-items-close-two-checked-one-accepted.md) | 5. What the evals showed |
 | 2026-10-19 | [Escalations now expire after 30 days, and PITR probably keeps them restorable for 35 more](2026-10-19-escalations-now-expire-after-30-days-pitr-stays-at-35.md) | 5. What the evals showed |
 | 2026-10-19 | [The exec role gets one statement per service](2026-10-19-the-exec-role-gets-one-statement-per-service.md) | 5. What the evals showed |
+| 2026-10-19 | [A line before the first lookup: one required sentence, measured on two clinic-local days](2026-10-19-a-line-before-the-first-lookup.md) | 5. What the evals showed |
