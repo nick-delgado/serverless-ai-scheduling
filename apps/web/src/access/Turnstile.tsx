@@ -80,6 +80,7 @@ export function Turnstile({ siteKey, onToken, onUnavailable, ref }: TurnstilePro
 
   useEffect(() => {
     const element = container.current;
+    /* v8 ignore next -- the ref is set before effects run; this only narrows the type for render() */
     if (!element) return;
     let cancelled = false;
     loadTurnstile().then(
