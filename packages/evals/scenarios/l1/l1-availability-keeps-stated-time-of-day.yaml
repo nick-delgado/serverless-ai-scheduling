@@ -10,8 +10,10 @@ notes: >
   was offered Monday, Oct 12, and now asks for an earlier date with someone else. The next check_availability
   must keep the afternoon: one call whose range ends on Thursday, Oct 8, or a call for Oct 8 alone (the per-day
   search), each with time_of_day afternoon or start_time 12:00. The observed failure, the same dates with no
-  time, fails, and so do time_of_day morning or any. The gap: this checks that some call keeps the time, so a
-  reply with one timed call and other untimed ones passes. Provider and specialty are not pinned, because
+  time, fails, and so do time_of_day morning or any with no start_time of 12:00. The gaps: this checks that some
+  call keeps the time, so a reply with one timed call and other untimed ones passes; and it is a subset match,
+  so an extra time argument passes too (morning with start_time 12:00, which the tool rejects, or afternoon with
+  a later start_time). Provider and specialty are not pinned, because
   "someone else" is searched either way.
 context:
   - patient: "I need a dermatology visit next week, afternoon if possible."

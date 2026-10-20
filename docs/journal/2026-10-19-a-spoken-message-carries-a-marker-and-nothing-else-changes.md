@@ -49,4 +49,4 @@ The readiness review (round 1) asked five questions and Nick took every recommen
 ## What's next
 
 - Show "spoken" on a restored bubble and in the staff email (a follow-up, to file).
-- #340, #306 and #251 may bump the prompt: whichever lands later merges `main` first and takes the next free version. The three 2026-10-18 prompt entries that said #234 takes the next version carry a **Later** note naming `system.v13`.
+- #340, #306 and #251 may bump the prompt: whichever lands later merges `main` first and takes the next free version. The three 2026-10-18 prompt entries that said #234 takes the next version carry a **Later** note naming `system.v13`. **Later (2026-10-20):** `system.v15` (#306) took the next version and keeps the patient's stated time of day on every later search; see [The patient's time of day stays on every search until they change it in words](2026-10-19-the-patients-time-of-day-stays-until-they-change-it.md).
