@@ -6,7 +6,7 @@
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { PutCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { TurnTrace } from "@sched/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createDynamoTurnStore, turnKeys } from "../src/lib/dynamo-turn-store";
 
@@ -124,6 +124,26 @@ describe("createDynamoTurnStore", () => {
     const store = createDynamoTurnStore({ tableName: "t", doc });
     await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toBe(conflict);
     expect(sent).toHaveLength(5);
+  });
+
+  it("waits 10, 20, 40 then 80 ms plus up to 20 ms of jitter between conflicting attempts", async () => {
+    const delays: unknown[] = [];
+    const wait = vi.spyOn(globalThis, "setTimeout").mockImplementation(((run: () => void, ms?: number) => {
+      delays.push(ms);
+      run();
+      return 0;
+    }) as never);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      const conflict = cancelled("TransactionConflict", "None");
+      const { doc } = failing(conflict, conflict, conflict, conflict, conflict);
+      const store = createDynamoTurnStore({ tableName: "t", doc });
+      await expect(store.consumeDailyTurn(PATIENT, "2026-10-05", caps)).rejects.toBe(conflict);
+    } finally {
+      wait.mockRestore();
+      random.mockRestore();
+    }
+    expect(delays).toEqual([20, 30, 50, 90]);
   });
 
   it("rethrows a cancellation that is neither a refusal nor a conflict, without retrying", async () => {
