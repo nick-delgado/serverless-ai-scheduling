@@ -129,11 +129,11 @@ The budget counts the Cost Explorer service `Transcribe` (`DemoBackstopServices`
 ACCT=$(aws sts get-caller-identity --profile sched-admin --query Account --output text)
 aws budgets describe-budget-actions-for-budget --profile sched-admin --account-id "$ACCT" \
   --budget-name sched-demo-backstop \
-  --query 'Actions[].{id:ActionId,type:ActionType,approval:ApprovalModel,when:NotificationType,threshold:ActionThreshold.Value,status:Status}'
+  --query 'Actions[].{id:ActionId,type:ActionType,approval:ApprovalModel,when:NotificationType,threshold:ActionThreshold.ActionThresholdValue,thresholdType:ActionThreshold.ActionThresholdType,status:Status}'
 aws iam list-attached-role-policies --profile sched-admin --role-name "$ROLE"
 ```
 
-Expect one action, `APPLY_IAM_POLICY`, `AUTOMATIC`, `ACTUAL`, threshold 100, status `STANDBY`, and no `sched-demo-backstop-deny` among the role's attached policies. Any other status is the action's state: `EXECUTION_SUCCESS` means it has run (below); `EXECUTION_FAILURE` means it could not attach, usually a stale role name.
+This needs `sched-admin`: `SchedDeployer` is denied both calls. (The API names the threshold `ActionThresholdValue`; `Value` is the CloudFormation property's name, and a query on it returns `null`.) Expect one action, `APPLY_IAM_POLICY`, `AUTOMATIC`, `ACTUAL`, threshold 100 `PERCENTAGE`, status `STANDBY`, and no `sched-demo-backstop-deny` among the role's attached policies. Any other status is the action's state: `EXECUTION_SUCCESS` means it has run (below); `EXECUTION_FAILURE` means it could not attach, usually a stale role name.
 
 **When it trips.** You get the 80% email first, and an email when the action runs. A patient's voice recording then fails as a failed Transcribe connection does today (the mic button reports an error); chat is unaffected. The action runs some hours after the spend crosses 100% (Budgets data lags), and AWS's Budgets Actions blog (not its reference documentation) says an action that applies a policy is reset at the beginning of each budget period, so voice should return on the first of the month with no step from you (not yet seen live: we haven't tripped it). To restore voice sooner, raise the limit or reverse the action:
 
