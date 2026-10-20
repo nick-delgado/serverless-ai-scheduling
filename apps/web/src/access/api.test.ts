@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { configureMockApi, server } from "../mocks/node";
+import { parseMockApiOptions } from "../mocks/options";
 import { MOCK_ISSUED_USER, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { MOCK_BOT_CHECK_TOKEN } from "./config";
 import { RETRY_MESSAGE, requestAccess } from "./api";
@@ -147,5 +148,19 @@ describe("the mock API's answers for POST /api/request-access", () => {
     const start = performance.now();
     await expect(post({ turnstileToken: MOCK_BOT_CHECK_TOKEN })).rejects.toThrow();
     expect(performance.now() - start).toBeGreaterThanOrEqual(50);
+  });
+});
+
+describe("the mock option accessFault", () => {
+  it.each(["none", "network", "bot_check", "capped", "retry"] as const)(
+    "reads %s from stored options",
+    (accessFault) => {
+      expect(parseMockApiOptions({ accessFault }).accessFault).toBe(accessFault);
+    },
+  );
+
+  it("falls back to none for a value it doesn't know", () => {
+    expect(parseMockApiOptions({ accessFault: "teapot" }).accessFault).toBe("none");
+    expect(parseMockApiOptions({}).accessFault).toBe("none");
   });
 });

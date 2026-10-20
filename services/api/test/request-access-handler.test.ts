@@ -114,6 +114,17 @@ describe("handlers/request-access", () => {
     expect(wiring.users.size).toBe(1);
   });
 
+  it("reads the expiry from ACCESS_EXPIRY_HOURS", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.stubEnv("ACCESS_EXPIRY_HOURS", "2");
+    const { handler } = await import("../src/handlers/request-access");
+    const before = Date.now();
+    const body = RequestAccessResponse.parse(JSON.parse((await handler(event)).body));
+    const hours = (Date.parse(body.expiresAt) - before) / 3_600_000;
+    expect(hours).toBeGreaterThan(1.99);
+    expect(hours).toBeLessThan(2.01);
+  });
+
   it("checks Cloudflare's hostname when TURNSTILE_EXPECTED_HOSTNAME is set", async () => {
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     vi.stubEnv("TURNSTILE_EXPECTED_HOSTNAME", "demo.example");
