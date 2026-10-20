@@ -1,0 +1,27 @@
+id: l1-reason-known-one-question
+category: l1
+fixture: clinic-default
+clock: 2026-10-05T13:00:00Z # Mon Oct 5, 9:00 AM EDT
+patient: pat-james
+tags: []
+covers: [FR-030]
+notes: >
+  #201 (S2, from PR #318 / #314; r1/Q-3 (a), r1/A-7, r1/A-8). The reason is known and the profile shows no
+  preferred provider, so the next action is one question (the specialty with family medicine and physical
+  therapy inside it, or when). Count only: any single question passes, and a search fails because the
+  specialty isn't settled. The system prompt names the two specialties, so the context has no `find_providers`
+  result. The failure on `system.v5` was "When would you like to come in? Any day or time that works best for
+  you?" (two question marks).
+context:
+  - patient: "I need to get seen."
+  - assistant: "What is the visit for?"
+  - patient: "Sore right knee. Been bothering me for a couple weeks since I went running."
+  - tool_call: { tool: get_patient_profile, args: {} }
+  - tool_result:
+      tool: get_patient_profile
+      result: { first_name: James, last_name: Whitaker, preferred_provider: null }
+expect:
+  action: respond
+  forbid_tools: [book_appointment, reschedule_appointment, escalate_to_human]
+  response:
+    max_questions: 1

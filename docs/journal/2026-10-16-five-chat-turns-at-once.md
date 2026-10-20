@@ -42,4 +42,4 @@ One step departs from an owner decision:
 
 ## What's next
 
-- #272 holds the rest of F-15 (the account quota) and F-18.
+- #272 holds the rest of F-15 (the account quota) and F-18. **Later (2026-10-19):** #272 closed, see [the #272 entry](2026-10-19-the-security-reviews-account-items-close-two-checked-one-accepted.md).

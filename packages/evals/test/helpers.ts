@@ -23,6 +23,8 @@ import {
   CalibrationSet,
   createTrialEnvironment,
   gradeInvariants,
+  gradeL1,
+  isDeterministicFailure,
   loadScenarios,
   QueuedPatientSimulator,
   runScenarioTrial,
@@ -50,9 +52,9 @@ export function l1Case(id: string): L1Case {
   return c;
 }
 
-/** The committed calibration set: the 2026-10-05 full run's trials (PR #165). */
+/** The 2026-10-05 full run's `system.v1` trials (PR #165), kept as a fixture since #296 moved them out of `calibration/`. */
 function recordedSet(): CalibrationSet {
-  const path = join(import.meta.dirname, "..", "calibration", "transcripts.json");
+  const path = join(import.meta.dirname, "fixtures", "system-v1", "transcripts.json");
   return CalibrationSet.parse(JSON.parse(readFileSync(path, "utf8")));
 }
 
@@ -102,6 +104,15 @@ export const byName = (
   name: string,
 ): GraderResult | undefined =>
   ("graders" in results ? results.graders : results).find((r) => r.name === name);
+
+/** The grader results for `text` (and `calls`) as the next action of L1 case `id`. */
+export const l1Graded = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  gradeL1(l1Case(id), { stopReason: calls.length > 0 ? "tool_use" : "end_turn", toolCalls: calls, text });
+/** The failing deterministic grader names for `text` (and `calls`) as the next action of L1 case `id`. */
+export const l1Failures = (id: string, text: string, calls: { name: string; input: unknown }[] = []) =>
+  l1Graded(id, text, calls)
+    .filter(isDeterministicFailure)
+    .map((r) => r.name);
 
 export const MARIA = FIXTURE_PATIENT_IDS["pat-maria"];
 /** Maria's Dr. Lee dermatology visit, Tue Oct 13 2026, 2:30 PM ET. */

@@ -208,7 +208,7 @@ export const positionedTexts = (events: readonly TranscriptEvent[]): PositionedT
  *   r1/Q-2 (a), r2/A-1);
  * - every other "h:mm AM/PM" time (`unclaimedTimes`, #320, r1/Q-1 (a)), wherever it is, later times in a
  *   sentence included: each needs ET, and a weekday or "that day" in its sentence unless it is a bound or a
- *   backed several-day phrase (`unclaimedTimeLacks`, r1/Q-2 (c); #337, r1/Q-2 (c) and r1/Q-3 (b)). In a
+ *   backed several-day phrase (`unclaimedTimeLacks`, r1/Q-2 (c); #337, r1/Q-2 (c) and r1/Q-3 (b); "next week", "both days" and "each of those days" added by #340). In a
  *   pre-tool text with no day line, each needs ET only (#337, r1/Q-1 (b)).
  * Shared with L1's `expect.invariants` opt-in (#282, r1/Q-2 (b)).
  */

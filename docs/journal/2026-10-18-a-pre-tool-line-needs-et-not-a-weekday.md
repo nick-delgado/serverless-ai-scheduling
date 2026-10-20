@@ -13,7 +13,7 @@ We read the failing sentences in the four results files (an agent did the readin
 Nick settled four questions in the readiness review (round 1), and the agent (a task worker) built them:
 
 - **Pre-tool lines need ET only**, read by position. The grader now gets each assistant text with a flag for whether a tool call follows it directly in the same reply (an `assistant` event then a `tool_call` of the same turn; in L1, the model's text when it made any tool call). A text with a day line keeps the full rule.
-- **A several-day phrase counts as a weekday only when it is backed**: the same text has Monday-to-Friday day lines and each lists that time.
+- **A several-day phrase counts as a weekday only when it is backed**: the same text has Monday-to-Friday day lines and each lists that time. **Later (2026-10-19):** #340 added "every day next week", "each day next week", "all five days next week", "both days" and "each of those days", each accepted only when the text's day lines back it. See [The grader reads "every day next week" and "on both days" as naming the days when day lines back them](2026-10-19-backed-several-day-leadins-in-more-wordings.md).
 - **"ET and later" is a bound**, in the grader only.
 - **No prompt change**: `packages/agent/` is untouched.
 
