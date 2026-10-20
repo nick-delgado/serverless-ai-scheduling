@@ -61,6 +61,7 @@ async function invoke(
     clock,
     systemPrompt: buildSystemPrompt satisfies SystemPromptFactory,
     dailyTurnCap: 50,
+    envDailyTurnCap: 1000,
   });
   const stream = new PassThrough();
   const chunks: Buffer[] = [];

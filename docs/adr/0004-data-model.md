@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** PRD FR-014, FR-030…FR-034, FR-037, NFR-004, NFR-008, ADR-001, ADR-009, issues #5, #13, #56
-- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation-56)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces-17)); 2026-10-03 (key details as built, and the conversation list, #13, #18; see [Amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123)); 2026-10-19 (escalations expire, #271; see [Amendment](#amendment-2026-10-19-escalations-expire-after-30-days-271))
+- **Amended:** 2026-09-29 (conversation ownership, one escalation per conversation; see [Amendment](#amendment-2026-09-29-conversation-ownership-and-one-escalation-per-conversation-56)); 2026-10-02 (turn counters and traces; see [Amendment](#amendment-2026-10-02-turn-counters-and-traces-17)); 2026-10-03 (key details as built, and the conversation list, #13, #18; see [Amendment](#amendment-2026-10-03-key-details-as-built-and-the-conversation-list-123)); 2026-10-19 (escalations expire, #271; see [Amendment](#amendment-2026-10-19-escalations-expire-after-30-days-271)); 2026-10-20 (the env-wide turn counter, #356; see [Amendment](#amendment-2026-10-20-the-env-wide-turn-counter-356))
 
 ## Context
 
@@ -118,7 +118,7 @@ The chat handler (#17) adds two item types for ADR-009's daily turn cap and FR-0
 
 | Entity | PK | SK | Notes |
 |---|---|---|---|
-| Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`; `UpdateItem` `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap`, so concurrent turns can't overshoot; `expiresAt` = two days after the day ends (UTC) |
+| Daily turn counter | `PATIENT#<sub>` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`; `UpdateItem` `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap`, so concurrent turns can't overshoot; `expiresAt` = two days after the day ends (UTC) *(Counted with the env counter in one transaction since #356: see the [amendment of 2026-10-20](#amendment-2026-10-20-the-env-wide-turn-counter-356).)* |
 | Turn trace | `CONV#<convId>` | `TRACE#<turnId>` | `patientId`, `outcome`, the `TurnTrace` as an opaque JSON string; `PutItem` with `attribute_not_exists(PK)`; `expiresAt` = turn start + 30 days |
 
 Neither prefix collides with an existing query: patient queries use `APPT#` and `CONV#`, conversation reads use `MSG#`, and the escalation is the fixed `ESC` key. Traces hold tool inputs (patient free text), so they stay out of CloudWatch (ADR-009).
@@ -141,3 +141,16 @@ The M3 security review (#39, finding F-10) found that escalation items had no `e
 - **Retry behaviour, with no change to `scripts/retry-escalations.ts` (Q-2 (a)).** The script finds a `FAILED` escalation with a Scan, and a Scan still returns an item after its `expiresAt` until DynamoDB deletes it. AWS: items "might be deleted by the system at any time, typically within a few days after their expiration" ([Using time to live (TTL) in DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html)); the same page tells callers to use filter expressions to remove expired items from Scan and Query results, which implies they are returned until then. So a `FAILED` escalation is re-sent while its item exists, including after `expiresAt`, and once deleted it is gone and never sent. If the item is deleted between the send and the status update, the run prints "status not recorded". By day 30 the messages up to the escalation have expired, so the transcript holds only messages written after it, if any.
 - **No backfill (Q-3 (a)).** Items written before this change keep no `expiresAt` and stay until deleted by hand. The data is synthetic.
 - **Point-in-time recovery is unchanged** (Q-4 (a)); see the ADR-009 amendment of the same date.
+
+## Amendment (2026-10-20): the env-wide turn counter (#356)
+
+ADR-009's "Cost and abuse" gains an env-wide cap on new turns per clinic-local day (ADR-009 amendment of the same date). It adds one item type and changes how the per-patient counter is written.
+
+| Entity | PK | SK | Notes |
+|---|---|---|---|
+| Env daily turn counter | `ENV` | `TURNS#<yyyy-mm-dd>` (clinic-local day) | `turns`, `entityType` `ENV_TURN_COUNTER`, `expiresAt` = two days after the day ends (UTC), as the patient's counter. One item per env per day: each env has its own table |
+
+- **`ENV` is no prefix of any other partition key** (`PATIENT#`, `PROVIDER#`, `CONV#`), so no existing query reaches it. Its key is `turnKeys.envDailyTurns(day)` in `services/api/src/lib/dynamo-turn-store.ts`, beside the patient counter's.
+- **One transaction counts a turn.** `TransactWriteItems` holds two conditional `Update`s, the patient's counter first and the env's second, each `ADD turns :one` with `attribute_not_exists(turns) OR turns < :cap` and the same TTL. If either condition fails, neither counter moves, so a turn one cap refuses uses up neither count and there is no read-then-write. The store reads which cap refused from the cancellation reasons by item position; the patient's cap wins when both refuse. The chat role needs no new IAM: a transaction is authorized per item as `UpdateItem`.
+- **The env item is a hot item.** Every new turn of the env writes it. At most 5 chat turns run at once per env (reserved concurrency, #273) and DynamoDB allows 1,000 writes a second to one item, so throughput is no limit. Concurrent transactions on one item can be cancelled with `TransactionConflict`: the store tries a conflict-only cancellation again, at most 5 attempts with jitter, then rethrows (the turn fails as any thrown store error does). A cancellation that includes `ConditionalCheckFailed` is a refusal and is never retried. DynamoDB Local never reports a conflict (20 simultaneous transactions on one item: none cancelled), so that path is tested with a fake `send`; the live check is the only run against the real service.
+- **The one-line result changed:** the store returns `{ ok: true }` or `{ ok: false, refusedBy: "patient" | "env" }`, no longer the count, because a transaction returns no attributes. The `turnsUsedToday` log field went with it; the log names the refusing cap instead.

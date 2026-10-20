@@ -15,7 +15,12 @@ import { createInMemoryRepositories, type EscalationRepo, type InMemoryRepositor
 import { FIXTURE_PATIENT_IDS, buildClinicFixture } from "@sched/tools/fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createInMemoryTurnStore, type InMemoryTurnStore, type RestApiProxyEvent } from "../src";
+import {
+  ENV_CAP_MESSAGE,
+  createInMemoryTurnStore,
+  type InMemoryTurnStore,
+  type RestApiProxyEvent,
+} from "../src";
 
 const aws = vi.hoisted(() => ({
   calls: [] as unknown[],
@@ -227,6 +232,19 @@ describe("handlers/chat", () => {
     expect((await invoke(handler)).at(-1)).toMatchObject({
       type: "error",
       code: "RATE_LIMITED",
+      retryable: false,
+    });
+  });
+
+  it("applies ENV_DAILY_TURN_CAP from the environment, with the env message", async () => {
+    vi.stubEnv("ENV_DAILY_TURN_CAP", "1");
+    const { handler } = await import("../src/handlers/chat");
+
+    expect((await invoke(handler)).at(-1)?.type).toBe("done");
+    expect((await invoke(handler)).at(-1)).toMatchObject({
+      type: "error",
+      code: "RATE_LIMITED",
+      message: ENV_CAP_MESSAGE,
       retryable: false,
     });
   });

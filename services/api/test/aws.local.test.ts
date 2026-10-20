@@ -59,7 +59,6 @@ describe.skipIf(!available)("createAwsStores (DynamoDB Local)", () => {
     });
 
     expect((await stores.repos.patients.get(MARIA))?.firstName).toBe("Maria");
-    expect(await stores.turns.consumeDailyTurn(MARIA, "2026-10-05", 50)).toMatchObject({ ok: true });
     const open = seed.slots.find((s) => s.status === "OPEN" && s.startUtc > NOW);
     const booked = await stores.repos.appointments.book({
       patientId: MARIA,
@@ -69,9 +68,11 @@ describe.skipIf(!available)("createAwsStores (DynamoDB Local)", () => {
 
     expect(booked.ok).toBe(true);
     expect(retries).toBe(1);
-    expect(sent).toEqual(
-      expect.arrayContaining(["GetItemCommand", "UpdateItemCommand", "TransactWriteItemsCommand"]),
-    );
+    // After the booking, so the injected conflict above is the booking's, not the turn counter's.
+    expect(await stores.turns.consumeDailyTurn(MARIA, "2026-10-05", { patient: 50, env: 200 })).toEqual({
+      ok: true,
+    });
+    expect(sent).toEqual(expect.arrayContaining(["GetItemCommand", "TransactWriteItemsCommand"]));
     client.destroy();
   }, 30_000);
 });

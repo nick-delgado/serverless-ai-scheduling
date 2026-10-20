@@ -29,6 +29,13 @@ Parameters:
     Default: 50
     MinValue: 1
     Description: Agent turns per patient per clinic-local day (ADR-009).
+  # The env-wide cap (#356). The default is demo's value, so every env is capped unless it overrides:
+  # e2e passes 1000 (.github/workflows/e2e.yml), and a live check passes 2.
+  EnvDailyTurnCap:
+    Type: Number
+    Default: 200
+    MinValue: 1
+    Description: New agent turns the whole env accepts per clinic-local day, across all patients (ADR-009, #356).
   # The escalation email's addresses (#35): the verified SES identity, kept out of this public repo.
   # scripts/deploy.sh passes them from SES_SENDER / SES_STAFF_RECIPIENT (the git-ignored .env). Empty
   # (an ephemeral env without them) leaves the chat function with no SES grant and no notifier.
@@ -107,6 +114,7 @@ Resources:
           TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
           AGENT_MODEL_PROFILE: !Ref AgentModelProfile
           DAILY_TURN_CAP: !Ref DailyTurnCap
+          ENV_DAILY_TURN_CAP: !Ref EnvDailyTurnCap
           # Read by sesNotifierFromEnv (@sched/tools/ses) in handlers/chat.ts, which passes the notifier
           # to the tools.
           SES_SENDER: !If [SesConfigured, !Ref SesSender, !Ref AWS::NoValue]

@@ -1,7 +1,7 @@
 import { DAILY_CAP_MESSAGE } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
-import { FAILURES, classifyAgentError } from "../src";
+import { ENV_CAP_MESSAGE, FAILURES, classifyAgentError } from "../src";
 
 describe("classifyAgentError", () => {
   it.each([
@@ -42,5 +42,23 @@ describe("FAILURES.dailyCap", () => {
     expect(FAILURES.dailyCap().event.message).toBe(DAILY_CAP_MESSAGE);
     expect(DAILY_CAP_MESSAGE).toContain("1-800-555-0199");
     expect(DAILY_CAP_MESSAGE).toContain("Mon–Fri, 8 AM–5 PM ET");
+  });
+});
+
+describe("FAILURES.envCap", () => {
+  it("is a non-retryable 429 with the env-cap text, which points at the README and never at the front desk (#356)", () => {
+    expect(FAILURES.envCap()).toEqual({
+      httpStatus: 429,
+      event: {
+        type: "error",
+        code: "RATE_LIMITED",
+        message:
+          "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author.",
+        retryable: false,
+      },
+    });
+    expect(ENV_CAP_MESSAGE).not.toContain("1-800-555-0199");
+    expect(ENV_CAP_MESSAGE.length).toBeLessThanOrEqual(500);
+    expect(FAILURES.envCap().event.message).not.toBe(FAILURES.dailyCap().event.message);
   });
 });

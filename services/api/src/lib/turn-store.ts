@@ -1,29 +1,42 @@
 /**
- * Per-turn bookkeeping the chat handler owns: the per-patient daily turn cap (ADR-009) and the per-turn
- * trace (FR-051). Two implementations: in-memory (tests, evals) and DynamoDB (`dynamo-turn-store.ts`).
+ * Per-turn bookkeeping the chat handler owns: the daily turn caps, per patient and for the whole env
+ * (ADR-009, #356), and the per-turn trace (FR-051). Two implementations: in-memory (tests, evals) and DynamoDB (`dynamo-turn-store.ts`).
  *
  * Neither is a repository the tools use, so it lives with the handler, not in `packages/tools`.
  */
 import { TurnTrace, type IsoDate, type PatientId } from "@sched/contracts";
 
 export type ConsumeTurnResult =
-  /** Counted. `used` includes this turn. */
-  | { ok: true; used: number }
-  /** The patient already used `cap` turns today. Nothing was counted. */
-  | { ok: false; used: number };
+  /** Counted against both the patient's day and the env's day. */
+  | { ok: true }
+  /**
+   * A cap was already reached, and nothing was counted against either. `patient` wins when both
+   * refuse (#356, A-3).
+   */
+  | { ok: false; refusedBy: "patient" | "env" };
+
+export interface DailyTurnCaps {
+  /** Turns one patient may use per clinic-local day. */
+  patient: number;
+  /** Turns the whole env accepts per clinic-local day, across all patients. */
+  env: number;
+}
 
 export interface TurnStore {
   /**
-   * Atomically count one agent turn for the patient on `day` (clinic-local date), unless `cap` turns are
-   * already counted. Concurrent calls can't overshoot the cap.
+   * Atomically count one agent turn for the patient and for the env on `day` (clinic-local date), unless
+   * either cap is already reached. A refused turn counts against neither. Concurrent calls can't
+   * overshoot either cap.
    */
-  consumeDailyTurn(patientId: PatientId, day: IsoDate, cap: number): Promise<ConsumeTurnResult>;
+  consumeDailyTurn(patientId: PatientId, day: IsoDate, caps: DailyTurnCaps): Promise<ConsumeTurnResult>;
   /** Store the turn's trace. Write-once per turn; it carries tool inputs, so it never goes to logs. */
   saveTrace(patientId: PatientId, trace: TurnTrace): Promise<void>;
 }
 
 export interface InMemoryTurnStore extends TurnStore {
   turnsUsed(patientId: PatientId, day: IsoDate): number;
+  /** Turns counted for the whole env on `day`. */
+  envTurnsUsed(day: IsoDate): number;
   /** Stored traces, in save order. */
   readonly traces: { patientId: PatientId; trace: TurnTrace }[];
 }
@@ -32,14 +45,20 @@ export function createInMemoryTurnStore(): InMemoryTurnStore {
   const counts = new Map<string, number>();
   const traces: { patientId: PatientId; trace: TurnTrace }[] = [];
   const key = (patientId: string, day: string) => `${patientId}#${day}`;
+  // "ENV" can't be a patient ID (a UUID), so the two kinds of key never collide.
+  const envKey = (day: string) => `ENV#${day}`;
   return {
     traces,
     turnsUsed: (patientId, day) => counts.get(key(patientId, day)) ?? 0,
-    consumeDailyTurn(patientId, day, cap) {
-      const used = counts.get(key(patientId, day)) ?? 0;
-      if (used >= cap) return Promise.resolve({ ok: false, used });
-      counts.set(key(patientId, day), used + 1);
-      return Promise.resolve({ ok: true, used: used + 1 });
+    envTurnsUsed: (day) => counts.get(envKey(day)) ?? 0,
+    consumeDailyTurn(patientId, day, caps) {
+      const patientUsed = counts.get(key(patientId, day)) ?? 0;
+      if (patientUsed >= caps.patient) return Promise.resolve({ ok: false, refusedBy: "patient" });
+      const envUsed = counts.get(envKey(day)) ?? 0;
+      if (envUsed >= caps.env) return Promise.resolve({ ok: false, refusedBy: "env" });
+      counts.set(key(patientId, day), patientUsed + 1);
+      counts.set(envKey(day), envUsed + 1);
+      return Promise.resolve({ ok: true });
     },
     saveTrace(patientId, trace) {
       if (traces.some((t) => t.trace.turnId === trace.turnId)) {
