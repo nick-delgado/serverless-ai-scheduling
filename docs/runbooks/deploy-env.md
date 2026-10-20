@@ -53,7 +53,7 @@ date -u +%FT%TZ; npx tsx scripts/seed-users.ts --env "$env" --env-file "$main/.e
 date -u +%FT%TZ; npx tsx scripts/seed-data.ts --env "$env"; date -u +%FT%TZ                           # 4. providers, slots, profiles
 ```
 
-1. **Stacks.** `deploy.sh all <env>` validates, builds and deploys `data`, `auth`, `api` and `web` in that order, as the CloudFormation execution role. The `web` stack's CloudFront distribution takes the longest. An ephemeral env gets `DeletionProtection=disabled`; `dev` and `demo` keep it on. Overrides go after `--` (for example `-- DailyTurnCap=500`); `api` defaults to the `sonnet-4.6` profile and 50 turns per patient per day. From a branch other than `main`, a deploy to `dev` or `demo` prints a note that it is an unmerged branch.
+1. **Stacks.** `deploy.sh all <env>` validates, builds and deploys `data`, `auth`, `api` and `web` in that order, as the CloudFormation execution role. The `web` stack's CloudFront distribution takes the longest. An ephemeral env gets `DeletionProtection=disabled`; `dev` and `demo` keep it on. Overrides go after `--` (for example `-- DailyTurnCap=500`); `api` defaults to the `sonnet-4.6` profile, 50 turns per patient per day and 200 turns per env per day ("Daily turn caps" below). From a branch other than `main`, a deploy to `dev` or `demo` prints a note that it is an unmerged branch.
 2. **SPA.** `deploy-web.sh <env>` reads the env's Cognito IDs, bucket, distribution and domain from SSM, builds `apps/web`, syncs it to the site bucket and waits for the CloudFront invalidation. `--dry-run` prints the plan and changes nothing.
 3. **Patients.** `seed-users.ts` creates a Cognito user for each `DEMO_PASSWORD_*` the env file sets (username `<first>.<last>`, for example `maria.santos`) and writes `.seed/cognito-users.<env>.json` (git-ignored) in the running checkout. It reads only the file `--env-file` names, which defaults to the running checkout's `.env`; a worktree has none, so pass the main checkout's. **For `demo`, pass `--env-file "$main/.env.demo"`.** Re-running is safe: existing users keep their `sub` and get the file's password again.
 4. **Table data.** `seed-data.ts` writes the 8 fixture providers, 4 weeks of slots from today and each mapped patient's profile and appointments (`aws-setup.md`, "Appendix: seeding an env's demo data"). Run it from the same checkout as step 3, since it reads that checkout's `.seed/` mapping. Never pass `--reset` on `dev` or `demo` without Nick.
@@ -83,6 +83,21 @@ Record the result without passwords, tokens, email addresses or the domain: the 
 ## Keeping a standing env seeded
 
 The seed covers 4 weeks from the day it ran. For a standing env (`dev`, `demo`), re-run step 4 (`seed-data.ts --env <env>`, no `--reset`) before the window runs out: it only adds the missing slots and keeps every booking. Re-run step 3 only to add a patient or change a password.
+
+## Daily turn caps
+
+Two caps count new turns per clinic-local day (ADR-009 and its 2026-10-20 amendment). Both are `api` stack parameters, counted together before any model call; a repeat or re-run of a stored message counts against neither.
+
+| Cap | Parameter | Default | Who overrides it |
+|---|---|---|---|
+| One patient's turns | `DailyTurnCap` | 50 | `e2e` passes 500 |
+| The whole env's turns, across patients | `EnvDailyTurnCap` | 200 (`demo`'s value; every env is capped unless it overrides) | `e2e` passes 1000; a live check passes 2 |
+
+- **Set or change a cap** by deploying `api` with the override: `scripts/deploy.sh api <env> -- EnvDailyTurnCap=<n>`. An ephemeral env takes it on `deploy.sh all <name> -- EnvDailyTurnCap=2`.
+- **A cap persists.** `sam deploy` marks every template parameter that `--parameter-overrides` doesn't name as "use previous value" (`samcli/lib/deploy/deployer.py`, `create_changeset`), so a later deploy without the override keeps the stack's value. A parameter the stack doesn't have yet (the first `api` deploy after #356) takes its template default, so `demo` starts at 200 with no override. Check what a stack holds: `aws cloudformation describe-stacks --profile sched-dev --region us-east-1 --stack-name sched-<env>-api --query "Stacks[0].Parameters"`.
+- **What a patient sees.** Over their own cap: "You've reached today's message limit for the assistant" with the front-desk number and hours. Over the env's cap: "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author." No front-desk number. Both are an error bubble with no Retry (HTTP 429, `RATE_LIMITED`, `retryable: false`); the patient's message wins when both are reached. Until #44 adds a contact line, the README has none, which is fine while Nick hands out access himself.
+- **Both reset at midnight Eastern** (the clinic-local date). There is no reset command: to let reviewers in sooner, raise `EnvDailyTurnCap` for the day with the command above and lower it again after. Counters expire two days after their day.
+- **Cost bound.** A short Sonnet 4.6 turn cost about $0.01 and a tool-heavy one several times that (an estimate, not a measurement): 200 turns is roughly $2 to $10 a day.
 
 ## Teardown
 

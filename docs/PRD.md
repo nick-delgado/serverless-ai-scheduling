@@ -62,9 +62,9 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 | FR-012 | M | Processing feedback while the agent works | A typing/processing animation shows from send until the first text arrives. **Tool-status chips** show what the agent is doing (e.g., "Checking availability…"). |
 | FR-013 | M | Agent responses appear a character at a time | Text renders progressively at a smooth, readable pace, never all at once. `prefers-reduced-motion` renders immediately. Screen readers get the final message via an `aria-live` region, not per character. The session greeting (FR-010) is a templated server string, not an agent response, and appears whole. |
 | FR-014 | S | Conversation restored on refresh | Reloading the page, or reopening the app while still signed in, shows the conversation started since this sign-in as the patient saw it: their messages and one reply per assistant turn, text only (no tool activity). A login session is one sign-in, across reloads and tabs, until sign-out or the end of the sign-in (refresh token expired or revoked); the SPA keeps `{ sub, conversationId }` in `localStorage` and clears it on sign-out. After sign-out, or once the sign-in has ended, the chat starts empty; a conversation from an earlier sign-in is never shown. Messages are kept 30 days (ADR-004). |
-| FR-015 | M | Errors are recoverable | Network or agent failure → a friendly error bubble. If the error is retryable (a network failure; an HTTP 5xx without an `error` event; a stream that ends without `done` or `error`, #138; or `retryable: true`: `RATE_LIMITED` for a busy model quota, `AGENT_UNAVAILABLE`), the bubble offers **Retry**, which resends the same text with the same `clientMessageId` and `conversationId`. Otherwise it shows the error's message without Retry (sign in again; for the daily cap, the front-desk number; the generic message for a 4xx without an event or a malformed stream). The patient's message is never lost: the server stores it before the agent runs, and a retried send isn't stored or counted twice; a repeat of an answered message streams the stored reply again, without a model call or a counted turn (#104). A turn that starts a conversation names it before the agent runs (#160), so a Retry after a cut stream continues it. The exception is a first turn that fails before that name reaches the client (a network failure before any byte, or API Gateway's or CloudFront's own 5xx): its Retry carries no `conversationId`, so the server stores the message again in a new conversation and counts a second turn. |
+| FR-015 | M | Errors are recoverable | Network or agent failure → a friendly error bubble. If the error is retryable (a network failure; an HTTP 5xx without an `error` event; a stream that ends without `done` or `error`, #138; or `retryable: true`: `RATE_LIMITED` for a busy model quota, `AGENT_UNAVAILABLE`), the bubble offers **Retry**, which resends the same text with the same `clientMessageId` and `conversationId`. Otherwise it shows the error's message without Retry (sign in again; for the patient's daily cap, the front-desk number; for the env-wide daily cap, that the demo reached today's limit and where to find the author, #356; the generic message for a 4xx without an event or a malformed stream). The patient's message is never lost: the server stores it before the agent runs, and a retried send isn't stored or counted twice; a repeat of an answered message streams the stored reply again, without a model call or a counted turn (#104). A turn that starts a conversation names it before the agent runs (#160), so a Retry after a cut stream continues it. The exception is a first turn that fails before that name reaches the client (a network failure before any byte, or API Gateway's or CloudFront's own 5xx): its Retry carries no `conversationId`, so the server stores the message again in a new conversation and counts a second turn. |
 | FR-016 | S | Demo disclaimer | A persistent banner: "Demo — fictional clinic. Do not enter real health information." |
-| FR-017 | M | Usage limits | A patient can send at most 50 messages to the assistant per clinic-local day (configurable). Over the limit, the chat says so and gives the front-desk number and hours; Retry isn't offered. (ADR-009) |
+| FR-017 | M | Usage limits | A patient can send at most 50 messages to the assistant per clinic-local day (configurable). Over the limit, the chat says so and gives the front-desk number and hours; Retry isn't offered. The whole env also accepts at most 200 new messages per clinic-local day across all patients (configurable per env, `EnvDailyTurnCap`); over that limit the chat says the demo has reached today's limit and points to the project's README, with no front-desk number and no Retry (#356). (ADR-009) |
 
 ### 4.3 Voice input
 
@@ -182,9 +182,9 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | FR-012 | #4, #17, #26, #36, #40, #122 |
 | FR-013 | #4, #7, #17, #26, #36, #40, #57 |
 | FR-014 | #18, #27, #36, #40, #104 |
-| FR-015 | #17, #27, #36, #40, #104, #105, #138, #160 |
+| FR-015 | #17, #27, #36, #40, #104, #105, #138, #160, #356 |
 | FR-016 | #24, #36, #40, #99, #100 |
-| FR-017 | #17, #27, #39 |
+| FR-017 | #17, #27, #39, #356 |
 | FR-020 | #10, #28, #36, #40 |
 | FR-021 | #10, #28, #36, #40 |
 | FR-022 | #10, #28, #29, #36, #40 |
@@ -207,7 +207,7 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | NFR-001 | #7, #9, #37, #38 |
 | NFR-002 | #10, #29 |
 | NFR-003 | #9, #37, #45 |
-| NFR-004 | #39 |
+| NFR-004 | #39, #356 |
 | NFR-005 | #24, #25, #26, #27, #28 |
 | NFR-006 | #24, #40 |
 | NFR-007 | #17, #38 |
