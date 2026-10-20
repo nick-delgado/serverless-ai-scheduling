@@ -148,7 +148,7 @@ describe("cognitoAdmin", () => {
   it("throws when the user has no sub attribute", async () => {
     const { client } = fakeCognito(() => ({ UserAttributes: [{ Name: "given_name", Value: "Maria" }] }));
     await expect(cognitoAdmin(client, "pool-a").getSub("maria.santos")).rejects.toThrow(
-      "User maria.santos has no sub attribute",
+      /^User maria\.santos has no sub attribute$/,
     );
   });
 

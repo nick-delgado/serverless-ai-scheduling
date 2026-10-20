@@ -139,6 +139,31 @@ describe("the request page", () => {
     expect(await screen.findByRole("heading", { name: "Your demo account" })).toBeVisible();
   });
 
+  it("shows that it is working while the request is out, then goes back to the button", async () => {
+    server.use(
+      http.post("/api/request-access", async () => {
+        await new Promise((r) => setTimeout(r, 80));
+        return HttpResponse.json({ error: { code: "TRY_AGAIN", message: "Try again." } }, { status: 503 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    const busy = await screen.findByRole("button", { name: "Creating your account…" });
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    await screen.findByText("Try again.");
+    const idle = screen.getByRole("button", { name: "Request demo access" });
+    expect(idle).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("starts with nothing copied", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    await screen.findByRole("button", { name: "Copy username and password" });
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
   it("sends one request for a double click", async () => {
     let calls = 0;
     server.use(
@@ -292,6 +317,36 @@ describe("the Turnstile widget", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("link", { name: "Back to sign in" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith("widget-1"));
+  });
+
+  it("loads no widget script on the dev server's mock bot check", async () => {
+    renderApp();
+    await screen.findByRole("button", { name: "Request demo access" });
+    expect(scriptEl()).toBeNull();
+    expect(document.querySelector(".access__widget")).toBeNull();
+  });
+
+  it("takes the widget away once its script has failed", async () => {
+    vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
+    await freshApp();
+    expect(document.querySelector(".access__widget")).not.toBeNull();
+    await waitFor(() => expect(scriptEl()).not.toBeNull());
+    scriptEl()?.dispatchEvent(new Event("error"));
+    await screen.findByText(UNAVAILABLE_MESSAGE);
+    expect(document.querySelector(".access__widget")).toBeNull();
+  });
+
+  it("renders nothing into the widget if the page went away before the script loaded", async () => {
+    vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
+    const { api } = fakeTurnstile();
+    const user = userEvent.setup();
+    await freshApp();
+    await waitFor(() => expect(scriptEl()).not.toBeNull());
+    await user.click(screen.getByRole("link", { name: "Back to sign in" }));
+    await screen.findByRole("heading", { name: "Sign in" });
+    await loadScript();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(api.render).not.toHaveBeenCalled();
   });
 
   it("is unavailable, and sends nothing, in a production build with no site key", async () => {

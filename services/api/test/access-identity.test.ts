@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BIRTH_DATES,
+  cryptoRandomInt,
   FIRST_NAMES,
   LAST_NAMES,
   newIdentity,
@@ -86,6 +87,9 @@ describe("newIdentity", () => {
   });
 });
 
+// The password for the lcg(7) stream above, as the implementation produced it when this test was written.
+const GOLDEN_PASSWORD = "2ZAmDCze6CZYwdUV";
+
 describe("newPassword", () => {
   it("meets the User Pool's policy every time, at 16 characters", () => {
     for (let seed = 1; seed <= 300; seed++) {
@@ -99,13 +103,27 @@ describe("newPassword", () => {
     for (let seed = 1; seed <= 300; seed++) expect(newPassword(lcg(seed))).not.toMatch(/[0O1lI]/);
   });
 
-  it("shuffles the required characters instead of leaving them in front", () => {
-    // With every draw 0 the picks are "aA2" then thirteen "a", and each swap trades with position 0.
-    // Without the shuffle the password would be "aA2aaaaaaaaaaaaa".
-    expect(newPassword(scripted(0))).toBe("A2aaaaaaaaaaaaaa");
+  it("shuffles the required characters, drawing every position from the whole of what is left", () => {
+    // A golden value for a fixed draw sequence: any change to the picks or to the shuffle's range moves it.
+    expect(newPassword(lcg(7))).toBe(GOLDEN_PASSWORD);
+    expect(newPassword(lcg(8))).not.toBe(GOLDEN_PASSWORD);
   });
 
   it("differs between draws", () => {
     expect(newPassword(lcg(1))).not.toBe(newPassword(lcg(2)));
+  });
+});
+
+describe("cryptoRandomInt", () => {
+  it("draws from [0, max) and covers the whole range", () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 400; i++) {
+      const n = cryptoRandomInt(4);
+      expect(n).toBeGreaterThanOrEqual(0);
+      expect(n).toBeLessThan(4);
+      seen.add(n);
+    }
+    expect([...seen].sort()).toEqual([0, 1, 2, 3]);
+    expect(cryptoRandomInt(1)).toBe(0);
   });
 });

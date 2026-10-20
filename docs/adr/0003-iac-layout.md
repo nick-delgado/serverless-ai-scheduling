@@ -4,7 +4,7 @@
 - **Date:** 2026-09-28
 - **Deciders:** Nick Delgado (+ Claude, drafting)
 - **Related:** ADR-005, ADR-007, runbook `docs/runbooks/aws-setup.md`
-- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41)); 2026-10-14 (observability in the api stack, #38; see [Amendment](#amendment-2026-10-14-observability-in-the-api-stack-38))
+- **Amended:** 2026-09-29 (what the first real deploys changed; see [Amendment](#amendment-2026-09-29-what-the-first-real-deploys-changed-6-7)); 2026-10-03 (validation as run, and the redeploy criterion, #123; see [Amendment](#amendment-2026-10-03-validation-as-run-and-the-redeploy-criterion-123)); 2026-10-04 (the SES grant and parameters as built, #35; see [Amendment](#amendment-2026-10-04-the-ses-grant-and-parameters-as-built-35)); 2026-10-08 (CI roles through GitHub OIDC, #41; see [Amendment](#amendment-2026-10-08-ci-roles-through-github-oidc-41)); 2026-10-14 (observability in the api stack, #38; see [Amendment](#amendment-2026-10-14-observability-in-the-api-stack-38)); 2026-10-20 (a conditional function and route, and the scheduling pattern, #357; see [Amendment](#amendment-2026-10-20-a-conditional-function-route-and-parameter-in-the-api-stack-the-scheduling-pattern-357))
 
 ## Context
 
@@ -104,4 +104,12 @@ The decision stands. #38 adds to the api stack, settled on its readiness review 
 - **No action on `NotificationFailedAlarm`** (owner decision r1/Q-1 (a)). The alarm only changes state, and the `sched-<env>-api` dashboard shows that state in an alarm widget beside the `Sched/NotificationFailed` chart. There's no SNS topic, no subscription, no bootstrap change and no new manual step. Someone has to look at the dashboard to see a failure.
 - **A CloudWatch dashboard, `sched-<env>-api`**, is a stack resource like the alarm. It charts the chat function's embedded-metric figures (namespace `Sched`, dimension `Env`: TTFT and turn latency at p50 and p95, tokens, turn errors by code, the tool error rate, booking conflict retries), and `AWS/Lambda` `Errors` for both functions.
 - **X-Ray on the chat function only** (`Tracing: Active`, owner decision r1/Q-5 (a)). The permissions boundary already allows the trace writes, so the bootstrap stack is unchanged.
+
+## Amendment (2026-10-20): a conditional function, route and parameter in the api stack; the scheduling pattern (#357)
+
+The decision stands. The `api` stack now holds one set of resources that exist only in some envs, and the second PR of #357 will add a scheduled one. Owner decisions r1/Q-4 (a) and r1/A-14 on #357.
+
+- **A parameter and a condition switch the public route on.** `RequestAccess` (`on` or `off`, default `off`) drives the condition `RequestAccessOn`, which creates the request function, its log group, its invoke permission and the `/api/request-access` path of the API's OpenAPI body (an `Fn::If` around the path, with `AWS::NoValue` when off). The stack publishes the result to SSM as `/sched/<env>/api/request-access`, which `scripts/deploy-web.sh` reads to build the SPA with or without the page. SAM's own `Api` event can't add the path: SAM leaves an explicit `DefinitionBody` alone (seen in the transformed template).
+- **The scheduling pattern for #325.** A function that runs on a schedule is a SAM `Schedule` event on an `AWS::Serverless::Function` in the owning stack, with its own log group and a role that grants only what it calls. The bootstrap stack's exec role carries `events:PutRule`, `PutTargets`, `DescribeRule`, `DeleteRule` and `RemoveTargets` on `sched-*` rules for it.
+- **Overrides persist.** `aws cloudformation deploy` and `sam deploy` use "the stack's existing value" for a parameter the command doesn't name, so a later `scripts/deploy.sh api <env>` without `-- RequestAccess=on` keeps the page on. `deploy.sh` still refuses `RequestAccess=on` for `dev`, `demo` and `e2e` until the expiry job exists.
 

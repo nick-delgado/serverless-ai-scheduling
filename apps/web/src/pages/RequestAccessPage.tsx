@@ -139,7 +139,7 @@ export function RequestAccessPage() {
         <button
           type="button"
           className="access__button"
-          disabled={token === undefined || unavailable || failure?.kind === "capped"}
+          disabled={token === undefined || failure?.kind === "capped"}
           aria-busy={pending}
           onClick={() => void onRequest()}
         >

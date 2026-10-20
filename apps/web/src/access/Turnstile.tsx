@@ -42,9 +42,9 @@ function loadTurnstile(): Promise<TurnstileApi> {
     };
     script.onerror = () => reject(new Error("The bot check could not be loaded."));
     document.head.append(script);
-  }).catch((error: unknown) => {
+  }).catch((error: Error) => {
     loading = undefined;
-    throw error instanceof Error ? error : new Error(String(error));
+    throw error;
   });
   return loading;
 }

@@ -58,6 +58,20 @@ describe("createInMemoryAccessStore", () => {
     expect(store.dailyCount("2026-10-20")).toBe(1);
   });
 
+  it("refuses everything at a cap of 0, with nothing counted", async () => {
+    const store = createInMemoryAccessStore();
+    await expect(store.reserve(reserveN(1), { daily: 0, active: 5 })).resolves.toEqual({
+      ok: false,
+      reason: "capped",
+    });
+    await expect(store.reserve(reserveN(2), { daily: 5, active: 0 })).resolves.toEqual({
+      ok: false,
+      reason: "capped",
+    });
+    expect(store.issued).toHaveLength(0);
+    expect(store.dailyCount("2026-10-20")).toBe(0);
+  });
+
   it("refuses at the active cap, on any day, and counts nothing for the refused request", async () => {
     const store = createInMemoryAccessStore();
     await store.reserve(reserveN(1), { daily: 5, active: 1 });
@@ -188,6 +202,27 @@ describe("createDynamoAccessStore", () => {
       reason: "capped",
     });
     expect(sent).toHaveLength(1);
+  });
+
+  it("reads a failed counter as the cap even when the registry entry also failed", async () => {
+    const { doc } = fakeDoc(() => {
+      throw cancelled("ConditionalCheckFailed", "None", "ConditionalCheckFailed");
+    });
+    await expect(
+      createDynamoAccessStore({ tableName: "t", doc }).reserve(RESERVATION, CAPS),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "capped",
+    });
+  });
+
+  it("throws, not conflict, when the registry entry exists and another item only conflicted", async () => {
+    const { doc } = fakeDoc(() => {
+      throw cancelled("TransactionConflict", "None", "ConditionalCheckFailed");
+    });
+    await expect(
+      createDynamoAccessStore({ tableName: "t", doc }).reserve(RESERVATION, CAPS),
+    ).rejects.toBeInstanceOf(TransactionCanceledException);
   });
 
   it("reads a cancellation of conflicts alone as a conflict, with no retry loop", async () => {

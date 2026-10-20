@@ -132,3 +132,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-19 | [A line before the first lookup: one required sentence, measured on two clinic-local days](2026-10-19-a-line-before-the-first-lookup.md) | 5. What the evals showed |
 | 2026-10-20 | [The whole env gets its own daily turn cap, counted in the same transaction as the patient's](2026-10-20-the-env-gets-its-own-daily-turn-cap.md) | 6. What I'd do next |
 | 2026-10-20 | [The spend backstop covers voice but not Bedrock, because Bedrock can't be told apart without changing the model IDs](2026-10-20-the-spend-backstop-covers-voice-not-bedrock.md) | 6. What I'd do next |
+| 2026-10-20 | [A reviewer can request a demo patient, and the bot check comes before anything is counted or created](2026-10-20-a-reviewer-can-request-a-demo-patient-and-the-bot-check-comes-first.md) | 6. What I'd do next |

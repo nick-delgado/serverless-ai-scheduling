@@ -14,6 +14,9 @@ import type { BotCheckResult, BotVerifier } from "../src/lib/bot-check";
 import { type CognitoAdmin, passwordProblems } from "../src/lib/cognito-admin";
 import {
   ACCESS_FAILURES,
+  DEFAULT_ACCESS_ACTIVE_CAP,
+  DEFAULT_ACCESS_DAILY_CAP,
+  DEFAULT_ACCESS_EXPIRY_HOURS,
   handleRequestAccess,
   requestAccessProxyHandler,
   type RequestAccessDeps,
@@ -183,6 +186,45 @@ describe("issuing an account", () => {
     await call(f);
     expect(f.store.dailyCount("2026-10-20")).toBe(1);
     expect(f.store.dailyCount("2026-10-21")).toBe(0);
+  });
+});
+
+describe("the defaults and the expiry time", () => {
+  it("defaults to 10 a day, 5 at once and 24 hours", () => {
+    expect([DEFAULT_ACCESS_DAILY_CAP, DEFAULT_ACCESS_ACTIVE_CAP, DEFAULT_ACCESS_EXPIRY_HOURS]).toEqual([
+      10, 5, 24,
+    ]);
+  });
+
+  it("dates the expiry exactly the configured hours after the request, to the second", async () => {
+    // 14:00:00.990 plus 24 hours is 14:00:00.990 the next day, which is whole second :00; plus 24 ms more would be :01.
+    const f = setup();
+    (f.deps.clock as FrozenClock).set("2026-10-20T14:00:00.990Z");
+    f.deps.config = { ...f.deps.config, expiryHours: 24 };
+    const body = RequestAccessResponse.parse(JSON.parse((await call(f)).body));
+    expect(body.expiresAt).toBe("2026-10-21T14:00:00Z");
+    expect(f.store.issued[0]?.accessExpiresAt).toBe("2026-10-21T14:00:00Z");
+    expect(f.store.patients[0]?.createdAt).toBe("2026-10-20T14:00:00Z");
+  });
+
+  it("uses the configured number of hours", async () => {
+    const f = setup();
+    f.deps.config = { ...f.deps.config, expiryHours: 1 };
+    const body = RequestAccessResponse.parse(JSON.parse((await call(f)).body));
+    expect(body.expiresAt).toBe("2026-10-20T15:00:00Z");
+  });
+
+  it("runs with only the required dependencies: real randomness, a UUID request ID, a silent log", async () => {
+    const f = setup();
+    const { random: _random, newRequestId: _id, log: _log, monotonicNow: _now, ...required } = f.deps;
+    const res = await handleRequestAccess({ body: BODY, requestId: "req-1" }, required);
+    expect(res.statusCode).toBe(200);
+    const body = RequestAccessResponse.parse(JSON.parse(res.body));
+    expect(body.username).toMatch(/^user-[a-z0-9]{8}$/);
+    expect(f.store.issued[0]?.requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(f.logs).toEqual([]);
   });
 });
 

@@ -4,7 +4,7 @@
  * `1x0000000000000000000000000000000AA`, the always-fails secret `2x0000000000000000000000000000000AA`, and a
  * dummy token `XXXX.DUMMY.TOKEN.XXXX`. Nothing here calls Cloudflare.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createTurnstileVerifier, SITEVERIFY_TIMEOUT_MS, SITEVERIFY_URL } from "../src/lib/bot-check";
 
@@ -48,12 +48,14 @@ describe("createTurnstileVerifier", () => {
     expect(String(f.calls[0]?.init.body)).not.toContain("remoteip");
   });
 
-  it("gives Cloudflare a timeout, so a hung call can't hold the Lambda", async () => {
+  it("gives Cloudflare a 4-second timeout, so a hung call can't hold the Lambda", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const f = fakeFetch(() => json({ success: true }));
     await createTurnstileVerifier({ secret: PASS_SECRET, fetch: f.impl })(TOKEN);
-    const signal = f.calls[0]?.init.signal;
-    expect(signal).toBeInstanceOf(AbortSignal);
-    expect(SITEVERIFY_TIMEOUT_MS).toBeLessThan(10_000);
+    expect(f.calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+    expect(timeout).toHaveBeenCalledWith(4000);
+    expect(SITEVERIFY_TIMEOUT_MS).toBe(4000);
+    timeout.mockRestore();
   });
 
   it("rejects a token Cloudflare refuses (success false, with the always-fails secret)", async () => {
@@ -89,6 +91,16 @@ describe("createTurnstileVerifier", () => {
       fetch: f.impl,
     });
     await expect(verify(TOKEN)).resolves.toEqual({ ok: false, reason: "rejected" });
+  });
+
+  it("reads a secret problem as unavailable even when a hostname is expected and none came back", async () => {
+    const f = fakeFetch(() => json({ success: false, "error-codes": ["invalid-input-secret"] }));
+    const verify = createTurnstileVerifier({
+      secret: PASS_SECRET,
+      expectedHostname: "demo.example",
+      fetch: f.impl,
+    });
+    await expect(verify(TOKEN)).resolves.toEqual({ ok: false, reason: "unavailable" });
   });
 
   it("accepts a token served on the expected hostname", async () => {

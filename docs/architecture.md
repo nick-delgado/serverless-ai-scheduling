@@ -23,6 +23,7 @@ This is a one-page overview; each part links to the ADR that decided it. It will
                     │  Cognito User Pool authorizer (ADR-005)    │
                     │  POST /api/chat   (response streaming)     │
                     │  POST /api/session (greeting + history)    ├───────────────────┐
+                    │  POST /api/request-access (public, if on)  │                   │
                     └───────────┬────────────────────────────────┘                   │
                                 ▼ POST /api/chat                                     ▼
                     ┌────────────────────────────────────────────┐    ┌──────────────────────────────┐
@@ -58,6 +59,16 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 6. ChatFn appends the turn's remaining messages, skipping the first entry of `newMessages` (the user message it already stored), so the assistant's replies and tool results plus the turn trace go to DynamoDB, then sends `done`.
 
 <!-- sync-end:chat-turn-order -->
+
+## Requesting demo access (where the page is on)
+
+Only envs whose `api` stack has `RequestAccess=on` have this route, and in the first part of #357 that is an ephemeral check env only (ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20). It is the API's one route with no authorizer.
+
+1. The sign-in page links to `/request-access`; the page shows a Cloudflare Turnstile widget and one button, and asks for nothing about the reviewer.
+2. The SPA sends `POST /api/request-access {turnstileToken}` with no `Authorization`. RequestAccessFn (Lambda, no Bedrock, no agent code) posts the token and its secret to Cloudflare's `siteverify` and goes on only if `success` is true. A failed check creates nothing and counts against no cap; an unreachable Cloudflare answers "try again".
+3. It reserves a place: one `TransactWriteItems` adds one to the day's counter and the active counter, each conditional on its cap, and puts a registry entry under `ACCESS#ISSUED`. Past either cap it answers 429 with the "requests have run out" message and creates nothing else.
+4. It creates the Cognito user (`AdminCreateUser`, no message, then `AdminSetUserPassword`, permanent), reads its `sub`, and writes the `PATIENT#<sub>` profile and the entry's `sub` in a second transaction. If a step fails, it deletes the user once and answers "try again".
+5. It answers with the username, a generated password and the synthetic patient's name, `no-store`; the page shows them once and keeps them in memory only. The reviewer then signs in at `/login` like any patient, and everything after that is the chat turn above, with the identity from the verified token.
 
 ## Greeting and restore
 

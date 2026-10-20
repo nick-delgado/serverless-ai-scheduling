@@ -87,4 +87,48 @@ describe("request access (#357)", () => {
     expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x".repeat(2048) }).success).toBe(true);
     expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x".repeat(2049) }).success).toBe(false);
   });
+
+  const response = (changes: Record<string, unknown>) =>
+    C.RequestAccessResponse.safeParse({ ...EXAMPLES.RequestAccessResponse, ...changes }).success;
+
+  it("keeps the password between 12 and 64 characters", () => {
+    expect(response({ password: "x".repeat(12) })).toBe(true);
+    expect(response({ password: "x".repeat(11) })).toBe(false);
+    expect(response({ password: "x".repeat(64) })).toBe(true);
+    expect(response({ password: "x".repeat(65) })).toBe(false);
+  });
+
+  it.each(["firstName", "lastName"])("keeps %s between 1 and 60 characters", (field) => {
+    expect(response({ [field]: "x" })).toBe(true);
+    expect(response({ [field]: "" })).toBe(false);
+    expect(response({ [field]: "x".repeat(60) })).toBe(true);
+    expect(response({ [field]: "x".repeat(61) })).toBe(false);
+  });
+
+  it("anchors the username at its start: nothing may come before user-", () => {
+    expect(response({ username: "xuser-x7k2m9qa" })).toBe(false);
+  });
+
+  it("takes a one-character token and nothing shorter", () => {
+    expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x" }).success).toBe(true);
+  });
+
+  it("keeps an error message between 1 and 500 characters", () => {
+    const error = (message: string) =>
+      C.RequestAccessError.safeParse({ error: { code: "TRY_AGAIN", message } }).success;
+    expect(error("x")).toBe(true);
+    expect(error("")).toBe(false);
+    expect(error("x".repeat(500))).toBe(true);
+    expect(error("x".repeat(501))).toBe(false);
+  });
+
+  it("names exactly the four codes this route answers with", () => {
+    expect(C.RequestAccessErrorCode.options).toEqual([
+      "BAD_REQUEST",
+      "BOT_CHECK_FAILED",
+      "CAP_REACHED",
+      "TRY_AGAIN",
+    ]);
+    expect(C.ACCESS_CAP_MESSAGE).toContain("contact Nick");
+  });
 });

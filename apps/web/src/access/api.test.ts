@@ -1,4 +1,4 @@
-import { ACCESS_CAP_MESSAGE } from "@sched/contracts";
+import { ACCESS_CAP_MESSAGE, RequestAccessResponse } from "@sched/contracts";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -102,5 +102,50 @@ describe("requestAccess", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(requestAccess("tok", controller.signal)).rejects.toThrow();
+  });
+});
+
+describe("the mock API's answers for POST /api/request-access", () => {
+  const post = (body: unknown) =>
+    fetch("/api/request-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it.each([
+    ["none", { turnstileToken: "not-the-mock-token" }, 403],
+    ["bot_check", { turnstileToken: MOCK_BOT_CHECK_TOKEN }, 403],
+    ["capped", { turnstileToken: MOCK_BOT_CHECK_TOKEN }, 429],
+    ["retry", { turnstileToken: MOCK_BOT_CHECK_TOKEN }, 503],
+    ["none", {}, 400],
+    ["none", { turnstileToken: MOCK_BOT_CHECK_TOKEN, email: "a@example.com" }, 400],
+    ["none", { turnstileToken: MOCK_BOT_CHECK_TOKEN }, 200],
+  ] as const)("with fault %s and body %j answers %i", async (accessFault, body, status) => {
+    configureMockApi({ accessFault });
+    expect((await post(body)).status).toBe(status);
+  });
+
+  it("answers 400 to a body that isn't JSON", async () => {
+    const res = await fetch("/api/request-access", { method: "POST", body: "not json" });
+    expect(res.status).toBe(400);
+  });
+
+  it("gives the issued account a day to live", async () => {
+    const before = Date.now();
+    const body = RequestAccessResponse.parse(
+      await (await post({ turnstileToken: MOCK_BOT_CHECK_TOKEN })).json(),
+    );
+    const hours = (Date.parse(body.expiresAt) - before) / 3_600_000;
+    expect(hours).toBeGreaterThan(23.99);
+    expect(hours).toBeLessThan(24.01);
+    expect(body.expiresAt).toMatch(/Z$/);
+  });
+
+  it("waits the mock's latency before it answers a network fault", async () => {
+    configureMockApi({ accessFault: "network", latencyMs: 60 });
+    const start = performance.now();
+    await expect(post({ turnstileToken: MOCK_BOT_CHECK_TOKEN })).rejects.toThrow();
+    expect(performance.now() - start).toBeGreaterThanOrEqual(50);
   });
 });
