@@ -22,10 +22,10 @@
 ## Evidence
 
 - Before (`system.v13`, `main` at `cb5ca45`, window 2026-10-19 11:25:44 to 11:35:45 UTC, no Eval gate job running): 30 `done` turns, p50 first `text_delta` 4,250 ms, p95 7,003 ms, p50 `done` 5,353 ms, p95 `done` 7,805 ms, read with ADR-002's 2026-10-14 query plus `promptVersion`.
-- After (`system.v14`): AFTER-RESULT-PENDING.
+- After (`system.v14`): 30 `done` turns, p50 first `text_delta` 2,478 ms, p95 4,453 ms, p50 `done` 5,739 ms, p95 `done` 7,261 ms (branch `feat/251-line-before-lookups` merged with `origin/main` at `ffc6e27`, `system.v14`, window 2026-10-20 10:23:17 to 10:33:21 UTC, 06:23 ET on the next clinic-local day, no Eval gate job running). Each of the 30 turns still made three model calls, and in every one the first `text_delta` came before model call 1 ended (`firstTextMs` is at most the first call's `durationMs` in all 30 turns, as `llmCalls` and `firstTextMs` show), so the line was written before `find_providers`. That is under NFR-001's 3,000 ms, so r1/Q-3 needs no decision line.
 - Tests: `packages/agent/src/prompts/system.v14.test.ts` pins the bullet and has content guards for the four lookups, once per reply, no question mark, the writes and escalation. The PR's Seen-failing table has the KILLED rows. A mutation can't show the model writes the line; only the re-measure can.
 
 ## What's next
 
-- If the after p50 first `text_delta` is above 3,000 ms, Nick records a decision line on #251 (r1/Q-3 (a)).
+- `dev` runs the branch's `api` until the PR merges; it goes back to `main`'s after.
 - A pre-tool-line grader case belongs on #201 (A-6).

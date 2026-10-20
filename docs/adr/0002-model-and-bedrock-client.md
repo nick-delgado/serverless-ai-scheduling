@@ -214,7 +214,7 @@ Each turn made three model calls (`find_providers`, `check_availability`, then t
 - The production default stays a Claude model at 10 requests per minute (the 2026-10-09 amendment).
 - Revisit if:
   - #159's calibration moves the rubric below 4.0; *(it didn't: the [2026-10-16 amendment](#amendment-2026-10-16-judge-calibration-159))*
-  - #251 changes NFR-001's first-text result; *(AFTER-RESULT-PENDING: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
+  - #251 changes NFR-001's first-text result; *(it did, 4,250 ms to 2,478 ms: see the [2026-10-19 amendment](#amendment-2026-10-19-a-line-before-the-first-lookup-251))*
   - #246 or #247 make a cheaper cell runnable;
   - a prompt change (#212, #234, #236, #249, #250) moves `sonnet-4.6@medium` or a cheaper cell over §7.
 
@@ -256,5 +256,5 @@ The production profile stands. #251 took the first-text miss (4,735 ms p50 again
 
 - **Method.** The same 30 turns as #37 (`spikes/s2-streaming/measure.ts --runs 30 --targets cloudfront --pace-ms 20000 --text "Does Dr. Haddad have anything this Thursday afternoon?"`) as `skeleton-tester` on `dev`, `sonnet-4.6` at effort `high`, the two runs on different clinic-local days (r1/Q-4 (a)). Read with the [2026-10-14 amendment](#amendment-2026-10-14-reading-nfr-001-after-38)'s query, adding `and promptVersion = "<version>"`, over each run's window.
 - **Before** (`main` at `cb5ca45`, `system.v13`, window 2026-10-19 11:25:44 to 11:35:45 UTC, no Eval gate job running): 30 `done` turns, p50 first `text_delta` 4,250 ms, p95 first `text_delta` 7,003 ms, p50 `done` 5,353 ms, p95 `done` 7,805 ms. A first attempt at 11:14 UTC was stopped after 11 turns: 5 turns ended in `RATE_LIMITED` while another PR's Eval gate job shared the Bedrock quota, and its 6 `done` turns aren't in the figures.
-- **After** (the branch, `system.v14`): AFTER-RESULT-PENDING.
+- **After** (the branch, `system.v14`): 30 `done` turns, p50 first `text_delta` 2,478 ms, p95 4,453 ms, p50 `done` 5,739 ms, p95 `done` 7,261 ms (branch `feat/251-line-before-lookups` merged with `origin/main` at `ffc6e27`, `system.v14`, window 2026-10-20 10:23:17 to 10:33:21 UTC, 06:23 ET on the next clinic-local day, no Eval gate job running). Each of the 30 turns still made three model calls, and in every one the first `text_delta` came before model call 1 ended (`firstTextMs` is at most the first call's `durationMs` in all 30 turns, as `llmCalls` and `firstTextMs` show), so the line was written before `find_providers`. The p50 first text fell 1,772 ms (42%) and meets NFR-001's 3,000 ms; p95 `done` is unchanged within noise and well inside 15,000 ms.
 - **Context.** #37 measured p50 first text 4,735 ms and p95 `done` 7,259 ms on `system.v3`; the before-run is `system.v13`, after v4 to v13 landed.
