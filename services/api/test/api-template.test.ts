@@ -259,7 +259,7 @@ describe("the expiry job (#357, part 2)", () => {
     expect(template).not.toContain("Type: Api");
   });
 
-  it("names the function sched-<env>-api-request-access-expiry, which the runbook's revoke-all step invokes", () => {
+  it("names the function sched-<env>-api-request-access-expiry, which the runbook's on-demand run invokes", () => {
     expect(entries(block(/^ {4}Properties:$/, fn())).FunctionName).toBe(
       "!Sub sched-${Env}-api-request-access-expiry",
     );
