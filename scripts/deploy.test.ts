@@ -450,7 +450,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     // Synthetic: Cloudflare's documented always-passes test secret, and distinct stand-ins for the .env sources.
     const SECRET = "1x0000000000000000000000000000000AA";
     const DOTENV_SECRET = "dotenv-turnstile-secret-value";
-    const HOST = "TurnstileExpectedHostname=localhost";
+    const HOST = "TurnstileExpectedHostname=example.com";
     const PAGE_ON = ["--", "RequestAccess=on", HOST];
     const noSecretPrinted = (r: ShellRun) => {
       for (const value of [SECRET, DOTENV_SECRET]) expect(r.out).not.toContain(value);
@@ -596,7 +596,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     );
 
     it("reads the hostname only from the parameter of that exact name, not from one that shares its prefix", () => {
-      const r = run(["api", "pr7", "--", "RequestAccess=on", "TurnstileExpectedHostnameX=localhost"], {
+      const r = run(["api", "pr7", "--", "RequestAccess=on", "TurnstileExpectedHostnameX=example.com"], {
         ...SES_ENV,
         TURNSTILE_SECRET: SECRET,
       });

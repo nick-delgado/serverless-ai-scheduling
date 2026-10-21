@@ -88,7 +88,7 @@ Parameters:
     NoEcho: true
     Description: Cloudflare Turnstile secret key that the request-access function verifies tokens with.
   # The hostname Cloudflare must report for a valid token (the env's CloudFront domain, which the web stack, deployed
-  # after this one, creates). Empty skips the check; Cloudflare's test secret keys report "localhost".
+  # after this one, creates). Empty skips the check; Cloudflare's test secret keys report "example.com".
   TurnstileExpectedHostname:
     Type: String
     Default: ""

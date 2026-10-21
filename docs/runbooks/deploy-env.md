@@ -117,7 +117,7 @@ Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's 
 
 ```bash
 export TURNSTILE_SITE_KEY=<site key> TURNSTILE_SECRET=<secret>     # or put them in .env
-scripts/deploy.sh all <name> -- RequestAccess=on TurnstileExpectedHostname=localhost   # api publishes /sched/<name>/api/request-access = on; the test keys report localhost
+scripts/deploy.sh all <name> -- RequestAccess=on TurnstileExpectedHostname=example.com   # api publishes /sched/<name>/api/request-access = on; the test keys report example.com
 scripts/deploy-web.sh <name>                                       # builds with VITE_REQUEST_ACCESS=on and the site key
 ```
 
@@ -128,7 +128,7 @@ scripts/deploy-web.sh <name>                                       # builds with
 | Accounts issued per clinic-local day | `RequestAccessDailyCap` | 10 | at least 1; resets at midnight Eastern |
 | Accounts in the registry at once | `RequestAccessActiveCap` | 5 | at least 1; "active" is listed in the registry, from the moment a request reserves its place until the expiry job removes the entry |
 | Hours before an account is due for deletion | `RequestAccessExpiryHours` | 24 | at least 1; recorded in the registry and shown to the reviewer; the hourly job deletes the account at most an hour after it is due |
-| Hostname a token must be issued on | `TurnstileExpectedHostname` | empty in the template; `deploy.sh` refuses to deploy the page without it | `demo`: the env's CloudFront domain (SSM `/sched/demo/web/domain`); an ephemeral check env with Cloudflare's test keys: `localhost`, which they report |
+| Hostname a token must be issued on | `TurnstileExpectedHostname` | empty in the template; `deploy.sh` refuses to deploy the page without it | `demo`: the env's CloudFront domain (SSM `/sched/demo/web/domain`); an ephemeral check env with Cloudflare's test keys: `example.com`, which they report (seen on a live check: `localhost` made every request a 403 `BOT_CHECK_FAILED`) |
 
 Set them like the turn caps: `scripts/deploy.sh api <name> -- RequestAccessDailyCap=2 RequestAccessActiveCap=2 RequestAccessExpiryHours=1`. They persist across later deploys (`aws cloudformation deploy` and `sam deploy` use the stack's existing value for a parameter the command doesn't name), so a later `deploy.sh api <name>` without `-- RequestAccess=on` keeps the page on, and `RequestAccess=off` turns it off. The secret is kept the same way: `TurnstileSecret` is a NoEcho parameter, and a deploy with no `TURNSTILE_SECRET` (environment or `.env`) leaves it out of its overrides, so SAM CLI marks it "use previous value" (`merge_parameters` in `samcli/commands/deploy/deploy_context.py`, SAM CLI 1.166.2: every template parameter the command doesn't name gets `UsePreviousValue`, with no exception for `NoEcho`) and the stack keeps it; it is never blanked. A deploy that does have the secret passes it, which refreshes it. `TurnstileExpectedHostname` persists like the caps.
 
