@@ -260,7 +260,7 @@ Scope: `services/`, `packages/`, `infra/`, `apps/web/src/`, `scripts/`.
 |---|---|---|---|
 | F-1 | medium | The chat role granted `…/index/*`; the table has one index, `GSI1`. | fixed (`572297e`) |
 | F-2 | medium | The chat role's `foundation-model/anthropic.claude-sonnet-4-6*` matched any model ID with that prefix. | fixed (`572297e`) |
-| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | fixed in #270 (second PR; applied by Nick, then a create, an update and a teardown of an ephemeral env on 2026-10-19, with no AccessDenied): one statement per service, resources named; Events, X-Ray, SES and Bedrock dropped (#357 adds `EventsSchedRules` back: the five rule actions, on `sched-*` rules only, for the expiry job's schedule) |
+| F-3 | medium | The exec role grants 13 service-wide actions on `"*"`. | fixed in #270 (second PR; applied by Nick, then a create, an update and a teardown of an ephemeral env on 2026-10-19, with no AccessDenied): one statement per service, resources named; Events, X-Ray, SES and Bedrock dropped (#357 adds `EventsSchedRules` back: nine rule actions, on `sched-*` rules only, for the expiry job's schedule: the five a rule and its target need, plus `TagResource`, `UntagResource`, `ListTargetsByRule` and `ListTagsForResource`, which CloudFormation's `AWS::Events::Rule` handlers list for tag-on-create, tag updates and delete; no `iam:PassRole`) |
 | F-4 | low | The boundary allows `bedrock-mantle:*` actions nothing calls since ADR-010. | fixed in #270 (first PR) |
 | F-5 | medium | The evals role copies the `sonnet-4-6*` suffix. | fixed in #270 (first PR) |
 | F-6 | medium | `SchedDeployer`'s `SpikesAndEvals` grants Bedrock and Transcribe on `"*"`, plus unused `bedrock-mantle:*`. | fixed in #270 (first PR) |

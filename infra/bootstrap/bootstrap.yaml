@@ -150,7 +150,10 @@ Resources:
                 Action: logs:*
                 Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sched-*
               # The SAM Schedule event of the expiry job (#357, second part) creates an EventBridge rule named
-              # from the stack, so it starts with sched-. The five actions are the ones a rule and its target need.
+              # from the stack, so it starts with sched-. The nine actions are the ones CloudFormation's
+              # AWS::Events::Rule handlers list (schema.cloudformation.us-east-1.amazonaws.com, aws-events-rule.json):
+              # create tags the rule on creation (stack and system tags), update changes tags on every deploy
+              # (git-commit), delete lists the targets first. No iam:PassRole: the rule has no role.
               - Sid: EventsSchedRules
                 Effect: Allow
                 Action:
@@ -159,6 +162,10 @@ Resources:
                   - events:DescribeRule
                   - events:DeleteRule
                   - events:RemoveTargets
+                  - events:TagResource
+                  - events:UntagResource
+                  - events:ListTargetsByRule
+                  - events:ListTagsForResource
                 Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/sched-*
               # A dashboard's ARN has no region.
               - Sid: CloudWatchSchedAlarmsAndDashboards
