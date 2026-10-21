@@ -283,6 +283,7 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`), or the E2E workflow for `e2e`. Reviewers' temporary patients are created at request time by the request-access Lambda (#357; `deploy-env.md`, "Reviewer access"), not by a script |
 | Creating the Cloudflare Turnstile widget and its keys | A Cloudflare dashboard step; the keys go in the git-ignored `.env`, never in a template or the repo | Nick (`deploy-env.md`, "Reviewer access") |
 | Reversing or re-arming the demo spend backstop after it ran | Budgets runs the action, not CloudFormation, so reversing it is a Budgets call ("The demo spend backstop", above) | Nick |
+| Revoking temporary reviewer accounts on demand (`aws lambda invoke` of the expiry job with an `asOf` time; the revoke-all step and the live check's early expiry) | It deletes users and their data, not infrastructure, by running code CloudFormation made, and needs `lambda:InvokeFunction`, which `SchedDeployer` doesn't have | Nick, as `sched-admin` (`deploy-env.md`, "Reviewer access") |
 | Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 
 ## Teardown

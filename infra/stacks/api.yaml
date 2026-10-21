@@ -60,7 +60,7 @@ Parameters:
     AllowedValues: ["on", "off"]
     Description: >-
       "on" creates POST /api/request-access (the API's one public route), its function and the expiry job. In demo
-      the page is on whatever this says. scripts/deploy.sh refuses "on" for dev and e2e, and, wherever the page is on,
+      the page is on whatever this says. scripts/deploy.sh refuses "on" for dev and e2e, and, on a demo deploy or one that passes RequestAccess=on,
       refuses without TURNSTILE_SECRET and TurnstileExpectedHostname. The web stack's build reads the result from
       /sched/<env>/api/request-access (scripts/deploy-web.sh).
   RequestAccessDailyCap:
