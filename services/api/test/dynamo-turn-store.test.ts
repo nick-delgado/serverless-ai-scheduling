@@ -3,31 +3,14 @@
  * boundary, concurrent calls, the write-once trace) is checked against DynamoDB Local in
  * `dynamo-turn-store.local.test.ts`.
  */
-import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { PutCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { TurnTrace } from "@sched/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDynamoTurnStore, turnKeys } from "../src/lib/dynamo-turn-store";
+import { cancelled, fakeDoc } from "./dynamo-fakes";
 
 const PATIENT = "3f6c1a2e-8b4d-4c1a-9f2e-6d5b7a8c9e01";
-
-function fakeDoc(respond: (command: unknown) => unknown = () => ({})) {
-  const sent: unknown[] = [];
-  return {
-    sent,
-    doc: {
-      send: (command: unknown) => {
-        sent.push(command);
-        try {
-          return Promise.resolve(respond(command));
-        } catch (error) {
-          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      },
-    } as never,
-  };
-}
 
 const trace: TurnTrace = {
   turnId: "00000000-0000-4000-8000-000000000002",
@@ -46,12 +29,6 @@ const trace: TurnTrace = {
 
 describe("createDynamoTurnStore", () => {
   const caps = { patient: 50, env: 200 };
-  const cancelled = (...codes: string[]) =>
-    new TransactionCanceledException({
-      message: "Transaction cancelled",
-      $metadata: {},
-      CancellationReasons: codes.map((Code) => ({ Code })),
-    });
   /** Fails with each of `failures` in turn, then succeeds. */
   const failing = (...failures: Error[]) => {
     let n = 0;

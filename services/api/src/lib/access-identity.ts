@@ -6,13 +6,12 @@
  */
 import { randomInt } from "node:crypto";
 
+import { ACCESS_USERNAME_PREFIX } from "@sched/contracts";
+
 /** A random integer in `[0, maxExclusive)`. */
 export type RandomInt = (maxExclusive: number) => number;
 
 export const cryptoRandomInt: RandomInt = (maxExclusive) => randomInt(maxExclusive);
-
-/** Every temporary username starts with this; the expiry job never touches a user without it (r1/Q-3 (a)). */
-export const USERNAME_PREFIX = "user-";
 
 const HANDLE_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const HANDLE_LENGTH = 8;
@@ -69,7 +68,7 @@ const pick = <T>(list: readonly T[], random: RandomInt): T => list[random(list.l
 export function newUsername(random: RandomInt = cryptoRandomInt): string {
   let handle = "";
   for (let i = 0; i < HANDLE_LENGTH; i++) handle += pick([...HANDLE_ALPHABET], random);
-  return USERNAME_PREFIX + handle;
+  return ACCESS_USERNAME_PREFIX + handle;
 }
 
 export interface SyntheticIdentity {

@@ -109,6 +109,15 @@ describe("request access (#357)", () => {
     expect(response({ username: "xuser-x7k2m9qa" })).toBe(false);
   });
 
+  it("has the one username prefix, and a response must start with it", () => {
+    expect(C.ACCESS_USERNAME_PREFIX).toBe("user-");
+  });
+
+  it("cuts the milliseconds off a date, without rounding", () => {
+    expect(C.toIsoSeconds(new Date("2026-10-20T14:00:00.999Z"))).toBe("2026-10-20T14:00:00Z");
+    expect(C.toIsoSeconds(new Date("2026-10-20T14:00:00.000Z"))).toBe("2026-10-20T14:00:00Z");
+  });
+
   it("takes a one-character token and nothing shorter", () => {
     expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x" }).success).toBe(true);
   });
@@ -129,6 +138,15 @@ describe("request access (#357)", () => {
       "CAP_REACHED",
       "TRY_AGAIN",
     ]);
-    expect(C.ACCESS_CAP_MESSAGE).toContain("contact Nick");
+    expect(C.ACCESS_CAP_MESSAGE).toBe(
+      "Demo access requests have run out for now. Please contact Nick through the contact details in the project README.",
+    );
+    expect(Object.fromEntries(Object.entries(C.ACCESS_ERRORS).map(([k, v]) => [k, v.status]))).toEqual({
+      BAD_REQUEST: 400,
+      BOT_CHECK_FAILED: 403,
+      CAP_REACHED: 429,
+      TRY_AGAIN: 503,
+    });
+    expect(C.ACCESS_ERRORS.CAP_REACHED.message).toBe(C.ACCESS_CAP_MESSAGE);
   });
 });

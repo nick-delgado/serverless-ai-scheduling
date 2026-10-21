@@ -3,13 +3,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, type RouteObject } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthService } from "../auth/authService";
 import { fakeAuthService } from "../auth/testing";
 import { DISCLAIMER_TEXT } from "./DisclaimerBanner";
 import { pageTitle } from "./pageTitle";
 import { appRoutes, pageRoutes, pageRoutesFor } from "./routes";
+
+afterEach(() => vi.unstubAllEnvs());
 
 const signedIn = () => fakeAuthService({ username: "maria.santos" });
 
@@ -58,7 +60,6 @@ describe("app shell", () => {
     vi.resetModules();
     const fresh = await import("./routes");
     expect(fresh.pageRoutes.map((r) => r.path)).toContain("request-access");
-    vi.unstubAllEnvs();
   });
 
   it("uses the FR-016 wording exactly", () => {

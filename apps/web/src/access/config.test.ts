@@ -27,6 +27,8 @@ describe("usesMockBotCheck", () => {
   it("is true only on the dev server with no site key", () => {
     expect(usesMockBotCheck({ DEV: true })).toBe(true);
     expect(usesMockBotCheck({ DEV: true, VITE_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" })).toBe(false);
+    expect(usesMockBotCheck({ DEV: true, VITE_MOCK_API: "off" })).toBe(false);
+    expect(usesMockBotCheck({ DEV: true, VITE_MOCK_API: "on" })).toBe(true);
     expect(usesMockBotCheck({ DEV: false })).toBe(false);
     expect(usesMockBotCheck({})).toBe(false);
   });

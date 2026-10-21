@@ -23,6 +23,9 @@ export interface MockCognitoUser {
   status: "CONFIRMED" | "FORCE_CHANGE_PASSWORD";
 }
 
+/** The token the mock `POST /api/request-access` accepts; the dev server's mock bot check sends it (#357). */
+export const MOCK_BOT_CHECK_TOKEN = "mock-turnstile-token";
+
 /** The temporary patient the mock's `POST /api/request-access` issues (#357); it signs in with MOCK_PASSWORD. */
 export const MOCK_ISSUED_USER = {
   username: "user-mock0001",

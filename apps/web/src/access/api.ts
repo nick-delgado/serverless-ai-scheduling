@@ -2,7 +2,7 @@
  * `POST /api/request-access` (#357): the one call the SPA makes without a token. It sends the bot-check token and
  * nothing about the reviewer, and keeps nothing: the caller holds the result in component state only (A-8).
  */
-import { RequestAccessError, RequestAccessResponse } from "@sched/contracts";
+import { ACCESS_ERRORS, RequestAccessError, RequestAccessResponse } from "@sched/contracts";
 
 export type AccessResult =
   | { ok: true; account: RequestAccessResponse }
@@ -13,7 +13,8 @@ export type AccessResult =
   /** Anything else, including a network failure and an unreadable answer: try again. */
   | { ok: false; kind: "retry"; message: string };
 
-export const RETRY_MESSAGE = "We couldn't create access just now. Please try again in a moment.";
+/** What the page says when the answer can't be read or never came: the server's own try-again text. */
+export const RETRY_MESSAGE = ACCESS_ERRORS.TRY_AGAIN.message;
 
 export async function requestAccess(turnstileToken: string, signal?: AbortSignal): Promise<AccessResult> {
   let response: Response;

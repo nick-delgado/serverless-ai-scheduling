@@ -3,8 +3,8 @@
  * reading of a cancelled one through a fake `send` (owner decision r2/A-15). The race against real DynamoDB is in
  * `access-store.local.test.ts`.
  */
-import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import type { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import type { Patient } from "@sched/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +15,7 @@ import {
   createDynamoAccessStore,
   createInMemoryAccessStore,
 } from "../src/lib/access-store";
+import { cancelled, fakeDoc as fakeAnyDoc, numberedReservation } from "./dynamo-fakes";
 
 const RESERVATION: AccessReservation = {
   requestId: "11111111-1111-4111-8111-111111111111",
@@ -31,11 +32,10 @@ const PATIENT: Patient = {
 };
 const CAPS: AccessCaps = { daily: 10, active: 5 };
 
-const reserveN = (n: number): AccessReservation => ({
-  ...RESERVATION,
-  requestId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
-  username: `user-${String(n).padStart(8, "0")}`,
-});
+/** A fake document client that records the transactions it is sent. */
+const fakeDoc = (outcome: () => unknown) => fakeAnyDoc<TransactWriteCommand>(outcome);
+
+const reserveN = (n: number) => numberedReservation(n);
 
 describe("createInMemoryAccessStore", () => {
   it("counts each reservation against the day and the registry", async () => {
@@ -101,31 +101,6 @@ describe("createInMemoryAccessStore", () => {
   });
 });
 
-/** A cancelled transaction as the SDK throws it. */
-const cancelled = (...codes: string[]) =>
-  new TransactionCanceledException({
-    message: "Transaction cancelled",
-    $metadata: {},
-    CancellationReasons: codes.map((Code) => ({ Code })),
-  });
-
-function fakeDoc(outcome: () => unknown) {
-  const sent: TransactWriteCommand[] = [];
-  return {
-    sent,
-    doc: {
-      send: (command: TransactWriteCommand) => {
-        sent.push(command);
-        try {
-          return Promise.resolve(outcome());
-        } catch (error) {
-          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      },
-    } as never,
-  };
-}
-
 describe("createDynamoAccessStore", () => {
   it("reserves with one transaction: the day's counter, the active counter, then the registry entry", async () => {
     const { sent, doc } = fakeDoc(() => ({}));
@@ -138,16 +113,24 @@ describe("createDynamoAccessStore", () => {
     expect(sent).toHaveLength(1);
     const items = sent[0]?.input.TransactItems ?? [];
     expect(items).toHaveLength(3);
-    expect(items[0]?.Update).toMatchObject({
+    expect(items[0]?.Update).toEqual({
       TableName: "t",
       Key: { PK: "ACCESS#COUNT", SK: "DAY#2026-10-20" },
+      UpdateExpression: "ADD issued :one SET expiresAt = :exp, entityType = :type",
       ConditionExpression: "attribute_not_exists(issued) OR issued < :cap",
-      ExpressionAttributeValues: { ":one": 1, ":cap": 10 },
+      ExpressionAttributeValues: {
+        ":one": 1,
+        ":cap": 10,
+        ":exp": Date.parse("2026-10-23T00:00:00Z") / 1000,
+        ":type": "ACCESS_DAILY_COUNTER",
+      },
     });
-    expect(items[1]?.Update).toMatchObject({
+    expect(items[1]?.Update).toEqual({
+      TableName: "t",
       Key: { PK: "ACCESS#COUNT", SK: "ACTIVE" },
+      UpdateExpression: "ADD active :one SET entityType = :type",
       ConditionExpression: "attribute_not_exists(active) OR active < :cap",
-      ExpressionAttributeValues: { ":one": 1, ":cap": 5 },
+      ExpressionAttributeValues: { ":one": 1, ":cap": 5, ":type": "ACCESS_ACTIVE_COUNTER" },
     });
     expect(items[2]?.Put).toMatchObject({
       Item: {
@@ -156,6 +139,7 @@ describe("createDynamoAccessStore", () => {
         username: "user-aaaaaaaa",
         requestId: RESERVATION.requestId,
         accessExpiresAt: "2026-10-21T14:00:00Z",
+        entityType: "ACCESS_ISSUED",
       },
       ConditionExpression: "attribute_not_exists(PK)",
     });

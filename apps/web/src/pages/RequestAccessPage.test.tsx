@@ -3,14 +3,14 @@
  * mock bot check supplies the mock API's token. The widget tests stub `window.turnstile` and the script's load.
  */
 import { ACCESS_CAP_MESSAGE } from "@sched/contracts";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_BOT_CHECK_TOKEN } from "../access/config";
+import { MOCK_BOT_CHECK_TOKEN } from "../mocks/cognitoUsers";
 import { pageRoutesFor, appRoutes } from "../app/routes";
 import { MOCK_ISSUED_USER, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { configureMockApi, server } from "../mocks/node";
@@ -128,15 +128,45 @@ describe("the request page", () => {
     expect(requestButton()).toBeEnabled();
   });
 
-  it("clears an earlier failure when the next request goes out", async () => {
+  it("clears an earlier failure's message as soon as the next request goes out", async () => {
     configureMockApi({ accessFault: "retry" });
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
     await screen.findByText(/try again/i);
-    configureMockApi({ accessFault: "none" });
+    // Hold the next request open, so the page is seen while it is pending.
+    server.use(
+      http.post("/api/request-access", async () => {
+        await new Promise((r) => setTimeout(r, 150));
+        return HttpResponse.json(
+          { error: { code: "TRY_AGAIN", message: "Second failure." } },
+          { status: 503 },
+        );
+      }),
+    );
     await user.click(requestButton());
-    expect(await screen.findByRole("heading", { name: "Your demo account" })).toBeVisible();
+    await screen.findByRole("button", { name: "Creating your account…" });
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement();
+    expect(await screen.findByText("Second failure.")).toBeVisible();
+  });
+
+  it("shows when the account is due to expire, in the clinic's time zone, from the response", async () => {
+    server.use(
+      http.post("/api/request-access", () =>
+        HttpResponse.json({
+          username: "user-x7k2m9qa",
+          password: "Sample-Only-Pw-0000",
+          firstName: "Noor",
+          lastName: "Vance",
+          expiresAt: "2026-10-21T15:00:00Z",
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    expect(await screen.findByText(/due to expire on Oct 21, 2026, 11:00 AM EDT/)).toBeVisible();
+    expect(screen.queryByText(/about a day/)).toBeNull();
   });
 
   it("shows that it is working while the request is out, then goes back to the button", async () => {
@@ -228,11 +258,16 @@ describe("the Turnstile widget", () => {
   async function freshApp() {
     vi.resetModules();
     const routes = await import("../app/routes");
-    const router = createMemoryRouter(routes.appRoutes(routes.pageRoutesFor(true)), {
-      initialEntries: ["/request-access"],
-    });
-    render(<RouterProvider router={router} />);
+    const mount = () => {
+      const router = createMemoryRouter(routes.appRoutes(routes.pageRoutesFor(true)), {
+        initialEntries: ["/request-access"],
+      });
+      return render(<RouterProvider router={router} />);
+    };
+    mount();
+    return mount;
   }
+  const scriptCount = () => document.head.querySelectorAll("script[src*='challenges.cloudflare.com']").length;
 
   it("loads Cloudflare's script, renders the widget with the site key, and enables the button on a token", async () => {
     vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
@@ -247,6 +282,29 @@ describe("the Turnstile widget", () => {
 
     rendered[0]?.callback("widget-token");
     await waitFor(() => expect(button).toBeEnabled());
+  });
+
+  it("loads the script once for the module: a second mount reuses it and renders again", async () => {
+    vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
+    const { api } = fakeTurnstile();
+    const mount = await freshApp();
+    await loadScript();
+    await waitFor(() => expect(api.render).toHaveBeenCalledTimes(1));
+    cleanup();
+    mount();
+    await waitFor(() => expect(api.render).toHaveBeenCalledTimes(2));
+    expect(scriptCount()).toBe(1);
+  });
+
+  it("tries the script again on the next mount after a failed load", async () => {
+    vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
+    const mount = await freshApp();
+    await waitFor(() => expect(scriptCount()).toBe(1));
+    scriptEl()?.dispatchEvent(new Event("error"));
+    await screen.findByText(UNAVAILABLE_MESSAGE);
+    cleanup();
+    mount();
+    await waitFor(() => expect(scriptCount()).toBe(2));
   });
 
   it("sends the widget's token, then asks the widget for a fresh one", async () => {
@@ -370,7 +428,6 @@ describe("the Turnstile widget", () => {
     fakeTurnstile();
     await freshApp();
     expect(await screen.findByRole("button", { name: "Request demo access" })).toBeDisabled();
-    expect(MOCK_BOT_CHECK_TOKEN).toBe("mock-turnstile-token");
     const alert = screen.getByRole("alert");
     expect(within(alert).queryByText(/./)).toBeNull();
   });

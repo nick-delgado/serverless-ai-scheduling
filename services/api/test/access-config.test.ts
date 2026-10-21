@@ -32,12 +32,13 @@ describe("requestAccessConfigFromEnv", () => {
     expect(() => requestAccessConfigFromEnv({ ...BASE, [name]: undefined })).toThrow(name);
   });
 
-  it("fails on a cap that isn't a positive integer, without printing the secret", () => {
-    expect(() => requestAccessConfigFromEnv({ ...BASE, ACCESS_DAILY_CAP: "0" })).toThrow("ACCESS_DAILY_CAP");
-    try {
-      requestAccessConfigFromEnv({ ...BASE, ACCESS_ACTIVE_CAP: "x" });
-    } catch (error) {
-      expect(String(error)).not.toContain("secret-value");
-    }
-  });
+  it.each(["ACCESS_DAILY_CAP", "ACCESS_ACTIVE_CAP", "ACCESS_EXPIRY_HOURS"])(
+    "fails on %s when it isn't a positive integer, without printing the secret",
+    (name) => {
+      for (const bad of ["0", "x", "-1", "1.5"]) {
+        expect(() => requestAccessConfigFromEnv({ ...BASE, [name]: bad }), `${name}=${bad}`).toThrow(name);
+        expect(() => requestAccessConfigFromEnv({ ...BASE, [name]: bad })).not.toThrow(/secret-value/);
+      }
+    },
+  );
 });

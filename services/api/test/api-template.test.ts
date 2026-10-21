@@ -417,33 +417,53 @@ describe("the request-access route (#357)", () => {
 
   it("grants only the two item writes on the base table and four Cognito admin calls on this env's pool", () => {
     const fn = resource("RequestAccessFunction");
-    const table = '"{{resolve:ssm:/sched/${Env}/data/table-arn}}"';
-    expect(bodyLines(block(/^\s+- Sid: RegistryAndProfileWrites$/, fn))).toEqual([
-      "  Effect: Allow",
-      "  Action:",
-      "    - dynamodb:PutItem",
-      "    - dynamodb:UpdateItem",
-      "  Resource:",
-      `    - !Sub ${table}`,
+    // The whole Policies list, so a third statement, a SAM policy template, another resource or a wildcard each fails.
+    expect(bodyLines(block(/^\s+Policies:$/, fn))).toEqual([
+      '  - Version: "2012-10-17"',
+      "    Statement:",
+      "      - Sid: RegistryAndProfileWrites",
+      "        Effect: Allow",
+      "        Action:",
+      "          - dynamodb:PutItem",
+      "          - dynamodb:UpdateItem",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
+      "      - Sid: CreateAndDeleteTemporaryUsers",
+      "        Effect: Allow",
+      "        Action:",
+      "          - cognito-idp:AdminCreateUser",
+      "          - cognito-idp:AdminSetUserPassword",
+      "          - cognito-idp:AdminGetUser",
+      "          - cognito-idp:AdminDeleteUser",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"',
     ]);
-    expect(bodyLines(block(/^\s+- Sid: CreateAndDeleteTemporaryUsers$/, fn))).toEqual([
-      "  Effect: Allow",
-      "  Action:",
-      "    - cognito-idp:AdminCreateUser",
-      "    - cognito-idp:AdminSetUserPassword",
-      "    - cognito-idp:AdminGetUser",
-      "    - cognito-idp:AdminDeleteUser",
-      "  Resource:",
-      '    - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"',
-    ]);
-    // Two statements and no more: nothing else is granted (no Scan, no Delete, no Query, no index).
-    expect(items(block(/^\s+Statement:$/, fn))).toHaveLength(2);
+    // No role of its own that would bypass Policies.
+    expect(fn.join("\n")).not.toMatch(/^ {6}Role:/m);
+  });
+
+  it("builds the request-access handler with its own Makefile target", () => {
+    const makefile = readFileSync(new URL("../Makefile", import.meta.url), "utf8");
+    expect(makefile).toMatch(
+      /^build-RequestAccessFunction: check-root\n\t.*services\/api\/src\/handlers\/request-access\.ts /m,
+    );
+    expect(text(resource("RequestAccessFunction"))).toContain("BuildMethod: makefile");
+  });
+
+  it("declares TurnstileExpectedHostname as a string that is empty by default", () => {
+    const hostname = block(/^ {2}TurnstileExpectedHostname:$/, lines);
+    expect(entries(hostname).Type).toBe("String");
+    expect(text(hostname)).toContain('Default: ""');
   });
 
   it("lets API Gateway invoke the function for POST /api/request-access only", () => {
-    expect(
-      bodyLines(resource("RequestAccessApiInvokePermission")).find((l) => l.includes("SourceArn")),
-    ).toContain("${ChatApi}/*/POST/api/request-access");
+    const permission = resource("RequestAccessApiInvokePermission");
+    expect(bodyLines(permission).find((l) => l.includes("SourceArn"))).toContain(
+      "${ChatApi}/*/POST/api/request-access",
+    );
+    expect(entries(block(/^ {4}Properties:$/, permission)).FunctionName).toBe(
+      "!GetAtt RequestAccessFunction.Arn",
+    );
   });
 
   it("keeps the 14-day log retention of the other functions", () => {

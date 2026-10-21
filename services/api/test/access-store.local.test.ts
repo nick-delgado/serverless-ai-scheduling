@@ -9,12 +9,8 @@ import type { Patient } from "@sched/contracts";
 import { createDocumentClient } from "@sched/tools/dynamo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  type AccessCaps,
-  type AccessReservation,
-  type AccessStore,
-  createDynamoAccessStore,
-} from "../src/lib/access-store";
+import { type AccessCaps, type AccessStore, createDynamoAccessStore } from "../src/lib/access-store";
+import { numberedReservation } from "./dynamo-fakes";
 import { dynamoLocalAvailable, localClient, tableFactory } from "./dynamo-local";
 
 const DAY = "2026-10-20";
@@ -27,12 +23,7 @@ afterAll(async () => {
   client.destroy();
 });
 
-const reservation = (n: number, day = DAY): AccessReservation => ({
-  requestId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
-  username: `user-${String(n).padStart(8, "0")}`,
-  day,
-  accessExpiresAt: "2026-10-21T14:00:00Z",
-});
+const reservation = (n: number, day = DAY) => numberedReservation(n, day);
 
 describe.skipIf(!available)("createDynamoAccessStore (DynamoDB Local)", () => {
   let store: AccessStore;

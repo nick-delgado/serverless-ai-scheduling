@@ -3,7 +3,14 @@
  * and frozen clock. Covers the order of the steps, both caps, the bot check's rejection path, a failure after the
  * reservation, the one username retry, the response and what the log may carry.
  */
-import { ACCESS_CAP_MESSAGE, Patient, RequestAccessError, RequestAccessResponse } from "@sched/contracts";
+import {
+  ACCESS_CAP_MESSAGE,
+  ACCESS_ERRORS,
+  ACCESS_USERNAME_PREFIX,
+  Patient,
+  RequestAccessError,
+  RequestAccessResponse,
+} from "@sched/contracts";
 import { FrozenClock } from "@sched/tools";
 import { buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
@@ -13,7 +20,6 @@ import { createInMemoryAccessStore, type AccessStore } from "../src/lib/access-s
 import type { BotCheckResult, BotVerifier } from "../src/lib/bot-check";
 import { type CognitoAdmin, passwordProblems } from "../src/lib/cognito-admin";
 import {
-  ACCESS_FAILURES,
   DEFAULT_ACCESS_ACTIVE_CAP,
   DEFAULT_ACCESS_DAILY_CAP,
   DEFAULT_ACCESS_EXPIRY_HOURS,
@@ -182,11 +188,12 @@ describe("issuing an account", () => {
     ]);
   });
 
-  it("never gives a fixture patient's username", async () => {
+  it("gives a username with the temporary prefix, which no fixture patient's has", async () => {
     const f = setup();
     const body = RequestAccessResponse.parse(JSON.parse((await call(f)).body));
     const fixture = buildClinicFixture().patients.map((p) => `${p.firstName}.${p.lastName}`.toLowerCase());
     expect(fixture).not.toContain(body.username);
+    expect(body.username.startsWith(ACCESS_USERNAME_PREFIX)).toBe(true);
   });
 
   it("dates the daily count by the clinic-local day, not the UTC day", async () => {
@@ -269,10 +276,21 @@ describe("the bot check", () => {
 
   it("runs before the caps are touched, even when a cap is already reached", async () => {
     const f = setup({ verdict: { ok: false, reason: "rejected" }, caps: { daily: 1, active: 1 } });
-    await call(setup({ caps: { daily: 1, active: 1 } }));
+    // Use up this fixture's own caps, so a request that reached them would answer 429.
+    await f.store.reserve(
+      {
+        requestId: "11111111-1111-4111-8111-111111111111",
+        username: "user-zzzzzzzz",
+        day: "2026-10-20",
+        accessExpiresAt: "2026-10-21T14:00:00Z",
+      },
+      { daily: 1, active: 1 },
+    );
     const res = await call(f);
     expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error.code).toBe("BOT_CHECK_FAILED");
     expect(f.steps).not.toContain("reserve");
+    expect(f.store.issued).toHaveLength(1);
   });
 });
 
@@ -415,6 +433,22 @@ describe("a random username clash", () => {
     expect(f.store.issued[0]?.username).toBe(body.username);
   });
 
+  it.each([
+    ["setting the password", { setPermanentPassword: () => Promise.reject(new Error("boom")) }],
+    ["reading the sub", { getSub: () => Promise.reject(new Error("boom")) }],
+  ])(
+    "deletes only the user it created, never the clashed one, when %s fails after a clash",
+    async (_name, later) => {
+      const { tried, admin } = clashing(1);
+      const f = setup({ admin: { ...admin, ...later } });
+      const res = await call(f);
+      expect(res.statusCode).toBe(503);
+      expect(tried).toHaveLength(2);
+      expect(f.steps.filter((s) => s.startsWith("deleteUser"))).toEqual([`deleteUser:${tried[1]}`]);
+      expect(f.steps).not.toContain(`deleteUser:${tried[0]}`);
+    },
+  );
+
   it("answers try again after a second clash, without deleting either user (neither is ours)", async () => {
     const { tried, admin } = clashing(2);
     const f = setup({ admin });
@@ -435,7 +469,8 @@ describe("what is logged (A-7)", () => {
 
   it.each([
     ["bot_check_failed", { verdict: { ok: false, reason: "rejected" } as BotCheckResult }],
-    ["try_again", { verdict: { ok: false, reason: "unavailable" } as BotCheckResult }],
+    ["bot_check_unavailable", { verdict: { ok: false, reason: "unavailable" } as BotCheckResult }],
+    ["try_again", { store: { reserve: () => Promise.resolve({ ok: false, reason: "conflict" } as const) } }],
     ["capped", { caps: { daily: 1, active: 0 } }],
   ])("names the outcome %s", async (outcome, options) => {
     const f = setup(options);
@@ -483,12 +518,22 @@ describe("the proxy adapter", () => {
 });
 
 describe("the failure table", () => {
-  it("pairs each code with its status", () => {
-    expect(Object.entries(ACCESS_FAILURES).map(([code, f]) => [code, f.status])).toEqual([
+  it("pairs each code with its status and its message, from the contract's one table", () => {
+    expect(Object.entries(ACCESS_ERRORS).map(([code, f]) => [code, f.status])).toEqual([
       ["BAD_REQUEST", 400],
       ["BOT_CHECK_FAILED", 403],
       ["CAP_REACHED", 429],
       ["TRY_AGAIN", 503],
     ]);
+  });
+
+  it.each([
+    ["BAD_REQUEST", "x"],
+    ["BOT_CHECK_FAILED", BODY],
+  ] as const)("answers %s with the table's status and message", async (code, body) => {
+    const f = setup({ verdict: { ok: false, reason: "rejected" } });
+    const res = await call(f, body);
+    expect(res.statusCode).toBe(ACCESS_ERRORS[code].status);
+    expect(JSON.parse(res.body)).toEqual({ error: { code, message: ACCESS_ERRORS[code].message } });
   });
 });

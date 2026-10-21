@@ -6,6 +6,7 @@
 export interface AccessEnv {
   VITE_REQUEST_ACCESS?: string;
   VITE_TURNSTILE_SITE_KEY?: string;
+  VITE_MOCK_API?: string;
   DEV?: boolean;
 }
 
@@ -20,12 +21,9 @@ export function turnstileSiteKey(env: AccessEnv): string | undefined {
 }
 
 /**
- * Whether the page may run without a widget: the dev server with no site key, where the mock API accepts a fixed
- * token. A production build without a site key shows the page as unavailable instead.
+ * Whether the page may run without a widget: the dev server with no site key and the mock API on (as
+ * `src/auth/session.ts` reads it), where the mock API accepts a fixed token. A production build without a site key shows the page as unavailable instead.
  */
 export function usesMockBotCheck(env: AccessEnv): boolean {
-  return env.DEV === true && turnstileSiteKey(env) === undefined;
+  return env.DEV === true && env.VITE_MOCK_API !== "off" && turnstileSiteKey(env) === undefined;
 }
-
-/** The token the mock API accepts when `usesMockBotCheck`. */
-export const MOCK_BOT_CHECK_TOKEN = "mock-turnstile-token";

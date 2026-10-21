@@ -25,10 +25,9 @@ import { TransactWriteCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-
 import type { IsoDate, Patient } from "@sched/contracts";
 import { patientItem } from "@sched/tools/dynamo";
 
-import { COUNTER_TTL_DAYS } from "./dynamo-turn-store";
+import { counterExpiresAt } from "./dynamo-turn-store";
 
 const CONDITION_FAILED = "ConditionalCheckFailed";
-const DAY_S = 24 * 60 * 60;
 
 export interface AccessCaps {
   /** Accounts issued per clinic-local day. */
@@ -73,10 +72,6 @@ export const accessKeys = {
   daily: (day: string) => ({ PK: "ACCESS#COUNT", SK: `DAY#${day}` }),
 };
 
-/** A daily counter's expiry: two days after the clinic-local `day` ends (UTC), epoch seconds. */
-const dailyExpiresAt = (day: string): number =>
-  Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000) + (1 + COUNTER_TTL_DAYS) * DAY_S;
-
 export interface DynamoAccessStoreOptions {
   tableName: string;
   /** `send` is all we use, so tests can pass a fake. */
@@ -97,7 +92,7 @@ export function createDynamoAccessStore({ tableName, doc }: DynamoAccessStoreOpt
               ExpressionAttributeValues: {
                 ":one": 1,
                 ":cap": caps.daily,
-                ":exp": dailyExpiresAt(r.day),
+                ":exp": counterExpiresAt(r.day),
                 ":type": "ACCESS_DAILY_COUNTER",
               },
             },

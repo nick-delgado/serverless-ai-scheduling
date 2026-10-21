@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { configureMockApi, server } from "../mocks/node";
 import { parseMockApiOptions } from "../mocks/options";
 import { MOCK_ISSUED_USER, MOCK_PASSWORD } from "../mocks/cognitoUsers";
-import { MOCK_BOT_CHECK_TOKEN } from "./config";
+import { MOCK_BOT_CHECK_TOKEN } from "../mocks/cognitoUsers";
 import { RETRY_MESSAGE, requestAccess } from "./api";
 
 describe("requestAccess", () => {
@@ -92,11 +92,20 @@ describe("requestAccess", () => {
     expect(await requestAccess("tok")).toEqual({ ok: false, kind: "retry", message: RETRY_MESSAGE });
   });
 
-  it("keeps the server's own try-again message", async () => {
-    configureMockApi({ accessFault: "retry" });
-    const result = await requestAccess(MOCK_BOT_CHECK_TOKEN);
-    expect(result).toMatchObject({ ok: false, kind: "retry" });
-    expect(result.ok ? "" : result.message).toContain("try again");
+  it("keeps the server's own try-again message, not the client's", async () => {
+    server.use(
+      http.post("/api/request-access", () =>
+        HttpResponse.json(
+          { error: { code: "TRY_AGAIN", message: "Back in five minutes." } },
+          { status: 503 },
+        ),
+      ),
+    );
+    expect(await requestAccess("tok")).toEqual({
+      ok: false,
+      kind: "retry",
+      message: "Back in five minutes.",
+    });
   });
 
   it("rethrows an aborted request instead of calling it a retry", async () => {

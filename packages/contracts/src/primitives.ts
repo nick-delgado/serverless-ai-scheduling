@@ -22,6 +22,9 @@ export type HhMm = z.infer<typeof HhMm>;
 export const IsoDateTimeUtc = z.iso.datetime({ offset: false });
 export type IsoDateTimeUtc = z.infer<typeof IsoDateTimeUtc>;
 
+/** `date` as an `IsoDateTimeUtc` with whole seconds (`2026-10-20T14:00:00Z`): the milliseconds are cut, not rounded. */
+export const toIsoSeconds = (date: Date): IsoDateTimeUtc => date.toISOString().replace(/\.\d{3}Z$/, "Z");
+
 const count = z.int().nonnegative();
 
 /** Token usage for one model call or a whole turn. */

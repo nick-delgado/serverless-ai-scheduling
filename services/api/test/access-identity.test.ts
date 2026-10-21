@@ -1,4 +1,4 @@
-import { Patient } from "@sched/contracts";
+import { ACCESS_USERNAME_PREFIX, Patient } from "@sched/contracts";
 import { buildClinicFixture } from "@sched/tools/fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,6 @@ import {
   newPassword,
   newUsername,
   type RandomInt,
-  USERNAME_PREFIX,
 } from "../src/lib/access-identity";
 import { passwordProblems } from "../src/lib/cognito-admin";
 
@@ -37,14 +36,14 @@ describe("newUsername", () => {
   });
 
   it("starts with the prefix the expiry job's guard keys on", () => {
-    expect(USERNAME_PREFIX).toBe("user-");
+    expect(ACCESS_USERNAME_PREFIX).toBe("user-");
   });
 
   it("matches no fixture patient's username", () => {
     const fixtureUsernames = buildClinicFixture().patients.map((p) =>
       `${p.firstName}.${p.lastName}`.toLowerCase(),
     );
-    for (const name of fixtureUsernames) expect(name.startsWith(USERNAME_PREFIX)).toBe(false);
+    for (const name of fixtureUsernames) expect(name.startsWith(ACCESS_USERNAME_PREFIX)).toBe(false);
   });
 });
 

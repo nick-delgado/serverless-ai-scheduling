@@ -18,13 +18,13 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  ACCESS_CAP_MESSAGE,
-  type IsoDateTimeUtc,
+  ACCESS_ERRORS,
   Patient,
   RequestAccessError,
   type RequestAccessErrorCode,
   RequestAccessRequest,
   RequestAccessResponse,
+  toIsoSeconds,
 } from "@sched/contracts";
 import { clinicDateOf, type Clock } from "@sched/tools";
 
@@ -58,34 +58,18 @@ export interface RequestAccessDeps {
   monotonicNow?: () => number;
 }
 
-/** Status, code and message of each failure; the page shows the message. */
-export const ACCESS_FAILURES: Record<
-  RequestAccessErrorCode,
-  { status: number; code: RequestAccessErrorCode; message: string }
-> = {
-  BAD_REQUEST: { status: 400, code: "BAD_REQUEST", message: "The request body must be a bot-check token." },
-  BOT_CHECK_FAILED: {
-    status: 403,
-    code: "BOT_CHECK_FAILED",
-    message: "The check didn't pass. Please try again.",
-  },
-  CAP_REACHED: { status: 429, code: "CAP_REACHED", message: ACCESS_CAP_MESSAGE },
-  TRY_AGAIN: {
-    status: 503,
-    code: "TRY_AGAIN",
-    message: "We couldn't create access just now. Please try again in a moment.",
-  },
-};
-
 function failure(code: RequestAccessErrorCode): ProxyResult {
-  const { status, message } = ACCESS_FAILURES[code];
+  const { status, message } = ACCESS_ERRORS[code];
   return jsonResponse(status, RequestAccessError.parse({ error: { code, message } }));
 }
 
-/** ISO UTC with whole seconds and a `Z`, the shape `IsoDateTimeUtc` and the registry's sort key use. */
-const isoSeconds = (date: Date): IsoDateTimeUtc => date.toISOString().replace(/\.\d{3}Z$/, "Z");
-
-export type AccessOutcome = "issued" | "bot_check_failed" | "capped" | "try_again" | "bad_request" | "error";
+/**
+ * What the log records for a request. `bot_check_unavailable` (the verifier could not decide: a timeout, a bad
+ * answer, a secret problem) and `try_again` (the reservation only conflicted) both answer TRY_AGAIN, but only the
+ * first never clears on its own.
+ */
+export type AccessOutcome =
+  "issued" | "bot_check_failed" | "bot_check_unavailable" | "capped" | "try_again" | "bad_request" | "error";
 
 export async function handleRequestAccess(
   input: { body: string | null; requestId: string },
@@ -118,12 +102,12 @@ async function issue(
   if (!check.ok) {
     return check.reason === "rejected"
       ? { outcome: "bot_check_failed", result: failure("BOT_CHECK_FAILED") }
-      : { outcome: "try_again", result: failure("TRY_AGAIN") };
+      : { outcome: "bot_check_unavailable", result: failure("TRY_AGAIN") };
   }
 
   const { random } = deps;
   const now = deps.clock.now();
-  const accessExpiresAt = isoSeconds(new Date(now.getTime() + deps.config.expiryHours * 3_600_000));
+  const accessExpiresAt = toIsoSeconds(new Date(now.getTime() + deps.config.expiryHours * 3_600_000));
   const reservation: AccessReservation = {
     requestId: (deps.newRequestId ?? randomUUID)(),
     username: newUsername(random),
@@ -142,25 +126,19 @@ async function issue(
   const identity = newIdentity(random);
   const password = newPassword(random);
   let username = reservation.username;
+  const create = () =>
+    deps.admin.createUser({ username, givenName: identity.firstName, familyName: identity.lastName });
   try {
-    let created = await deps.admin.createUser({
-      username,
-      givenName: identity.firstName,
-      familyName: identity.lastName,
-    });
+    let created = await create();
     if (!created) {
       // A random clash with an existing user: one retry with a new handle, then give up.
       username = newUsername(random);
-      created = await deps.admin.createUser({
-        username,
-        givenName: identity.firstName,
-        familyName: identity.lastName,
-      });
+      created = await create();
       if (!created) return { outcome: "try_again", result: failure("TRY_AGAIN") };
     }
     await deps.admin.setPermanentPassword(username, password);
     const sub = await deps.admin.getSub(username);
-    const patient = Patient.parse({ patientId: sub, ...identity, createdAt: isoSeconds(now) });
+    const patient = Patient.parse({ patientId: sub, ...identity, createdAt: toIsoSeconds(now) });
     await deps.store.commit({ ...reservation, username }, patient);
     return {
       outcome: "issued",

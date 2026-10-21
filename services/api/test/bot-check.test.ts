@@ -40,6 +40,7 @@ describe("createTurnstileVerifier", () => {
     expect(SITEVERIFY_URL).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
     expect(f.calls[0]?.init.method).toBe("POST");
     expect(JSON.parse(String(f.calls[0]?.init.body))).toEqual({ secret: PASS_SECRET, response: TOKEN });
+    expect(f.calls[0]?.init.headers).toEqual({ "Content-Type": "application/json" });
   });
 
   it("never sends the visitor's address (no remoteip)", async () => {
@@ -144,6 +145,16 @@ describe("createTurnstileVerifier", () => {
       });
     },
   );
+
+  it("reads one server-side code among visitor codes as unavailable", async () => {
+    const f = fakeFetch(() =>
+      json({ success: false, "error-codes": ["invalid-input-response", "internal-error"] }),
+    );
+    await expect(createTurnstileVerifier({ secret: PASS_SECRET, fetch: f.impl })(TOKEN)).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+  });
 
   it("treats success: 'true' (a string) as a failure, not a pass", async () => {
     const f = fakeFetch(() => json({ success: "true" }));

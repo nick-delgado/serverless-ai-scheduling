@@ -5,7 +5,8 @@ import { useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { pageTitle } from "../app/pageTitle";
-import { MOCK_BOT_CHECK_TOKEN, turnstileSiteKey, usesMockBotCheck } from "../access/config";
+import { turnstileSiteKey, usesMockBotCheck } from "../access/config";
+import { MOCK_BOT_CHECK_TOKEN } from "../mocks/cognitoUsers";
 import { type AccessResult, requestAccess } from "../access/api";
 import { Turnstile, type TurnstileHandle } from "../access/Turnstile";
 
@@ -16,6 +17,19 @@ type Account = Extract<AccessResult, { ok: true }>["account"];
 type Failure = Extract<AccessResult, { ok: false }>;
 
 export const UNAVAILABLE_MESSAGE = "The bot check could not be loaded. Please reload the page and try again.";
+
+/** The expiry in the clinic's time zone, for example `Oct 21, 2026, 10:00 AM EDT`. */
+export function formatExpiry(expiresAt: string): string {
+  return new Date(expiresAt).toLocaleString("en-US", {
+    timeZone: CLINIC.timezone,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
 
 /**
  * "Request demo access" (#357, FR-001): one button and a bot check. It asks for nothing about the reviewer. The
@@ -87,7 +101,7 @@ export function RequestAccessPage() {
             {account.firstName} {account.lastName}
           </dd>
         </dl>
-        <p className="muted">This account is deleted after about a day.</p>
+        <p className="muted">This account is due to expire on {formatExpiry(account.expiresAt)}.</p>
         <div className="access__actions">
           <button
             type="button"
