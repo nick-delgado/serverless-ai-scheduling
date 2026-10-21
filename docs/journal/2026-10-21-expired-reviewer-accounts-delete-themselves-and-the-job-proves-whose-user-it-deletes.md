@@ -56,10 +56,10 @@ Nick's answers on #357 (r1/Q-3 (a), r1/A-4, A-10) are on the issue. The bullets 
   - B and C were issued (active 2 of 2) and D got 429 `CAP_REACHED` with nothing created.
   - Revoke-all (`asOf` `9999-12-31T23:59:59Z`) reported due 2, expired 2, failed 0, with B's and C's users and data gone, the registry empty and active 0.
   - E was issued afterwards (active 1, day count 4 of 4) and F got 429 from the daily cap; the fixture patients still verified.
-  - Not shown: a slot freed by a real booked appointment (the account booked nothing; the DynamoDB Local test covers it), and the teardown of `ex357`, which waits for Nick's approval.
+  - Not shown: a slot freed by a real booked appointment (the account booked nothing; the DynamoDB Local test covers it). `ex357` was torn down afterwards, on Nick's approval ([record](https://github.com/nick-delgado/serverless-ai-scheduling/pull/367#issuecomment-6327906567)).
 - The seen-failing table, the coverage gate and the lint, typecheck and test results are in the PR description, for the commit it names.
 
 ## What's next
 
-- Nick approves tearing `ex357` down, then Nick turns the page on in `demo` with real Turnstile keys and #44's README contact line in place (runbook, "Turn it on for `demo`").
+- Nick turns the page on in `demo` with real Turnstile keys and #44's README contact line in place (runbook, "Turn it on for `demo`").
 - Sharing the conflict-retry helpers between the turn store and the access store, and the cancellation-code reader now in a third place: to file.
