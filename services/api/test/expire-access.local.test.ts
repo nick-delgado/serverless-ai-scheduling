@@ -121,7 +121,7 @@ describe.skipIf(!available)("the expiry job (DynamoDB Local)", () => {
 
   beforeEach(async () => {
     tableName = await tables.create();
-    const seed = buildClinicFixture();
+    const seed = buildClinicFixture({ weeks: 2 });
     await writeSeed({ tableName, client, seed });
     slots = seed.slots;
     repos = createDynamoRepositories({ tableName, client, clock: new FrozenClock(NOW) });
