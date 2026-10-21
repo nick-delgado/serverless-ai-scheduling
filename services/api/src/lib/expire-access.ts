@@ -33,7 +33,7 @@ export interface ExpireDeps {
   log?: Logger;
 }
 
-export type ExpiryOutcome =
+type ExpiryOutcome =
   /** The user (if it was ours) and the data are gone and the entry is released. */
   | "expired"
   /** An entry with no `sub`: released without touching any user. */

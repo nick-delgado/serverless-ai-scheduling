@@ -28,7 +28,7 @@ import {
   TransactWriteCommand,
   type DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
-import { PatientId, parseSlotId, type Specialty } from "@sched/contracts";
+import { PatientId, parseSlotId, Specialty } from "@sched/contracts";
 import { keys, openSlotGsi1 } from "@sched/tools/dynamo";
 
 import { CONDITION_FAILED, cancellationCodes } from "./access-store";
@@ -91,14 +91,17 @@ export function createAccountData(options: {
     for (let attempt = 0; attempt < MAX_RELEASE_ATTEMPTS; attempt++) {
       const { Item: appt } = await doc.send(new GetCommand({ TableName, Key: key, ConsistentRead: true }));
       if (!appt) return false;
-      const slot = typeof appt.slotId === "string" ? parseSlotId(appt.slotId) : null;
-      if (appt.status !== "BOOKED" || !slot || attempted === appt.slotId) {
-        // Not booked, no slot to give back, or the slot didn't hold this appointment when we tried it.
+      const slotId = typeof appt.slotId === "string" ? appt.slotId : undefined;
+      const slot = slotId === undefined ? null : parseSlotId(slotId);
+      const specialty = Specialty.safeParse(appt.specialty);
+      if (appt.status !== "BOOKED" || !slot || !specialty.success || attempted === slotId) {
+        // Not booked, no slot or specialty to give the slot back with, or the slot didn't hold this appointment when
+        // we tried it.
         await deleteAll([key]);
         return false;
       }
-      attempted = appt.slotId as string;
-      const reopened = openSlotGsi1(appt.specialty as Specialty, slot.providerId, slot.startUtc);
+      attempted = slotId;
+      const reopened = openSlotGsi1(specialty.data, slot.providerId, slot.startUtc);
       try {
         await doc.send(
           new TransactWriteCommand({

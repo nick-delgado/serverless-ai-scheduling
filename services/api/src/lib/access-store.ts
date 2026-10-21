@@ -163,8 +163,8 @@ export function createDynamoAccessStore({
         await doc.send(new TransactWriteCommand(input));
         return { ok: true };
       } catch (error) {
-        if (!(error instanceof TransactionCanceledException)) throw error;
-        const codes = (error.CancellationReasons ?? []).map((reason) => reason.Code);
+        const codes = cancellationCodes(error);
+        if (!codes) throw error;
         if (codes[0] === CONDITION_FAILED || codes[1] === CONDITION_FAILED) {
           return { ok: false, reason: "capped" };
         }
@@ -254,7 +254,7 @@ export function createDynamoAccessStore({
 
 export interface InMemoryAccessStore extends AccessStore, ExpiryStore {
   /** Registry entries in reserve order. */
-  readonly issued: { requestId: string; username: string; accessExpiresAt: string; sub?: string }[];
+  readonly issued: IssuedEntry[];
   /** Profiles written by `commit`. */
   readonly patients: Patient[];
   activeCount(): number;

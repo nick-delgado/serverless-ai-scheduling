@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { IssuedEntry } from "../src/lib/access-store";
 import type { ExpireDeps } from "../src/lib/expire-access";
 
 const wiring = vi.hoisted(() => ({
@@ -13,7 +14,7 @@ const wiring = vi.hoisted(() => ({
   poolIds: [] as string[],
   listed: [] as string[],
   deleted: [] as string[],
-  entries: [] as { requestId: string; username: string; accessExpiresAt: string; sub?: string }[],
+  entries: [] as IssuedEntry[],
 }));
 
 vi.mock("../src/lib/access-store", () => ({

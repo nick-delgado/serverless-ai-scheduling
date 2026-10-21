@@ -306,6 +306,7 @@ describe("the expiry job's side of the in-memory store", () => {
     const due = await store.listExpired("2026-10-21T13:00:00Z");
     expect(due.map((e) => e.username)).toEqual(["user-00000001", "user-00000002"]);
     const [first] = due;
+    expect(first).not.toHaveProperty("sub");
     if (first) first.username = "changed";
     expect(store.issued[1]?.username).toBe("user-00000001");
   });

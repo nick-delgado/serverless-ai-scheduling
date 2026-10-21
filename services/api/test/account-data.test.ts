@@ -44,7 +44,7 @@ function fake(opts: {
     send: (command: Cmd) => {
       sent.push(command);
       const input = command.input;
-      if (command instanceof QueryCommand || command.constructor.name === "QueryCommand") {
+      if (command instanceof QueryCommand) {
         const pk = input.ExpressionAttributeValues[":pk"] as string;
         const all = opts.partitions?.[pk] ?? [];
         if (opts.pages) {
@@ -230,6 +230,9 @@ describe("createAccountData", () => {
       const out = await createAccountData({ tableName: "t", doc }).deleteAccount(SUB);
 
       expect(out.slotsFreed).toBe(1);
+      const reads = sent.filter((c) => c instanceof GetCommand);
+      expect(reads).toHaveLength(1);
+      expect(reads[0]?.input.ConsistentRead).toBe(true);
       const tx = sent.find((c) => c.constructor.name === "TransactWriteCommand");
       expect(tx?.input.TransactItems).toEqual([
         {
@@ -300,11 +303,13 @@ describe("createAccountData", () => {
       }
     });
 
-    it("is deleted alone, no slot touched, when it is not BOOKED, has no readable slot, or is already gone", async () => {
+    it("is deleted alone, no slot touched, when it is not BOOKED, has no readable slot or specialty, or is already gone", async () => {
       for (const [item, deletes] of [
         [apptItem({ status: "COMPLETED" }), 2],
         [apptItem({ slotId: "garbage" }), 2],
         [apptItem({ slotId: undefined }), 2],
+        [apptItem({ specialty: undefined }), 2],
+        [apptItem({ specialty: "astrology" }), 2],
         [undefined, 1],
       ] as const) {
         const { doc, log, sent } = withAppt({ appts: { [APPT_KEY]: item ? [item] : [] } });

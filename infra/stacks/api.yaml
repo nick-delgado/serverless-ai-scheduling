@@ -97,6 +97,8 @@ Conditions:
     - !Not [!Equals [!Ref SesSender, ""]]
     - !Not [!Equals [!Ref SesStaffRecipient, ""]]
   # The request page, its function, its route and the expiry job (r1/Q-4 (a)): on in demo, or when RequestAccess is on.
+  # scripts/deploy.sh copies this rule (`access_requested` and the demo test) to decide when to ask for the Turnstile
+  # secret and hostname: change both together.
   RequestAccessOn: !Or
     - !Equals [!Ref Env, demo]
     - !Equals [!Ref RequestAccess, "on"]

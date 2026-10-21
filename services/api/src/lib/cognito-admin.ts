@@ -2,7 +2,9 @@
  * The User Pool admin operations that create a patient, shared by `scripts/seed-users.ts` (the fixture
  * patients) and the request-access handler (temporary reviewer patients, #357). Both create a user the
  * same way (ADR-005): `AdminCreateUser` with no invitation message, then `AdminSetUserPassword` with
- * `Permanent: true`, so the user signs in with SRP straight away. Tests inject a fake, so nothing here needs AWS.
+ * `Permanent: true`, so the user signs in with SRP straight away. The expiry job (`expire-access.ts`) uses
+ * the other three calls: `findSub` (`AdminGetUser`), `globalSignOut` and `deleteUser`. Tests inject a fake,
+ * so nothing here needs AWS.
  */
 import {
   AdminCreateUserCommand,

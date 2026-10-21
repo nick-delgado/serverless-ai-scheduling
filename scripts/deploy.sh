@@ -134,7 +134,8 @@ fi
 # (the environment, then this checkout's .env, then the main checkout's), passed as the NoEcho parameter TurnstileSecret
 # when set, and never echoed. The page is on in `demo` (the template's `Env` clause, r1/Q-4 (a), now that the expiry
 # job exists) and wherever `RequestAccess=on` is passed. `dev` and `e2e` stay off: `RequestAccess=on` is refused there.
-# Wherever the page is on, the secret and TurnstileExpectedHostname (the hostname Cloudflare must report; decision
+# The rule "the page is on in demo or with RequestAccess=on" is the template's condition `RequestAccessOn` (infra/stacks/api.yaml);
+# change both together. Wherever the page is on, the secret and TurnstileExpectedHostname (the hostname Cloudflare must report; decision
 # 97fb801/SPEC-3 (b) on PR #366) must both be given, so the bot check can't be deployed half-configured.
 ACCESS_REFUSED_ENVS=(dev e2e)
 access_overrides=()
@@ -146,7 +147,7 @@ override_value() {
 }
 if [[ " ${stacks[*]} " == *" api "* ]]; then
   access_requested=false
-  [[ " ${extra_overrides[*]-} " == *" RequestAccess=on "* ]] && access_requested=true
+  [[ "$(override_value RequestAccess)" == "on" ]] && access_requested=true
   if $access_requested && [[ " ${ACCESS_REFUSED_ENVS[*]} " == *" $env "* ]]; then
     echo "refusing RequestAccess=on for '${env}': the request page stays off on dev and e2e; only demo and an" \
          "ephemeral env (scripts/deploy.sh all <name>) turn it on." >&2

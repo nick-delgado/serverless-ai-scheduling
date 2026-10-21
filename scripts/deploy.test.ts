@@ -562,7 +562,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
     });
 
-    it("does not ask for a hostname when the page is off, and still deploys dev with one given", () => {
+    it("passes a given TurnstileExpectedHostname through for dev, where the page is off", () => {
       const r = run(["api", "dev", "--", HOST], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
       expect(r.status, r.out).toBe(0);
       expect(overrides(r.calls)["sched-dev-api"]).toContain(HOST);

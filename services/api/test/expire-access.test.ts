@@ -238,6 +238,7 @@ describe("expireAccess", () => {
     await expireAccess(f.deps);
     expect(f.calls).toEqual(["findSub user-00000001", "data 01", "release 01"]);
     expect(f.store.issued).toEqual([]);
+    expect(f.logs.map((l) => l.msg)).not.toContain("access-expiry left a user with another sub alone");
   });
 
   it("counts an entry already released by another run as expired once, calling release again harmlessly", async () => {
@@ -308,6 +309,13 @@ describe("expireAccess", () => {
 
       expect(await expireAccess(f.deps)).toMatchObject({ expired: 0, failed: 1 });
       expect(f.store.issued).toHaveLength(1);
+      // The data was deleted before the release failed, and the log says so before it says the entry failed.
+      expect(f.logs.map((l) => l.msg)).toEqual([
+        "access-expiry data",
+        "access-expiry entry failed",
+        "access-expiry entry",
+        "access-expiry",
+      ]);
 
       fail = false;
       expect(await expireAccess(f.deps)).toMatchObject({ expired: 1, failed: 0 });

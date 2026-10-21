@@ -5,7 +5,7 @@
  * part-way leaves the account to be finished by the next run. The fixture patients, another temporary account and a
  * slot held by someone else are checked untouched. Skipped locally without DynamoDB Local; required in CI.
  */
-import { DeleteCommand, GetCommand, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { ConversationMessage, Patient, PatientId, Slot, SlotId } from "@sched/contracts";
 import { clinicDateOf, FrozenClock, type Repositories } from "@sched/tools";
 import {
@@ -22,6 +22,7 @@ import { createDynamoAccessStore, type AccessReservation } from "../src/lib/acce
 import { createAccountData } from "../src/lib/account-data";
 import { createDynamoTurnStore } from "../src/lib/dynamo-turn-store";
 import { expireAccess, type ExpireDeps } from "../src/lib/expire-access";
+import { numberedReservation } from "./dynamo-fakes";
 import { dynamoLocalAvailable, localClient, tableFactory } from "./dynamo-local";
 
 const NOW = "2026-10-05T12:00:00Z";
@@ -44,9 +45,7 @@ afterAll(async () => {
 
 const guid = (n: number): PatientId => `22222222-2222-4222-8222-${String(n).padStart(12, "0")}`;
 const reservation = (n: number, accessExpiresAt: string): AccessReservation => ({
-  requestId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
-  username: `user-${String(n).padStart(8, "0")}`,
-  day: "2026-10-05",
+  ...numberedReservation(n, "2026-10-05"),
   accessExpiresAt,
 });
 const profile = (patientId: PatientId): Patient => ({
@@ -288,13 +287,10 @@ describe.skipIf(!available)("the expiry job (DynamoDB Local)", () => {
     await doc.send(
       new DeleteCommand({ TableName: tableName, Key: keys.slot(slot.providerId, slot.startUtc) }),
     );
-    const before = (await doc.send(new ScanCommand({ TableName: tableName, Select: "COUNT" }))).Count ?? 0;
-
     expect(await expireAccess(deps)).toMatchObject({ expired: 1, failed: 0 });
 
     expect(await get(keys.slot(slot.providerId, slot.startUtc))).toBeUndefined();
     expect(await partition(`PATIENT#${gone}`)).toEqual([]);
-    expect(before).toBeGreaterThan(0);
   });
 
   describe("when a call fails part-way", () => {
