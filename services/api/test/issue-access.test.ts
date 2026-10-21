@@ -188,7 +188,7 @@ describe("issuing an account", () => {
     ]);
   });
 
-  it("gives a username with the temporary prefix, which no fixture patient's has", async () => {
+  it("gives a username with the temporary prefix and not a fixture patient's", async () => {
     const f = setup();
     const body = RequestAccessResponse.parse(JSON.parse((await call(f)).body));
     const fixture = buildClinicFixture().patients.map((p) => `${p.firstName}.${p.lastName}`.toLowerCase());
@@ -518,7 +518,7 @@ describe("the proxy adapter", () => {
 });
 
 describe("the failure table", () => {
-  it("pairs each code with its status and its message, from the contract's one table", () => {
+  it("pairs the four codes with their statuses and messages, from the contract's one table", () => {
     expect(Object.entries(ACCESS_ERRORS).map(([code, f]) => [code, f.status])).toEqual([
       ["BAD_REQUEST", 400],
       ["BOT_CHECK_FAILED", 403],

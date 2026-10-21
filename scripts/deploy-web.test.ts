@@ -320,7 +320,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
       return path;
     };
 
-    it("falls back to the main checkout's .env from a worktree with none", () => {
+    it("falls back to the main checkout's .env from a worktree that has no .env of its own", () => {
       setSsm({ ...SSM, [REQUEST]: "on" });
       writeFileSync(join(sb.repo.dir, ".env"), `TURNSTILE_SITE_KEY=${DOTENV_KEY}\n`);
       const r = sb.run("scripts/deploy-web.sh", ["dev"], { env: {}, root: worktree() });
