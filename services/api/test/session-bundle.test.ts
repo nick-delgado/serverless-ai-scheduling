@@ -1,5 +1,5 @@
 /**
- * The session Lambda never calls a model, so its bundle must not carry the agent loop or the Bedrock
+ * The session Lambda (and the public request-access Lambda, #357) never calls a model, so its bundle must not carry the agent loop or the Bedrock
  * client (`lib/env.ts`, `handlers/session.ts`), nor the X-Ray SDK, since only the chat function is
  * traced. Bundles each handler with esbuild's JS API, as the Makefile does, and reads the inputs from
  * the metafile. The chat bundle is the control: it does carry all three, so the check can see them.
@@ -36,6 +36,13 @@ describe("Lambda bundles", () => {
     expect(inputs).toContain("services/api/src/handlers/session.ts");
     expect(agentOrBedrock(inputs)).toEqual([]);
     // X-Ray traces the chat function only (owner decision r1/Q-5 (a)).
+    expect(xray(inputs)).toEqual([]);
+  }, 30_000);
+
+  it("keeps the agent, the Bedrock client and the X-Ray SDK out of the request-access bundle, the one public function (#357)", async () => {
+    const inputs = await bundleInputs("request-access");
+    expect(inputs).toContain("services/api/src/handlers/request-access.ts");
+    expect(agentOrBedrock(inputs)).toEqual([]);
     expect(xray(inputs)).toEqual([]);
   }, 30_000);
 

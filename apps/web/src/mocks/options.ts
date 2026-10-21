@@ -17,6 +17,8 @@ export const ChatFault = z.enum([
 export const SessionVariant = z.enum(["upcoming", "no_upcoming", "restore"]);
 export const SessionFault = z.enum(["none", "network", "unauthorized", "internal"]);
 
+export const AccessFault = z.enum(["none", "network", "bot_check", "capped", "retry"]);
+
 const ms = (fallback: number) => z.int().min(0).max(60_000).catch(fallback);
 
 export const MockApiOptions = z.object({
@@ -56,6 +58,11 @@ export const MockApiOptions = z.object({
   session: SessionVariant.catch("upcoming"),
   /** Error injection for `POST /api/session`: `internal` is a 500 with an `ApiError` body. */
   sessionFault: SessionFault.catch("none"),
+  /**
+   * Error injection for `POST /api/request-access` (#357): `network` fails the request; `bot_check`, `capped` and
+   * `retry` are the 403, 429 and 503 answers.
+   */
+  accessFault: AccessFault.catch("none"),
 });
 export type MockApiOptions = z.infer<typeof MockApiOptions>;
 

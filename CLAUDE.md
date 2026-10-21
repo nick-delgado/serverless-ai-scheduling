@@ -28,7 +28,7 @@ A serverless AI scheduling assistant, built as a portfolio proof-of-concept. A p
 
 ```
 apps/web/            React + Vite SPA (login, chat, voice)
-services/api/        Lambda handlers: POST /api/chat (streaming agent turn), POST /api/session (greeting + restore)
+services/api/        Lambda handlers: POST /api/chat (streaming agent turn), POST /api/session (greeting + restore), POST /api/request-access (the one public route, temporary reviewer patients; only where an env turns it on)
 packages/contracts/  Zod schemas: domain types, API stream events, tool inputs/outputs
 packages/agent/      Agent loop, LlmClient, model profiles, prompts
 packages/tools/      Tool implementations, repository interfaces, in-memory + DynamoDB repos

@@ -14,6 +14,12 @@
 #   /sched/<env>/web/bucket-name, /sched/<env>/web/distribution-id, /sched/<env>/web/domain
 # A missing parameter stops the script before it builds.
 #
+# The reviewer access page (#357, r1/Q-4 (a)): /sched/<env>/api/request-access ("on" or "off") → VITE_REQUEST_ACCESS.
+# That one parameter may be missing (an env whose api stack predates the page): missing reads as off. When it is on,
+# the page's public Turnstile site key comes from TURNSTILE_SITE_KEY (the environment, then the checkout's .env, then
+# the main checkout's, as deploy.sh reads the SES values) → VITE_TURNSTILE_SITE_KEY, and the script refuses to build
+# without it. The site key is public (it ships in the bundle) but stays out of the repo, so each env can have its own.
+#
 # Caching: hashed files under assets/ are immutable for a year; every other file (index.html) is
 # `no-cache`, so browsers revalidate it and pick up new asset names. The upload order keeps the live
 # site whole: new assets first, then index.html, then stale files are deleted (--delete), then the
@@ -78,6 +84,33 @@ identity_pool_id="$(param "/sched/${env}/auth/identity-pool-id")"
 bucket="$(param "/sched/${env}/web/bucket-name")"
 distribution_id="$(param "/sched/${env}/web/distribution-id")"
 domain="$(param "/sched/${env}/web/domain")"
+# The page switch: a missing or unreadable parameter is "off" (the CLI's error stays visible, as for the others).
+request_access="$(param "/sched/${env}/api/request-access")"
+[[ "$request_access" == "on" ]] || request_access="off"
+# The value of $1 from the environment, else the first .env (this checkout's, then the main checkout's) that has a
+# non-empty one. A copy of the function in scripts/deploy.sh, which reads the SES values and the Turnstile secret with
+# it: change both together.
+main_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+env_file_value() {
+  local key="$1" file val=""
+  for file in "$repo_root/.env" "$main_checkout/.env"; do
+    [[ -f "$file" ]] || continue
+    val="$(node -e 'const { parseEnv } = require("node:util");
+      const vars = parseEnv(require("node:fs").readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(vars[process.argv[2]] ?? "");' "$file" "$key")" || exit 1
+    [[ -n "$val" ]] && break
+  done
+  printf '%s' "$val"
+}
+turnstile_site_key=""
+if [[ "$request_access" == "on" ]]; then
+  turnstile_site_key="${TURNSTILE_SITE_KEY:-$(env_file_value TURNSTILE_SITE_KEY)}"
+  if [[ -z "$turnstile_site_key" || "$turnstile_site_key" == *[$'\n\r']* ]]; then
+    echo "refusing: '${env}' has the request page on, so TURNSTILE_SITE_KEY must be set to one line (environment or" \
+         ".env, see .env.example): the page can't show the bot check without it" >&2
+    exit 1
+  fi
+fi
 missing=()
 for pair in "auth/user-pool-id=$user_pool_id" "auth/spa-client-id=$spa_client_id" \
             "auth/identity-pool-id=$identity_pool_id" "web/bucket-name=$bucket" \
@@ -99,6 +132,7 @@ fi
 echo "==> building apps/web with the '${env}' Cognito settings"
 rm -rf "$dist"
 VITE_USER_POOL_ID="$user_pool_id" VITE_SPA_CLIENT_ID="$spa_client_id" VITE_IDENTITY_POOL_ID="$identity_pool_id" \
+  VITE_REQUEST_ACCESS="$request_access" VITE_TURNSTILE_SITE_KEY="$turnstile_site_key" \
   npm run build -w apps/web
 
 if [[ ! -f "$dist/index.html" ]] || [[ -z "$(find "$dist/assets" -type f 2>/dev/null | head -n 1)" ]]; then
@@ -113,6 +147,11 @@ if ! grep -rqF -- "$user_pool_id" "$dist/assets"; then
 fi
 if ! grep -rqF -- "$identity_pool_id" "$dist/assets"; then
   echo "refusing: the built assets don't contain the '${env}' Identity Pool ID; VITE_IDENTITY_POOL_ID didn't reach the build" >&2
+  exit 1
+fi
+
+if [[ "$request_access" == "on" ]] && ! grep -rqF -- "$turnstile_site_key" "$dist/assets"; then
+  echo "refusing: the built assets don't contain the Turnstile site key; VITE_TURNSTILE_SITE_KEY didn't reach the build" >&2
   exit 1
 fi
 

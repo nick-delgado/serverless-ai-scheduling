@@ -88,6 +88,8 @@ flowchart LR
     M4_01["#43 M4-01<br/>README story: chapters 3–6, architecture diagram"]
     M4_02["#44 M4-02<br/>Demo script, recording, and reviewer access"]
     M4_03["#45 M4-03<br/>Retrospective and cost report"]
+    M4_04["#356 M4-04<br/>Cap what the demo env can spend: env turn cap, voice backstop"]
+    M4_05["#357 M4-05<br/>Self-serve reviewer access: request page, bot check, caps, expiry"]
   end
   M1_01 --> M1_02
   M1_02 --> M1_03
@@ -171,6 +173,8 @@ flowchart LR
   M3_01 --> M3_07
   M3_02 --> M4_01
   M3_05 --> M4_02
+  M4_04 --> M4_05
+  M4_05 --> M4_02
   M3_02 --> M4_03
   M3_03 --> M4_03
   S4_01 --> F77
@@ -214,7 +218,7 @@ After M1 lands, these streams run in parallel; each owns distinct paths (listed 
 | S7 Evals | [#30](https://github.com/nick-delgado/serverless-ai-scheduling/issues/30) S7-01, [#31](https://github.com/nick-delgado/serverless-ai-scheduling/issues/31) S7-02, [#32](https://github.com/nick-delgado/serverless-ai-scheduling/issues/32) S7-03, [#33](https://github.com/nick-delgado/serverless-ai-scheduling/issues/33) S7-04, [#34](https://github.com/nick-delgado/serverless-ai-scheduling/issues/34) S7-05; follow-ups [#80](https://github.com/nick-delgado/serverless-ai-scheduling/issues/80) (replaced #33), [#201](https://github.com/nick-delgado/serverless-ai-scheduling/issues/201) (replaced #80; closed by its PR), [#343](https://github.com/nick-delgado/serverless-ai-scheduling/issues/343) (replaces #201 as the open scenario-authoring issue), [#98](https://github.com/nick-delgado/serverless-ai-scheduling/issues/98), [#108](https://github.com/nick-delgado/serverless-ai-scheduling/issues/108) | #4 M1-02, #5 M1-03, #8 M1-06, #9 M1-07 |
 | S8 Escalation | [#35](https://github.com/nick-delgado/serverless-ai-scheduling/issues/35) S8-01 | #6 M1-04, #23 S4-05 |
 | M3 Integration + hardening | [#36](https://github.com/nick-delgado/serverless-ai-scheduling/issues/36) M3-01, [#37](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37) M3-02, [#38](https://github.com/nick-delgado/serverless-ai-scheduling/issues/38) M3-03, [#39](https://github.com/nick-delgado/serverless-ai-scheduling/issues/39) M3-04, [#40](https://github.com/nick-delgado/serverless-ai-scheduling/issues/40) M3-05, [#41](https://github.com/nick-delgado/serverless-ai-scheduling/issues/41) M3-06, [#42](https://github.com/nick-delgado/serverless-ai-scheduling/issues/42) M3-07 | #6 M1-04, #8 M1-06, #14 S2-02, #16 S3-02, #17 S3-03, #18 S3-04, #19 S4-01, #20 S4-02, #21 S4-03, #22 S4-04, #25 S1-02, #27 S5-03, #29 S6-02, #34 S7-05, #35 S8-01, #41 M3-06, #80, #99, #100, #107 |
-| M4 Story | [#43](https://github.com/nick-delgado/serverless-ai-scheduling/issues/43) M4-01, [#44](https://github.com/nick-delgado/serverless-ai-scheduling/issues/44) M4-02, [#45](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45) M4-03 | #37 M3-02, #38 M3-03, #40 M3-05 |
+| M4 Story | [#43](https://github.com/nick-delgado/serverless-ai-scheduling/issues/43) M4-01, [#44](https://github.com/nick-delgado/serverless-ai-scheduling/issues/44) M4-02, [#45](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45) M4-03, [#356](https://github.com/nick-delgado/serverless-ai-scheduling/issues/356) M4-04, [#357](https://github.com/nick-delgado/serverless-ai-scheduling/issues/357) M4-05 | #37 M3-02, #38 M3-03, #40 M3-05 |
 
 ## M0 Foundations
 
@@ -317,5 +321,7 @@ Narrative README, diagrams, eval results, demo script/video, retrospective.
 | # | ID | Task | Stream | Type | PRD | Blocked by |
 |---|---|---|---|---|---|---|
 | [#43](https://github.com/nick-delgado/serverless-ai-scheduling/issues/43) | M4-01 | README story: chapters 3–6, architecture diagram, eval results | story | docs | — | #37 |
-| [#44](https://github.com/nick-delgado/serverless-ai-scheduling/issues/44) | M4-02 | Demo script, recording, and reviewer access | story | docs | — | #40 |
+| [#44](https://github.com/nick-delgado/serverless-ai-scheduling/issues/44) | M4-02 | Demo script, recording, and reviewer access | story | docs | — | #40, #357 |
 | [#45](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45) | M4-03 | Retrospective and cost report | story | docs | — | #37, #38 |
+| [#356](https://github.com/nick-delgado/serverless-ai-scheduling/issues/356) | M4-04 | Cap what the demo env can spend: an env-wide daily turn cap and a demo-only spend backstop. **Closed (PRs #358, #359)** | integration | infra | FR-017, NFR-004 | — |
+| [#357](https://github.com/nick-delgado/serverless-ai-scheduling/issues/357) | M4-05 | Self-serve reviewer access: request page, bot check, issuance caps, expiry. Two PRs: issuance (first), then the expiry job and `demo` | auth | feature | FR-001, FR-004, NFR-004 | #356 |

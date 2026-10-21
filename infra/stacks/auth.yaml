@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   sched-<env>-auth: Cognito User Pool + SPA app client (ADR-005), and an Identity Pool whose
   authenticated role can only open Transcribe streaming WebSockets (ADR-006). Demo users are seeded
-  by scripts/seed-users.ts, not by this template, so no password lives here (ADR-003).
+  by scripts/seed-users.ts, and temporary reviewer patients are created by the api stack's request-access
+  function (#357, ADR-005's 2026-10-20 amendment), not by this template, so no password lives here (ADR-003).
 
 Parameters:
   Env:
@@ -29,7 +30,8 @@ Resources:
       UserPoolName: !Sub sched-${Env}-patients
       UserPoolTier: LITE
       DeletionProtection: !If [Protect, ACTIVE, INACTIVE]
-      # Demo patients are created by an admin script; nobody can sign themselves up.
+      # Patients are created by admin calls only (the seed script, or the request-access function in envs that turn
+      # it on, #357); nobody can sign themselves up.
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: true
       UsernameConfiguration:

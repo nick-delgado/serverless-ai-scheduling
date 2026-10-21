@@ -102,6 +102,8 @@ aws cloudformation deploy --profile sched-admin --region us-east-1 \
   --stack-name sched-bootstrap --template-file infra/bootstrap/bootstrap.yaml --capabilities CAPABILITY_NAMED_IAM
 ```
 
+**The apply for reviewer access (#357, first part)** is this command with no overrides (Nick applied it on 2026-10-21 and the standby check below still showed `STANDBY`): it adds six actions to the permissions boundary (`cognito-idp:AdminCreateUser`, `AdminSetUserPassword`, `AdminGetUser`, `AdminDeleteUser`, `AdminUserGlobalSignOut`, `dynamodb:DeleteItem`) and the exec role's `EventsSchedRules` statement. Name no `DemoTranscribeRoleName`, `DemoBackstopUsd` or `DemoBackstopServices`: the spend backstop keeps the values it has (the AWS CLI says of `--parameter-overrides`, "If you're updating a stack and you don't specify a parameter, the command uses the stack's existing value"), and `DemoTranscribeRoleName=""` would delete it. Afterwards run the standby check under "The demo spend backstop": it should still show one `APPLY_IAM_POLICY` action with status `STANDBY`. Until the apply, deploying the `api` stack with the page on fails with an AccessDenied on the new role's inline policy (the boundary doesn't allow the Cognito calls yet).
+
 When a PR changes `infra/bootstrap/sched-deployer-policy.json`, check the CI roles in `bootstrap.yaml` that copy its statements (each copy says so), then go to **IAM Identity Center → Permission sets → SchedDeployer → Inline policy**, paste the new version (with `<ACCOUNT_ID>`, `<SES_IDENTITY>` and `<SES_RECIPIENT>` substituted, as in step 3), and then choose **Provision** (or "Update") on the account.
 
 ### The demo spend backstop (#356)
@@ -278,7 +280,8 @@ These are the only AWS changes made outside CloudFormation (CLAUDE.md, ADR-003):
 | SES email verification click | Requires a human to click the email link | Nick |
 | GitHub-side CI settings: the OIDC subject customization, the `dev` and `e2e` Environments, the secrets `AWS_DEPLOY_ROLE_ARN`, `AWS_E2E_ROLE_ARN`, `DEMO_PASSWORD_SOFIA` (environment), `AWS_EVAL_ROLE_ARN`, `SES_SENDER`, `SES_STAFF_RECIPIENT` (repository), and required SHA pinning | GitHub settings, not AWS resources; a workflow can't read the role ARNs from SSM before it has credentials | Nick ("CI credentials (GitHub OIDC)") |
 | SPA asset upload (`aws s3 sync`) + CloudFront invalidation | Build artifacts, not infrastructure | Agents (`scripts/deploy-web.sh <env>`, after the env's auth and web stacks; builds with the Cognito IDs from SSM, see the `sam-deploy` skill), or the deploy workflow for `dev` and the E2E workflow for `e2e` |
-| Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`), or the E2E workflow for `e2e` |
+| Demo user seeding (`AdminCreateUser`) | Passwords must not live in templates | Agents (`scripts/seed-users.ts`), or the E2E workflow for `e2e`. Reviewers' temporary patients are created at request time by the request-access Lambda (#357; `deploy-env.md`, "Reviewer access"), not by a script |
+| Creating the Cloudflare Turnstile widget and its keys | A Cloudflare dashboard step; the keys go in the git-ignored `.env`, never in a template or the repo | Nick (`deploy-env.md`, "Reviewer access") |
 | Reversing or re-arming the demo spend backstop after it ran | Budgets runs the action, not CloudFormation, so reversing it is a Budgets call ("The demo spend backstop", above) | Nick |
 | Re-sending failed escalation emails | Repairs data (a notification status) and sends email; not infrastructure | Agents or Nick, as `sched-dev` (`scripts/retry-escalations.ts`, below) |
 

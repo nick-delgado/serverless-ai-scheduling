@@ -3,7 +3,7 @@
  * whole app against the Cognito mock (real Amplify, real SRP); the ones about timing and call
  * counts use a fake auth service they control.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
@@ -50,6 +50,33 @@ async function signInThroughForm(username: string, password: string, wait: { tim
   await user.type(passwordField(), `${password}{Enter}`);
   return user;
 }
+
+describe("the Request demo access link (#357; FR-001 amended)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is absent when the env leaves the page off, which is every build that sets nothing", async () => {
+    renderApp("/login");
+    await screen.findByRole("heading", { name: "Sign in" }, COGNITO);
+    expect(screen.queryByRole("link", { name: "Request demo access" })).toBeNull();
+    vi.stubEnv("VITE_REQUEST_ACCESS", "off");
+    cleanup();
+    renderApp("/login");
+    await screen.findByRole("heading", { name: "Sign in" }, COGNITO);
+    expect(screen.queryByRole("link", { name: "Request demo access" })).toBeNull();
+  });
+
+  it("is present, pointing at /request-access, when the env turns the page on", async () => {
+    vi.stubEnv("VITE_REQUEST_ACCESS", "on");
+    renderApp("/login");
+    await screen.findByRole("heading", { name: "Sign in" }, COGNITO);
+    expect(screen.getByRole("link", { name: "Request demo access" })).toHaveAttribute(
+      "href",
+      "/request-access",
+    );
+    // Not a sign-up link: the test below keeps its assertion that none of those exist.
+    expect(screen.queryByRole("link", { name: /sign up|register|create/i })).toBeNull();
+  });
+});
 
 describe("login form (FR-001)", () => {
   it("labels its fields for password managers and screen readers, in tab order, with no sign-up link", async () => {

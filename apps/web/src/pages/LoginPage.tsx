@@ -2,8 +2,9 @@ import "./LoginPage.css";
 
 import { CLINIC } from "@sched/contracts";
 import { type FormEvent, useId, useRef, useState } from "react";
-import { Navigate } from "react-router";
+import { Link, Navigate } from "react-router";
 
+import { requestAccessEnabled } from "../access/config";
 import { pageTitle } from "../app/pageTitle";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionCheck } from "../auth/RequireAuth";
@@ -19,7 +20,9 @@ export const LOGIN_ERRORS = {
 
 /**
  * The patient's sign-in page (FR-001): a plain form, so Enter submits from either field. No
- * self-sign-up link (patients are created by the clinic). Signed-in visitors go straight to /chat.
+ * self-sign-up link (patients are created by the clinic). In an env that turns it on, a "Request demo access"
+ * link goes to the page that issues a temporary demo patient (#357); that is not a sign-up, since it collects
+ * nothing about the visitor. Signed-in visitors go straight to /chat.
  */
 export function LoginPage() {
   const { state, signIn } = useAuth();
@@ -96,6 +99,11 @@ export function LoginPage() {
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      {requestAccessEnabled(import.meta.env) && (
+        <p className="muted">
+          No account? <Link to="/request-access">Request demo access</Link>
+        </p>
+      )}
     </div>
   );
 }

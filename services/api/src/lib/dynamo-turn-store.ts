@@ -33,7 +33,7 @@ const DAY_S = 24 * 60 * 60;
 const MAX_ATTEMPTS = 5;
 
 /** A counter item's expiry: two days after the clinic-local `day` ends (UTC), epoch seconds. */
-const counterExpiresAt = (day: string): number =>
+export const counterExpiresAt = (day: string): number =>
   Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000) + (1 + COUNTER_TTL_DAYS) * DAY_S;
 
 const backoff = (attempt: number): Promise<void> =>

@@ -424,4 +424,101 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       });
     });
   });
+  describe("the reviewer access page's secret and switch (#357)", () => {
+    // Synthetic: Cloudflare's documented always-passes test secret, and distinct stand-ins for the .env sources.
+    const SECRET = "1x0000000000000000000000000000000AA";
+    const DOTENV_SECRET = "dotenv-turnstile-secret-value";
+    const PAGE_ON = ["--", "RequestAccess=on"];
+    const noSecretPrinted = (r: ShellRun) => {
+      for (const value of [SECRET, DOTENV_SECRET]) expect(r.out).not.toContain(value);
+    };
+
+    it("passes TurnstileSecret to the api stack from the environment, after the SES values, and never prints it", () => {
+      const r = run(["api", "pr7", ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-pr7-api"]).toEqual([
+        "Env=pr7",
+        "RequestAccess=on",
+        `SesSender=${SENDER}`,
+        `SesStaffRecipient=${RECIPIENT}`,
+        `TurnstileSecret=${SECRET}`,
+      ]);
+      noSecretPrinted(r);
+    });
+
+    it("reads TURNSTILE_SECRET from .env, and prefers the environment over it", () => {
+      writeEnv(sb.repo.dir, `${DOTENV}TURNSTILE_SECRET=${DOTENV_SECRET}\n`);
+      const fromFile = run(["api", "pr7", ...PAGE_ON]);
+      expect(overrides(fromFile.calls)["sched-pr7-api"]).toContain(`TurnstileSecret=${DOTENV_SECRET}`);
+      noSecretPrinted(fromFile);
+      sb.clearCalls();
+      const both = run(["api", "pr7", ...PAGE_ON], { TURNSTILE_SECRET: SECRET });
+      expect(overrides(both.calls)["sched-pr7-api"]).toContain(`TurnstileSecret=${SECRET}`);
+      expect(overrides(both.calls)["sched-pr7-api"]).not.toContain(`TurnstileSecret=${DOTENV_SECRET}`);
+    });
+
+    it("passes the secret to the api stack only, and RequestAccess only to the template that declares it", () => {
+      const r = run(["all", "pr7", ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status, r.out).toBe(0);
+      const all = overrides(r.calls);
+      expect(all["sched-pr7-data"]).toEqual(["Env=pr7", "DeletionProtection=disabled"]);
+      expect(all["sched-pr7-auth"]).toEqual(["Env=pr7", "DeletionProtection=disabled"]);
+      expect(all["sched-pr7-web"]).toEqual(["Env=pr7"]);
+      expect(all["sched-pr7-api"]).toContain("RequestAccess=on");
+      expect(all["sched-pr7-api"]).toContain(`TurnstileSecret=${SECRET}`);
+    });
+
+    it("leaves the api overrides alone when the page is off and no secret is set", () => {
+      expectSes(run(["api", "pr7"], SES_ENV), "pr7", SENDER, RECIPIENT);
+    });
+
+    it("refuses RequestAccess=on without a secret, before any ssm or sam call", () => {
+      const r = run(["api", "pr7", ...PAGE_ON], SES_ENV);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TURNSTILE_SECRET must be set");
+      expect(r.out).toContain("RequestAccess=on");
+      expect(awsOrSam(r.calls)).toEqual([]);
+    });
+
+    it.each(["dev", "demo", "e2e"])(
+      "refuses RequestAccess=on for %s even with a secret, until the expiry job exists",
+      (env) => {
+        const r = run(["api", env, ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+        expect(r.status).toBe(1);
+        expect(r.out).toContain(`refusing RequestAccess=on for '${env}'`);
+        expect(r.out).toContain("expiry job");
+        expect(awsOrSam(r.calls)).toEqual([]);
+        noSecretPrinted(r);
+      },
+    );
+
+    it("still deploys dev without the page switch, passing a secret it was given", () => {
+      const r = run(["api", "dev"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-dev-api"]).not.toContain("RequestAccess=on");
+      expect(overrides(r.calls)["sched-dev-api"]).toContain(`TurnstileSecret=${SECRET}`);
+      noSecretPrinted(r);
+    });
+
+    it("refuses a secret that spans lines, naming only the key", () => {
+      const r = run(["api", "pr7"], { ...SES_ENV, TURNSTILE_SECRET: `${SECRET}\nx` });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TURNSTILE_SECRET spans more than one line");
+      expect(r.out).toMatch(/^TURNSTILE_SECRET spans more than one line/m);
+      // Neither SES key is named, before it (the order deploy.sh prints) or after it.
+      for (const other of ["SES_SENDER", "SES_STAFF_RECIPIENT"]) {
+        expect(r.out).not.toContain(`${other} spans`);
+        expect(r.out).not.toContain(`${other} TURNSTILE_SECRET`);
+        expect(r.out).not.toContain(`TURNSTILE_SECRET ${other}`);
+      }
+      expect(awsOrSam(r.calls)).toEqual([]);
+      noSecretPrinted(r);
+    });
+
+    it("does not look for a secret when the target has no api stack", () => {
+      const r = run(["data", "pr7", ...PAGE_ON], {});
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-pr7-data"]).toEqual(["Env=pr7", "DeletionProtection=disabled"]);
+    });
+  });
 });

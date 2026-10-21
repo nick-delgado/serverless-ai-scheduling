@@ -49,9 +49,10 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 
 | ID | Pri | Requirement | Acceptance criteria |
 |---|---|---|---|
-| FR-001 | M | Patient logs in with username and password on a simple login page | Valid credentials → chat page. Invalid → inline error, no account enumeration. Enter key submits. No self-sign-up link. |
+| FR-001 | M | Patient logs in with username and password on a simple login page | Valid credentials → chat page. Invalid → inline error, no account enumeration. Enter key submits. No self-sign-up link: a patient is never created from what a visitor types. The one way in without Nick's credentials is FR-004's page, which collects nothing and is on only in envs that turn it on (#357). |
 | FR-002 | M | Session persists across refreshes; patient can log out | Refresh keeps the patient logged in until the refresh token expires (7 days) or they sign out; the hourly ID and access tokens refresh silently. Logout clears the session and returns to login. |
 | FR-003 | M | Unauthenticated users can't reach the chat or API | Visiting `/chat` while logged out redirects to login. API calls without a valid token → 401. |
+| FR-004 | S | A reviewer can get a temporary demo account without giving up any personal data | On an env that turns it on (`RequestAccess`; never `dev`, `demo` or `e2e` until the expiry job exists), the sign-in page links to `/request-access`: one button and a Cloudflare Turnstile check, with no email, name or free text. The server verifies the token before it creates anything, then makes one synthetic patient (username `user-` and 8 random letters or digits, a random fictional name and date of birth, a random password) and shows the username, password and name once; it never stores or logs the password. At most `RequestAccessDailyCap` (default 10) accounts are issued per clinic-local day and `RequestAccessActiveCap` (default 5) exist at once; past either, the page says requests have run out for now and links to the project README for Nick's contact details, and nothing is created. A failed or unreachable bot check creates nothing and says to try again. Accounts last `RequestAccessExpiryHours` (default 24); deleting them is #357's second part. (ADR-005, ADR-009; #357) |
 
 ### 4.2 Chat experience
 
@@ -123,7 +124,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould.
 | NFR-001 | Latency | Chat, on the deployed stack with the production profile: time from the API receiving `POST /api/chat` to the first `text_delta` it writes ≤ 3 s (p50), and to `done` ≤ 15 s (p95), over at least 30 turns, read from the handler's logs or metrics (#38). Eval-harness latencies include rate-limit pacing and are reported for information only |
 | NFR-002 | Latency | Voice: stop → final transcript ≤ 2 s (p95) |
 | NFR-003 | Cost | Idle ≤ $5/month (excluding a domain). Agent cost (excluding the eval simulator and judge) ≤ $0.25 per completed conversation on the production profile, where a completed conversation is a scenario-mode trial that ends with the simulator's `goal_achieved` or `escalated` stop; an M3 gate measured in the matrix (#37), with idle cost reported in #45 |
-| NFR-004 | Security | Least-privilege IAM; JWT on every API; patient ID only from the token; no secrets in the repo; synthetic data only (ADR-009) |
+| NFR-004 | Security | Least-privilege IAM; JWT on every API, except the one public route, `POST /api/request-access` (FR-004, #357), which exists only where the page is on; patient ID only from the token; no secrets in the repo; synthetic data only (ADR-009) |
 | NFR-005 | Accessibility | WCAG 2.2 AA basics: keyboard operable, visible focus, focus trap in overlay, `aria-live` for new messages, color contrast, reduced motion |
 | NFR-006 | Compatibility | Latest Chrome, Safari, Firefox, Edge; iOS Safari and Android Chrome. Text chat must work in all six. Voice is measured on Chrome (desktop), Safari (macOS), iOS Safari and Android Chrome; Firefox and Edge are best effort. Verified by #40: Playwright on Chromium, WebKit and Firefox for login → book, plus a manual pass on iOS Safari and Android Chrome |
 | NFR-007 | Observability | Structured JSON logs with request/conversation IDs (no message text in logs); per-turn traces; CloudWatch metrics for latency, tokens, errors |
@@ -174,9 +175,10 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 
 | Requirement | Issue(s) |
 |---|---|
-| FR-001 | #12, #25, #40, #99, #100 |
+| FR-001 | #12, #25, #40, #99, #100, #357 |
 | FR-002 | #12, #25, #40, #99, #100 |
 | FR-003 | #12, #25, #40, #99, #100 |
+| FR-004 | #357 |
 | FR-010 | #18, #26, #27, #36, #40, #121 |
 | FR-011 | #17, #26, #36, #40 |
 | FR-012 | #4, #17, #26, #36, #40, #122 |
@@ -207,7 +209,7 @@ Requirement → GitHub issue(s). Generated from the backlog on 2026-09-28 and up
 | NFR-001 | #7, #9, #37, #38 |
 | NFR-002 | #10, #29 |
 | NFR-003 | #9, #37, #45 |
-| NFR-004 | #39, #356 |
+| NFR-004 | #39, #356, #357 |
 | NFR-005 | #24, #25, #26, #27, #28 |
 | NFR-006 | #24, #40 |
 | NFR-007 | #17, #38 |

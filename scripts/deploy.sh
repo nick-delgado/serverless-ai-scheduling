@@ -10,6 +10,10 @@
 # (environment or the git-ignored .env); dev and demo refuse to deploy it without them, and any env refuses
 # a value that spans lines (see "the escalation email's SES identity" below).
 #
+# The api stack also takes the Cloudflare Turnstile secret key from TURNSTILE_SECRET (environment or .env), a NoEcho
+# parameter like the SES addresses. `-- RequestAccess=on` (the reviewer access page, #357) refuses to deploy without
+# it, and refuses dev, demo and e2e outright until the expiry job exists (see "the reviewer access page" below).
+#
 # Arguments: the target is one stack name or `all`, exactly; anything after the env must start with `--`.
 #
 # Deploys the checkout this script lives in (repo_root below comes from the script's own path), so
@@ -85,6 +89,7 @@ fi
 # which is what an unmatched quote becomes when a later line has the same quote, is refused.
 main_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 # The value of $1 from the first .env that has a non-empty one; a file is read only if it exists.
+# scripts/deploy-web.sh keeps a copy of this function (it reads TURNSTILE_SITE_KEY): change both together.
 env_file_value() {
   local key="$1" file val=""
   for file in "$repo_root/.env" "$main_checkout/.env"; do
@@ -97,12 +102,16 @@ env_file_value() {
   printf '%s' "$val"
 }
 ses_overrides=()
+turnstile_secret=""
 if [[ " ${stacks[*]} " == *" api "* ]]; then
   ses_sender="${SES_SENDER:-$(env_file_value SES_SENDER)}"
   ses_recipient="${SES_STAFF_RECIPIENT:-$(env_file_value SES_STAFF_RECIPIENT)}"
+  # The Turnstile secret (the reviewer access page, below) is read here so one check covers all three values.
+  turnstile_secret="${TURNSTILE_SECRET:-$(env_file_value TURNSTILE_SECRET)}"
   multiline=()
   [[ "$ses_sender" == *[$'\n\r']* ]] && multiline+=(SES_SENDER)
   [[ "$ses_recipient" == *[$'\n\r']* ]] && multiline+=(SES_STAFF_RECIPIENT)
+  [[ "$turnstile_secret" == *[$'\n\r']* ]] && multiline+=(TURNSTILE_SECRET)
   if [[ ${#multiline[@]} -gt 0 ]]; then
     echo "${multiline[*]} spans more than one line (in .env, an unmatched quote may have swallowed the" \
          "lines after it); fix it before deploying the api stack." >&2
@@ -117,6 +126,30 @@ if [[ " ${stacks[*]} " == *" api "* ]]; then
   else
     echo "note: SES_SENDER/SES_STAFF_RECIPIENT not set; '${env}' gets no escalation email (notifications FAILED)." >&2
   fi
+fi
+
+# --- the reviewer access page (api stack, #357) -----------------------------------------------------
+# TURNSTILE_SECRET is Cloudflare Turnstile's secret key (r1/Q-1 (a)): never committed, read with the SES values above
+# (the environment, then this checkout's .env, then the main checkout's), passed as the NoEcho parameter TurnstileSecret
+# when set, and never echoed. `RequestAccess=on` turns the page's route on in the api stack. In the first part of #357
+# only an ephemeral env may have it: accounts that never expire would pile up in a stateful env, and the expiry job is
+# the second part (r1/Q-2 (b)). The second part removes demo from this list.
+ACCESS_REFUSED_ENVS=(dev demo e2e)
+access_overrides=()
+if [[ " ${stacks[*]} " == *" api "* ]]; then
+  if [[ " ${extra_overrides[*]-} " == *" RequestAccess=on "* ]]; then
+    if [[ " ${ACCESS_REFUSED_ENVS[*]} " == *" $env "* ]]; then
+      echo "refusing RequestAccess=on for '${env}': the expiry job (the second part of #357) does not exist yet, so" \
+           "accounts issued there would never expire. Use an ephemeral env (scripts/deploy.sh all <name>)." >&2
+      exit 1
+    fi
+    if [[ -z "$turnstile_secret" ]]; then
+      echo "TURNSTILE_SECRET must be set (environment or .env, see .env.example) to deploy the api stack with" \
+           "RequestAccess=on: the request function can't verify the bot check without it." >&2
+      exit 1
+    fi
+  fi
+  [[ -n "$turnstile_secret" ]] && access_overrides=("TurnstileSecret=${turnstile_secret}")
 fi
 
 echo "Deploying ${stacks[*]} to env '${env}' from ${git_branch}@${git_commit} (${repo_root})"
@@ -144,7 +177,7 @@ for stack in "${stacks[@]}"; do
   for kv in ${extra_overrides[@]+"${extra_overrides[@]}"}; do
     [[ "$declared" == *" ${kv%%=*} "* ]] && overrides+=("$kv")
   done
-  [[ "$stack" == "api" ]] && overrides+=(${ses_overrides[@]+"${ses_overrides[@]}"})
+  [[ "$stack" == "api" ]] && overrides+=(${ses_overrides[@]+"${ses_overrides[@]}"} ${access_overrides[@]+"${access_overrides[@]}"})
 
   sam validate --lint --template-file "$template" --region "$AWS_REGION"
   sam build --template-file "$template" --build-dir "$build_dir" --cached --cache-dir ".aws-sam/cache-${stack}" >/dev/null

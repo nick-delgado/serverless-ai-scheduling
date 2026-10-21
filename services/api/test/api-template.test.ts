@@ -276,9 +276,16 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
     expect(post).toContain("/functions/${ChatFunction.Arn}/response-streaming-invocations");
   });
 
-  it("puts every method of the API behind the Cognito authorizer, which validates this env's user pool", () => {
-    const methods = childBlocks(block(/^ {8}paths:$/, lines)).flatMap((path) => childBlocks(path));
-    expect(methods.length).toBeGreaterThan(0);
+  it("puts every method of the API behind the Cognito authorizer, except the one public route, which this env's pool validates", () => {
+    const paths = childBlocks(block(/^ {8}paths:$/, lines));
+    // The one named exception (#357, r1/A-5): every other path stays pinned.
+    const headers = paths.map((path) => (path[0] ?? "").trim());
+    expect(headers.map((h) => h.replace(/:.*$/, "")).sort()).toEqual(
+      ["/api/chat", "/api/request-access", "/api/session"].sort(),
+    );
+    const guarded = paths.filter((path) => !(path[0] ?? "").includes("/api/request-access"));
+    const methods = guarded.flatMap((path) => childBlocks(path));
+    expect(methods.length).toBe(2);
     for (const m of methods) expect(text(m), m[0]).toMatch(/^ {14}security:\n {16}- CognitoUserPool: \[\]$/m);
     expect(bodyLines(block(/^ {12}CognitoUserPool:$/, lines))).toEqual([
       "  type: apiKey",
@@ -328,5 +335,154 @@ describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)
     expect(entries(block(/^\s+Variables:$/, chatLines))).toMatchObject({
       ENV_DAILY_TURN_CAP: "!Ref EnvDailyTurnCap",
     });
+  });
+});
+
+describe("the request-access route (#357)", () => {
+  const publicPath = (): string[] => block(/^ {10}\/api\/request-access: !If$/, lines);
+  const accessResources = [
+    "RequestAccessLogGroup",
+    "RequestAccessFunction",
+    "RequestAccessApiInvokePermission",
+  ];
+
+  it("is the API's one method with no authorizer: no security, an integration with its own function, only where RequestAccessOn", () => {
+    const path = text(publicPath());
+    expect(path).toMatch(/- RequestAccessOn\n/);
+    expect(path).toMatch(/- !Ref AWS::NoValue\s*$/);
+    expect(path).toContain("- post:");
+    expect(path).not.toContain("security");
+    expect(path).not.toContain("CognitoUserPool");
+    expect(path).toContain("/functions/${RequestAccessFunction.Arn}/invocations");
+    // An ordinary Lambda proxy integration: the route answers with one buffered JSON body.
+    expect(path).toContain("type: aws_proxy");
+    expect(path).not.toContain("responseTransferMode");
+  });
+
+  it("is on only when the RequestAccess parameter is on (default off), and demo does not turn it on in PR 1", () => {
+    expect(entries(block(/^ {2}RequestAccess:$/, lines))).toMatchObject({
+      Type: "String",
+      Default: "off",
+      AllowedValues: '["on", "off"]',
+    });
+    expect(entries(block(/^Conditions:$/, lines)).RequestAccessOn).toBe('!Equals [!Ref RequestAccess, "on"]');
+    expect(template).not.toMatch(/Equals \[!Ref Env, demo\]/);
+  });
+
+  it("puts exactly the log group, the function and the invoke permission under that condition", () => {
+    const conditioned = lines.flatMap((line, i) => {
+      if (!/^ {2}[A-Za-z0-9]+:$/.test(line)) return [];
+      const own = block(new RegExp(`^ {2}${line.trim().replace(":", "")}:$`), lines);
+      return own.some((l) => /^ {4}Condition: RequestAccessOn$/.test(l))
+        ? [lines[i]?.trim().replace(":", "")]
+        : [];
+    });
+    expect(conditioned).toEqual(accessResources);
+  });
+
+  it("defaults the caps to 10 a day and 5 at once, expires accounts after 24 hours, each at least 1", () => {
+    for (const [name, def] of [
+      ["RequestAccessDailyCap", "10"],
+      ["RequestAccessActiveCap", "5"],
+      ["RequestAccessExpiryHours", "24"],
+    ] as const) {
+      expect(entries(block(new RegExp(`^ {2}${name}:$`), lines)), name).toMatchObject({
+        Type: "Number",
+        Default: def,
+        MinValue: "1",
+      });
+    }
+  });
+
+  it("takes the Turnstile secret as a NoEcho parameter with an empty default", () => {
+    // `entries` drops an empty value, so the default is read from the block's text.
+    const secret = block(/^ {2}TurnstileSecret:$/, lines);
+    expect(entries(secret)).toMatchObject({ Type: "String", NoEcho: "true" });
+    expect(text(secret)).toContain('Default: ""');
+  });
+
+  it("gives the function the table, the pool, the secret, the hostname and the three settings", () => {
+    const fn = resource("RequestAccessFunction");
+    expect(entries(block(/^\s+Variables:$/, fn))).toEqual({
+      TABLE_NAME: '!Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"',
+      USER_POOL_ID: '!Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-id}}"',
+      TURNSTILE_SECRET: "!Ref TurnstileSecret",
+      TURNSTILE_EXPECTED_HOSTNAME: "!Ref TurnstileExpectedHostname",
+      ACCESS_DAILY_CAP: "!Ref RequestAccessDailyCap",
+      ACCESS_ACTIVE_CAP: "!Ref RequestAccessActiveCap",
+      ACCESS_EXPIRY_HOURS: "!Ref RequestAccessExpiryHours",
+      NODE_OPTIONS: "--enable-source-maps",
+    });
+  });
+
+  it("grants only the two item writes on the base table and four Cognito admin calls on this env's pool", () => {
+    const fn = resource("RequestAccessFunction");
+    // The whole Policies list, so a third statement, a SAM policy template, another resource or a wildcard each fails.
+    expect(bodyLines(block(/^\s+Policies:$/, fn))).toEqual([
+      '  - Version: "2012-10-17"',
+      "    Statement:",
+      "      - Sid: RegistryAndProfileWrites",
+      "        Effect: Allow",
+      "        Action:",
+      "          - dynamodb:PutItem",
+      "          - dynamodb:UpdateItem",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
+      "      - Sid: CreateAndDeleteTemporaryUsers",
+      "        Effect: Allow",
+      "        Action:",
+      "          - cognito-idp:AdminCreateUser",
+      "          - cognito-idp:AdminSetUserPassword",
+      "          - cognito-idp:AdminGetUser",
+      "          - cognito-idp:AdminDeleteUser",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"',
+    ]);
+    // No role of its own that would bypass Policies.
+    expect(fn.join("\n")).not.toMatch(/^ {6}Role:/m);
+  });
+
+  it("builds the request-access handler with its own Makefile target", () => {
+    const makefile = readFileSync(new URL("../Makefile", import.meta.url), "utf8");
+    expect(makefile).toMatch(
+      /^build-RequestAccessFunction: check-root\n\t.*services\/api\/src\/handlers\/request-access\.ts /m,
+    );
+    expect(text(resource("RequestAccessFunction"))).toContain("BuildMethod: makefile");
+  });
+
+  it("declares TurnstileExpectedHostname as a string that is empty by default", () => {
+    const hostname = block(/^ {2}TurnstileExpectedHostname:$/, lines);
+    expect(entries(hostname).Type).toBe("String");
+    expect(text(hostname)).toContain('Default: ""');
+  });
+
+  it("lets API Gateway invoke the function for POST /api/request-access only", () => {
+    const permission = resource("RequestAccessApiInvokePermission");
+    expect(bodyLines(permission).find((l) => l.includes("SourceArn"))).toContain(
+      "${ChatApi}/*/POST/api/request-access",
+    );
+    expect(entries(block(/^ {4}Properties:$/, permission)).FunctionName).toBe(
+      "!GetAtt RequestAccessFunction.Arn",
+    );
+  });
+
+  it("keeps the 14-day log retention of the other functions", () => {
+    expect(entries(block(/^ {4}Properties:$/, resource("RequestAccessLogGroup")))).toMatchObject({
+      LogGroupName: "!Sub /aws/lambda/sched-${Env}-api-request-access",
+      RetentionInDays: "14",
+    });
+  });
+
+  it("publishes whether the page is on, for the web build", () => {
+    expect(entries(block(/^ {4}Properties:$/, resource("RequestAccessParam")))).toEqual({
+      Name: "!Sub /sched/${Env}/api/request-access",
+      Type: "String",
+      Value: '!If [RequestAccessOn, "on", "off"]',
+    });
+  });
+
+  it("adds no access logging to the stage, which would record callers' addresses (A-7)", () => {
+    expect(template).not.toContain("AccessLogSetting");
+    expect(template).not.toContain("DestinationArn");
   });
 });

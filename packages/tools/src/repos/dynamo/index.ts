@@ -12,4 +12,4 @@ export {
   type DynamoRepositoryOptions,
 } from "./repositories";
 export { createTableInput, GSI1 } from "./table";
-export { escalationFrom, keys, MESSAGE_TTL_DAYS } from "./items";
+export { escalationFrom, keys, MESSAGE_TTL_DAYS, patientItem } from "./items";

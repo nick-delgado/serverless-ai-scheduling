@@ -67,3 +67,63 @@ export const ApiError = z.strictObject({
   }),
 });
 export type ApiError = z.infer<typeof ApiError>;
+
+/**
+ * `POST /api/request-access` (#357): the one public route. A reviewer passes the bot check and gets a
+ * temporary synthetic patient. The body carries the bot-check token and nothing about the reviewer.
+ */
+export const RequestAccessRequest = z.strictObject({
+  /** The Cloudflare Turnstile token (at most 2048 characters, per Cloudflare's server-side validation docs). */
+  turnstileToken: z.string().min(1).max(2048),
+});
+export type RequestAccessRequest = z.infer<typeof RequestAccessRequest>;
+
+/** Every temporary reviewer username starts with this; the expiry job (part 2) touches no other user. */
+export const ACCESS_USERNAME_PREFIX = "user-";
+
+/** The sign-in details, shown once: the server never stores or logs the password (#357, A-7, A-8). */
+export const RequestAccessResponse = z.strictObject({
+  username: z.string().regex(new RegExp(`^${ACCESS_USERNAME_PREFIX}[a-z0-9]{8}$`)),
+  password: z.string().min(12).max(64),
+  /** The synthetic patient's name, drawn from a fixed list without any input from the reviewer. */
+  firstName: z.string().min(1).max(60),
+  lastName: z.string().min(1).max(60),
+  /** When the account stops counting as active and is due for deletion. */
+  expiresAt: IsoDateTimeUtc,
+});
+export type RequestAccessResponse = z.infer<typeof RequestAccessResponse>;
+
+/** Why a request created nothing. Separate from `ChatErrorCode`: these codes belong to this route alone. */
+export const RequestAccessErrorCode = z.enum([
+  "BAD_REQUEST",
+  /** The bot check rejected the token (or none was sent). */
+  "BOT_CHECK_FAILED",
+  /** The daily or the active cap is reached: the page says to contact Nick. */
+  "CAP_REACHED",
+  /** The verifier was unreachable, a transaction conflicted, or a step failed: nothing usable was created. */
+  "TRY_AGAIN",
+]);
+export type RequestAccessErrorCode = z.infer<typeof RequestAccessErrorCode>;
+
+export const RequestAccessError = z.strictObject({
+  error: z.strictObject({
+    code: RequestAccessErrorCode,
+    message: z.string().min(1).max(500),
+  }),
+});
+export type RequestAccessError = z.infer<typeof RequestAccessError>;
+
+/** The text when a cap is reached (#357, A-11). The page links "the project README" to the repository's README. */
+export const ACCESS_CAP_MESSAGE =
+  "Demo access requests have run out for now. Please contact Nick through the contact details in the project README.";
+
+/**
+ * What each failure of `POST /api/request-access` answers with: the HTTP status and the message the page shows. The
+ * handler, the mock API and the SPA client all read this one table.
+ */
+export const ACCESS_ERRORS: Record<RequestAccessErrorCode, { status: number; message: string }> = {
+  BAD_REQUEST: { status: 400, message: "The request body must be a bot-check token." },
+  BOT_CHECK_FAILED: { status: 403, message: "The check didn't pass. Please try again." },
+  CAP_REACHED: { status: 429, message: ACCESS_CAP_MESSAGE },
+  TRY_AGAIN: { status: 503, message: "We couldn't create access just now. Please try again in a moment." },
+};

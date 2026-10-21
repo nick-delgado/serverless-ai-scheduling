@@ -6,7 +6,7 @@
 # root, so SAM runs this Makefile there and esbuild resolves workspace packages through the root
 # node_modules, exactly like the tests do. SAM sets ARTIFACTS_DIR to the function's build output.
 #
-# Try it locally: make -f services/api/Makefile build-ChatFunction ARTIFACTS_DIR=/tmp/chat (or build-SessionFunction)
+# Try it locally: make -f services/api/Makefile build-ChatFunction ARTIFACTS_DIR=/tmp/chat (or build-SessionFunction, build-RequestAccessFunction)
 
 ESBUILD := npx --no-install esbuild
 # ESM output for nodejs24.x. The banner gives bundled CommonJS dependencies a working `require`.
@@ -14,7 +14,7 @@ ESBUILD_FLAGS := --bundle --platform=node --target=node24 --format=esm --main-fi
 	--sourcemap --sources-content=false --legal-comments=none --log-level=warning \
 	--banner:js="import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);"
 
-.PHONY: check-root build-ChatFunction build-SessionFunction
+.PHONY: check-root build-ChatFunction build-SessionFunction build-RequestAccessFunction
 
 check-root:
 	@test -f services/api/Makefile || { echo "run from the repo root (api.yaml sets WorkingDirectory)" >&2; exit 1; }
@@ -25,3 +25,6 @@ build-ChatFunction: check-root
 
 build-SessionFunction: check-root
 	$(ESBUILD) services/api/src/handlers/session.ts $(ESBUILD_FLAGS) --outfile="$(ARTIFACTS_DIR)/index.mjs"
+
+build-RequestAccessFunction: check-root
+	$(ESBUILD) services/api/src/handlers/request-access.ts $(ESBUILD_FLAGS) --outfile="$(ARTIFACTS_DIR)/index.mjs"

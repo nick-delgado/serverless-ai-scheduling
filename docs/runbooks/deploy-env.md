@@ -8,10 +8,10 @@ Region: **us-east-1** throughout. The commands are for bash or zsh (the macOS de
 
 | Env | What it is | Teardown |
 |---|---|---|
-| `dev` | Shared, protected. The deploy workflow (`aws-setup.md`, "CI credentials (GitHub OIDC)") or an issue's own stacks | Never with `teardown.sh`; see "Teardown" |
-| `demo` | Protected; the env reviewers see (#44) | Never with `teardown.sh`; see "Teardown" |
-| `e2e` | #40's standing env for the Playwright journeys | Never; see `aws-setup.md`, "Appendix: end-to-end tests (the e2e env)" |
-| anything else | Ephemeral, e.g. `pr52`: a rehearsal or a branch's experiment | `scripts/teardown.sh <env>` when done |
+| `dev` | Shared, protected. The deploy workflow (`aws-setup.md`, "CI credentials (GitHub OIDC)") or an issue's own stacks. The request page is off (`deploy.sh` refuses it) | Never with `teardown.sh`; see "Teardown" |
+| `demo` | Protected; the env reviewers see (#44). The request page is off until #357's expiry job lands (`deploy.sh` refuses it) | Never with `teardown.sh`; see "Teardown" |
+| `e2e` | #40's standing env for the Playwright journeys; the request page is off, so its journeys don't change | Never; see `aws-setup.md`, "Appendix: end-to-end tests (the e2e env)" |
+| anything else | Ephemeral, e.g. `pr52`: a rehearsal or a branch's experiment; the only kind that may turn the request page on ("Reviewer access") | `scripts/teardown.sh <env>` when done |
 
 A name is lowercase, 2–16 characters, starting with a letter (`^[a-z][a-z0-9-]{1,15}$`). Before a first deploy, make sure the name is free; this prints nothing for a new env:
 
@@ -106,6 +106,58 @@ Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's 
 - **Redeploying `demo`'s `auth` stack** can replace the Identity Pool role the backstop targets. After such a deploy, run the standby check there; if the role's name changed, re-apply the bootstrap with the new one.
 - **What a patient sees when it trips:** voice recording fails as a failed Transcribe connection does today; text chat is unaffected. Chat spend is bounded by the caps above, not by the backstop; there is no Bedrock backstop; to stop `demo`'s spend by hand see [`aws-setup.md`](aws-setup.md), "Stopping `demo`'s spend by hand".
 - **Reset:** Nick reverses the action with `aws budgets execute-budget-action ... REVERSE_BUDGET_ACTION` (`aws-setup.md` has the commands). AWS's Budgets Actions blog says an action that applies a policy is reset at the beginning of each budget period, so voice should return on the first of the month by itself (not yet seen live: we haven't tripped it).
+
+## Reviewer access (the request page, #357)
+
+`/request-access` lets a reviewer get a temporary synthetic patient without anyone sending credentials (PRD FR-004; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20). It collects nothing: a Cloudflare Turnstile check and one button. This is the first of the issue's two parts: issuance and its caps. The expiry job and its revoke-all step are the second, so for now **only an ephemeral env may turn the page on**; `deploy.sh` refuses `-- RequestAccess=on` for `dev`, `demo` and `e2e`.
+
+**Keys (Nick creates them once per env).** In the Cloudflare dashboard, Turnstile, add a widget (Managed mode) with the env's CloudFront domain as its hostname. Put its two keys in the git-ignored `.env` (`.env.example` lists them): `TURNSTILE_SITE_KEY` (public; `deploy-web.sh` bakes it into the SPA) and `TURNSTILE_SECRET` (`deploy.sh` passes it to the `api` stack as the NoEcho parameter `TurnstileSecret`). For an ephemeral check env, Cloudflare's documented test keys need no dashboard: site key `1x00000000000000000000AA` with secret `1x0000000000000000000000000000000AA` always passes, and the secret `2x0000000000000000000000000000000AA` always fails ([Cloudflare, "Testing"](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)). Never use them on an env that matters: anyone passes.
+
+**Turn it on** (ephemeral env `<name>`):
+
+```bash
+export TURNSTILE_SITE_KEY=<site key> TURNSTILE_SECRET=<secret>     # or put them in .env
+scripts/deploy.sh all <name> -- RequestAccess=on                   # api publishes /sched/<name>/api/request-access = on
+scripts/deploy-web.sh <name>                                       # builds with VITE_REQUEST_ACCESS=on and the site key
+```
+
+`deploy-web.sh` reads the SSM value (a missing parameter reads as off) and refuses to build with the page on and no site key. Off, the sign-in page has no link, `/request-access` is the not-found page, and `POST /api/request-access` doesn't exist (API Gateway's own 403).
+
+| Setting | Parameter | Default | Notes |
+|---|---|---|---|
+| Accounts issued per clinic-local day | `RequestAccessDailyCap` | 10 | at least 1; resets at midnight Eastern |
+| Accounts in the registry at once | `RequestAccessActiveCap` | 5 | at least 1; "active" is listed in the registry, and until the expiry job exists nothing leaves it |
+| Hours before an account is due for deletion | `RequestAccessExpiryHours` | 24 | at least 1; recorded in the registry and shown to the reviewer; the deleting job is the second part |
+| Hostname a token must be issued on | `TurnstileExpectedHostname` | empty (not checked) | the env's CloudFront domain once known; leave empty with Cloudflare's test keys, which report `localhost` |
+
+Set them like the turn caps: `scripts/deploy.sh api <name> -- RequestAccessDailyCap=2 RequestAccessActiveCap=2 RequestAccessExpiryHours=1`. They persist across later deploys (`aws cloudformation deploy` and `sam deploy` use the stack's existing value for a parameter the command doesn't name), so a later `deploy.sh api <name>` without `-- RequestAccess=on` keeps the page on.
+
+**What a reviewer sees.** One button; then the username (`user-` and 8 characters), a generated password and a made-up patient name, once, with a copy button and a link to sign in (the page doesn't sign them in). Past a cap: "Demo access requests have run out for now. Please contact Nick through the contact details in the project README." with a link, and nothing is created. A failed check says to try again. A reload shows the button again; the password isn't stored anywhere.
+
+**Check it on an ephemeral env** (the live check of #357's first part). With the always-passes test keys, caps of 2 and the other steps of "Deploy" above (including seeding one fixture patient and the table data, so a signed-in turn works):
+
+```bash
+domain="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/<name>/web/domain" --query Parameter.Value --output text)"
+req() { curl -s -w '\n%{http_code}\n' -X POST "https://$domain/api/request-access" -H 'content-type: application/json' -d "$1"; }
+req '{}'                                                    # 400 BAD_REQUEST: no token
+req '{"turnstileToken":"XXXX.DUMMY.TOKEN.XXXX"}'            # 200: username, password, name, expiresAt (record none of them)
+```
+
+Sign the issued user in (the SPA, or `srpSignInSub` from `scripts/seed-users.ts`) and send one chat turn. Then redeploy `api` with the always-fails secret (`TURNSTILE_SECRET=2x0000000000000000000000000000000AA scripts/deploy.sh api <name>`) and request again: `403 BOT_CHECK_FAILED`, and the registry still holds one entry. Redeploy with the passing secret, request a second account (200), then a third: `429 CAP_REACHED` with the README message. Count the registry entries (always 2 after the cap), the users in the pool (`aws cognito-idp list-users` needs an admin profile; `SchedDeployer` is denied it) and the table's `ACCESS#` items:
+
+```bash
+table="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/<name>/data/table-name" --query Parameter.Value --output text)"
+aws dynamodb query --profile sched-dev --region us-east-1 --table-name "$table" --key-condition-expression 'PK = :p' \
+  --expression-attribute-values '{":p":{"S":"ACCESS#ISSUED"}}' --select COUNT --query Count
+aws dynamodb query --profile sched-dev --region us-east-1 --table-name "$table" --key-condition-expression 'PK = :p' \
+  --expression-attribute-values '{":p":{"S":"ACCESS#COUNT"}}' --query 'Items[].{sk:SK.S,issued:issued.N,active:active.N}'
+```
+
+Tear the env down with `scripts/teardown.sh <name>` once Nick approves; its users go with its pool.
+
+**What is and isn't logged.** The request function logs the API Gateway request ID, an outcome (`issued`, `bot_check_failed`, `bot_check_unavailable`, `capped`, `try_again`, `bad_request`, `error`; `bot_check_unavailable` on every request means the secret or Cloudflare is the problem, `try_again` is a passing transaction conflict) and the duration, for 14 days. It never logs or reads an IP address, a user agent, the token, a username or a password. The `api` stage and CloudFront have no access logs. Cloudflare sees the visitor's IP address and browser signals when the widget loads (ADR-009's amendment).
+
+**Revoke all temporary accounts at once, and the expiry job**: the second part of #357. Until it lands, the registry only grows, which is why the page stays off the envs that keep state.
 
 ## Teardown
 
