@@ -164,7 +164,7 @@ export function createDynamoAccessStore({
         return { ok: true };
       } catch (error) {
         if (!(error instanceof TransactionCanceledException)) throw error;
-        const codes = cancellationCodes(error) ?? [];
+        const codes = (error.CancellationReasons ?? []).map((reason) => reason.Code);
         if (codes[0] === CONDITION_FAILED || codes[1] === CONDITION_FAILED) {
           return { ok: false, reason: "capped" };
         }

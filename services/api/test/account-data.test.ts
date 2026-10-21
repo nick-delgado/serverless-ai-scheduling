@@ -287,6 +287,7 @@ describe("createAccountData", () => {
       for (const [item, deletes] of [
         [apptItem({ status: "COMPLETED" }), 2],
         [apptItem({ slotId: "garbage" }), 2],
+        [apptItem({ slotId: undefined }), 2],
         [undefined, 1],
       ] as const) {
         const { doc, log, sent } = withAppt({ appts: { [APPT_KEY]: item ? [item] : [] } });

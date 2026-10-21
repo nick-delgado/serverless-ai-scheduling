@@ -14,7 +14,7 @@ When it isn't clear which one a change is, ask the owner.
 | [001](0001-agent-runtime.md) | Agent runtime: our own tool-use loop in Lambda | Accepted (amended 2026-10-03) |
 | [002](0002-model-and-bedrock-client.md) | Model selection and Bedrock client | Client decision superseded by ADR-010; model-selection method stands; amended 2026-10-09; production profile `sonnet-4.6` at effort `high`, amended 2026-10-12; NFR-001 query after #38, amended 2026-10-14; judge calibration 42/49 on `judge.v1` (#159), amended 2026-10-16; rubric average 4.77 on `judge.v2` (#295), amended 2026-10-18; a required line before the first lookup (#251), amended 2026-10-19; the exit table re-run on `system.v15` (#345), amended 2026-10-20 |
 | [003](0003-iac-layout.md) | Infrastructure as code: SAM, one template per stack | Accepted (amended 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-08, 2026-10-14, 2026-10-20) |
-| [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03, 2026-10-19, 2026-10-20, 2026-10-20) |
+| [004](0004-data-model.md) | Data model: DynamoDB single-table design | Accepted (amended 2026-09-29, 2026-10-02, 2026-10-03, 2026-10-19, 2026-10-20, 2026-10-20, 2026-10-21) |
 | [005](0005-auth.md) | Authentication and identity propagation | Accepted (amended 2026-10-03, 2026-10-20) |
 | [006](0006-voice-transcription.md) | Voice transcription: browser → Transcribe Streaming | Accepted (spike S-3, #10; amended 2026-10-09, 2026-10-19) |
 | [007](0007-chat-transport.md) | Chat transport: REST API + Lambda response streaming | Accepted (spike S-2, #7; amended 2026-10-03, twice; 2026-10-04; 2026-10-05, twice) |

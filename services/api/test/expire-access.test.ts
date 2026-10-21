@@ -197,6 +197,15 @@ describe("expireAccess", () => {
     );
   });
 
+  it("counts an entry with no sub that another run already released as released once", async () => {
+    const f = fixture({ release: () => Promise.resolve({ ok: false, reason: "gone" }) });
+    await issue(f.store, 1, { withSub: false });
+    expect(await expireAccess(f.deps)).toMatchObject({ expired: 1, failed: 0 });
+    expect(f.logs).toContainEqual(
+      expect.objectContaining({ msg: "access-expiry entry", outcome: "already_released" }),
+    );
+  });
+
   it("leaves a user alone whose sub isn't the entry's, but still deletes the entry's data and releases it", async () => {
     const f = fixture();
     await issue(f.store, 1);
