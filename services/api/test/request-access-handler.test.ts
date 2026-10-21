@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe("handlers/request-access", () => {
-  it("wires the table, the pool and the secret, issues an account and logs only the outcome", async () => {
+  it("wires the table, the pool and the secret, issues an account and logs one line with the request ID and the outcome", async () => {
     const out: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation((chunk) => out.push(String(chunk)) > 0);
     const { handler } = await import("../src/handlers/request-access");

@@ -9,7 +9,10 @@
  * to delete the Cognito user, the reservation stays (the expiry job releases it, PR 2), and the answer is "try
  * again"; the day's count stays used.
  *
- * Privacy (A-7): the log entry carries the request ID, the outcome and timings, and nothing else. The handler never
+ * Privacy (A-7): the log writes at most two entries. Every request writes one with the request ID, the outcome and
+ * the duration. A failed request also writes one error entry (`request-access failed`, level error) with the request
+ * ID and `errorSummary`'s fields: the error's name, its AWS error code and HTTP status if it has them, and, for an AWS
+ * SDK error only, its message clipped to 200 characters. Neither carries anything else. The handler never
  * reads the source IP, the user agent, the token, the username or the password. The password exists in memory for
  * the length of this call and in the one response; it is never stored or logged. This route has no authorizer, so
  * the patient ID is not read from the request at all: it is the `sub` Cognito assigned to the new user (CLAUDE.md

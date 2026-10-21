@@ -504,6 +504,8 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const r = run(["api", "pr7"], { ...SES_ENV, TURNSTILE_SECRET: `${SECRET}\nx` });
       expect(r.status).toBe(1);
       expect(r.out).toContain("TURNSTILE_SECRET spans more than one line");
+      expect(r.out).not.toContain("SES_SENDER spans");
+      expect(r.out).not.toContain("SES_STAFF_RECIPIENT spans");
       expect(awsOrSam(r.calls)).toEqual([]);
       noSecretPrinted(r);
     });

@@ -498,7 +498,7 @@ describe("what is logged (A-7)", () => {
 });
 
 describe("the proxy adapter", () => {
-  it("reads the body and the API Gateway request ID, and never an identity field", async () => {
+  it("reads the body and the API Gateway request ID", async () => {
     const f = setup();
     const handler = requestAccessProxyHandler(f.deps);
     const res = await handler({ body: BODY, requestContext: { requestId: "gw-1" } });
@@ -518,7 +518,7 @@ describe("the proxy adapter", () => {
 });
 
 describe("the failure table", () => {
-  it("pairs the four codes with their statuses and messages, from the contract's one table", () => {
+  it("pairs the four codes with their statuses, from the contract's one table", () => {
     expect(Object.entries(ACCESS_ERRORS).map(([code, f]) => [code, f.status])).toEqual([
       ["BAD_REQUEST", 400],
       ["BOT_CHECK_FAILED", 403],

@@ -78,10 +78,10 @@ export const RequestAccessRequest = z.strictObject({
 });
 export type RequestAccessRequest = z.infer<typeof RequestAccessRequest>;
 
-/** The sign-in details, shown once: the server never stores or logs the password (#357, A-7, A-8). */
 /** Every temporary reviewer username starts with this; the expiry job (part 2) touches no other user. */
 export const ACCESS_USERNAME_PREFIX = "user-";
 
+/** The sign-in details, shown once: the server never stores or logs the password (#357, A-7, A-8). */
 export const RequestAccessResponse = z.strictObject({
   username: z.string().regex(new RegExp(`^${ACCESS_USERNAME_PREFIX}[a-z0-9]{8}$`)),
   password: z.string().min(12).max(64),

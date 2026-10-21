@@ -39,7 +39,7 @@ function renderApp(path = "/request-access") {
 const requestButton = () => screen.getByRole("button", { name: /Request demo access|Creating/ });
 
 describe("the request page", () => {
-  it("asks for nothing about the reviewer: no text field, only one button and the bot check", async () => {
+  it("asks for nothing about the reviewer: no text field, and one button", async () => {
     renderApp();
     expect(await screen.findByRole("heading", { name: "Request demo access" })).toBeVisible();
     expect(screen.queryAllByRole("textbox")).toEqual([]);
@@ -48,7 +48,7 @@ describe("the request page", () => {
     expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
   });
 
-  it("shows the username, the password and the patient's name once, and links to sign in", async () => {
+  it("shows the username, the password and the patient's name, and links to sign in", async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
@@ -421,7 +421,7 @@ describe("the Turnstile widget", () => {
     expect(calls).toBe(0);
   });
 
-  it("uses the mock token only when there is no site key", async () => {
+  it("does not use the mock token when there is a site key", async () => {
     // With a site key set, the dev server's mock token is not sent: the button waits for the widget.
     vi.stubEnv("VITE_TURNSTILE_SITE_KEY", SITE_KEY);
     fakeTurnstile();

@@ -109,7 +109,7 @@ describe("request access (#357)", () => {
     expect(response({ username: "xuser-x7k2m9qa" })).toBe(false);
   });
 
-  it("has the one username prefix, and a response must start with it", () => {
+  it("names the one username prefix, user-", () => {
     expect(C.ACCESS_USERNAME_PREFIX).toBe("user-");
   });
 
@@ -118,7 +118,7 @@ describe("request access (#357)", () => {
     expect(C.toIsoSeconds(new Date("2026-10-20T14:00:00.000Z"))).toBe("2026-10-20T14:00:00Z");
   });
 
-  it("takes a one-character token and nothing shorter", () => {
+  it("takes a one-character token", () => {
     expect(C.RequestAccessRequest.safeParse({ turnstileToken: "x" }).success).toBe(true);
   });
 
@@ -131,7 +131,7 @@ describe("request access (#357)", () => {
     expect(error("x".repeat(501))).toBe(false);
   });
 
-  it("names exactly the four codes this route answers with", () => {
+  it("names exactly the four codes this route answers with, and each one's status and message", () => {
     expect(C.RequestAccessErrorCode.options).toEqual([
       "BAD_REQUEST",
       "BOT_CHECK_FAILED",
@@ -147,6 +147,11 @@ describe("request access (#357)", () => {
       CAP_REACHED: 429,
       TRY_AGAIN: 503,
     });
-    expect(C.ACCESS_ERRORS.CAP_REACHED.message).toBe(C.ACCESS_CAP_MESSAGE);
+    expect(Object.fromEntries(Object.entries(C.ACCESS_ERRORS).map(([k, v]) => [k, v.message]))).toEqual({
+      BAD_REQUEST: "The request body must be a bot-check token.",
+      BOT_CHECK_FAILED: "The check didn't pass. Please try again.",
+      CAP_REACHED: C.ACCESS_CAP_MESSAGE,
+      TRY_AGAIN: "We couldn't create access just now. Please try again in a moment.",
+    });
   });
 });
