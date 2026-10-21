@@ -496,6 +496,8 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const r = run(["api", "dev"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
       expect(r.status, r.out).toBe(0);
       expect(overrides(r.calls)["sched-dev-api"]).not.toContain("RequestAccess=on");
+      expect(overrides(r.calls)["sched-dev-api"]).toContain(`TurnstileSecret=${SECRET}`);
+      noSecretPrinted(r);
     });
 
     it("refuses a secret that spans lines, naming only the key", () => {

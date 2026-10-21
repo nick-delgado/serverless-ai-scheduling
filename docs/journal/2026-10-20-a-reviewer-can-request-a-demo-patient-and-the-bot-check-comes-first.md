@@ -12,7 +12,7 @@ The agent built `POST /api/request-access`, the API's only route without the Cog
 
 The route, its function and its log group exist only where the `api` stack's `RequestAccess` parameter is `on`. The stack publishes that to SSM, and `scripts/deploy-web.sh` reads it to build the SPA with or without the link. `scripts/deploy.sh` passes the Turnstile secret from the git-ignored `.env`, and refuses `RequestAccess=on` for `dev`, `demo` and `e2e` until the expiry job exists.
 
-Nothing here has run against AWS or Cloudflare. The bootstrap apply, Nick's Turnstile keys and the live check on an ephemeral env are pending; the PR says so.
+The code has not yet run against AWS or Cloudflare. Nick applied the bootstrap stack from this branch with no overrides (UpdateComplete 2026-10-21 11:05 UTC: only the permissions boundary and the exec role changed, the spend backstop untouched, and his standby re-check showed status `STANDBY` with no policy attached; [record](https://github.com/nick-delgado/serverless-ai-scheduling/pull/366#issuecomment-6314445796)). The live checks on an ephemeral env, on Cloudflare's test keys, are still pending, and Nick approves the teardown; real Turnstile keys are needed only for part 2.
 
 ## Why we chose what we chose
 
@@ -25,7 +25,7 @@ Nick's answers on #357 (r1/Q-1 to Q-6, A-1 to A-19) are on the issue. The ones b
 - **The Turnstile site key comes from `TURNSTILE_SITE_KEY` (the environment, then `.env`), read by `deploy-web.sh`.** The issue says `deploy-web.sh` sets the build-time key but not from where. The key is public, but a per-env value that stays out of the repo can differ between `demo` and an ephemeral env. The alternative, an SSM parameter, would need a step to write it that the issue doesn't allow. A missing key with the page on refuses the build.
 - **The registry entry's `username` is rewritten by `commit`.** After a random username clash the retry uses a new handle, and the entry would otherwise name an existing user that the second PR's job would delete. A failure between the reservation and `commit` can still leave the first handle on the entry; that is about 36^-8 per request and the ADR-004 amendment says the second PR should check an entry's `sub` before deleting.
 - **`deleteUser` is in this PR, `globalSignOut` is not.** A-3's failure path deletes the user once, so the adapter needs `deleteUser` now; sign-out is the expiry job's. The bootstrap edit still carries all six actions (A-1), which the PR says are unused until the second PR.
-- **`patientItem` is exported from `@sched/tools/dynamo`, `openSlotGsi1` is not yet.** A-6 asks for both, but the slot release is the expiry job's; exporting an unused function in the Eval-gated package would add no test. The second PR adds it.
+- **`patientItem` is exported from `@sched/tools/dynamo`, `openSlotGsi1` is not yet.** A-6 asks for both, but the slot release is the expiry job's; exporting an unused function in the Eval-gated package would add no test. The owner accepted that the second PR adds it with its first user (review of `97fb801`, SPEC-8 (a)).
 - **The public route is a path-level `Fn::If` in the OpenAPI body, not a SAM `Api` event.** We tried the event first and transformed the template offline with SAM's translator: with an explicit `DefinitionBody` SAM leaves the paths alone and the route never appeared. `Fn::If` around the path survives the transform; whether CloudFormation accepts it at deploy is the live check's first job.
 - **The cap message lives in `@sched/contracts` (`ACCESS_CAP_MESSAGE`), and the page renders the server's message plus a README link.** One string for the handler's response and the SPA's mock; the alternative, the page owning the text, would let the two drift.
 
@@ -46,5 +46,6 @@ Nick's answers on #357 (r1/Q-1 to Q-6, A-1 to A-19) are on the issue. The ones b
 ## What's next
 
 - The second PR: the expiry job (a SAM `Schedule` event, hourly), the revoke-all step, the live check that an expired account is deleted, and turning the page on for `demo` once #44's README has a contact line.
-- Nick creates the Turnstile widgets, applies the bootstrap stack and approves the ephemeral env's teardown.
+- The orchestrator runs the live checks on an ephemeral env with Cloudflare's test keys, and Nick approves its teardown; Nick creates real Turnstile widgets only when part 2 turns the page on for `demo`.
+- Part 2 also makes `scripts/deploy.sh` refuse `RequestAccess=on` (or `demo`) without `TurnstileExpectedHostname`, with a `deploy.test.ts` refusal case (owner decision on the review of `97fb801`, SPEC-3 (b)), and adds `Env == demo` to the condition (SPEC-2 (a)).
 - Sharing the conflict-retry helpers between the turn store and the access store: to file.

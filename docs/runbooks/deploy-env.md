@@ -155,7 +155,7 @@ aws dynamodb query --profile sched-dev --region us-east-1 --table-name "$table" 
 
 Tear the env down with `scripts/teardown.sh <name>` once Nick approves; its users go with its pool.
 
-**What is and isn't logged.** The request function logs the API Gateway request ID, an outcome (`issued`, `bot_check_failed`, `capped`, `try_again`, `bad_request`, `error`) and the duration, for 14 days. It never logs or reads an IP address, a user agent, the token, a username or a password. The `api` stage and CloudFront have no access logs. Cloudflare sees the visitor's IP address and browser signals when the widget loads (ADR-009's amendment).
+**What is and isn't logged.** The request function logs the API Gateway request ID, an outcome (`issued`, `bot_check_failed`, `bot_check_unavailable`, `capped`, `try_again`, `bad_request`, `error`; `bot_check_unavailable` on every request means the secret or Cloudflare is the problem, `try_again` is a passing transaction conflict) and the duration, for 14 days. It never logs or reads an IP address, a user agent, the token, a username or a password. The `api` stage and CloudFront have no access logs. Cloudflare sees the visitor's IP address and browser signals when the widget loads (ADR-009's amendment).
 
 **Revoke all temporary accounts at once, and the expiry job**: the second part of #357. Until it lands, the registry only grows, which is why the page stays off the envs that keep state.
 

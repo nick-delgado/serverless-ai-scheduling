@@ -101,5 +101,5 @@ ADR-006, accepted after spike S-3 (#10). #28 built the mic and the recording ove
 | `sched-bootstrap` | — | `/sched/bootstrap/`: `cfn-exec-role-arn`, `permissions-boundary-arn`, `artifact-bucket` |
 | `sched-<env>-data` | bootstrap | `/sched/<env>/data/table-name`, `data/table-arn` |
 | `sched-<env>-auth` | bootstrap | `/sched/<env>/auth/user-pool-id`, `auth/user-pool-arn`, `auth/spa-client-id`, `auth/identity-pool-id` |
-| `sched-<env>-api` | data, auth | `/sched/<env>/api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status` |
+| `sched-<env>-api` | data, auth | `/sched/<env>/api/rest-api-id`, `api/execute-api-domain`, `api/stage-name`, `api/status`, `api/request-access` |
 | `sched-<env>-web` | api | `/sched/<env>/web/bucket-name`, `web/distribution-id`, `web/domain`, `web/status` |

@@ -313,7 +313,36 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
       expect(syncs(r.calls)).toEqual([]);
     });
 
-    it("builds with the page off when the parameter can't be read", () => {
+    // The copy of deploy.sh's env_file_value: the main checkout's .env, and the skip of an empty value.
+    const worktree = () => {
+      const path = join(sb.dir, "wt");
+      sb.repo.git("worktree", "add", "-q", "-b", "wt", path);
+      return path;
+    };
+
+    it("falls back to the main checkout's .env from a worktree with none", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      writeFileSync(join(sb.repo.dir, ".env"), `TURNSTILE_SITE_KEY=${DOTENV_KEY}\n`);
+      const r = sb.run("scripts/deploy-web.sh", ["dev"], { env: {}, root: worktree() });
+      expect(r.status, r.out).toBe(0);
+      expect(lastBuild(r.calls)).toContain(`VITE_TURNSTILE_SITE_KEY=${DOTENV_KEY}`);
+    });
+
+    it("falls back to the main checkout's .env for a key the worktree's .env leaves empty, and prefers a set one", () => {
+      setSsm({ ...SSM, [REQUEST]: "on" });
+      writeFileSync(join(sb.repo.dir, ".env"), `TURNSTILE_SITE_KEY=${DOTENV_KEY}\n`);
+      const wt = worktree();
+      writeFileSync(join(wt, ".env"), "TURNSTILE_SITE_KEY=\n");
+      const empty = sb.run("scripts/deploy-web.sh", ["dev"], { env: {}, root: wt });
+      expect(empty.status, empty.out).toBe(0);
+      expect(lastBuild(empty.calls)).toContain(`VITE_TURNSTILE_SITE_KEY=${DOTENV_KEY}`);
+      sb.clearCalls();
+      writeFileSync(join(wt, ".env"), "TURNSTILE_SITE_KEY=worktree-site-key-0000\n");
+      const set = sb.run("scripts/deploy-web.sh", ["dev"], { env: {}, root: wt });
+      expect(lastBuild(set.calls)).toContain("VITE_TURNSTILE_SITE_KEY=worktree-site-key-0000");
+    });
+
+    it("builds with the page off when the parameter can't be read, showing the CLI's error", () => {
       setSsm({ ...SSM, [REQUEST]: "on" });
       const r = run(["dev"], {
         FAKE_SSM_ERROR: "boom",
@@ -322,6 +351,7 @@ describe("deploy-web.sh", { timeout: 30_000 }, () => {
       });
       expect(r.status, r.out).toBe(0);
       expect(lastBuild(r.calls)).toContain("VITE_REQUEST_ACCESS=off");
+      expect(r.out).toContain("boom");
     });
   });
 });

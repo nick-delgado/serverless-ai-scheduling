@@ -130,7 +130,7 @@ Resources:
             Version: "2012-10-17"
             Statement:
               # One statement per service (#270 F-3, r1/Q-2 (a)): the actions stay service-wide, the resources are
-              # named where the ARN carries the sched- name. No stack declares an Events, X-Ray or SES resource, and
+              # named where the ARN carries the sched- name. No stack declares an X-Ray or SES resource (the expiry job's schedule, #357, is the one Events rule, granted below), and
               # none a Bedrock one, so those grants are gone. Where a statement below holds no sched- name, its
               # comment says why. An action that takes no resource gets its own "*" statement once a deploy shows
               # the AccessDenied.

@@ -10,7 +10,6 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_BOT_CHECK_TOKEN } from "../mocks/cognitoUsers";
 import { pageRoutesFor, appRoutes } from "../app/routes";
 import { MOCK_ISSUED_USER, MOCK_PASSWORD } from "../mocks/cognitoUsers";
 import { configureMockApi, server } from "../mocks/node";

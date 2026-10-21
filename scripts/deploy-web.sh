@@ -84,11 +84,12 @@ identity_pool_id="$(param "/sched/${env}/auth/identity-pool-id")"
 bucket="$(param "/sched/${env}/web/bucket-name")"
 distribution_id="$(param "/sched/${env}/web/distribution-id")"
 domain="$(param "/sched/${env}/web/domain")"
-# The page switch: a missing or unreadable parameter is "off", with no error shown.
-request_access="$(aws ssm get-parameter --name "/sched/${env}/api/request-access" --query Parameter.Value --output text 2>/dev/null || true)"
+# The page switch: a missing or unreadable parameter is "off" (the CLI's error stays visible, as for the others).
+request_access="$(param "/sched/${env}/api/request-access")"
 [[ "$request_access" == "on" ]] || request_access="off"
 # The value of $1 from the environment, else the first .env (this checkout's, then the main checkout's) that has a
-# non-empty one. Parsed with Node's util.parseEnv, as scripts/deploy.sh reads the SES values (keep the two in step).
+# non-empty one. A copy of the function in scripts/deploy.sh, which reads the SES values and the Turnstile secret with
+# it: change both together.
 main_checkout="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 env_file_value() {
   local key="$1" file val=""
