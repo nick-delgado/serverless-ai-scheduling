@@ -5,7 +5,7 @@
  * | Item | PK | SK | Attributes |
  * |---|---|---|---|
  * | Registry entry, one per issued account | `ACCESS#ISSUED` | `<accessExpiresAt>#<requestId>` | `username`, `requestId`, `accessExpiresAt` (ISO, UTC), `sub` once the user exists |
- * | Active-account counter | `ACCESS#COUNT` | `ACTIVE` | `active` (no TTL: only the expiry job decrements it, PR 2) |
+ * | Active-account counter | `ACCESS#COUNT` | `ACTIVE` | `active` (no TTL: only the expiry job decrements it, in the transaction that removes the entry) |
  * | Daily counter (clinic-local day) | `ACCESS#COUNT` | `DAY#<yyyy-mm-dd>` | `issued`, `expiresAt` = two days after the day ends (UTC) |
  *
  * `ACCESS#` is no prefix of `PATIENT#`, `PROVIDER#`, `CONV#` or `ENV`, and the counters live under it, not under `ENV`
@@ -15,6 +15,10 @@
  * on its cap, so concurrent requests can't overshoot either cap and a refused request counts for nothing. `commit`,
  * after Cognito has created the user, writes the patient's `PATIENT#<sub>` profile and the entry's `sub` together.
  * "Active" means listed in the registry, from the moment the reservation commits.
+ *
+ * The expiry job (#357, part 2) reads the registry with `listExpired` (a `Query` on the partition with an SK range, no
+ * `Scan`) and, once an account's user and data are gone, calls `release`: one transaction removes the entry and takes one
+ * off the active counter. `release` is safe to repeat: an entry already gone is `gone` and decrements nothing.
  *
  * A cancelled transaction is read by item position (r2/A-15). A failed condition on either counter is the cap, even
  * when another item only conflicted, and is never retried. A cancellation of conflicts alone is `conflict`: nothing
@@ -26,8 +30,15 @@ import type { IsoDate, Patient } from "@sched/contracts";
 import { patientItem } from "@sched/tools/dynamo";
 
 import { counterExpiresAt } from "./dynamo-turn-store";
+import { queryAll } from "./query-all";
 
-const CONDITION_FAILED = "ConditionalCheckFailed";
+export const CONDITION_FAILED = "ConditionalCheckFailed";
+
+/** The cancellation codes of a cancelled transaction, by item position; null for any other error. */
+export function cancellationCodes(error: unknown): (string | undefined)[] | null {
+  if (!(error instanceof TransactionCanceledException)) return null;
+  return (error.CancellationReasons ?? []).map((reason) => reason.Code);
+}
 
 export interface AccessCaps {
   /** Accounts issued per clinic-local day. */
@@ -47,6 +58,19 @@ export interface AccessReservation {
   accessExpiresAt: string;
 }
 
+/** A registry entry as the expiry job reads it. `sub` is absent when issuing failed before the profile was written. */
+export interface IssuedEntry {
+  requestId: string;
+  username: string;
+  accessExpiresAt: string;
+  sub?: string;
+}
+
+export type ReleaseResult =
+  | { ok: true }
+  /** The entry was already removed (an earlier run got this far): nothing was decremented. */
+  | { ok: false; reason: "gone" };
+
 export type ReserveResult =
   | { ok: true }
   /** A cap was reached; nothing was written. */
@@ -61,6 +85,17 @@ export interface AccessStore {
    * reserved one only after a username clash) on the reservation's entry.
    */
   commit(reservation: AccessReservation, patient: Patient): Promise<void>;
+}
+
+/** What the expiry job uses of the registry. */
+export interface ExpiryStore {
+  /** Entries due at `nowIso` (ISO UTC, whole seconds): `accessExpiresAt` at or before it, oldest first. */
+  listExpired(nowIso: string): Promise<IssuedEntry[]>;
+  /**
+   * Removes the entry and takes one off the active counter, in one transaction. A transaction that conflicts, or a
+   * counter already at 0, throws: the entry stays and the next run tries again.
+   */
+  release(entry: IssuedEntry): Promise<ReleaseResult>;
 }
 
 export const accessKeys = {
@@ -78,7 +113,10 @@ export interface DynamoAccessStoreOptions {
   doc: Pick<DynamoDBDocumentClient, "send">;
 }
 
-export function createDynamoAccessStore({ tableName, doc }: DynamoAccessStoreOptions): AccessStore {
+export function createDynamoAccessStore({
+  tableName,
+  doc,
+}: DynamoAccessStoreOptions): AccessStore & ExpiryStore {
   return {
     async reserve(r, caps) {
       const input = {
@@ -126,13 +164,61 @@ export function createDynamoAccessStore({ tableName, doc }: DynamoAccessStoreOpt
         return { ok: true };
       } catch (error) {
         if (!(error instanceof TransactionCanceledException)) throw error;
-        const codes = (error.CancellationReasons ?? []).map((reason) => reason.Code);
+        const codes = cancellationCodes(error) ?? [];
         if (codes[0] === CONDITION_FAILED || codes[1] === CONDITION_FAILED) {
           return { ok: false, reason: "capped" };
         }
         // A random request ID that already exists is a bug, not a conflict to retry.
         if (codes[2] === CONDITION_FAILED) throw error;
         if (codes.includes("TransactionConflict")) return { ok: false, reason: "conflict" };
+        throw error;
+      }
+    },
+
+    async listExpired(nowIso) {
+      const items = await queryAll(doc, {
+        TableName: tableName,
+        ConsistentRead: true,
+        // `~` sorts after every character of a request ID, so an entry expiring exactly at `nowIso` is included.
+        KeyConditionExpression: "PK = :pk AND SK <= :last",
+        ExpressionAttributeValues: { ":pk": "ACCESS#ISSUED", ":last": `${nowIso}#~` },
+      });
+      return items.map((item) => ({
+        requestId: String(item.requestId),
+        username: String(item.username),
+        accessExpiresAt: String(item.accessExpiresAt),
+        ...(typeof item.sub === "string" ? { sub: item.sub } : {}),
+      }));
+    },
+
+    async release(entry) {
+      try {
+        await doc.send(
+          new TransactWriteCommand({
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: tableName,
+                  Key: accessKeys.issued(entry.accessExpiresAt, entry.requestId),
+                  ConditionExpression: "attribute_exists(PK)",
+                },
+              },
+              {
+                Update: {
+                  TableName: tableName,
+                  Key: accessKeys.active(),
+                  UpdateExpression: "ADD active :minusOne",
+                  ConditionExpression: "active >= :one",
+                  ExpressionAttributeValues: { ":minusOne": -1, ":one": 1 },
+                },
+              },
+            ],
+          }),
+        );
+        return { ok: true };
+      } catch (error) {
+        const codes = cancellationCodes(error);
+        if (codes?.[0] === CONDITION_FAILED) return { ok: false, reason: "gone" };
         throw error;
       }
     },
@@ -166,7 +252,7 @@ export function createDynamoAccessStore({ tableName, doc }: DynamoAccessStoreOpt
   };
 }
 
-export interface InMemoryAccessStore extends AccessStore {
+export interface InMemoryAccessStore extends AccessStore, ExpiryStore {
   /** Registry entries in reserve order. */
   readonly issued: { requestId: string; username: string; accessExpiresAt: string; sub?: string }[];
   /** Profiles written by `commit`. */
@@ -199,6 +285,18 @@ export function createInMemoryAccessStore(): InMemoryAccessStore {
       entry.username = r.username;
       patients.push(structuredClone(patient));
       return Promise.resolve();
+    },
+    listExpired(nowIso) {
+      const due = issued
+        .filter((e) => e.accessExpiresAt <= nowIso)
+        .sort((a, b) => a.accessExpiresAt.localeCompare(b.accessExpiresAt));
+      return Promise.resolve(due.map((e) => ({ ...e })));
+    },
+    release(entry) {
+      const at = issued.findIndex((e) => e.requestId === entry.requestId);
+      if (at < 0) return Promise.resolve({ ok: false, reason: "gone" });
+      issued.splice(at, 1);
+      return Promise.resolve({ ok: true });
     },
   };
 }

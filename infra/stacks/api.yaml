@@ -51,16 +51,17 @@ Parameters:
     Default: ""
     NoEcho: true
     Description: Front-desk address that receives escalation emails (a verified identity in the SES sandbox).
-  # The reviewer access page (#357). Off everywhere unless an env turns it on; PR 1 turns it on only for the
-  # ephemeral check env (`-- RequestAccess=on`). The expiry job (PR 2) must exist before any env that keeps state
-  # does: accounts that never expire contradict the issue's expiry criterion (r1/Q-2 (b)).
+  # The reviewer access page (#357). On in `demo` (the `Env` clause of RequestAccessOn below, r1/Q-4 (a)) and wherever
+  # an env passes `-- RequestAccess=on` (the ephemeral check env); off everywhere else. The expiry job, with its
+  # hourly schedule, exists exactly where the page does, so no account is ever issued without something to delete it.
   RequestAccess:
     Type: String
     Default: "off"
     AllowedValues: ["on", "off"]
     Description: >-
-      "on" creates POST /api/request-access (the API's one public route) and its function. scripts/deploy.sh
-      refuses "on" without TURNSTILE_SECRET. The web stack's build reads the result from
+      "on" creates POST /api/request-access (the API's one public route), its function and the expiry job. In demo
+      the page is on whatever this says. scripts/deploy.sh refuses "on" for dev and e2e, and, wherever the page is on,
+      refuses without TURNSTILE_SECRET and TurnstileExpectedHostname. The web stack's build reads the result from
       /sched/<env>/api/request-access (scripts/deploy-web.sh).
   RequestAccessDailyCap:
     Type: Number
@@ -76,7 +77,7 @@ Parameters:
     Type: Number
     Default: 24
     MinValue: 1
-    Description: Hours before a temporary account is due for deletion (the registry's expiry; the job is PR 2 of #357).
+    Description: Hours before a temporary account is due for deletion (the registry's expiry; the hourly expiry job deletes it, #357).
   # Cloudflare Turnstile's secret key (r1/Q-1 (a)). scripts/deploy.sh passes it from TURNSTILE_SECRET (the
   # git-ignored .env), the way it passes the SES addresses. It reaches the function as an environment variable.
   TurnstileSecret:
@@ -95,8 +96,10 @@ Conditions:
   SesConfigured: !And
     - !Not [!Equals [!Ref SesSender, ""]]
     - !Not [!Equals [!Ref SesStaffRecipient, ""]]
-  # PR 2 of #357 adds `Env is demo` (r1/Q-4 (a)) when the expiry job lands; until then only the parameter turns it on.
-  RequestAccessOn: !Equals [!Ref RequestAccess, "on"]
+  # The request page, its function, its route and the expiry job (r1/Q-4 (a)): on in demo, or when RequestAccess is on.
+  RequestAccessOn: !Or
+    - !Equals [!Ref Env, demo]
+    - !Equals [!Ref RequestAccess, "on"]
 
 Globals:
   Function:
@@ -458,6 +461,70 @@ Resources:
       FunctionName: !GetAtt RequestAccessFunction.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatApi}/*/POST/api/request-access
+
+  # ---------------------------------------------------------------------------------------------
+  # The expiry job (#357, part 2): deletes each temporary account that is due, with its data, every hour. It exists
+  # exactly where the request function does. No API route: a SAM `Schedule` event invokes it, and an operator may too
+  # (`{ "asOf": "<ISO time>" }`, the runbook's revoke-all step). It grants only what it calls: the registry query, item
+  # reads, deletes and the two transactions' updates on the base table (no BatchWriteItem, no index) and three Cognito
+  # admin calls on this env's pool. The permissions boundary (bootstrap.yaml) lists the same actions.
+  # ---------------------------------------------------------------------------------------------
+  RequestAccessExpiryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: RequestAccessOn
+    Properties:
+      LogGroupName: !Sub /aws/lambda/sched-${Env}-api-request-access-expiry
+      RetentionInDays: 14
+
+  RequestAccessExpiryFunction:
+    Type: AWS::Serverless::Function
+    Condition: RequestAccessOn
+    Metadata:
+      BuildMethod: makefile
+      WorkingDirectory: ../..
+    Properties:
+      FunctionName: !Sub sched-${Env}-api-request-access-expiry
+      Description: Hourly (#357). Deletes expired temporary reviewer accounts, their data, and frees their slots and registry places.
+      CodeUri: ../../services/api
+      Handler: index.handler
+      Timeout: 300
+      Environment:
+        Variables:
+          TABLE_NAME: !Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"
+          USER_POOL_ID: !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-id}}"
+          NODE_OPTIONS: --enable-source-maps
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref RequestAccessExpiryLogGroup
+      Events:
+        Hourly:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Description: Run the reviewer-account expiry job (#357).
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            # Query (the registry, each partition of an account), GetItem (an appointment, read again before its slot is
+            # released), DeleteItem (every item), UpdateItem (the slot's release and the active counter's decrement, in
+            # transactions with a delete). Nothing is put and nothing is scanned.
+            - Sid: RegistryAndAccountData
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:GetItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"
+            - Sid: DeleteTemporaryUsers
+              Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminUserGlobalSignOut
+                - cognito-idp:AdminDeleteUser
+              Resource:
+                - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"
 
   ChatApi:
     Type: AWS::Serverless::Api

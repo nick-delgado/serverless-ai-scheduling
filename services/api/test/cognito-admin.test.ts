@@ -9,6 +9,7 @@ import {
   AdminDeleteUserCommand,
   AdminGetUserCommand,
   AdminSetUserPasswordCommand,
+  AdminUserGlobalSignOutCommand,
   type CognitoIdentityProviderClient,
   UserNotFoundException,
   UsernameExistsException,
@@ -175,5 +176,50 @@ describe("cognitoAdmin", () => {
       throw new Error("throttled");
     });
     await expect(cognitoAdmin(client, "pool-a").deleteUser("user-x7k2m9qa")).rejects.toThrow("throttled");
+  });
+
+  it("finds the sub of a user, and undefined when there is no such user", async () => {
+    const found = fakeCognito(() => ({ UserAttributes: [{ Name: "sub", Value: "sub-123" }] }));
+    await expect(cognitoAdmin(found.client, "pool-a").findSub("user-aaaaaaaa")).resolves.toBe("sub-123");
+    expect((found.sent[0] as AdminGetUserCommand).input).toEqual({
+      UserPoolId: "pool-a",
+      Username: "user-aaaaaaaa",
+    });
+
+    const missing = fakeCognito(() => {
+      throw new UserNotFoundException({ message: "no user", $metadata: {} });
+    });
+    await expect(cognitoAdmin(missing.client, "pool-a").findSub("user-aaaaaaaa")).resolves.toBeUndefined();
+  });
+
+  it("rethrows any other error from findSub", async () => {
+    const { client } = fakeCognito(() => {
+      throw new Error("throttled");
+    });
+    await expect(cognitoAdmin(client, "pool-a").findSub("user-aaaaaaaa")).rejects.toThrow("throttled");
+  });
+
+  it("signs the user out everywhere, and counts a missing user as signed out", async () => {
+    const { sent, client } = fakeCognito();
+    await cognitoAdmin(client, "pool-a").globalSignOut("user-aaaaaaaa");
+    expect(sent[0]).toBeInstanceOf(AdminUserGlobalSignOutCommand);
+    expect((sent[0] as AdminUserGlobalSignOutCommand).input).toEqual({
+      UserPoolId: "pool-a",
+      Username: "user-aaaaaaaa",
+    });
+
+    const missing = fakeCognito(() => {
+      throw new UserNotFoundException({ message: "no user", $metadata: {} });
+    });
+    await expect(
+      cognitoAdmin(missing.client, "pool-a").globalSignOut("user-aaaaaaaa"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rethrows any other error from globalSignOut", async () => {
+    const { client } = fakeCognito(() => {
+      throw new Error("throttled");
+    });
+    await expect(cognitoAdmin(client, "pool-a").globalSignOut("user-aaaaaaaa")).rejects.toThrow("throttled");
   });
 });

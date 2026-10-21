@@ -6,7 +6,7 @@
  * transaction); `AdminCreateUser` (no message); `AdminSetUserPassword` (permanent); `AdminGetUser` for the `sub`;
  * then write the profile and the entry's `sub` in one transaction. The bot check comes first, so a request that
  * fails it counts against no cap and creates nothing. If anything after the reservation fails, one attempt is made
- * to delete the Cognito user, the reservation stays (the expiry job releases it, PR 2), and the answer is "try
+ * to delete the Cognito user, the reservation stays (the expiry job releases it when it expires, `expire-access.ts`), and the answer is "try
  * again"; the day's count stays used.
  *
  * Privacy (A-7): the log writes at most two entries. Every request writes one with the request ID, the outcome and
