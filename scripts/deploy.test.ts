@@ -400,6 +400,28 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(overrides(run(["data", "dev"]).calls)["sched-dev-data"]).toEqual(["Env=dev"]);
     });
 
+    it.each([
+      ["api", "dev", "RequestAccess=off", "RequestAccess=on"],
+      ["api", "pr7", "TurnstileExpectedHostname=a.example", "TurnstileExpectedHostname=b.example"],
+      ["data", "pr7", "DeletionProtection=enabled", "DeletionProtection=disabled"],
+    ])(
+      "refuses a repeated override key (%s %s: %s %s), before any ssm or sam call",
+      (target, env, first, second) => {
+        const r = run([target as string, env as string, "--", first as string, second as string], {
+          ...SES_ENV,
+          TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
+        });
+        expect(r.status).toBe(1);
+        expect(r.out).toContain(`override ${(first as string).split("=")[0]} is given more than once`);
+        expect(awsOrSam(r.calls)).toEqual([]);
+      },
+    );
+
+    it("accepts two different override keys, and one key whose name only starts like another's", () => {
+      const r = run(["api", "pr7", "--", "RequestAccessDailyCap=2", "RequestAccess=off"], SES_ENV);
+      expect(r.status, r.out).toBe(0);
+    });
+
     it("lets the caller's own DeletionProtection= win in an ephemeral env", () => {
       const r = run(["data", "pr7", "--", "DeletionProtection=enabled"]);
       expect(overrides(r.calls)["sched-pr7-data"]).toEqual(["Env=pr7", "DeletionProtection=enabled"]);
@@ -504,7 +526,9 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       ]);
     });
 
-    it("leaves the TurnstileSecret parameter out of a demo deploy that has no secret, so CloudFormation keeps its value", () => {
+    // Why leaving it out keeps the stack's value: SAM CLI's `merge_parameters` gives every template parameter a command
+    // doesn't name `UsePreviousValue` (read in SAM CLI 1.166.2's source, not tested here: the fake `sam` only logs).
+    it("leaves the TurnstileSecret parameter out of a demo deploy that has no secret", () => {
       const r = run(["api", "demo", "--", "EnvDailyTurnCap=1"], SES_ENV);
       expect(r.status, r.out).toBe(0);
       expect(overrides(r.calls)["sched-demo-api"]?.some((kv) => kv.startsWith("TurnstileSecret"))).toBe(

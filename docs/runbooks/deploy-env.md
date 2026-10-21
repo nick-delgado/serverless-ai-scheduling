@@ -159,7 +159,7 @@ Tear the env down with `scripts/teardown.sh <name>` once Nick approves; its user
 
 **Turn it on for `demo` (Nick; needs the keys above).** Prerequisites, in this order:
 
-1. The bootstrap apply that widens `EventsSchedRules` to nine actions (`aws-setup.md`, "The apply for reviewer access"), or the `api` deploy fails with an AccessDenied on the schedule's rule.
+1. The bootstrap apply that widens `EventsSchedRules` to nine actions (`aws-setup.md`, "The apply for reviewer access"; Nick applied it on 2026-10-21), without which the `api` deploy fails with an AccessDenied on the schedule's rule.
 2. A real Turnstile widget (Managed mode) whose hostname allow-list holds `demo`'s CloudFront domain, and its two keys in the main checkout's git-ignored `.env` as `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` (never Cloudflare's test keys on `demo`: anyone would pass). The README's contact line (#44) is what the "requests have run out" message points to, so write it before the page is public.
 3. Then, from `main` (or the merged branch), with `aws sso login --profile sched-dev`:
 

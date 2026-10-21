@@ -42,6 +42,17 @@ if [[ $# -gt 0 ]]; then
   shift
 fi
 extra_overrides=("$@")
+# A key given twice is ambiguous (this script reads the first copy; SAM most likely applies the last), so refuse it here,
+# before any AWS call, rather than let a later check be passed by the copy it doesn't read.
+seen_keys=" "
+for kv in ${extra_overrides[@]+"${extra_overrides[@]}"}; do
+  key="${kv%%=*}"
+  if [[ "$seen_keys" == *" $key "* ]]; then
+    echo "override ${key} is given more than once; pass each override once." >&2
+    exit 1
+  fi
+  seen_keys+="$key "
+done
 # The target must equal one stack name (or `all`): "data auth" or " data" is refused here, before any AWS call.
 stacks=()
 if [[ "$target" == "all" ]]; then
