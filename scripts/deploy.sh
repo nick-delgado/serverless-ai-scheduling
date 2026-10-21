@@ -11,8 +11,9 @@
 # a value that spans lines (see "the escalation email's SES identity" below).
 #
 # The api stack also takes the Cloudflare Turnstile secret key from TURNSTILE_SECRET (environment or .env), a NoEcho
-# parameter like the SES addresses. `-- RequestAccess=on` (the reviewer access page, #357) refuses to deploy without
-# it, and refuses dev, demo and e2e outright until the expiry job exists (see "the reviewer access page" below).
+# parameter like the SES addresses. A deploy that passes `-- RequestAccess=on` (the reviewer access page, #357; `demo`
+# included) refuses without it and without `-- TurnstileExpectedHostname=<domain>`; `RequestAccess=on` is refused for
+# dev and e2e (see "the reviewer access page" below).
 #
 # Arguments: the target is one stack name or `all`, exactly; anything after the env must start with `--`.
 #
@@ -41,6 +42,17 @@ if [[ $# -gt 0 ]]; then
   shift
 fi
 extra_overrides=("$@")
+# A key given twice is ambiguous (this script reads the first copy; SAM most likely applies the last), so refuse it here,
+# before any AWS call, rather than let a later check be passed by the copy it doesn't read.
+seen_keys=" "
+for kv in ${extra_overrides[@]+"${extra_overrides[@]}"}; do
+  key="${kv%%=*}"
+  if [[ "$seen_keys" == *" $key "* ]]; then
+    echo "override ${key} is given more than once; pass each override once." >&2
+    exit 1
+  fi
+  seen_keys+="$key "
+done
 # The target must equal one stack name (or `all`): "data auth" or " data" is refused here, before any AWS call.
 stacks=()
 if [[ "$target" == "all" ]]; then
@@ -131,21 +143,42 @@ fi
 # --- the reviewer access page (api stack, #357) -----------------------------------------------------
 # TURNSTILE_SECRET is Cloudflare Turnstile's secret key (r1/Q-1 (a)): never committed, read with the SES values above
 # (the environment, then this checkout's .env, then the main checkout's), passed as the NoEcho parameter TurnstileSecret
-# when set, and never echoed. `RequestAccess=on` turns the page's route on in the api stack. In the first part of #357
-# only an ephemeral env may have it: accounts that never expire would pile up in a stateful env, and the expiry job is
-# the second part (r1/Q-2 (b)). The second part removes demo from this list.
-ACCESS_REFUSED_ENVS=(dev demo e2e)
+# when set, and never echoed. The page is on wherever `RequestAccess=on` is passed, `demo` included, and nowhere
+# else: the template's condition `RequestAccessOn` (infra/stacks/api.yaml) is that parameter alone, so any other demo
+# deploy (the emergency `-- EnvDailyTurnCap=1`) neither asks for the page's keys nor turns it on (decision 04dd78a/SPEC-1
+# on PR #367; change the template's rule and `access_requested` below together). `dev` and `e2e` stay off:
+# `RequestAccess=on` is refused there. A deploy that passes `RequestAccess=on` must also give the secret and
+# TurnstileExpectedHostname (the hostname Cloudflare must report; decision 97fb801/SPEC-3 (b) on PR #366), so the bot
+# check can't be deployed half-configured. A deploy with no secret leaves the TurnstileSecret parameter out, and
+# `sam deploy` keeps the stack's value for a parameter it isn't given.
+ACCESS_REFUSED_ENVS=(dev e2e)
 access_overrides=()
+override_value() {
+  local kv
+  for kv in ${extra_overrides[@]+"${extra_overrides[@]}"}; do
+    if [[ "$kv" == "$1="* ]]; then printf '%s' "${kv#*=}"; return; fi
+  done
+}
 if [[ " ${stacks[*]} " == *" api "* ]]; then
-  if [[ " ${extra_overrides[*]-} " == *" RequestAccess=on "* ]]; then
-    if [[ " ${ACCESS_REFUSED_ENVS[*]} " == *" $env "* ]]; then
-      echo "refusing RequestAccess=on for '${env}': the expiry job (the second part of #357) does not exist yet, so" \
-           "accounts issued there would never expire. Use an ephemeral env (scripts/deploy.sh all <name>)." >&2
-      exit 1
-    fi
+  access_requested=false
+  [[ "$(override_value RequestAccess)" == "on" ]] && access_requested=true
+  if $access_requested && [[ " ${ACCESS_REFUSED_ENVS[*]} " == *" $env "* ]]; then
+    echo "refusing RequestAccess=on for '${env}': the request page stays off on dev and e2e; only demo and an" \
+         "ephemeral env (scripts/deploy.sh all <name>) turn it on." >&2
+    exit 1
+  fi
+  if $access_requested; then
     if [[ -z "$turnstile_secret" ]]; then
       echo "TURNSTILE_SECRET must be set (environment or .env, see .env.example) to deploy the api stack with" \
-           "RequestAccess=on: the request function can't verify the bot check without it." >&2
+           "RequestAccess=on: the request function can't verify the bot" \
+           "check without it." >&2
+      exit 1
+    fi
+    expected_hostname="$(override_value TurnstileExpectedHostname)"
+    if [[ ! "$expected_hostname" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+      echo "TurnstileExpectedHostname must be passed as one hostname (-- TurnstileExpectedHostname=<domain>) to" \
+           "deploy the api stack with RequestAccess=on: without it the" \
+           "bot check accepts a token issued on any hostname. See docs/runbooks/deploy-env.md, 'Reviewer access'." >&2
       exit 1
     fi
   fi

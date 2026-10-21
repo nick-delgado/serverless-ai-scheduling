@@ -78,7 +78,7 @@ export const RequestAccessRequest = z.strictObject({
 });
 export type RequestAccessRequest = z.infer<typeof RequestAccessRequest>;
 
-/** Every temporary reviewer username starts with this; the expiry job (part 2) touches no other user. */
+/** Every temporary reviewer username starts with this; the expiry job (`services/api/src/lib/expire-access.ts`) touches no other user. */
 export const ACCESS_USERNAME_PREFIX = "user-";
 
 /** The sign-in details, shown once: the server never stores or logs the password (#357, A-7, A-8). */

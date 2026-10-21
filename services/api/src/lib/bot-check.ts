@@ -31,7 +31,7 @@ export interface TurnstileOptions {
   secret: string;
   /**
    * The hostname Cloudflare must report the challenge was served on (the env's CloudFront domain). Empty or
-   * omitted skips the check; Cloudflare's test secret keys report `localhost`.
+   * omitted skips the check; Cloudflare's test secret keys report `example.com`.
    */
   expectedHostname?: string;
   /** `fetch`, injectable for tests. */

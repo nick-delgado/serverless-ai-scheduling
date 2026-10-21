@@ -296,3 +296,114 @@ describe("createDynamoAccessStore", () => {
     });
   });
 });
+
+describe("the expiry job's side of the in-memory store", () => {
+  it("lists entries at or before the time, oldest first, as copies without the sub's absence filled in", async () => {
+    const store = createInMemoryAccessStore();
+    await store.reserve({ ...reserveN(2), accessExpiresAt: "2026-10-21T13:00:00Z" }, CAPS);
+    await store.reserve({ ...reserveN(1), accessExpiresAt: "2026-10-21T12:00:00Z" }, CAPS);
+    await store.reserve({ ...reserveN(3), accessExpiresAt: "2026-10-21T13:00:01Z" }, CAPS);
+    const due = await store.listExpired("2026-10-21T13:00:00Z");
+    expect(due.map((e) => e.username)).toEqual(["user-00000001", "user-00000002"]);
+    const [first] = due;
+    expect(first).not.toHaveProperty("sub");
+    if (first) first.username = "changed";
+    expect(store.issued[1]?.username).toBe("user-00000001");
+  });
+
+  it("releases an entry once, taking its active place with it, and says gone the second time", async () => {
+    const store = createInMemoryAccessStore();
+    await store.reserve(reserveN(1), CAPS);
+    await store.reserve(reserveN(2), CAPS);
+    const [entry] = await store.listExpired("2026-10-21T14:00:00Z");
+    if (!entry) throw new Error("no entry");
+    await expect(store.release(entry)).resolves.toEqual({ ok: true });
+    expect(store.activeCount()).toBe(1);
+    expect(store.issued.map((e) => e.username)).toEqual(["user-00000002"]);
+    await expect(store.release(entry)).resolves.toEqual({ ok: false, reason: "gone" });
+    expect(store.activeCount()).toBe(1);
+  });
+});
+
+describe("createDynamoAccessStore's expiry side", () => {
+  const ENTRY = {
+    requestId: RESERVATION.requestId,
+    username: "user-aaaaaaaa",
+    accessExpiresAt: "2026-10-21T14:00:00Z",
+    sub: PATIENT.patientId,
+  };
+
+  it("queries the registry's partition up to the time, consistently, and follows the pages", async () => {
+    const pages = [
+      { Items: [{ ...ENTRY, PK: "ACCESS#ISSUED" }], LastEvaluatedKey: { PK: "ACCESS#ISSUED", SK: "k1" } },
+      { Items: [{ requestId: "r2", username: "user-bbbbbbbb", accessExpiresAt: "2026-10-21T14:30:00Z" }] },
+    ];
+    const { sent, doc } = fakeAnyDoc<{ input: Record<string, unknown> }>(() => pages.shift());
+
+    const due = await createDynamoAccessStore({ tableName: "t", doc }).listExpired("2026-10-21T15:00:00Z");
+
+    expect(due).toEqual([
+      ENTRY,
+      { requestId: "r2", username: "user-bbbbbbbb", accessExpiresAt: "2026-10-21T14:30:00Z" },
+    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]?.input).toMatchObject({
+      TableName: "t",
+      ConsistentRead: true,
+      KeyConditionExpression: "PK = :pk AND SK <= :last",
+      ExpressionAttributeValues: { ":pk": "ACCESS#ISSUED", ":last": "2026-10-21T15:00:00Z#~" },
+    });
+    expect(sent[1]?.input.ExclusiveStartKey).toEqual({ PK: "ACCESS#ISSUED", SK: "k1" });
+  });
+
+  it("removes the entry and takes one off the active counter in one transaction, each guarded", async () => {
+    const { sent, doc } = fakeDoc(() => ({}));
+    await expect(createDynamoAccessStore({ tableName: "t", doc }).release(ENTRY)).resolves.toEqual({
+      ok: true,
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.input.TransactItems).toEqual([
+      {
+        Delete: {
+          TableName: "t",
+          Key: { PK: "ACCESS#ISSUED", SK: `2026-10-21T14:00:00Z#${RESERVATION.requestId}` },
+          ConditionExpression: "attribute_exists(PK)",
+        },
+      },
+      {
+        Update: {
+          TableName: "t",
+          Key: { PK: "ACCESS#COUNT", SK: "ACTIVE" },
+          UpdateExpression: "ADD active :minusOne",
+          ConditionExpression: "active >= :one",
+          ExpressionAttributeValues: { ":minusOne": -1, ":one": 1 },
+        },
+      },
+    ]);
+  });
+
+  it("reads a failed entry condition as gone: the entry was released already", async () => {
+    const { doc } = fakeDoc(() => {
+      throw cancelled("ConditionalCheckFailed", "None");
+    });
+    await expect(createDynamoAccessStore({ tableName: "t", doc }).release(ENTRY)).resolves.toEqual({
+      ok: false,
+      reason: "gone",
+    });
+  });
+
+  it.each([
+    ["a counter already at 0", cancelled("None", "ConditionalCheckFailed")],
+    ["a conflict", cancelled("TransactionConflict", "None")],
+    [
+      "a cancellation that names no reasons",
+      new TransactionCanceledException({ message: "x", $metadata: {} }),
+    ],
+    ["any other error", new Error("network down")],
+  ])("throws on %s, so the entry stays for the next run", async (_name, failure) => {
+    const { doc } = fakeDoc(() => {
+      throw failure;
+    });
+    await expect(createDynamoAccessStore({ tableName: "t", doc }).release(ENTRY)).rejects.toBe(failure);
+  });
+});
