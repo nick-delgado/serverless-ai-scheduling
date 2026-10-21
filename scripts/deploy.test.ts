@@ -428,7 +428,8 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
     // Synthetic: Cloudflare's documented always-passes test secret, and distinct stand-ins for the .env sources.
     const SECRET = "1x0000000000000000000000000000000AA";
     const DOTENV_SECRET = "dotenv-turnstile-secret-value";
-    const PAGE_ON = ["--", "RequestAccess=on"];
+    const HOST = "TurnstileExpectedHostname=localhost";
+    const PAGE_ON = ["--", "RequestAccess=on", HOST];
     const noSecretPrinted = (r: ShellRun) => {
       for (const value of [SECRET, DOTENV_SECRET]) expect(r.out).not.toContain(value);
     };
@@ -439,6 +440,7 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(overrides(r.calls)["sched-pr7-api"]).toEqual([
         "Env=pr7",
         "RequestAccess=on",
+        HOST,
         `SesSender=${SENDER}`,
         `SesStaffRecipient=${RECIPIENT}`,
         `TurnstileSecret=${SECRET}`,
@@ -480,17 +482,82 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       expect(awsOrSam(r.calls)).toEqual([]);
     });
 
-    it.each(["dev", "demo", "e2e"])(
-      "refuses RequestAccess=on for %s even with a secret, until the expiry job exists",
-      (env) => {
-        const r = run(["api", env, ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+    it.each(["dev", "e2e"])("refuses RequestAccess=on for %s even with a secret and a hostname", (env) => {
+      const r = run(["api", env, ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain(`refusing RequestAccess=on for '${env}'`);
+      expect(r.out).toContain("stays off on dev and e2e");
+      expect(awsOrSam(r.calls)).toEqual([]);
+      noSecretPrinted(r);
+    });
+
+    // The demo env turns the page on through the template's Env clause, so deploy.sh asks for what the page needs
+    // whether or not RequestAccess=on is passed (#357, part 2; decision 97fb801/SPEC-2 (a) and SPEC-3 (b)).
+    it("deploys demo's api stack with the secret and the hostname, with no RequestAccess switch", () => {
+      const r = run(["api", "demo", "--", "TurnstileExpectedHostname=d111.example"], {
+        ...SES_ENV,
+        TURNSTILE_SECRET: SECRET,
+      });
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-demo-api"]).toEqual([
+        "Env=demo",
+        "TurnstileExpectedHostname=d111.example",
+        `SesSender=${SENDER}`,
+        `SesStaffRecipient=${RECIPIENT}`,
+        `TurnstileSecret=${SECRET}`,
+      ]);
+      noSecretPrinted(r);
+    });
+
+    it("accepts RequestAccess=on for demo too, with the secret and the hostname", () => {
+      const r = run(["api", "demo", ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-demo-api"]).toContain("RequestAccess=on");
+    });
+
+    it("refuses demo's api stack without a secret, before any ssm or sam call", () => {
+      const r = run(["api", "demo", "--", HOST], SES_ENV);
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TURNSTILE_SECRET must be set");
+      expect(r.out).toContain("the demo env");
+      expect(awsOrSam(r.calls)).toEqual([]);
+    });
+
+    it("refuses demo's api stack without TurnstileExpectedHostname, before any ssm or sam call", () => {
+      const r = run(["api", "demo"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
+      expect(r.out).toContain("the demo env");
+      expect(awsOrSam(r.calls)).toEqual([]);
+      noSecretPrinted(r);
+    });
+
+    it("refuses RequestAccess=on on an ephemeral env without TurnstileExpectedHostname", () => {
+      const r = run(["api", "pr7", "--", "RequestAccess=on"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
+      expect(r.out).toContain("RequestAccess=on");
+      expect(awsOrSam(r.calls)).toEqual([]);
+    });
+
+    it.each(["", "a/b", "a b", ".leading", "trailing.", "-dash", "d111.example\nx"])(
+      "refuses the hostname %j as not one hostname",
+      (host) => {
+        const r = run(["api", "pr7", "--", "RequestAccess=on", `TurnstileExpectedHostname=${host}`], {
+          ...SES_ENV,
+          TURNSTILE_SECRET: SECRET,
+        });
         expect(r.status).toBe(1);
-        expect(r.out).toContain(`refusing RequestAccess=on for '${env}'`);
-        expect(r.out).toContain("expiry job");
+        expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
         expect(awsOrSam(r.calls)).toEqual([]);
-        noSecretPrinted(r);
       },
     );
+
+    it("does not ask for a hostname when the page is off, and still deploys dev with one given", () => {
+      const r = run(["api", "dev", "--", HOST], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-dev-api"]).toContain(HOST);
+    });
 
     it("still deploys dev without the page switch, passing a secret it was given", () => {
       const r = run(["api", "dev"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
