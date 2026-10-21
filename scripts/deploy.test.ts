@@ -504,8 +504,13 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       const r = run(["api", "pr7"], { ...SES_ENV, TURNSTILE_SECRET: `${SECRET}\nx` });
       expect(r.status).toBe(1);
       expect(r.out).toContain("TURNSTILE_SECRET spans more than one line");
-      expect(r.out).not.toContain("SES_SENDER spans");
-      expect(r.out).not.toContain("SES_STAFF_RECIPIENT spans");
+      expect(r.out).toMatch(/^TURNSTILE_SECRET spans more than one line/m);
+      // Neither SES key is named, before it (the order deploy.sh prints) or after it.
+      for (const other of ["SES_SENDER", "SES_STAFF_RECIPIENT"]) {
+        expect(r.out).not.toContain(`${other} spans`);
+        expect(r.out).not.toContain(`${other} TURNSTILE_SECRET`);
+        expect(r.out).not.toContain(`TURNSTILE_SECRET ${other}`);
+      }
       expect(awsOrSam(r.calls)).toEqual([]);
       noSecretPrinted(r);
     });
