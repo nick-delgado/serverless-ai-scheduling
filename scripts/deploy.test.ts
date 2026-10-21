@@ -491,16 +491,36 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       noSecretPrinted(r);
     });
 
-    // The demo env turns the page on through the template's Env clause, so deploy.sh asks for what the page needs
-    // whether or not RequestAccess=on is passed (#357, part 2; decision 97fb801/SPEC-2 (a) and SPEC-3 (b)).
-    it("deploys demo's api stack with the secret and the hostname, with no RequestAccess switch", () => {
-      const r = run(["api", "demo", "--", "TurnstileExpectedHostname=d111.example"], {
+    // demo turns the page on the way an ephemeral env does: with `-- RequestAccess=on` (decision 04dd78a/SPEC-1 on PR
+    // #367, which dropped the template's `Env == demo` clause). Any other demo deploy leaves the page as it is.
+    it("deploys demo's emergency stop (EnvDailyTurnCap=1) with no secret and no hostname, and doesn't turn the page on", () => {
+      const r = run(["api", "demo", "--", "EnvDailyTurnCap=1"], SES_ENV);
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-demo-api"]).toEqual([
+        "Env=demo",
+        "EnvDailyTurnCap=1",
+        `SesSender=${SENDER}`,
+        `SesStaffRecipient=${RECIPIENT}`,
+      ]);
+    });
+
+    it("leaves the TurnstileSecret parameter out of a demo deploy that has no secret, so CloudFormation keeps its value", () => {
+      const r = run(["api", "demo", "--", "EnvDailyTurnCap=1"], SES_ENV);
+      expect(r.status, r.out).toBe(0);
+      expect(overrides(r.calls)["sched-demo-api"]?.some((kv) => kv.startsWith("TurnstileSecret"))).toBe(
+        false,
+      );
+    });
+
+    it("turns demo's page on with RequestAccess=on, the secret and the hostname", () => {
+      const r = run(["api", "demo", "--", "RequestAccess=on", "TurnstileExpectedHostname=d111.example"], {
         ...SES_ENV,
         TURNSTILE_SECRET: SECRET,
       });
       expect(r.status, r.out).toBe(0);
       expect(overrides(r.calls)["sched-demo-api"]).toEqual([
         "Env=demo",
+        "RequestAccess=on",
         "TurnstileExpectedHostname=d111.example",
         `SesSender=${SENDER}`,
         `SesStaffRecipient=${RECIPIENT}`,
@@ -509,25 +529,23 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       noSecretPrinted(r);
     });
 
-    it("accepts RequestAccess=on for demo too, with the secret and the hostname", () => {
-      const r = run(["api", "demo", ...PAGE_ON], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+    it("turns demo's page off with RequestAccess=off, asking for no secret and no hostname", () => {
+      const r = run(["api", "demo", "--", "RequestAccess=off"], SES_ENV);
       expect(r.status, r.out).toBe(0);
-      expect(overrides(r.calls)["sched-demo-api"]).toContain("RequestAccess=on");
+      expect(overrides(r.calls)["sched-demo-api"]).toContain("RequestAccess=off");
     });
 
-    it("refuses demo's api stack without a secret, before any ssm or sam call", () => {
-      const r = run(["api", "demo", "--", HOST], SES_ENV);
+    it("refuses to turn demo's page on without a secret, before any ssm or sam call", () => {
+      const r = run(["api", "demo", "--", "RequestAccess=on", HOST], SES_ENV);
       expect(r.status).toBe(1);
       expect(r.out).toContain("TURNSTILE_SECRET must be set");
-      expect(r.out).toContain("the demo env");
       expect(awsOrSam(r.calls)).toEqual([]);
     });
 
-    it("refuses demo's api stack without TurnstileExpectedHostname, before any ssm or sam call", () => {
-      const r = run(["api", "demo"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
+    it("refuses to turn demo's page on without TurnstileExpectedHostname, before any ssm or sam call", () => {
+      const r = run(["api", "demo", "--", "RequestAccess=on"], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
       expect(r.status).toBe(1);
       expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
-      expect(r.out).toContain("the demo env");
       expect(awsOrSam(r.calls)).toEqual([]);
       noSecretPrinted(r);
     });

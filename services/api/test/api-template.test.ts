@@ -434,16 +434,14 @@ describe("the request-access route (#357)", () => {
     expect(path).not.toContain("responseTransferMode");
   });
 
-  it("is on in demo, or when the RequestAccess parameter is on (default off): the page, its function, its route and the expiry job together", () => {
+  it("is on only when the RequestAccess parameter is on (default off), in demo as anywhere else: the page, its function, its route and the expiry job together", () => {
     expect(entries(block(/^ {2}RequestAccess:$/, lines))).toMatchObject({
       Type: "String",
       Default: "off",
       AllowedValues: '["on", "off"]',
     });
-    expect(bodyLines(block(/^ {2}RequestAccessOn: !Or$/, block(/^Conditions:$/, lines)))).toEqual([
-      "  - !Equals [!Ref Env, demo]",
-      '  - !Equals [!Ref RequestAccess, "on"]',
-    ]);
+    expect(entries(block(/^Conditions:$/, lines)).RequestAccessOn).toBe('!Equals [!Ref RequestAccess, "on"]');
+    expect(template).not.toMatch(/Equals \[!Ref Env, demo\]/);
   });
 
   it("puts exactly the two log groups, the two functions and the invoke permission under that condition", () => {

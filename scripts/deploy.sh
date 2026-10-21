@@ -11,8 +11,8 @@
 # a value that spans lines (see "the escalation email's SES identity" below).
 #
 # The api stack also takes the Cloudflare Turnstile secret key from TURNSTILE_SECRET (environment or .env), a NoEcho
-# parameter like the SES addresses. Where the reviewer access page (#357) is on (`demo`, or `-- RequestAccess=on`),
-# deploying refuses without it and without `-- TurnstileExpectedHostname=<domain>`; `RequestAccess=on` is refused for
+# parameter like the SES addresses. A deploy that passes `-- RequestAccess=on` (the reviewer access page, #357; `demo`
+# included) refuses without it and without `-- TurnstileExpectedHostname=<domain>`; `RequestAccess=on` is refused for
 # dev and e2e (see "the reviewer access page" below).
 #
 # Arguments: the target is one stack name or `all`, exactly; anything after the env must start with `--`.
@@ -132,11 +132,14 @@ fi
 # --- the reviewer access page (api stack, #357) -----------------------------------------------------
 # TURNSTILE_SECRET is Cloudflare Turnstile's secret key (r1/Q-1 (a)): never committed, read with the SES values above
 # (the environment, then this checkout's .env, then the main checkout's), passed as the NoEcho parameter TurnstileSecret
-# when set, and never echoed. The page is on in `demo` (the template's `Env` clause, r1/Q-4 (a), now that the expiry
-# job exists) and wherever `RequestAccess=on` is passed. `dev` and `e2e` stay off: `RequestAccess=on` is refused there.
-# The rule "the page is on in demo or with RequestAccess=on" is the template's condition `RequestAccessOn` (infra/stacks/api.yaml);
-# change both together. On a demo deploy and on any deploy that passes RequestAccess=on, the secret and TurnstileExpectedHostname (the hostname Cloudflare must report; decision
-# 97fb801/SPEC-3 (b) on PR #366) must both be given, so the bot check can't be deployed half-configured.
+# when set, and never echoed. The page is on wherever `RequestAccess=on` is passed, `demo` included, and nowhere
+# else: the template's condition `RequestAccessOn` (infra/stacks/api.yaml) is that parameter alone, so any other demo
+# deploy (the emergency `-- EnvDailyTurnCap=1`) neither asks for the page's keys nor turns it on (decision 04dd78a/SPEC-1
+# on PR #367; change the template's rule and `access_requested` below together). `dev` and `e2e` stay off:
+# `RequestAccess=on` is refused there. A deploy that passes `RequestAccess=on` must also give the secret and
+# TurnstileExpectedHostname (the hostname Cloudflare must report; decision 97fb801/SPEC-3 (b) on PR #366), so the bot
+# check can't be deployed half-configured. A deploy with no secret leaves the TurnstileSecret parameter out, and
+# `sam deploy` keeps the stack's value for a parameter it isn't given.
 ACCESS_REFUSED_ENVS=(dev e2e)
 access_overrides=()
 override_value() {
@@ -153,17 +156,17 @@ if [[ " ${stacks[*]} " == *" api "* ]]; then
          "ephemeral env (scripts/deploy.sh all <name>) turn it on." >&2
     exit 1
   fi
-  if $access_requested || [[ "$env" == "demo" ]]; then
+  if $access_requested; then
     if [[ -z "$turnstile_secret" ]]; then
       echo "TURNSTILE_SECRET must be set (environment or .env, see .env.example) to deploy the api stack with" \
-           "the request page on (RequestAccess=on, or the demo env): the request function can't verify the bot" \
+           "RequestAccess=on: the request function can't verify the bot" \
            "check without it." >&2
       exit 1
     fi
     expected_hostname="$(override_value TurnstileExpectedHostname)"
     if [[ ! "$expected_hostname" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
       echo "TurnstileExpectedHostname must be passed as one hostname (-- TurnstileExpectedHostname=<domain>) to" \
-           "deploy the api stack with the request page on (RequestAccess=on, or the demo env): without it the" \
+           "deploy the api stack with RequestAccess=on: without it the" \
            "bot check accepts a token issued on any hostname. See docs/runbooks/deploy-env.md, 'Reviewer access'." >&2
       exit 1
     fi

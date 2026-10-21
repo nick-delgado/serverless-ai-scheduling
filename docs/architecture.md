@@ -62,7 +62,7 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 
 ## Requesting demo access (where the page is on)
 
-Only envs whose `api` stack turns the page on have this route: `demo`, and an ephemeral check env passed `RequestAccess=on` (never `dev` or `e2e`; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20 and 2026-10-21). It is the API's one route with no authorizer.
+Only envs whose `api` stack is deployed with `RequestAccess=on` have this route: an ephemeral check env, and `demo` once Nick turns it on (never `dev` or `e2e`; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20 and 2026-10-21). It is the API's one route with no authorizer.
 
 1. The sign-in page links to `/request-access`; the page shows a Cloudflare Turnstile widget and one button, and asks for nothing about the reviewer.
 2. The SPA sends `POST /api/request-access {turnstileToken}` with no `Authorization`. RequestAccessFn (Lambda, no Bedrock, no agent code) posts the token and its secret to Cloudflare's `siteverify` and goes on only if `success` is true. A failed check creates nothing and counts against no cap; an unreachable Cloudflare answers "try again".

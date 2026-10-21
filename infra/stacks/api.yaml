@@ -51,17 +51,19 @@ Parameters:
     Default: ""
     NoEcho: true
     Description: Front-desk address that receives escalation emails (a verified identity in the SES sandbox).
-  # The reviewer access page (#357). On in `demo` (the `Env` clause of RequestAccessOn below, r1/Q-4 (a)) and wherever
-  # an env passes `-- RequestAccess=on` (the ephemeral check env); off everywhere else. The expiry job, with its
-  # hourly schedule, exists exactly where the page does, so no account is ever issued without something to delete it.
+  # The reviewer access page (#357). On only where an env passes `-- RequestAccess=on`: an ephemeral check env, and
+  # `demo` when Nick turns it on (decision 04dd78a/SPEC-1 on PR #367 dropped the `Env == demo` clause, so an unrelated
+  # `demo` deploy, such as the emergency `EnvDailyTurnCap=1`, never turns the page on). The expiry job, with its hourly
+  # schedule, exists exactly where the page does, so no account is ever issued without something to delete it. The
+  # parameter keeps its value on later deploys; `RequestAccess=off` turns the page and the job off again.
   RequestAccess:
     Type: String
     Default: "off"
     AllowedValues: ["on", "off"]
     Description: >-
-      "on" creates POST /api/request-access (the API's one public route), its function and the expiry job. In demo
-      the page is on whatever this says. scripts/deploy.sh refuses "on" for dev and e2e, and, on a demo deploy or one that passes RequestAccess=on,
-      refuses without TURNSTILE_SECRET and TurnstileExpectedHostname. The web stack's build reads the result from
+      "on" creates POST /api/request-access (the API's one public route), its function and the expiry job; "off"
+      removes them (revoke the accounts first: the job is what deletes them). scripts/deploy.sh refuses "on" for dev
+      and e2e, and refuses it without TURNSTILE_SECRET and TurnstileExpectedHostname. The web stack's build reads the result from
       /sched/<env>/api/request-access (scripts/deploy-web.sh).
   RequestAccessDailyCap:
     Type: Number
@@ -96,12 +98,10 @@ Conditions:
   SesConfigured: !And
     - !Not [!Equals [!Ref SesSender, ""]]
     - !Not [!Equals [!Ref SesStaffRecipient, ""]]
-  # The request page, its function, its route and the expiry job (r1/Q-4 (a)): on in demo, or when RequestAccess is on.
-  # scripts/deploy.sh copies this rule (`access_requested` and the demo test) to decide when to ask for the Turnstile
-  # secret and hostname: change both together.
-  RequestAccessOn: !Or
-    - !Equals [!Ref Env, demo]
-    - !Equals [!Ref RequestAccess, "on"]
+  # The request page, its function, its route and the expiry job: on when RequestAccess is on, in any env.
+  # scripts/deploy.sh copies this rule (`access_requested`) to decide when to ask for the Turnstile secret and
+  # hostname: change both together.
+  RequestAccessOn: !Equals [!Ref RequestAccess, "on"]
 
 Globals:
   Function:
