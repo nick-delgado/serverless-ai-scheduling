@@ -191,6 +191,23 @@ describe("createAccountData", () => {
     expect(log).toEqual([`delete PATIENT#${SUB} OTHER#1`, `delete PATIENT#${SUB} PROFILE`]);
   });
 
+  it("treats only keys that start with CONV# or APPT# as conversations and appointments: ZAPPT#1 is just another item", async () => {
+    const { doc, log } = fake({
+      partitions: {
+        [`PATIENT#${SUB}`]: [
+          { PK: `PATIENT#${SUB}`, SK: "ZAPPT#1" },
+          { PK: `PATIENT#${SUB}`, SK: "ZCONV#1" },
+        ],
+      },
+    });
+    await createAccountData({ tableName: "t", doc }).deleteAccount(SUB);
+    expect(log).toEqual([
+      `delete PATIENT#${SUB} ZAPPT#1`,
+      `delete PATIENT#${SUB} ZCONV#1`,
+      `delete PATIENT#${SUB} PROFILE`,
+    ]);
+  });
+
   it.each(["", "maria.santos", "PATIENT#x", "../x"])(
     "refuses %j as a patient ID before any call",
     async (bad) => {
@@ -269,8 +286,8 @@ describe("createAccountData", () => {
         appts: { [APPT_KEY]: slots },
         transact: () => cancelled("ConditionalCheckFailed", "None"),
       });
-      await expect(createAccountData({ tableName: "t", doc }).deleteAccount(SUB)).rejects.toThrow(
-        "its slot kept changing under the release",
+      await expect(createAccountData({ tableName: "t", doc }).deleteAccount(SUB)).rejects.toThrowError(
+        /^appointment APPT#appt_aaaaaaaaaa: its slot kept changing under the release$/,
       );
       expect(log).toEqual(["transact", "transact", "transact", "transact", "transact"]);
     });

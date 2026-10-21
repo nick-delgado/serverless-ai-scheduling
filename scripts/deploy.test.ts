@@ -553,6 +553,15 @@ describe("deploy.sh", { timeout: 30_000 }, () => {
       },
     );
 
+    it("reads the hostname only from the parameter of that exact name, not from one that shares its prefix", () => {
+      const r = run(["api", "pr7", "--", "RequestAccess=on", "TurnstileExpectedHostnameX=localhost"], {
+        ...SES_ENV,
+        TURNSTILE_SECRET: SECRET,
+      });
+      expect(r.status).toBe(1);
+      expect(r.out).toContain("TurnstileExpectedHostname must be passed as one hostname");
+    });
+
     it("does not ask for a hostname when the page is off, and still deploys dev with one given", () => {
       const r = run(["api", "dev", "--", HOST], { ...SES_ENV, TURNSTILE_SECRET: SECRET });
       expect(r.status, r.out).toBe(0);

@@ -169,6 +169,17 @@ describe("expireAccess", () => {
     });
   });
 
+  it("skips, and keeps, an entry with no sub whose username has no user- prefix: the prefix guard comes first", async () => {
+    const f = fixture();
+    await issue(f.store, 1, { withSub: false });
+    const entry = f.store.issued[0];
+    if (!entry) throw new Error("no entry");
+    entry.username = "maria.santos";
+    expect(await expireAccess(f.deps)).toMatchObject({ due: 1, expired: 0, skipped: 1 });
+    expect(f.store.issued).toHaveLength(1);
+    expect(f.calls).toEqual([]);
+  });
+
   it("accepts the prefix exactly: user- followed by the handle", async () => {
     const f = fixture();
     await issue(f.store, 1);
@@ -378,7 +389,9 @@ describe("expiryHandler", () => {
     async (event) => {
       const f = fixture();
       await issue(f.store, 1);
-      await expect(expiryHandler(f.deps)(event)).rejects.toThrow("asOf must be an ISO date-time string");
+      await expect(expiryHandler(f.deps)(event)).rejects.toThrowError(
+        /^asOf must be an ISO date-time string$/,
+      );
       expect(f.calls).toEqual([]);
     },
   );
@@ -386,6 +399,12 @@ describe("expiryHandler", () => {
   it.each([undefined, null, "a string", 5, {}])("takes %j as no asOf", async (event) => {
     const f = fixture();
     await expect(expiryHandler(f.deps)(event)).resolves.toMatchObject({ asOf: NOW, due: 0 });
+  });
+
+  it("throws for a single failure too, naming one of one", async () => {
+    const f = fixture({ admin: { findSub: () => Promise.reject(new Error("throttled")) } });
+    await issue(f.store, 1);
+    await expect(expiryHandler(f.deps)({})).rejects.toThrowError(/^1 of 1 accounts failed to expire$/);
   });
 
   it("throws after trying every entry when any failed, so the invocation shows as failed", async () => {
@@ -400,7 +419,7 @@ describe("expiryHandler", () => {
     });
     await issue(f.store, 1);
     await issue(f.store, 2);
-    await expect(expiryHandler(f.deps)({})).rejects.toThrow("2 of 2 accounts failed to expire");
+    await expect(expiryHandler(f.deps)({})).rejects.toThrowError(/^2 of 2 accounts failed to expire$/);
     expect(lookups).toBe(2);
   });
 });

@@ -394,6 +394,10 @@ describe("createDynamoAccessStore's expiry side", () => {
   it.each([
     ["a counter already at 0", cancelled("None", "ConditionalCheckFailed")],
     ["a conflict", cancelled("TransactionConflict", "None")],
+    [
+      "a cancellation that names no reasons",
+      new TransactionCanceledException({ message: "x", $metadata: {} }),
+    ],
     ["any other error", new Error("network down")],
   ])("throws on %s, so the entry stays for the next run", async (_name, failure) => {
     const { doc } = fakeDoc(() => {

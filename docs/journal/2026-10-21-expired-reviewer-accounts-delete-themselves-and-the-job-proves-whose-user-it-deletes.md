@@ -1,0 +1,46 @@
+# 2026-10-21 — Expired reviewer accounts delete themselves, and the job proves whose user it is deleting
+
+**Chapter:** 6. What I'd do next
+**Milestone:** M4
+**Related:** #357 (second of two PRs), PR #TBD, PR #366, #356, #44, #325, ADR-003, ADR-004, ADR-005, ADR-009, PRD FR-004
+
+## What happened
+
+The first PR of #357 let a reviewer request a temporary synthetic patient, but nothing deleted one, so the page could only be on in a throwaway env. This PR is the other half (Nick's r1/Q-2 (b)): an hourly job that deletes each account after `RequestAccessExpiryHours`, with its data, and frees its place in the registry. With it the page can be on in `demo`.
+
+The agent added `RequestAccessExpiryFunction` to the `api` stack, a SAM `Schedule` event (`rate(1 hour)`) that exists exactly where the request function does, with its own log group and a role that grants only what it calls. For each registry entry at or before now it looks the Cognito user up and, only when the user's `sub` is the entry's, signs it out everywhere and deletes it; then it deletes the patient's items and puts the slots the patient held back to open; and last one transaction removes the entry and takes one off the active counter. A failure on any step leaves the entry, and the next run finishes it. The template's condition is now `Env == demo` or `RequestAccess == on`, and `scripts/deploy.sh` drops `demo` from its refused list and, wherever the page is on, refuses to deploy the `api` stack without the Turnstile secret and a `TurnstileExpectedHostname` (the owner's decisions on the review of PR #366, SPEC-2 (a) and SPEC-3 (b)). `openSlotGsi1` is now exported from `@sched/tools/dynamo`, with its first user (SPEC-8 (a)).
+
+Before writing any of it the agent read CloudFormation's schema for `AWS::Events::Rule` (the public CloudFormation schema bundle, `aws-events-rule.json`) and found that PR #366's bootstrap grant for the schedule was short. The rule is created with the stack's tags, so CloudFormation needs `events:TagResource` on create, `UntagResource` on every update (the `git-commit` tag changes each deploy) and `ListTargetsByRule` on delete; `ListTagsForResource` is on its read handler. PR #366 had five actions. Nick decided to fix it in this PR as its own first commit, so the first deploy of the schedule wouldn't fail with an AccessDenied the template tests could never show; the bootstrap apply with the four added actions is Nick's, and comes before any deploy that has the schedule.
+
+## Why we chose what we chose
+
+Nick's answers on #357 (r1/Q-3 (a), r1/A-4, A-10) are on the issue. The first two below are Nick's answers to the orchestrator on 2026-10-21; the rest are the agent's, where the issue was silent, each with the alternative it beat.
+
+- **The Events grant is fixed here, as the first commit, not in a separate PR (Nick, 2026-10-21).** The alternative, a separate bootstrap PR, would have blocked this one on a merge for a four-line change that this PR is the only user of. The apply is still Nick's, with no overrides, so the spend backstop is untouched.
+- **The slot release is written in `services/api`, not extracted from `@sched/tools` (Nick, 2026-10-21).** The reuse note asked before extracting the transaction in `reschedule`. What `reschedule` does is one update inside a three-item transaction; the job needs the same update next to a different item (the appointment's delete). Extracting a builder would have meant a new export in Eval-gated `packages/tools` for one caller; a copy, listed in the PR and pinned against real tables, costs less. The copy's condition fails safely: the update can't create a slot, since its condition needs attributes only a booked slot has.
+- **The job checks the `sub` before it deletes a user, and touches no user for an entry that has none.** PR #366's journal and the ADR-004 amendment named a window (about 36^-8 per request) where an entry names the first handle after a username clash, which is another account's. The `user-` prefix doesn't stop that, so the job compares `AdminGetUser`'s `sub` with the entry's. An entry with no `sub` (issuing failed before the profile was written) can't prove which user is its own, so the job deletes none for it. The alternative, deleting by username as the first design did, would delete another reviewer's account in that window. The cost: a user the request function created and then failed to delete stays in the pool, with a password nobody was ever shown.
+- **Items are deleted with `DeleteItem`, ten at a time.** The permissions boundary has no `BatchWriteItem` (the seed role has it, workload roles don't), and adding it would be another bootstrap apply for a job that deletes a handful of items an hour.
+- **Deletion order is conversations, then their meta item, then appointments, then counters, and the profile last.** A run that stops part-way must leave what the next run needs to find the rest: the conversation meta item is the only pointer to a conversation's own partition, and the profile is the account's proof of existence.
+- **A slot is released only for the appointment that holds it.** An appointment whose slot another patient holds, a cancelled one, or one whose slot item is gone is deleted alone; a reschedule that moves the appointment between the read and the transaction makes the job read it again and release the new slot.
+- **`asOf` in the invocation event is the on-demand and revoke-all mechanism.** The alternatives were a second function for revoke-all or a parameter that shrinks the expiry. One optional field, read only from an operator's invocation (the schedule's event never has it), runs the same code as the hourly job, so the revoke-all step is the job, not a second implementation. It needs `lambda:InvokeFunction`, which `SchedDeployer` doesn't have; the runbook says `sched-admin` runs it.
+- **The hostname check is required by `deploy.sh`, not by the template.** SPEC-3 (b) says to make the script refuse. A required template parameter would also break the first `all` deploy of an env, because the `api` stack deploys before the web stack that creates the CloudFront domain; for `demo` the web stack already exists, so its domain comes from SSM.
+- **The request function and the expiry job share one condition.** A page without a job would issue accounts that never expire, which is the thing r1/Q-2 (b) said must not happen on an env that keeps state. We saw in the transformed template (SAM's translator, run offline) that the schedule's rule and permission carry the function's condition.
+
+## What surprised us
+
+- **A template test can't see the IAM a resource needs.** The `Schedule` event looks like one line, but the rule it creates is tagged by the stack, and CloudFormation's handler for that type lists `events:TagResource` for it. Only the schema said so. The fix is pinned by the bootstrap test, which the agent saw fail before the commit, and by nothing that can show CloudFormation accepts it: the first real deploy with the schedule is the check.
+- **The SDK's `paginateQuery` refuses a fake client.** It insists on a real `DynamoDBDocumentClient`, so the tests that pass a fake `send` (to make a delete fail, or to script a cancelled transaction) failed with "Invalid client". The job reads pages with a 15-line `queryAll` over `send` instead.
+- **The DynamoDB Local tests slowed under load.** A test seeding four weeks of slots before each case timed out in a loaded full run (hook timeout), passed alone, and passes in a loaded run with a two-week seed.
+
+## Evidence
+
+- The job's rules are `services/api/test/expire-access.test.ts` (order of steps, the due boundary, the prefix and `sub` guards, each failure leaving the entry, the log carrying no username or `sub`); the deletes, the slot release and its fallbacks are `account-data.test.ts` (a fake `send`) and `expire-access.local.test.ts` (DynamoDB Local: the registry entry and the active place released in one transaction, data deleted, slots freed with their GSI1 keys, a fixture patient, another temporary account and a slot held by someone else untouched, and a delete or a transaction that fails part-way finished by the next run).
+- On real DynamoDB a request racing the job's decrement may be cancelled by a conflict, which DynamoDB Local never reports (ADR-004's earlier amendment, #356); the Local test shows only that the registry and the counter stay in step.
+- Live check on an ephemeral env: pending, run by the orchestrator after Nick applies the bootstrap; the commands are in the runbook ("Check the expiry on an ephemeral env"). Nothing here claims more than the tests and that check show.
+- The seen-failing table, the coverage gate and the lint, typecheck and test results are in the PR description, for the commit it names.
+
+## What's next
+
+- Nick applies the bootstrap stack (nine Events actions), then the orchestrator runs the ephemeral live check, then Nick turns the page on in `demo` with real Turnstile keys and #44's README contact line in place (runbook, "Turn it on for `demo`").
+- A later deploy of `demo`'s `api` stack must pass `TurnstileExpectedHostname` every time: to file, if Nick would rather the script read it from SSM.
+- Sharing the conflict-retry helpers between the turn store and the access store, and the cancellation-code reader now in a third place: to file.
