@@ -71,3 +71,20 @@
   margin: var(--space-2) 0 0;
   min-height: 1.5em;
 }
+
+/* A small icon button beside a value; the accessible name is the button's aria-label. */
+.access__copy {
+  margin-inline-start: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  line-height: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.access__copy:hover {
+  background: var(--color-surface);
+}
