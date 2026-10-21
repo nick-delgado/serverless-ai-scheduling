@@ -4,6 +4,8 @@
 >
 > **Status:** Phase 0 complete (planning and foundations). The build is in progress. Follow along in the [journal](docs/journal/) and on the [project board](https://github.com/users/nick-delgado/projects/1).
 >
+> **Contact:** if the demo's access requests have run out, or you'd like a walkthrough, message Nick Delgado on [LinkedIn](https://www.linkedin.com/in/i-delgado/).
+>
 > *Cedar Ridge Health is a fictional clinic. All data is synthetic.*
 
 ---
