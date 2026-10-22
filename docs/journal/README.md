@@ -138,4 +138,5 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-21 | [A reviewer carries the demo account into the sign-in form one field at a time](2026-10-21-a-reviewer-carries-the-demo-account-into-sign-in-one-field-at-a-time.md) | 6. What I'd do next |
 | 2026-10-22 | [A reason the patient gives with the yes is the patient's own word, so the grader reads it there](2026-10-22-a-reason-in-the-yes-is-the-patients-own-word.md) | 5. What the evals showed |
 | 2026-10-22 | [An hours remark and a one-day closing question are not offers, so the weekday check stops asking for a weekday on them](2026-10-22-an-hours-remark-and-a-one-day-closing-question-are-not-offers.md) | 5. What the evals showed |
+| 2026-10-22 | [The project has billed $249.60 as of 2026-10-22, nearly all of it Claude on Bedrock, and idle runs at $0.26 so far](2026-10-22-billed-249-dollars-nearly-all-claude-on-bedrock-and-idle-is-26-cents.md) | 6. What I'd do next |
 | 2026-10-22 | [The demo script and the access doc promise no credential and no address](2026-10-22-the-demo-script-and-access-doc-promise-no-credential-and-no-url.md) | 6. What I'd do next |
