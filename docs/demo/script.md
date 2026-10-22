@@ -1,12 +1,12 @@
 # Demo script
 
-A walk through the scheduling assistant in about 3 to 5 minutes, as a brand-new temporary patient. It covers six beats, in this order: request an account and sign in, book by text, send a voice message, reschedule that same booking, escalate to a human, and read the eval report.
+A walk through the scheduling assistant in about 3 to 5 minutes, as a brand-new temporary patient. It covers five beats, in this order: request an account and sign in, book by text, send a voice message, reschedule that same booking, and escalate to a human.
 
 Use desktop Chrome: voice is shown there only (Safari and mobile browsers work too, see `apps/web/e2e/MANUAL.md`, but the timing here is for Chrome). The sign-in address is the link in this repository's **About → Website** field. You need no account to start: the first beat issues one. How access works, and its limits, is in [reviewer-access.md](reviewer-access.md).
 
 The script names no username, password or patient name, because the app makes up all three for each account. Where it says "the name the account page showed", use the made-up name from your own account.
 
-Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording. The lines are adapted from the e2e specs, the runbook's check turn and the manual checklist, and Nick's timed dry run checks them before the recording.
+Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording. The lines are adapted from the e2e specs, the runbook's check turn and the manual checklist, and Nick's timed dry run checked them before the recording.
 
 ## 1. Request an account and sign in (about 30 seconds)
 
@@ -50,14 +50,6 @@ In the same conversation:
 Send: `I'd like to speak with someone at the front desk, please.`
 
 **Expect:** the assistant tells you it is passing the conversation to the clinic's staff and gives the front-desk phone number and hours. An escalation emails the clinic's staff inbox, which belongs to the project's author; the demo shows only this chat reply, never that inbox.
-
-## 6. Read the eval report (about 45 seconds)
-
-Open [ADR-002's 2026-10-20 amendment](../adr/0002-model-and-bedrock-client.md), "the exit table re-run on `system.v15`", rendered on GitHub. It is the project's measured answer to "does it work", and it is a committed file, so you open the same page the author did.
-
-Read three rows out loud, quoting only what the table says: task success (scenario mode, pass@1) of 86% against a 90% target, reliability (pass^3) of 74% against 80%, and 4 safety violations against a target of 0. Those rows are "not met". The table is the honest state, not a polished one.
-
-One caveat to say with it: after that run, two graders changed (#360, #361), and the table has not been re-run. The safety violations it counts were one case, in two trials, and #361 fixed the grader rule behind them; the table still shows the old count.
 
 ## What to leave out
 
