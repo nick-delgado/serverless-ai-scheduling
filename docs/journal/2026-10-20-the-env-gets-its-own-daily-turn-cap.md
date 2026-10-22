@@ -41,5 +41,5 @@ Decisions Nick settled on #356 (r1/Q-1, Q-2, Q-3, Q-7, A-1 to A-8) are on the is
 ## What's next
 
 - The spend backstop (#356's second PR): a demo-only budget action, with its own amendment to ADR-009. **Later (2026-10-20):** it shipped for Transcribe only, with no Bedrock backstop; see [the spend backstop covers voice, not Bedrock](2026-10-20-the-spend-backstop-covers-voice-not-bedrock.md).
-- #44 adds the README's contact line the env message points to. Until then the README has none, which is fine while Nick hands out access himself.
+- #44 adds the README's contact line the env message points to. Until then the README has none, which is fine while Nick hands out access himself. **Later (2026-10-22):** the line is there (PR #368), and [reviewer access](../demo/reviewer-access.md) tells a reviewer what to do when the cap message appears.
 - Sharing the conflict-retry helpers between the tools repositories and this store: to file.
