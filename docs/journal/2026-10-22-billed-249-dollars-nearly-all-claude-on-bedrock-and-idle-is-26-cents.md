@@ -38,12 +38,12 @@ Billed and estimated figures stay in their own columns. Only the residual, build
 | Bucket | Billed | List-price estimate | How it was found |
 |---|---|---|---|
 | Idle | $0.26 | | Every service except Bedrock (and the two per-model Claude names) and Transcribe; no tax was charged on any of them |
-| Eval | | **at least $115.11** | The sum of recorded harness costs in the ledger below (agent, simulator and judge together), at the list prices in `packages/agent/src/profiles.ts` (`PRICES_AS_OF = "2026-09-29"`) |
-| Build | | **at most $113.11** | Inferred residual: billed usage $228.22 minus the eval estimate $115.11. Covers dev and demo chat, the E2E runs, voice, and every eval run nobody recorded, so it is an upper bound |
+| Eval | | **at least $115.87** | The sum of recorded harness costs in the ledger below (agent, simulator and judge together), at the list prices in `packages/agent/src/profiles.ts` (`PRICES_AS_OF = "2026-09-29"`) |
+| Build | | **at most $112.35** | Inferred residual: billed usage $228.22 minus the eval estimate $115.87. Covers dev and demo chat, the E2E runs, voice, and every eval run nobody recorded, so it is an upper bound |
 | Usage (build + eval) | $228.22 | | Billed Bedrock + Transcribe |
 | Tax on usage | $21.12 | | Belongs with usage (build and eval), as its own line: Nick's Taxes-by-service table on the issue gives it per service, not per purpose, so we don't split it between build and eval |
 
-Eval is a minimum for three reasons, all of them runs whose cost nobody wrote down: local results before 2026-10-06's out-of-checkout copy (`0ff92ab`), the CI `Eval gate` (223 runs of `evals.yml` as of 2026-10-22, from `gh run list --workflow evals.yml`, many of which pass without calling Bedrock; the ledger holds the cost of five of them, the two on 2026-10-09 and the three on 2026-10-11, and the later gate runs' entries name the result but not the cost), and runs a task worker made without noting the cost. Build is therefore a maximum by the same amount. The ledger doesn't hit the "estimate exceeds the bill" edge: the estimate is 50% of billed usage.
+Eval is a minimum for three reasons, all of them runs whose cost nobody wrote down: local results before 2026-10-06's out-of-checkout copy (`0ff92ab`), the CI `Eval gate` (223 runs of `evals.yml` as of 2026-10-22, from `gh run list --workflow evals.yml`, many of which pass without calling Bedrock; the ledger holds the cost of five of them, the two on 2026-10-09 and the three on 2026-10-11, and the later gate runs' entries name the result but not the cost), and runs a task worker made without noting the cost. Build is therefore a maximum by the same amount. The ledger doesn't hit the "estimate exceeds the bill" edge: the estimate is 51% of billed usage.
 
 ### The recorded eval ledger
 
@@ -69,8 +69,8 @@ Each figure is what the entry or issue comment named, quoted, not re-measured.
 | 2026-10-09 | The `Eval gate`'s seed smoke runs (0.0566 + 0.3169 + 0.0430 judge) | 0.417 | [entry](2026-10-09-the-eval-gate-and-an-estimate-that-was-7x-high.md) |
 | 2026-10-09 | `Eval gate` run 37930953931 (0.0405 + 0.3208 + 0.0417 judge) | 0.4030 | [entry](2026-10-09-the-eval-gate-and-an-estimate-that-was-7x-high.md), [the run](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/37930953931) |
 | 2026-10-09 | `Eval gate` run 37935466134 (0.0574 + 0.3511 + 0.0435 judge) | 0.4520 | [entry](2026-10-09-the-eval-gate-and-an-estimate-that-was-7x-high.md), [the run](https://github.com/nick-delgado/serverless-ai-scheduling/actions/runs/37935466134) |
-| 2026-10-10 to 11 | Ask who is speaking before acting: nine runs, from 0.0014 to 0.0719 | 0.3065 | [entry](2026-10-10-ask-who-is-speaking-before-acting.md) |
-| 2026-10-11 | Plain text for a plain-text bubble: four local runs (0.0369, 0.0417, 0.3103 + 0.0391 judge), and three `Eval gate` runs (0.4394, 0.4428, 0.3772) | 1.6874 | [entry](2026-10-11-plain-text-for-a-plain-text-bubble.md) |
+| 2026-10-10 to 11 | Ask who is speaking before acting: six runs, from 0.0014 to 0.0719 | 0.3065 | [entry](2026-10-10-ask-who-is-speaking-before-acting.md) |
+| 2026-10-11 | Plain text for a plain-text bubble: three local runs (0.0369, 0.0417, 0.3103 + 0.0391 judge), and three `Eval gate` runs (0.4394, 0.4428, 0.3772) | 1.6874 | [entry](2026-10-11-plain-text-for-a-plain-text-bubble.md) |
 | 2026-10-11 to 12 | **The M3 matrix**, 14 cells, k=3, both modes | 57.61 | [entry](2026-10-13-what-the-matrix-chose.md), [#37](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37) |
 | 2026-10-15 | Five options grouped by day: `main` 0.56, the branch 0.96 | 1.52 | [entry](2026-10-15-five-options-grouped-by-day.md) |
 | 2026-10-16 | A format miss is not a leak | 0.0784 | [entry](2026-10-16-a-format-miss-is-not-a-leak.md) |
@@ -80,6 +80,7 @@ Each figure is what the entry or issue comment named, quoted, not re-measured.
 | 2026-10-16 | The lead-in says that day | 0.2765 | [entry](2026-10-16-the-lead-in-says-that-day.md) |
 | 2026-10-17 | Options go inside the one question, two runs | 1.1739 | [entry](2026-10-17-options-go-inside-the-one-question.md) |
 | 2026-10-17 | Every undated time, two runs (0.5349 + 0.5215) | 1.0564 | [entry](2026-10-17-every-undated-time-still-left-out-et.md) |
+| 2026-10-17 | The `system.v9` smoke re-baseline at k=1: L1 0.0975, scenario 0.6036 + 0.0577 judge | 0.7588 | [entry](2026-10-17-the-time-check-reads-every-clock-time.md) |
 | 2026-10-18 | Several-day offers name no time: run 1 (2.14 + 0.13 judge) and run 2 (2.25 + 0.15 judge) | 4.67 | [entry](2026-10-18-several-day-offers-name-no-time.md) |
 | 2026-10-18 | Undated times now carry ET: runs 2 (1.85) and 4 (2.41) and a one-trial check (about 0.2); run 1 was lost and its spend is unrecorded | 4.46 | [entry](2026-10-18-undated-times-now-carry-et-the-weekday-is-what-is-left.md) |
 | 2026-10-18 | One time over several days (agent 1.91, judge 0.15) | 2.06 | [entry](2026-10-18-one-time-over-several-days-is-searched-per-weekday.md) |
@@ -88,9 +89,9 @@ Each figure is what the entry or issue comment named, quoted, not re-measured.
 | 2026-10-19 | Seven suggested cases, one L1 run | 0.06 | [entry](2026-10-19-seven-suggested-cases-and-the-checks-l1-cannot-make.md) |
 | 2026-10-19 to 20 | The patient's time of day stays: five L1 runs (0.0505, 0.0855, 0.0799, 0.0851, 0.0800); the first draft's $0.0706 is an estimate and is left out | 0.3810 | [entry](2026-10-19-the-patients-time-of-day-stays-until-they-change-it.md) |
 | 2026-10-20 | The M3 exit re-run: scenario 10.3084, L1 1.5067, two stopped scenario attempts 2.85 and 2.05 (their judge share unrecorded) | 16.72 | [entry](2026-10-20-the-exit-rerun-on-system-v15-misses-three-of-six-targets.md), [#345](https://github.com/nick-delgado/serverless-ai-scheduling/issues/345) |
-| | **Recorded total** (37 rows) | **115.11** | |
+| | **Recorded total** (38 rows) | **115.87** | |
 
-Recorded build-side spend that sits inside the residual, not subtracted from it: #37's two deployed NFR-001 measurements $0.86 ([#37](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37), "Total live spend on #37 so far is $58.47", which is the matrix's $57.61 plus these), the refusal-fallback spike $0.047 ([the matrix entry](2026-10-13-what-the-matrix-chose.md)), the E2E suite's full run $0.1220 ([entry](2026-10-13-the-e2e-suite-reads-the-stream-not-the-reply.md)), nine deployed chat turns about $0.13 ([entry](2026-10-10-the-deployed-chat-runs-the-real-prompt.md)) and the S-1c model spike about $0.16 ([entry](2026-09-29-one-transport-many-models.md)). That is $1.32; the remaining $111.79 of the residual has no record.
+Recorded build-side spend that sits inside the residual, not subtracted from it: #37's two deployed NFR-001 measurements $0.86 ([#37](https://github.com/nick-delgado/serverless-ai-scheduling/issues/37), "Total live spend on #37 so far is $58.47", which is the matrix's $57.61 plus these), the refusal-fallback spike $0.047 ([the matrix entry](2026-10-13-what-the-matrix-chose.md)), the E2E suite's full run $0.1220 ([entry](2026-10-13-the-e2e-suite-reads-the-stream-not-the-reply.md)), nine deployed chat turns about $0.13 ([entry](2026-10-10-the-deployed-chat-runs-the-real-prompt.md)) and the S-1c model spike about $0.16 ([entry](2026-09-29-one-transport-many-models.md)). That is $1.32; the remaining $111.03 of the residual has no record.
 
 ### Idle against NFR-003
 
@@ -111,7 +112,7 @@ The settled decisions are on #45 (r1/Q-1 to Q-6, all recommendations accepted). 
 
 - **Tax goes with usage, as its own line, not split between build and eval.** Nick's Bills, Taxes by service table ([#45 comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45#issuecomment-6341441996)) shows the $21.12 is all tax on the four usage services (Sonnet 4.6 $17.88, Haiku 4.5 $2.17, Bedrock $1.03, Transcribe $0.04) and none on any other, so idle carries no tax and stays $0.26. The alternative, splitting it pro rata between build and eval, would need a build/eval split of billed usage, and we only have the eval estimate and a residual, so the split would rest on an estimate; we kept the usage-tax line beside both.
 - **October to the 22nd is the reported idle month, and September is a footnote (the owner's decision on this PR's review, SPEC-2 (b)).** Q-3 (a) names the latest full calendar month, and the project has none: September is four days at $0.00. The alternative, reporting September as the nominal month with October beside it, would have attached the envs and the build-traffic caveat Q-3 (a) asks for to a month they don't describe. The alternative of waiting for November's full month would have delayed this entry by weeks (r1/Q-3's rejected (c)).
-- **The $115.11 total counts each run once.** The first full scenario run appears in two entries with the same figures, and is in the ledger once. Where an entry gives an approximation ("2.7x"), the row says "about" and shows its basis. The alternative, leaving unreconstructable rows out, would have understated eval further.
+- **The $115.87 total counts each run once.** The first full scenario run appears in two entries with the same figures, and is in the ledger once. Where an entry gives an approximation ("2.7x"), the row says "about" and shows its basis. The alternative, leaving unreconstructable rows out, would have understated eval further.
 - **Ephemeral envs are named, not priced.** The export has no env dimension; there are no cost-allocation tags on `sched-*` stacks, and changing that is a non-goal of #45. The alternative, estimating each env's idle share from its lifetime, would put a made-up number beside the billed ones, and the DynamoDB row, 88% of idle, can't be split by env at all.
 
 ## What surprised us
@@ -169,8 +170,8 @@ Engineering, cheaper, safer or more measurable:
 ## Evidence
 
 - Billed figures: [#45 comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45#issuecomment-6341441996), Nick's table from Cost Explorer's daily report, 2026-09-27 to 2026-10-22 (the 22nd partial), retyped and rounded to cents. The agent derived the subtotals; arithmetic: usage 193.28 + 23.40 + 11.15 + 0.38 = 228.22 (from unrounded rows, 228.217); idle 0.23 + 0.02 + 0.01 = 0.26 (0.2584); with tax 228.4755 + 21.12 = 249.5955; the tax by service is Nick's table on the same comment.
-- Eval ledger: each row's linked entry or comment; sum 115.11 over 37 rows, from the rows as quoted (rows that name several runs are the sum of those figures). Sources that name a cost: the journal entries linked in the ledger and, for the judge calibration, `6ee1591`, `6fc8c2a` and `ef90f9f`; the commit messages that record a cost (`e49d9e9`, the post-fix L1 run's $0.38, `6ee1591`) repeat figures the entries already give.
-- Residual: 228.217 - 115.11 = 113.11. Build recorded inside it: 0.86 + 0.047 + 0.1220 + 0.13 + 0.16 = 1.32, leaving 111.79 with no record.
+- Eval ledger: each row's linked entry or comment; sum 115.87 over 38 rows, from the rows as quoted (rows that name several runs are the sum of those figures). Sources that name a cost: the journal entries linked in the ledger and, for the judge calibration, `6ee1591`, `6fc8c2a` and `ef90f9f`; the commit messages that record a cost (`e49d9e9`, the post-fix L1 run's $0.38, `6ee1591`) repeat figures the entries already give.
+- Residual: 228.22 - 115.87 = 112.35. Build recorded inside it: 0.86 + 0.047 + 0.1220 + 0.13 + 0.16 = 1.32, leaving 111.03 with no record.
 - Prices: `packages/agent/src/profiles.ts`, `PRICES_AS_OF = "2026-09-29"`; the harness figures are list-price estimates, not bills.
 - Count of `evals.yml` workflow runs: `gh run list --workflow evals.yml --limit 400 --json conclusion,createdAt`, 223 on 2026-10-22.
 - No credit rows in the export; no account ID, screenshot or export file in the repo.
