@@ -136,6 +136,10 @@ describe("the request page", () => {
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
     await screen.findByRole("button", { name: "Copy username" });
+    for (const svg of document.querySelectorAll(".access__copy svg")) {
+      expect(svg).toHaveAttribute("aria-hidden", "true");
+      expect(svg).toHaveAttribute("focusable", "false");
+    }
     expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
       "Copy username",
       "Copy password",
