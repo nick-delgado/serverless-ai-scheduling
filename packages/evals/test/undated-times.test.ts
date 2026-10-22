@@ -1367,6 +1367,7 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
         "The latest possible slot is 4:30 PM ET, since visits are 30 minutes and the clinic closes at 5 PM.",
       );
       await passes("The clinic closes at 5:00 PM ET.");
+      await passes("Closes at 5:00 PM ET.");
       await passes("The clinic opens at 8:00 AM ET.");
     });
 
@@ -1394,6 +1395,7 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
       ["a provider's 4:00 PM is not the last start", "Dr. Lee's latest slot is 4:00 PM ET"],
       ["the phrase after the time isn't covered", "4:30 PM ET is the latest slot"],
       ["whole words only", "The latest slots end at 4:30 PM ET"],
+      ["whole words only, before the phrase", "The prelatest slot is 4:30 PM ET"],
       ["a phrase outside the list", "The final slot is 4:30 PM ET"],
       ["an hour that isn't a bound", "The clinic opens at 9:00 AM ET"],
       ["a bound hour with no lead phrase", "Dr. Lee has 5:00 PM ET"],
@@ -1450,9 +1452,25 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
       "The only option would be a weekday appointment, Monday through Friday, between 8:00 AM and 5:00 PM ET.";
 
     it("passes", () => passes(SENTENCE));
-    it("title case passes", () => passes("Monday through Friday, Between 8:00 AM and 5:00 PM ET."));
+    it("title case passes, at the start of the text and after a tab", async () => {
+      await passes("Monday through Friday, Between 8:00 AM and 5:00 PM ET.");
+      await passes("Between 8:00 AM and 5:00 PM ET, Monday through Friday.");
+      await passes("Monday through Friday, between\t8:00 AM and 5:00 PM ET.");
+    });
 
     it.each([
+      [
+        "a time that isn't right after 'between'",
+        "Monday through Friday, between 7:00 AM ET and 8:00 AM and 5:00 PM ET.",
+        "8:00 AM",
+        "Monday through Friday, between 7:00 AM ET and 8:00 AM and 5:00 PM ET.",
+      ],
+      [
+        "more than 'and' in the gap",
+        "Monday through Friday, between 8:00 AM and then 5:00 PM ET.",
+        "8:00 AM",
+        "Monday through Friday, between 8:00 AM and then 5:00 PM ET.",
+      ],
       [
         "no between, a list",
         "On Monday, 9:30 AM and 10:00 AM ET are open.",

@@ -672,12 +672,12 @@ function hoursRemark(text: string, t: UnclaimedTime): boolean {
  */
 export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
   const end = t.index + t.raw.length;
-  const gap = t.next === undefined ? "" : text.slice(end, t.next.index);
-  const rangeEnd =
-    t.next !== undefined &&
-    (RANGE_GAP.test(gap) || (BETWEEN_BEFORE.test(text.slice(0, t.index)) && BETWEEN_GAP.test(gap)))
-      ? t.next
-      : undefined;
+  /** Whether the next clock time `n` ends a range this time starts (`RANGE_GAP`, or "between" and "and"). */
+  const endsRange = (n: WindowedTime): boolean => {
+    const gap = text.slice(end, n.index);
+    return RANGE_GAP.test(gap) || (BETWEEN_BEFORE.test(text.slice(0, t.index)) && BETWEEN_GAP.test(gap));
+  };
+  const rangeEnd = t.next !== undefined && endsRange(t.next) ? t.next : undefined;
   if (!zoneAfter(text, t, t.limit) && (rangeEnd === undefined || !zoneAfter(text, rangeEnd, rangeEnd.limit)))
     return "ET";
   const bound = BOUND_BEFORE.test(text.slice(0, t.index)) || BOUND_AFTER.test(text.slice(end));
