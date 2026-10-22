@@ -178,5 +178,5 @@ Engineering, cheaper, safer or more measurable:
 
 ## What's next
 
-- #43 turns this entry and the exit table into the README story; Chapter 6 links here.
+- #43 turns this entry and the exit table into the README story; Chapter 6 links here. **Later (2026-10-22):** done; chapter 6 tells it and links here, see [the README story's entry](2026-10-22-the-readme-tells-21-beats-and-quotes-the-v15-exit-table.md).
 - Re-measure idle in a month with no development traffic, when `demo` is the only env standing.

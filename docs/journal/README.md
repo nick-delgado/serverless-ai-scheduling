@@ -141,3 +141,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-22 | [The project has billed $249.60 as of 2026-10-22, nearly all of it Claude on Bedrock, and idle runs at $0.26 so far](2026-10-22-billed-249-dollars-nearly-all-claude-on-bedrock-and-idle-is-26-cents.md) | 6. What I'd do next |
 | 2026-10-22 | [The demo script and the access doc promise no credential and no address](2026-10-22-the-demo-script-and-access-doc-promise-no-credential-and-no-url.md) | 6. What I'd do next |
 | 2026-10-22 | [The demo recording is an unlisted YouTube video and the script has five beats](2026-10-22-the-demo-recording-is-on-youtube-and-the-script-has-five-beats.md) | 6. What I'd do next |
+| 2026-10-22 | [The README tells chapters 3 to 6 in 21 beats, quotes the v15 exit table in six rows, and carries no matrix table](2026-10-22-the-readme-tells-21-beats-and-quotes-the-v15-exit-table.md) | 6. What I'd do next |
