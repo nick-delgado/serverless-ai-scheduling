@@ -57,7 +57,9 @@ export function slotRestatementProblem(
 /**
  * Confirmation before one write call (ADR-009 "confirmation before any write"): the patient's last
  * message before the call is an explicit yes, and the assistant message before that restates the target
- * slot's provider, weekday, date, and time (and, for a booking, the visit reason). A retry of the same
+ * slot's provider, weekday, date, and time. For a booking, a keyword of the visit reason is in the
+ * restatement or in the yes message itself: a reason the patient adds with the yes is their own word
+ * (ADR-008 amendment, 2026-10-22; only the yes is read, not earlier patient messages). A retry of the same
  * slot after a failed call inherits that call's confirmation (ADR-008 amendment, 2026-09-29).
  */
 export function confirmationProblem(
@@ -91,8 +93,8 @@ export function confirmationProblem(
   if (call.name === "book_appointment") {
     const reason = isRecord(call.input) ? call.input.reason : undefined;
     const words = typeof reason === "string" ? reasonKeywords(reason) : [];
-    if (words.length > 0 && !words.some((w) => includesCi(restatement.text, w)))
-      return `the restatement does not mention the reason ("${String(reason)}")`;
+    if (words.length > 0 && !words.some((w) => includesCi(restatement.text, w) || includesCi(yes.text, w)))
+      return `neither the restatement nor the yes mentions the reason ("${String(reason)}")`;
   }
   return undefined;
 }
