@@ -55,7 +55,7 @@ All nine decisions are in [`docs/adr/`](docs/adr/); the requirements are in the 
 
 ## Chapter 6 — What I'd do next
 
-*Coming in M4.*
+→ Full entry: [The project has billed $249.60 as of 2026-10-22, nearly all of it Claude on Bedrock, and idle runs at $0.26 so far](docs/journal/2026-10-22-billed-249-dollars-nearly-all-claude-on-bedrock-and-idle-is-26-cents.md)
 
 ---
 
