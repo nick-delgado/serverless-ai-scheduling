@@ -9,7 +9,7 @@ How to try the demo without asking anyone for a login. The deployed demo is a re
 3. Choose the one button. A short bot check runs first. If it passes, the page shows a username, a password and a made-up patient name, **once**, with a copy button beside the username and another beside the password. The page does not store the password: closing or reloading it loses it, and a reload shows the button again.
 4. Choose **Go to sign in**. It opens a plain sign-in page in a new tab, so the account page stays open for the second field. The account page does not sign you in.
 
-Then follow [script.md](script.md), a 3 to 5 minute walk through booking, voice, rescheduling, escalation and the eval report.
+Then follow [script.md](script.md), a 3 to 5 minute walk through booking, voice, rescheduling and escalation.
 
 ## If requests have run out
 

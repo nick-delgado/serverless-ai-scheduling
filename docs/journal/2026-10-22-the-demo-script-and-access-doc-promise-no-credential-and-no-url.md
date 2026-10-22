@@ -3,6 +3,7 @@
 **Chapter:** 6. What I'd do next
 **Milestone:** M4 (issue M4-02, first part)
 **Related:** #44, PR #374, #357, #368, ADR-009, PRD FR-001
+**Later (2026-10-22):** the script is five beats, not six (the eval-report beat was dropped), and the recording is an unlisted YouTube video, not a GitHub attachment; see [the closing part's entry](2026-10-22-the-demo-recording-is-on-youtube-and-the-script-has-five-beats.md).
 
 ## What happened
 
