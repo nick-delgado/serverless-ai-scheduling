@@ -10,6 +10,9 @@
  * - what counts as a time (r1/Q-4 (a)): "h:mm AM/PM" only.
  * The sentences of #326's and #332's runs are fixtures too (#337, A-3), and so are #339's two gate-run sentences (#340,
  * A-2), placed as they were in their trials.
+ * #360 (r1/Q-1 to Q-5): an hours remark (the last start of a visit after a latest-slot phrase, or an opening or
+ * closing hour after a clinic-hours lead) needs ET only; a one-date text's closing question needs ET only, its day
+ * line naming the day; "between 8:00 AM and 5:00 PM ET" is a range. #345's eight failing trials are fixtures, whole.
  * The 12 sentences of #293's hand count (results comment on #293, 2026-10-17) are fixtures, placed as they were in
  * the trial, and so are `system.v9`'s own compliant examples. Pairs and day-line times keep their rule (A-2):
  * `offer-format.test.ts`.
@@ -20,7 +23,14 @@ import { describe, expect, it } from "vitest";
 
 import { buildSystemPrompt } from "@sched/agent";
 
-import { BOUND_AFTER_TAILS, BOUND_WORDS, unclaimedTimeLacks, unclaimedTimes } from "../src/graders/text";
+import {
+  BOUND_AFTER_TAILS,
+  BOUND_WORDS,
+  headingListTimes,
+  slotMentions,
+  unclaimedTimeLacks,
+  unclaimedTimes,
+} from "../src/graders/text";
 import type { TranscriptEvent } from "../src";
 import { assistant, call, checked, graded, inTurn, patient } from "./helpers";
 
@@ -600,8 +610,8 @@ describe("#326's and #332's sentences, placed as they were in their trials (#337
       expect(await timesCheck([ASKS, assistant(line), ...after])).toMatchObject({ status: "pass" });
   });
 
-  it("a text with a day line keeps the full rule, even before a tool call", async () => {
-    const text = `Dr. Haddad has 10:00 AM ET open that week.\n\n${dayLines([["Monday", "October 19"]])}`;
+  it("a text with a day line keeps the full rule, even before a tool call (the line lacks the time: #360)", async () => {
+    const text = `Dr. Haddad has 10:00 AM ET open that week.\n\n${dayLines([["Monday", "October 19"]], { Monday: "11:00 AM ET" })}`;
     expect(await timesCheck([ASKS, assistant(text), HADDAD_10AM])).toMatchObject({
       status: "fail",
       detail: lacks("10:00 AM", WEEKDAY, "Dr. Haddad has 10:00 AM ET open that week."),
@@ -736,10 +746,12 @@ Thursday, October 29: none`;
     ]);
   });
 
-  it('#326 run 2: the "Other days that week" remark fails on a weekday after a one-day offer', async () => {
+  it('#326 run 2: the "Other days that week" remark fails on a weekday after a one-day offer, until #360 (r1/Q-3 (a)): the one day line names the day', async () => {
     const remark = "Other days that week may have 10:00 AM ET available too if you'd prefer a different day.";
     const text = `Dr. Haddad has 10:00 AM ET open that day:\n\nMonday, October 19, 2026:\n- 10:00 AM ET\n\n${remark} Would Monday at 10:00 AM ET work, or would you like me to check later in the week?`;
-    expect(await offerCheck(text)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
+    expect(await offerCheck(text)).toEqual(["pass", undefined]);
+    const second = `${text}\n\nFriday, October 23:`;
+    expect(await offerCheck(second)).toEqual(["fail", lacks("10:00 AM", WEEKDAY, remark)]);
   });
 
   it("#332 run 2: the 12:00 PM aside fails on ET, and 1:00 PM in its sentence is a bound that passes", async () => {
@@ -922,8 +934,8 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(`${SENTENCE}\n\n${dayLines(WED_THU_FRI)}`)).toEqual(failsOn(SENTENCE));
     });
 
-    it("one date, or no day line, fails", async () => {
-      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(failsOn(SENTENCE));
+    it("one date passes since #360 (r1/Q-3 (a): its day line names the day), and no day line fails", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(PASSES);
       expect(await textCheck(SENTENCE)).toEqual(failsOn(SENTENCE));
     });
 
@@ -935,7 +947,9 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
     it("two headings for one date count once, and both must list the time", async () => {
       const again = (time: string) => `Wednesday, October 14, 2026:\n- ${time}`;
       const oneDateTwice = `${dayLines(TWO.slice(0, 1))}\n\n${again("10:00 AM ET")}`;
-      expect(await textCheck(`${SENTENCE}\n\n${oneDateTwice}`)).toEqual(failsOn(SENTENCE));
+      expect(await textCheck(`${SENTENCE}\n\n${oneDateTwice}`)).toEqual(PASSES);
+      const oneLacks = `${dayLines(TWO.slice(0, 1))}\n\n${again("11:00 AM ET")}`;
+      expect(await textCheck(`${SENTENCE}\n\n${oneLacks}`)).toEqual(failsOn(SENTENCE));
       const bothListed = `${dayLines(TWO)}\n\n${again("10:00 AM ET")}`;
       expect(await textCheck(`${SENTENCE}\n\n${bothListed}`)).toEqual(PASSES);
       const secondLacks = `${dayLines(TWO)}\n\n${again("11:00 AM ET")}`;
@@ -990,8 +1004,8 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
       expect(await textCheck(`${SENTENCE}\n\n${dayLines(days)}`)).toEqual(PASSES);
     });
 
-    it("one date fails, and so does a day line without the time", async () => {
-      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(failsOn(SENTENCE));
+    it("one date passes since #360 (r1/Q-3 (a)), and a day line without the time fails", async () => {
+      expect(await textCheck(`${SENTENCE}\n\n${dayLines(TWO.slice(0, 1))}`)).toEqual(PASSES);
       const text = `${SENTENCE}\n\n${dayLines(WED_THU_FRI, { Friday: "11:00 AM ET" })}`;
       expect(await textCheck(text)).toEqual(failsOn(SENTENCE));
     });
@@ -1012,6 +1026,485 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
     it('"those days" alone still needs a weekday, even with two day lines', async () => {
       const sentence = "Dr. Haddad has 10:00 AM ET open those days:";
       expect(await textCheck(`${sentence}\n\n${dayLines(TWO)}`)).toEqual(failsOn(sentence));
+    });
+  });
+});
+
+describe('#360: hours remarks, one-day closing questions and "between … and" ranges, with #345\'s eight failing trials whole', () => {
+  const say = (turn: number, text: string): TranscriptEvent => ({ ...assistant(text), turn });
+  const tool = (turn: number, name: string): TranscriptEvent => ({ ...call(name, {}), turn });
+  /** Every sentence of `text` this check fails (`unclaimedTimes`), not only the first the verdict names. */
+  const failingSentences = (text: string, preTool = false): string[] => {
+    const etOnly = preTool && headingListTimes(text).length === 0;
+    return unclaimedTimes(text).flatMap((u) => {
+      const what = unclaimedTimeLacks(text, u, etOnly);
+      return what === undefined ? [] : [lacks(u.raw, what, u.sentence)];
+    });
+  };
+  const passes = async (text: string) => expect(await onText(text)).toMatchObject({ status: "pass" });
+  const failsWith = async (text: string, detail: string) =>
+    expect(await onText(text)).toMatchObject({ status: "fail", detail });
+
+  /** The eight failing trials of #345's exit run (the patient's lines left out: this check reads only the assistant's). */
+  const TRIALS: [scenarioId: string, trial: number, events: TranscriptEvent[]][] = [
+    [
+      "availability-weekend-after-hours",
+      1,
+      [
+        say(
+          1,
+          "Unfortunately, Cedar Ridge Health is only open Monday through Friday, 8:00 AM to 5:00 PM ET. There are no weekend or evening appointments available.\n\nIf you can find a window during those hours, I'm happy to look for the earliest openings that fit your schedule. Would a morning or afternoon slot work better for you, James?",
+        ),
+        say(2, "Let me check afternoon availability in family medicine for this week and next week."),
+        tool(2, "check_availability"),
+        say(2, "Let me look for the later afternoon slots specifically."),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "The latest slot each day is 4:30 PM ET, since the clinic closes at 5:00 PM and visits are 30 minutes. Here are the available 4:30 PM ET slots with Dr. Elena Alvarez in family medicine:\n\nThursday, October 8:\n- 4:30 PM ET\n\nFriday, October 9:\n- 4:30 PM ET\n\nMore 4:30 PM ET slots are available on later dates if these don't work. Would any of these work for you, James, or would you like to see more dates?",
+        ),
+        say(
+          3,
+          "No problem, James! Whenever you're ready to book, just reach out and I'll find the best available time for you.",
+        ),
+      ],
+    ],
+    [
+      "availability-weekend-after-hours",
+      2,
+      [
+        say(
+          1,
+          "Unfortunately, Cedar Ridge Health is only open Monday through Friday, 8:00 AM to 5:00 PM ET. There are no evening or weekend appointments available.\n\nThat said, I'm happy to find you the earliest available family medicine slot during those hours. Would any particular day or time of day work best for you, James?",
+        ),
+        say(2, "Let me check for late-afternoon family medicine openings this week and next."),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "The latest possible slot is 4:30 PM ET, since visits are 30 minutes and the clinic closes at 5 PM. Here's what's available with Dr. Elena Alvarez:\n\nThursday, October 8:\n- 4:00 PM ET\n- 4:30 PM ET\n\nFriday, October 9:\n- 4:00 PM ET\n- 4:30 PM ET\n\nMonday, October 12:\n- 4:00 PM ET\n\nMore times are available on later days if you'd like to see others. What's the reason for your visit, James?",
+        ),
+        say(
+          3,
+          "Of course, take your time! When you're ready to book, just come back and I can check availability for whatever day works best for you.",
+        ),
+      ],
+    ],
+    [
+      "availability-weekend-after-hours",
+      3,
+      [
+        say(
+          1,
+          "Unfortunately, Cedar Ridge Health is only open Monday through Friday, 8:00 AM to 5:00 PM ET. There are no evening or weekend hours available.\n\nThat said, I'd be happy to help you find the earliest available family medicine slot during the week. Would you like me to check what's open, and is there a particular time of day that works best for you — earlier in the morning or closer to the end of the day?",
+        ),
+        say(2, "Let me check afternoon availability for family medicine over the next two weeks."),
+        tool(2, "check_availability"),
+        say(2, "Let me look for the latest times specifically, closer to end of day."),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "The latest available slot on any weekday is 4:30 PM ET — since the clinic closes at 5:00 PM and visits are 30 minutes, that's as late as it goes. Dr. Elena Alvarez has 4:30 PM ET open on multiple days:\n\nThursday, October 8:\n- 4:30 PM ET\n\nFriday, October 9:\n- 4:30 PM ET\n\nMonday, October 12:\n- 4:30 PM ET\n\nTuesday, October 13:\n- 4:30 PM ET\n\nWednesday, October 14:\n- 4:30 PM ET\n\nMore times are available on later days if you'd like. Would any of these work for you, James?",
+        ),
+        say(
+          3,
+          "Of course, James! Whenever you're ready to book, just reach out and I'll find you a time that works.",
+        ),
+      ],
+    ],
+    [
+      "book-multi-constraint",
+      2,
+      [
+        say(1, "Let me look up Dr. Haddad for you."),
+        tool(1, "find_providers"),
+        say(1, "Let me check Dr. Haddad's openings next week."),
+        tool(1, "check_availability"),
+        tool(1, "check_availability"),
+        tool(1, "check_availability"),
+        tool(1, "check_availability"),
+        tool(1, "check_availability"),
+        say(
+          1,
+          "Dr. Omar Haddad has plenty of openings next week. Here are some options:\n\nMonday, October 12:\n- 8:00 AM ET\n\nTuesday, October 13:\n- 8:00 AM ET\n\nWednesday, October 14:\n- 8:00 AM ET\n\nThursday, October 15:\n- 8:00 AM ET\n\nFriday, October 16:\n- 8:00 AM ET\n\nMore times are available on these days if you'd like to see others. What day and time works best for you, Walter, and what will the visit be for?",
+        ),
+        say(2, "Let me check Dr. Haddad's availability after 3:00 PM ET that week."),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "No problem! Dr. Haddad has openings after 3:00 PM ET every day that week. Here's one from each day:\n\nMonday, October 19:\n- 3:00 PM ET\n\nTuesday, October 20:\n- 3:00 PM ET\n\nWednesday, October 21:\n- 3:00 PM ET\n\nThursday, October 22:\n- 3:00 PM ET\n\nFriday, October 23:\n- 3:00 PM ET\n\nMore times are available on these days (3:30, 4:00, and 4:30 PM ET each day) if you'd like. Which day works for you, and what will the visit be for?",
+        ),
+        say(
+          3,
+          "That's helpful to know. Which day would you prefer — Monday October 19, Tuesday October 20, Thursday October 22, or Friday October 23?",
+        ),
+        say(
+          4,
+          "That slot is open. Here are the details before I book it:\n\n- Provider: Dr. Omar Haddad\n- Date: Thursday, October 22, 2026 at 3:00 PM ET\n- Location: 400 Cedar Ridge Pkwy\n- Reason: blood pressure medication check\n\nShall I go ahead and book this?",
+        ),
+        tool(5, "book_appointment"),
+        say(
+          5,
+          "You're all set, Walter! Your appointment with Dr. Omar Haddad is confirmed for Thursday, October 22, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy. Is there anything else I can help you with?",
+        ),
+      ],
+    ],
+    [
+      "book-provider-not-accepting",
+      3,
+      [
+        say(1, "Let me look up Dr. Brooks for you."),
+        tool(1, "find_providers"),
+        say(
+          1,
+          "I found Dr. Marcus Brooks in family medicine. When would you like to come in, James — this week, next week, or a specific day?",
+        ),
+        say(2, "Let me check Dr. Brooks's afternoon openings this week."),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "Dr. Marcus Brooks has these afternoon openings this week:\n\nMonday, October 5:\n- 12:00 PM ET\n\nTuesday, October 6:\n- 12:00 PM ET\n\nWednesday, October 7:\n- 12:00 PM ET\n\nThursday, October 8:\n- 12:00 PM ET\n\nFriday, October 9:\n- 12:00 PM ET\n\nMore times are available on these days, and into next week as well. Which day works best for you, or would you like to see other times?",
+        ),
+        say(3, "Let me check from 2:00 PM ET each day this week."),
+        tool(3, "check_availability"),
+        tool(3, "check_availability"),
+        tool(3, "check_availability"),
+        tool(3, "check_availability"),
+        tool(3, "check_availability"),
+        say(
+          3,
+          "Dr. Marcus Brooks has these openings after 2:00 PM ET:\n\nMonday, October 5:\n- 2:00 PM ET\n\nTuesday, October 6:\n- 2:00 PM ET\n\nWednesday, October 7:\n- 2:00 PM ET\n\nThursday, October 8:\n- 2:00 PM ET\n\nFriday, October 9:\n- 2:00 PM ET\n\nMore times are available on these days, including 3:00 PM ET and later, if you'd like to see others. Which day works for you?",
+        ),
+        say(
+          4,
+          "Just to confirm before I book: this will be an appointment with Dr. Marcus Brooks on Thursday, October 8, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy, for a check-up. Does that all look right?",
+        ),
+        tool(5, "book_appointment"),
+        say(
+          5,
+          "Unfortunately, Dr. Brooks isn't taking new patients at this time, so I'm unable to book with him. Let me find other family medicine providers who are available Thursday afternoon.",
+        ),
+        tool(5, "check_availability"),
+        say(
+          5,
+          "I'm sorry about that, James. Dr. Elena Alvarez is another family medicine provider who has openings that afternoon:\n\nThursday, October 8:\n- 2:00 PM ET\n- 2:30 PM ET\n- 3:00 PM ET\n- 3:30 PM ET\n- 4:00 PM ET\n\nWould 3:00 PM ET with Dr. Alvarez work, or would you prefer a different time?",
+        ),
+        say(
+          6,
+          "To confirm: I'll book an appointment with Dr. Elena Alvarez on Thursday, October 8, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy, for a check-up. Shall I go ahead?",
+        ),
+        tool(7, "book_appointment"),
+        say(
+          7,
+          "You're all set, James! Your appointment with Dr. Elena Alvarez is confirmed for Thursday, October 8, 2026 at 3:00 PM ET at 400 Cedar Ridge Pkwy. Is there anything else I can help you with?",
+        ),
+      ],
+    ],
+    [
+      "clarify-unsupported-specialty",
+      3,
+      [
+        say(
+          1,
+          "Cedar Ridge Health doesn't have orthopedic surgery as a specialty. Our available specialties are family medicine, pediatrics, dermatology, cardiology, and physical therapy.\n\nIf you'd like, I can help you book with one of those — for example, family medicine or physical therapy may be options worth considering for back pain. Would any of those work for you?",
+        ),
+        say(2, "Let me check afternoon availability for both specialties across this week."),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        tool(2, "check_availability"),
+        say(
+          2,
+          "There's good availability across both. Here are some options this week:\n\nMonday, October 5:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 12:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nTuesday, October 6:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 12:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nWednesday, October 7:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n\nMore times are available on these days and throughout next week as well. Would any of these work, or would you like to see other days or times?",
+        ),
+        say(
+          3,
+          "Good news — those times are already in the results I pulled. Here are openings at 1:00 PM ET or later this week:\n\nMonday, October 5:\n- 1:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 1:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nTuesday, October 6:\n- 1:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 1:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nWednesday, October 7:\n- 1:00 PM ET with Dr. Elena Alvarez (family medicine)\n\nLater afternoon times (including 2:00 PM ET) are also available on these days, and there are openings next week too. Does any of these work, or would you like to see other options?",
+        ),
+        say(4, "That slot is available. What's the reason for your visit?"),
+        say(
+          5,
+          "Just to confirm before I book: this will be an appointment with Dr. Elena Alvarez (family medicine) on Wednesday, October 7 at 2:00 PM ET at 400 Cedar Ridge Pkwy, for lower back pain. Shall I go ahead?",
+        ),
+        tool(6, "book_appointment"),
+        say(
+          6,
+          "You're all set, James! Your appointment with Dr. Elena Alvarez is confirmed for Wednesday, October 7, 2026 at 2:00 PM ET at 400 Cedar Ridge Pkwy, for lower back pain. Is there anything else I can help you with?",
+        ),
+      ],
+    ],
+    [
+      "escalate-frustration",
+      1,
+      [
+        say(
+          1,
+          "The clinic is open Monday through Friday only, so Saturday appointments aren't available. I'd be happy to find you a weekday opening with Dr. Haddad instead — do you have a preferred day or week in mind?",
+        ),
+        say(
+          2,
+          "I completely understand that Saturdays are most convenient for you, Walter. Unfortunately, the clinic is closed on weekends — there are no Saturday slots available for any provider. The only option would be a weekday appointment, Monday through Friday, between 8:00 AM and 5:00 PM ET.\n\nWould a weekday work for you, perhaps a day earlier in the week or later in the afternoon?",
+        ),
+        tool(3, "escalate_to_human"),
+        say(
+          3,
+          "I'm sorry for the frustration, Walter. I'll connect you with our front desk. Please call 1-800-555-0199 (Mon–Fri, 8 AM–5 PM ET). I've passed a summary of our conversation to them.",
+        ),
+      ],
+    ],
+    [
+      "reschedule-declined-at-confirmation",
+      3,
+      [
+        say(1, "Let me pull up your appointments right now."),
+        tool(1, "get_my_appointments"),
+        say(
+          1,
+          "I can see your Wednesday appointment with Dr. Anna Kowalski on October 7 at 4:00 PM ET for knee rehab. Let me check Thursday afternoon availability for physical therapy.",
+        ),
+        tool(1, "check_availability"),
+        say(
+          1,
+          "Dr. Kowalski has these openings on Thursday afternoon:\n\nThursday, October 8:\n- 12:00 PM ET\n- 12:30 PM ET\n- 1:00 PM ET\n- 1:30 PM ET\n- 2:00 PM ET\n\nMore times are available that afternoon if none of these work. Which one would you like, Daniel?",
+        ),
+        say(
+          2,
+          "No problem at all! Your Wednesday, October 7 appointment with Dr. Anna Kowalski at 4:00 PM ET stays as is. Let me know if there's anything else I can help you with.",
+        ),
+      ],
+    ],
+  ];
+  const trialEvents = (id: string, n: number): TranscriptEvent[] =>
+    TRIALS.find(([s, t]) => s === id && t === n)?.[2] ?? [];
+  const SLOT_HOURS = (tail: string) =>
+    `The latest slot each day is 4:30 PM ET, since the clinic closes at 5:00 PM${tail}`;
+
+  /** What each trial's texts get now: the verdict, and every sentence a text fails on, with the pattern it belongs to. */
+  const NOW: [
+    id: string,
+    trial: number,
+    status: "pass" | "fail",
+    detail: string | undefined,
+    failing: string[],
+  ][] = [
+    [
+      "availability-weekend-after-hours",
+      1,
+      "fail",
+      '"5:00 PM" lacks ET, in "The latest slot each day is 4:30 PM ET, since the clinic closes at 5:00 PM and visits are 30 minutes."',
+      [
+        '"5:00 PM" lacks ET, in "The latest slot each day is 4:30 PM ET, since the clinic closes at 5:00 PM and visits are 30 minutes."',
+        '"4:30 PM" lacks a weekday or "that day", in "Here are the available 4:30 PM ET slots with Dr. Elena Alvarez in family medicine:"',
+        '"4:30 PM" lacks a weekday or "that day", in "More 4:30 PM ET slots are available on later dates if these don\'t work."',
+      ],
+    ],
+    ["availability-weekend-after-hours", 2, "pass", undefined, []],
+    [
+      "availability-weekend-after-hours",
+      3,
+      "fail",
+      '"5:00 PM" lacks ET, in "The latest available slot on any weekday is 4:30 PM ET — since the clinic closes at 5:00 PM and visits are 30 minutes, that\'s as late as it goes."',
+      [
+        '"5:00 PM" lacks ET, in "The latest available slot on any weekday is 4:30 PM ET — since the clinic closes at 5:00 PM and visits are 30 minutes, that\'s as late as it goes."',
+        '"4:30 PM" lacks a weekday or "that day", in "Dr. Elena Alvarez has 4:30 PM ET open on multiple days:"',
+      ],
+    ],
+    [
+      "book-multi-constraint",
+      2,
+      "fail",
+      '"4:30 PM" lacks a weekday or "that day", in "More times are available on these days (3:30, 4:00, and 4:30 PM ET each day) if you\'d like."',
+      [
+        '"4:30 PM" lacks a weekday or "that day", in "More times are available on these days (3:30, 4:00, and 4:30 PM ET each day) if you\'d like."',
+      ],
+    ],
+    ["book-provider-not-accepting", 3, "pass", undefined, []],
+    [
+      "clarify-unsupported-specialty",
+      3,
+      "fail",
+      '"2:00 PM" lacks a weekday or "that day", in "Later afternoon times (including 2:00 PM ET) are also available on these days, and there are openings next week too."',
+      [
+        '"2:00 PM" lacks a weekday or "that day", in "Later afternoon times (including 2:00 PM ET) are also available on these days, and there are openings next week too."',
+      ],
+    ],
+    ["escalate-frustration", 1, "pass", undefined, []],
+    ["reschedule-declined-at-confirmation", 3, "fail", '"October 7 at 4:00 PM" lacks a weekday or ET', []],
+  ];
+
+  describe("each trial's verdict and failing sentences", () => {
+    it.each(NOW)("%s, trial %i: %s", async (id, trial, status, detail, failing) => {
+      const events = trialEvents(id, trial);
+      expect(await graded(id, events, "times_in_clinic_tz_with_weekday")).toMatchObject({
+        status,
+        ...(detail === undefined ? {} : { detail }),
+      });
+      const failed = events.flatMap((e, i) =>
+        e.kind === "assistant"
+          ? failingSentences(e.text, events[i + 1]?.kind === "tool_call" && events[i + 1]?.turn === e.turn)
+          : [],
+      );
+      expect(failed).toEqual(failing);
+    });
+  });
+
+  describe("an hours remark (r1/Q-1 (a)): the last start or an opening hour needs ET, not a weekday", () => {
+    it("the last start of a visit after a latest-slot phrase passes (the trial 2 sentence, and a closing hour with ET)", async () => {
+      await passes(
+        "The latest possible slot is 4:30 PM ET, since visits are 30 minutes and the clinic closes at 5 PM.",
+      );
+      await passes("The clinic closes at 5:00 PM ET.");
+      await passes("The clinic opens at 8:00 AM ET.");
+    });
+
+    it.each([
+      "latest slot",
+      "latest possible slot",
+      "latest available slot",
+      "latest appointment",
+      "last slot",
+      "last appointment",
+      "Latest Slot",
+    ])("the phrase %j passes", (phrase) => passes(`The ${phrase} is 4:30 PM ET.`));
+
+    it("without ET it fails on ET, under every phrase", () =>
+      failsWith(
+        "The latest slot each day is 4:30 PM.",
+        lacks("4:30 PM", "ET", "The latest slot each day is 4:30 PM."),
+      ));
+
+    it("a closing hour without ET fails on ET (what trials 1 and 3 of availability-weekend-after-hours fail on)", () =>
+      failsWith(SLOT_HOURS(" and visits."), lacks("5:00 PM", "ET", SLOT_HOURS(" and visits."))));
+
+    it.each([
+      ["a first slot is not the last start", "The earliest slot is 9:00 AM ET"],
+      ["a provider's 4:00 PM is not the last start", "Dr. Lee's latest slot is 4:00 PM ET"],
+      ["the phrase after the time isn't covered", "4:30 PM ET is the latest slot"],
+      ["whole words only", "The latest slots end at 4:30 PM ET"],
+      ["a phrase outside the list", "The final slot is 4:30 PM ET"],
+      ["an hour that isn't a bound", "The clinic opens at 9:00 AM ET"],
+      ["a bound hour with no lead phrase", "Dr. Lee has 5:00 PM ET"],
+    ])("%s: %s needs a weekday", (_why, sentence) =>
+      failsWith(`${sentence}.`, lacks(sentence.match(/\d+:\d+ [AP]M/)?.[0] ?? "", WEEKDAY, `${sentence}.`)),
+    );
+  });
+
+  it("a latest-slot phrase in an earlier sentence doesn't count: the time needs a weekday", () =>
+    failsWith(
+      "That is the latest slot. Dr. Lee has 4:30 PM ET.",
+      lacks("4:30 PM", WEEKDAY, "Dr. Lee has 4:30 PM ET."),
+    ));
+
+  describe("a one-day offer's closing question (r1/Q-3 (a)): the one day line names the day", () => {
+    /** book-provider-not-accepting trial 3's offer, whole, as recorded. */
+    const OFFER =
+      trialEvents("book-provider-not-accepting", 3).flatMap((e) =>
+        e.kind === "assistant" && e.text.includes("Would 3:00 PM ET with") ? [e.text] : [],
+      )[0] ?? "";
+    const QUESTION = "Would 3:00 PM ET with Dr. Alvarez work, or would you prefer a different time?";
+    const DAY_LINE =
+      "Thursday, October 8:\n- 2:00 PM ET\n- 2:30 PM ET\n- 3:00 PM ET\n- 3:30 PM ET\n- 4:00 PM ET";
+
+    it("the recorded text passes", () => passes(OFFER));
+
+    it("a lead-in over the same single day line passes too", () =>
+      passes(`Dr. Alvarez has 3:00 PM ET open:\n\n${DAY_LINE}`));
+
+    it("a second heading for the same date passes while it lists the time, and fails when it doesn't", async () => {
+      await passes(`${OFFER}\n\nThursday, October 8:\n- 3:00 PM ET`);
+      await failsWith(`${OFFER}\n\nThursday, October 8:\n- 2:00 PM ET`, lacks("3:00 PM", WEEKDAY, QUESTION));
+    });
+
+    const FIVE = QUESTION.replace("3:00", "5:00");
+    it.each([
+      ["a time the day line doesn't list", OFFER.replace(QUESTION, FIVE), "5:00 PM", FIVE],
+      ["a second date, listing times", `${OFFER}\n\nFriday, October 9:\n- 3:00 PM ET`, "3:00 PM", QUESTION],
+      ["a second date with no times", `${OFFER}\n\nFriday, October 9:`, "3:00 PM", QUESTION],
+      ["no day line", QUESTION, "3:00 PM", QUESTION],
+    ])("%s fails on the weekday", (_why, text, time, sentence) =>
+      failsWith(text, lacks(time, WEEKDAY, sentence)),
+    );
+
+    it("a closing question without ET fails on ET", () =>
+      failsWith(
+        OFFER.replace("Would 3:00 PM ET with", "Would 3:00 PM with"),
+        lacks("3:00 PM", "ET", QUESTION.replace("3:00 PM ET", "3:00 PM")),
+      ));
+  });
+
+  describe('"between … and" (r1/Q-4 (a)): the range start takes the end\'s ET', () => {
+    const SENTENCE =
+      "The only option would be a weekday appointment, Monday through Friday, between 8:00 AM and 5:00 PM ET.";
+
+    it("passes", () => passes(SENTENCE));
+    it("title case passes", () => passes("Monday through Friday, Between 8:00 AM and 5:00 PM ET."));
+
+    it.each([
+      [
+        "no between, a list",
+        "On Monday, 9:30 AM and 10:00 AM ET are open.",
+        "9:30 AM",
+        "On Monday, 9:30 AM and 10:00 AM ET are open.",
+      ],
+      [
+        "no ET on either end",
+        "Monday through Friday, between 8:00 AM and 5:00 PM.",
+        "8:00 AM",
+        "Monday through Friday, between 8:00 AM and 5:00 PM.",
+      ],
+      [
+        "a comma in the gap",
+        "Monday through Friday, between 8:00 AM, and 5:00 PM ET.",
+        "8:00 AM",
+        "Monday through Friday, between 8:00 AM, and 5:00 PM ET.",
+      ],
+      [
+        'more than "and" in the gap',
+        "Monday through Friday, between 8:00 AM or 5:00 PM ET.",
+        "8:00 AM",
+        "Monday through Friday, between 8:00 AM or 5:00 PM ET.",
+      ],
+      [
+        '"between" glued to the time\'s word',
+        "Monday through Friday, inbetween 8:00 AM and 5:00 PM ET.",
+        "8:00 AM",
+        "Monday through Friday, inbetween 8:00 AM and 5:00 PM ET.",
+      ],
+    ])("%s fails on ET", (_why, text, time, sentence) => failsWith(text, lacks(time, "ET", sentence)));
+
+    it('"between 8:00 AM and noon" has no range end, so it needs a weekday', () =>
+      failsWith("Between 8:00 AM and noon ET.", lacks("8:00 AM", WEEKDAY, "Between 8:00 AM and noon ET.")));
+
+    it('"Monday, November 2 at 9:00 AM and 11:30 AM" still yields two slots (RANGE_END is unchanged)', () => {
+      expect(slotMentions("Monday, November 2 at 9:00 AM and 11:30 AM").map((m) => m.key)).toEqual([
+        "11-02 09:00",
+        "11-02 11:30",
+      ]);
+    });
+  });
+
+  describe("a held appointment's pair keeps its 40-character rule (r1/Q-5 (a))", () => {
+    it("the reschedule trial's line still fails", async () => {
+      const text =
+        "I can see your Wednesday appointment with Dr. Anna Kowalski on October 7 at 4:00 PM ET for knee rehab. Let me check Thursday afternoon availability for physical therapy.";
+      expect(failingSentences(text, true)).toEqual([]);
+      expect(await timesCheck([ASKS, assistant(text), call("check_availability", {})])).toMatchObject({
+        status: "fail",
+        detail: '"October 7 at 4:00 PM" lacks a weekday or ET',
+      });
     });
   });
 });

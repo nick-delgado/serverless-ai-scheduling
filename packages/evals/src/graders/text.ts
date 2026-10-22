@@ -432,6 +432,8 @@ export interface UnclaimedTime extends WindowedTime {
   time: string;
   /** The sentence that holds the time, trimmed. */
   sentence: string;
+  /** The sentence's text before the time (`hoursRemark`). */
+  lead: string;
   /** The next clock time in the text, claimed or not: a range start's end (`unclaimedTimeLacks`). */
   next?: WindowedTime;
 }
@@ -498,6 +500,7 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
         time: t.time,
         limit: limitOf(i),
         sentence: text.slice(start, end).trim(),
+        lead: text.slice(start, t.index),
         ...next,
       },
     ];
@@ -583,6 +586,17 @@ function datesBack(text: string, time: string, exact?: number): boolean {
   );
 }
 /**
+ * Whether `text`'s day lines name exactly one date and every day line lists `time` (#360, r1/Q-3 (a)): a one-day
+ * offer's closing question needs no weekday, its day line names the day. Two headings for one date count once,
+ * and each must list the time; a second date, even a heading with no times, fails it. `datesBack`'s two-date floor
+ * stays for its own callers.
+ */
+function oneDateBack(text: string, time: string): boolean {
+  const lines = dayLines(text);
+  return new Set(lines.map((l) => l.date)).size === 1 && lines.every((l) => l.times.has(time));
+}
+
+/**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
  * complete: a new wording needs a weekday until it is added here, in `BOUND_WORDS`, and to the prompt's bound
  * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328). The bound words
@@ -620,6 +634,30 @@ const BOUND_AFTER = new RegExp(
  * 0cdd23a/SPEC-4 (a).
  */
 const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
+/**
+ * "between" (any case, whole word) right before a time, and a gap to the next clock time of only "and" (#360,
+ * r1/Q-4 (a)): "between 8:00 AM and 5:00 PM ET" is a range whose start takes the end's ET. `RANGE_END` stays as it
+ * was, because `pairsAndLaterTimes` reads it.
+ */
+const BETWEEN_BEFORE = /\bbetween[ \t]+$/i;
+const BETWEEN_GAP = /^\s*and\s*$/i;
+
+/** The words before the last start of a visit that make its sentence an hours remark (#360, r1/Q-1 (a)). */
+const LATEST_SLOT = /\b(?:latest (?:possible |available )?(?:slot|appointment)|last (?:slot|appointment))\b/i;
+
+/**
+ * Whether the time is the clinic's own hours rather than an offer, so it needs no weekday (#360, r1/Q-1 (a)): the
+ * last start of a visit (`CLINIC.closeHour` less `CLINIC.visitMinutes`, 4:30 PM) with a `LATEST_SLOT` phrase before
+ * it in its sentence, or the opening or closing hour right after a `CLINIC_HOURS_LEAD` phrase. ET is still needed.
+ * The list of phrases is complete: any other wording needs a weekday.
+ */
+function hoursRemark(text: string, t: UnclaimedTime): boolean {
+  const lastStart = CLINIC.closeHour * 60 - CLINIC.visitMinutes;
+  return t.time === hhmm(Math.floor(lastStart / 60), lastStart % 60)
+    ? LATEST_SLOT.test(t.lead)
+    : [CLINIC.openHour, CLINIC.closeHour].some((h) => t.time === hhmm(h, 0)) &&
+        CLINIC_HOURS_LEAD.test(text.slice(0, t.index));
+}
 
 /**
  * What an `unclaimedTimes` time lacks, or undefined (#320, r1/Q-2 (c)): ET within `ZONE_WINDOW` characters after
@@ -634,12 +672,19 @@ const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
  */
 export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
   const end = t.index + t.raw.length;
-  const rangeEnd = t.next !== undefined && RANGE_GAP.test(text.slice(end, t.next.index)) ? t.next : undefined;
+  const gap = t.next === undefined ? "" : text.slice(end, t.next.index);
+  const rangeEnd =
+    t.next !== undefined &&
+    (RANGE_GAP.test(gap) || (BETWEEN_BEFORE.test(text.slice(0, t.index)) && BETWEEN_GAP.test(gap)))
+      ? t.next
+      : undefined;
   if (!zoneAfter(text, t, t.limit) && (rangeEnd === undefined || !zoneAfter(text, rangeEnd, rangeEnd.limit)))
     return "ET";
   const bound = BOUND_BEFORE.test(text.slice(0, t.index)) || BOUND_AFTER.test(text.slice(end));
   return bound ||
     etOnly ||
+    hoursRemark(text, t) ||
+    oneDateBack(text, t.time) ||
     WEEKDAY_RE.test(t.sentence) ||
     THAT_DAY.test(t.sentence) ||
     (SEVERAL_DAYS.test(t.sentence) && dayLinesBack(text, t.time)) ||
