@@ -1427,6 +1427,28 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
     });
   });
 
+  describe("the failure list the trial pins use (failingSentences)", () => {
+    const LINE = "Let me check 10:00 AM ET.";
+    const DAY_LINE = "Tuesday, October 13:\n- 1:00 PM ET";
+
+    it("a pre-tool text with no day line needs ET only, and the same text elsewhere needs a weekday", () => {
+      expect(failingSentences({ text: LINE, preTool: true })).toEqual([]);
+      expect(failingSentences({ text: LINE, preTool: false })).toEqual([lacks("10:00 AM", WEEKDAY, LINE)]);
+    });
+
+    it("a pre-tool text with a day line keeps the full rule", () => {
+      expect(failingSentences({ text: `${LINE}\n\n${DAY_LINE}`, preTool: true })).toEqual([
+        lacks("10:00 AM", WEEKDAY, LINE),
+      ]);
+    });
+
+    it("a day-line time without ET is listed, ahead of the unclaimed times", () => {
+      expect(
+        failingSentences({ text: `${LINE}\n\nTuesday, October 13:\n- 1:00 PM`, preTool: false }),
+      ).toEqual(['"October 13 … 1:00 PM" lacks a weekday or ET', lacks("10:00 AM", WEEKDAY, LINE)]);
+    });
+  });
+
   describe("an hours remark (r1/Q-1 (a)): the last start or an opening hour needs ET, not a weekday", () => {
     it("the last start of a visit after a latest-slot phrase passes (the trial 2 sentence, and a closing hour with ET)", async () => {
       await passes(
