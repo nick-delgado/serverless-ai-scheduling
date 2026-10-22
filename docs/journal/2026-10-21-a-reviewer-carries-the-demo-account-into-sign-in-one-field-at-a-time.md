@@ -14,13 +14,13 @@ Nick settled the design in the readiness review (r1/Q-1 (a)): per-field copy onl
 
 The readiness review asked the agent to check two things in jsdom before rewriting the sign-in test (A-5). Both were fine:
 
-- Clicking a `target="_blank"` anchor in jsdom with React Router does nothing: the router stays on `/request-access`, the account view stays up and nothing reaches `console.error`. A test pins that the page is still there after the click.
+- Clicking a `target="_blank"` anchor in jsdom with React Router does nothing: the router stays on `/request-access`, the account view stays up and, when we looked, nothing reached `console.error`. A test pins only that the page is still there after the click (it fails if the link becomes an in-app route link); no test pins the `console.error` observation, since removing `target` did not change it.
 - user-event's clipboard stub keeps its contents across `cleanup()` and a remount. The sign-in test still reads each value as it is copied, then stands in for the new tab with a fresh router at the link's own `href`.
 
 ## Why we chose what we chose
 
 - **Per-field copy, no "Copy all details".** Nick's answer (Q-1 (a)). The alternative was a third button for saving the details as labelled lines. A reviewer can select the text by hand to save it.
-- **Wording the spec left to the agent** (A-2, A-4, A-7): status "Copied the username." / "Copied the password."; failure "Couldn't copy the <field>. Select it on this page and copy it yourself."; link "Go to sign in (opens in a new tab)"; explanation "Each copy button copies one field. "Go to sign in" opens the sign-in page in a new tab, so keep this tab open until you have signed in: the password is shown once, and it is gone when this tab is closed or reloaded."
+- **Wording** (A-2, A-4, A-7): Nick confirmed the status and link text in his answers (A-2, A-4), so those copy his words rather than beat an alternative. The explanation (A-7) is the agent's: it says what each button copies, the new tab, keeping this tab open and that the password is gone on close or reload; the alternative was a shorter line that dropped the reason to keep the tab open. Status "Copied the username." / "Copied the password."; failure "Couldn't copy the <field>. Select it on this page and copy it yourself."; link "Go to sign in (opens in a new tab)"; explanation "Each copy button copies one field. "Go to sign in" opens the sign-in page in a new tab, so keep this tab open until you have signed in: the password is shown once, and it is gone when this tab is closed or reloaded."
 - **A local `CopyIcon`-style inline SVG inside a small `CopyButton`**, with `aria-label` as the name and the SVG hidden from assistive tech. No icon library: `apps/web/package.json` is outside the issue's owned paths.
 - **A plain `<a href="/login">` instead of React Router's `Link`.** A new-tab link has to be a real anchor with an exact `href`; the router adds nothing for it, and nothing about the account passes to the new tab.
 - **FR-004's requirement row is unchanged.** The password still comes in one response, is never stored and is gone on reload. Only its traceability row gains #369.

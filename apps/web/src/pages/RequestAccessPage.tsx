@@ -38,17 +38,6 @@ export function formatExpiry(expiresAt: string): string {
  * (it copies that value and nothing else, A-1), and "Go to sign in" opens a plain /login in a new tab (#369), so this
  * tab, and the password in it, stay open while the reviewer fills the form.
  */
-function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" className="access__copy" aria-label={label} onClick={onClick}>
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-        <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" strokeWidth="2" />
-      </svg>
-    </button>
-  );
-}
-
 export function RequestAccessPage() {
   const env = import.meta.env;
   const siteKey = turnstileSiteKey(env);
@@ -173,5 +162,16 @@ export function RequestAccessPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" className="access__copy" aria-label={label} onClick={onClick}>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+        <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+        <path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </button>
   );
 }

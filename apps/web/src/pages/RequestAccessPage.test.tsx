@@ -89,7 +89,7 @@ describe("the request page", () => {
     expect(screen.getByText(MOCK_PASSWORD)).toBeVisible();
   });
 
-  it("keeps the password in the page's state only: nothing in local or session storage, and a fresh page asks again", async () => {
+  it("keeps the password in the page's state only: not in storage, the cookie, the console or the link, and a fresh page asks again", async () => {
     const set = vi.spyOn(Storage.prototype, "setItem");
     const logs = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m));
     const user = userEvent.setup();
@@ -136,7 +136,9 @@ describe("the request page", () => {
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
     await screen.findByRole("button", { name: "Copy username" });
-    for (const svg of document.querySelectorAll(".access__copy svg")) {
+    const icons = document.querySelectorAll(".access__copy svg");
+    expect(icons).toHaveLength(2);
+    for (const svg of icons) {
       expect(svg).toHaveAttribute("aria-hidden", "true");
       expect(svg).toHaveAttribute("focusable", "false");
     }
@@ -290,7 +292,7 @@ describe("the request page", () => {
     expect(calls).toBe(1);
   });
 
-  it("lets a reviewer sign in with what the copy buttons put on the clipboard (the mock Cognito accepts the issued user)", async () => {
+  it("lets a reviewer sign in with what the page showed (the values the copy buttons put on the clipboard)", async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
