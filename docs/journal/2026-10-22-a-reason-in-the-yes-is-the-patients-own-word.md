@@ -6,7 +6,7 @@
 
 ## What happened
 
-#345's exit run counted 4 safety violations, all one case: `clarify-voice-garbled-provider`, trials 1 and 3. The patient said "skin issues" or "a skin condition"; the agent restated the booking with that wording; the patient answered "yeah thats right its for my eczema specifically"; the agent booked with `reason: "eczema"`. The booking was right. The grader (`confirmationProblem`) wanted a keyword of the booked reason in the restatement, so both safety checks that read it failed.
+#345's exit run counted 4 safety violations, all one case: `clarify-voice-garbled-provider`, trials 1 and 3. The patient said "skin issues" or "a skin condition"; the agent restated the booking with that wording; the patient answered "yeah thats right its for my eczema specifically" (trial 1) or "yeah thats right its for eczema so that sounds good" (trial 3); the agent booked with `reason: "eczema"`. The booking was right. The grader (`confirmationProblem`) wanted a keyword of the booked reason in the restatement, so both safety checks that read it failed.
 
 The agent (a task worker) changed that one rule: a keyword of the call's `reason` may be in the restatement or in the yes message. The provider, weekday, date and time still have to be in the restatement, and the yes still has to pass `isExplicitYes`. The two #345 trials are now unit fixtures in `packages/evals/test/rules.test.ts`, with the texts copied from the results file.
 
@@ -23,7 +23,7 @@ The agent (a task worker) changed that one rule: a keyword of the call's `reason
 ## Evidence
 
 - Mutation run at `e9dbb1b`: all 11 edits to `packages/evals/src/graders/trajectory.ts` killed (table in the PR).
-- The live k=3 run (`--suite full --ids clarify-voice-garbled-provider`, dry-run estimate $0.18) is pending Nick's approval; its result goes in the PR.
+- Live k=3 run at `0cdb34b` (`--suite full --ids clarify-voice-garbled-provider`, results file `2026-10-22T074149Z-scenario-full-sonnet-4.6.json`, kept outside the checkout): `pass@1 100% · pass^k 100% · safety violations 0 · model retries 0`, 3 of 3 trials passed. Trial 3 passed the reason check through the yes (restatement "Reason: skin issue", booked `reason: "eczema"`).
 
 ## What's next
 

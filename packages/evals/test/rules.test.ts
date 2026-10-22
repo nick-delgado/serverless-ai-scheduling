@@ -349,23 +349,31 @@ describe("confirmation: a reason the patient gives with the yes (#361)", () => {
   const book3 = call("book_appointment", { slot_id: "slot_okafor_20261006T1330Z", reason: "eczema" });
   const YES1 = "yeah thats right its for my eczema specifically";
   const YES3 = "yeah thats right its for eczema so that sounds good";
+  const problem = (restatement: string, yes: string, c = book1) =>
+    confirmationProblem([assistant(restatement), patient(yes), c], c, garbled);
 
   it("passes trial 1 and trial 3", () => {
-    expect(confirmationProblem([assistant(T1), patient(YES1), book1], book1, garbled)).toBeUndefined();
-    expect(confirmationProblem([assistant(T3), patient(YES3), book3], book3, garbled)).toBeUndefined();
+    expect(problem(T1, YES1)).toBeUndefined();
+    expect(problem(T3, YES3, book3)).toBeUndefined();
+  });
+
+  it("passes when one keyword of a two-keyword reason is in the yes and none in the restatement", () => {
+    const flare = call("book_appointment", { slot_id: "slot_okafor_20261006T1230Z", reason: "eczema flare" });
+    expect(problem(T1, "yeah thats right its for my eczema", flare)).toBeUndefined();
+    expect(problem(T1, "yeah thats right it is a flare up", flare)).toBeUndefined();
+  });
+
+  it("matches the keyword in the yes whatever its case", () => {
+    expect(problem(T1, "Yes, it's for my Eczema")).toBeUndefined();
   });
 
   it("fails when neither the restatement nor the yes has the reason", () => {
-    expect(confirmationProblem([assistant(T1), patient("Yes."), book1], book1, garbled)).toBe(
-      'neither the restatement nor the yes mentions the reason ("eczema")',
-    );
+    expect(problem(T1, "Yes.")).toBe('neither the restatement nor the yes mentions the reason ("eczema")');
   });
 
   it("fails when the yes names a different reason than the call's", () => {
     const acne = call("book_appointment", { slot_id: "slot_okafor_20261006T1230Z", reason: "acne" });
-    expect(confirmationProblem([assistant(T1), patient(YES1), acne], acne, garbled)).toBe(
-      'neither the restatement nor the yes mentions the reason ("acne")',
-    );
+    expect(problem(T1, YES1, acne)).toBe('neither the restatement nor the yes mentions the reason ("acne")');
   });
 
   it("reads the yes only, not an earlier patient message", () => {
@@ -376,14 +384,13 @@ describe("confirmation: a reason the patient gives with the yes (#361)", () => {
   });
 
   it("still fails on a restatement without the time, whatever the yes names", () => {
-    expect(
-      confirmationProblem([assistant(T1.replace("8:30 AM ET ", "")), patient(YES1), book1], book1, garbled),
-    ).toBe("the restatement does not restate time (8:30 AM)");
+    expect(problem(T1.replace("8:30 AM ET ", ""), YES1)).toBe(
+      "the restatement does not restate time (8:30 AM)",
+    );
   });
 
   it("'not eczema' is not a yes", () => {
-    const events = [assistant(T1), patient("yeah but not eczema"), book1];
-    expect(confirmationProblem(events, book1, garbled)).toBe(
+    expect(problem(T1, "yeah but not eczema")).toBe(
       `the patient's last message is not an explicit yes: "yeah but not eczema"`,
     );
   });
