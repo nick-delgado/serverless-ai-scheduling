@@ -6,12 +6,12 @@ Use desktop Chrome: voice is shown there only (Safari and mobile browsers work t
 
 The script names no username, password or patient name, because the app makes up all three for each account. Where it says "the name the account page showed", use the made-up name from your own account.
 
-Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording, but these were chosen because they work end to end.
+Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording. The lines are adapted from the e2e specs, the runbook's check turn and the manual checklist, and Nick's timed dry run checks them before the recording.
 
 ## 1. Request an account and sign in (about 30 seconds)
 
 1. Open the address from the About field. On the sign-in page, choose **Request demo access**.
-2. Choose the one button on the page. A username (`user-` and 8 characters), a password and a patient name appear, once, each with a copy button.
+2. Choose the one button on the page. A username, a password and a patient name appear, once; [reviewer-access.md](reviewer-access.md) describes the page.
 3. Choose **Go to sign in**; it opens in a new tab and leaves the account page open. Copy the username, paste it, go back, copy the password, paste it, and sign in.
 
 **Expect:** the chat opens with a greeting that uses the name the account page showed. Nothing is booked yet.
@@ -20,9 +20,9 @@ Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quo
 
 Ask for a provider who is taking new patients, Dr. Priya Lee (dermatology). Dr. Marcus Brooks is not accepting new patients, so don't pick him.
 
-1. Send: `What times does Dr. Priya Lee have open next week?`
+1. Send: `What times does Dr. Priya Lee have open next week for a skin check?` The reason for the visit is in the line because the assistant asks for it before it books.
 2. Status chips show while it works ("Looking up providers…", "Checking availability…"), then the reply lists times. Name a provider and a week: an open question such as "What appointments are available next week?" gets a clarifying question back instead of times.
-3. Send: `The earliest of those works for me.` The assistant restates the time and asks before it books. Nothing is booked yet.
+3. Send: `The earliest of those works for me.` The assistant restates the provider, time and reason, and asks before it books. Nothing is booked yet.
 4. Send: `Yes, please book it.`
 
 **Expect:** a confirmation with the provider, date and time.
@@ -33,7 +33,7 @@ Ask for a provider who is taking new patients, Dr. Priya Lee (dermatology). Dr. 
 2. Say: "What appointments do I have coming up?" then choose **Send**.
 3. The overlay shows a timer and a level bar, then "Transcribing…", and your words appear as your own chat bubble.
 
-**Expect:** the agent answers as it would to typed text, and lists the booking from beat 2. Voice has its own spend limit and can be off for the rest of a month; if the microphone button says so, say that to your reviewer and move on, since typing carries every other beat.
+**Expect:** the agent answers as it would to typed text, and lists the booking from beat 2. Voice has its own spend limit and can be off for the rest of a month; if the overlay says "Sorry, we couldn't turn that into text." and it keeps saying so, the voice backstop may have tripped; say that to your reviewer and move on, since typing carries every other beat.
 
 ## 4. Reschedule that same booking (about 45 seconds)
 
@@ -62,4 +62,4 @@ One caveat to say with it: after that run, two graders changed (#360, #361), and
 ## What to leave out
 
 - Don't open the staff inbox, a console, or any environment other than `demo`. `demo`'s address in the address bar is fine: it is already public in the repository's About field (r2/Q-2).
-- The take's username and password may show on screen in the recording (r2/Q-1): it is a temporary account, deleted about 24 hours after it was issued, and the per-env turn caps bound what anyone could spend with it before then.
+- The take's username and password may show on screen in the recording (r2/Q-1): it is a temporary account, deleted about 24 hours after it was issued at present (the runbook holds the current value), and the per-env turn caps bound what anyone could spend with it before then.

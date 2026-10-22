@@ -23,7 +23,7 @@ A temporary patient account on `demo`: a username, a generated password and a ma
 
 These are the current defaults, set per environment. The runbook, [Deploy env](../runbooks/deploy-env.md), holds the values and how they change ("Daily turn caps", "The spend backstop" and "Reviewer access"); don't rely on a number here.
 
-- **Expiry.** An account is deleted about 24 hours after it was issued. That removes the sign-in, its appointments and conversations, and puts any slot it held back to open.
+- **Expiry.** By default, an account is deleted about 24 hours after it was issued. That removes the sign-in, its appointments and conversations, and puts any slot it held back to open.
 - **Messages.** A per-account limit on messages per day (50 at present), and a demo-wide daily limit shared by every visitor. Over the demo-wide limit the assistant answers: "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author." Both reset at midnight Eastern.
 - **Issuance.** The page issues a limited number of accounts per day and keeps a limited number alive at once.
 - **Voice.** Voice messages have a monthly spend backstop. If it trips, voice stops until the month ends and typing still works.
@@ -32,4 +32,4 @@ These are the current defaults, set per environment. The runbook, [Deploy env](.
 
 ## How access ends
 
-Your account is deleted automatically about 24 hours after it was issued, by an hourly job; there is nothing for you to do. Nobody else is given your password, and this repository holds no credentials.
+Your account is deleted automatically after its expiry (24 hours at present; see Limits), by an hourly job; there is nothing for you to do. Nobody else is given your password, and this repository holds no credentials.
