@@ -915,7 +915,7 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
     });
   });
 
-  describe('"both days": two dates back it, each listing the time, and one date passes since #360 (a3f0813/SPEC-1 (a))', () => {
+  describe('"both days": two dates that list the time back it, and one date passes since #360 (a3f0813/SPEC-1 (a))', () => {
     const SENTENCE = "Dr. Haddad has 10:00 AM ET open on both days:";
 
     it("two day lines that list the time pass, in any case", async () => {
