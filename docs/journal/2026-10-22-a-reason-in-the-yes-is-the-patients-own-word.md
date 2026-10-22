@@ -1,7 +1,7 @@
 # 2026-10-22 — A reason the patient gives with the yes is the patient's own word, so the grader reads it there
 
 **Chapter:** 5. What the evals showed
-**Milestone:** M3
+**Milestone:** M3 (follow-up to the M3 exit, issue M4-07)
 **Related:** #361, #345, #347, #360, PR #371, ADR-008 (amendment of 2026-10-22), ADR-009, PRD FR-031
 
 ## What happened
