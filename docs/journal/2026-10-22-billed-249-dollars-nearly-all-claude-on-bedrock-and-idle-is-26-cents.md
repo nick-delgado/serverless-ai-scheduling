@@ -8,9 +8,9 @@
 
 #45 closes the loop: what the project cost, what we learned, what a second version would do. NFR-003 gives this issue one number to report, idle cost against $5 a month (excluding a domain).
 
-The agent can't read billing, so Nick exported Cost Explorer's daily report, by service, from the console on 2026-10-22 and posted it on the issue as a plain table ([#45 (comment link TBD)](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45)). It covers 2026-09-27, the day the repo was created, to 2026-10-22, the last day and a partial one. The agent summed it by month and service and retyped the figures below. Everything in the "billed" column comes from that comment and nothing else. The export has no credit rows, so no credit was applied.
+The agent can't read billing, so Nick exported Cost Explorer's daily report, by service, from the console on 2026-10-22 and posted it on the issue as a plain table ([#45 comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45#issuecomment-6341441996)). It covers 2026-09-27, the day the repo was created, to 2026-10-22, the last day and a partial one. The agent summed it by month and service and retyped the figures below. Everything in the "billed" column comes from that comment and nothing else. The export has no credit rows, so no credit was applied.
 
-The headline: **$249.60 billed as of 2026-10-22, of which $228.48 before tax and $21.12 tax.** All of it falls in October; September's four days read $0.00. Claude on Bedrock is $216.68 of it (Sonnet 4.6 $193.28, Haiku 4.5 $23.40). The other model services and voice add $11.53 (Cost Explorer's "Bedrock" $11.15, "Transcribe" $0.38). Every other service together is $0.26.
+The headline: **$249.60 billed as of 2026-10-22, of which $228.48 before tax and $21.12 tax, all of it on the usage services.** All of it falls in October; September's four days read $0.00. Claude on Bedrock is $216.68 of it (Sonnet 4.6 $193.28, Haiku 4.5 $23.40). The other model services and voice add $11.53 (Cost Explorer's "Bedrock" $11.15, "Transcribe" $0.38). Every other service together is $0.26.
 
 Counted: AWS and Bedrock only (r1/Q-6 (a)). Not counted: the AI coding agents' and other tools' costs, and any domain (there is none). Cloudflare Turnstile, which the self-serve access page uses ([the access-request entry](2026-10-20-a-reviewer-can-request-a-demo-patient-and-the-bot-check-comes-first.md)), is on its free tier, so it adds nothing.
 
@@ -28,7 +28,7 @@ Counted: AWS and Bedrock only (r1/Q-6 (a)). Not counted: the AI coding agents' a
 | S3, API Gateway, SES, CloudWatch (each under $0.01: 0.0043, 0.0037, 0.0022, 0.0003) | 0.01 | idle |
 | Secrets Manager, CloudFront, Glue, CloudFormation, KMS, SNS, SQS, Lambda, Cognito, X-Ray, Budgets, Data Transfer | 0.00 | idle |
 | **Idle subtotal** | **0.26** | |
-| Tax (one posting, 2026-10-01) | 21.12 | not split, see below |
+| Tax on usage (Sonnet 4.6 17.88, Haiku 4.5 2.17, Bedrock 1.03, Transcribe 0.04; one posting, 2026-10-01) | 21.12 | usage tax, kept beside the usage rows |
 | **Total costs** | **249.60** | |
 
 ### The split: build, eval, idle (r1/Q-2 (a))
@@ -37,11 +37,11 @@ Billed and estimated figures stay in their own columns. Only the residual, build
 
 | Bucket | Billed | List-price estimate | How it was found |
 |---|---|---|---|
-| Idle | $0.26 | | Every service except Bedrock (and the two per-model Claude names) and Transcribe, Tax left out |
+| Idle | $0.26 | | Every service except Bedrock (and the two per-model Claude names) and Transcribe; no tax was charged on any of them |
 | Eval | | **at least $104.93** | The sum of recorded harness costs in the ledger below (agent, simulator and judge together), at the list prices in `packages/agent/src/profiles.ts` (`PRICES_AS_OF = "2026-09-29"`) |
 | Build | | **at most $123.29** | Inferred residual: billed usage $228.22 minus the eval estimate $104.93. Covers dev and demo chat, the E2E runs, voice, and every eval run nobody recorded, so it is an upper bound |
 | Usage (build + eval) | $228.22 | | Billed Bedrock + Transcribe |
-| Tax | $21.12 | | Not assigned to any bucket |
+| Tax on usage | $21.12 | | Belongs with usage (build and eval), as its own line: Nick's Taxes-by-service table on the issue gives it per service, not per purpose, so we don't split it between build and eval |
 
 Eval is a minimum for three reasons, all of them runs whose cost nobody wrote down: local results before 2026-10-06's out-of-checkout copy (`0ff92ab`), the CI `Eval gate` (223 runs of `evals.yml` as of 2026-10-22, from `gh run list --workflow evals.yml`, many of which pass without calling Bedrock; the cost was recorded for two of them), and runs a task worker made without noting the cost. Build is therefore a maximum by the same amount. The ledger doesn't hit the "estimate exceeds the bill" edge: the estimate is 46% of billed usage.
 
@@ -86,7 +86,7 @@ Recorded build-side spend that sits inside the residual, not subtracted from it:
 
 NFR-003: idle at most $5 a month, excluding a domain. We read it the way r1/Q-3 (a) says: account-wide and measured, bootstrap stack included, every env alive in the period.
 
-| Period | Idle billed (excluding Tax) | Verdict |
+| Period | Idle billed | Verdict |
 |---|---|---|
 | September 2026, the latest full calendar month (27th to 30th only; the repo dates from 2026-09-27) | $0.00 | met |
 | October 2026 to the 22nd (the 22nd is partial) | $0.26 | met |
@@ -98,7 +98,7 @@ The envs that were up in October, as the journal names them: `dev`, `demo`, `e2e
 
 The settled decisions are on #45 (r1/Q-1 to Q-6, all recommendations accepted). The ones the agent made where the spec was silent, each with the alternative it beat:
 
-- **Tax stays out of every bucket.** r1/Q-2 (a) defines idle as every service except Bedrock and Transcribe. Tax isn't a service, and it posted in one lump on 2026-10-01, before most of the usage did. Adding it to idle would turn $0.26 into $21.38 and a "missed", on a charge we can't tie to any resource. The alternative reading is stated here, with the arithmetic, and the open question is under "What's next".
+- **Tax goes with usage, as its own line, not split between build and eval.** Nick's Bills, Taxes by service table ([#45 comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45#issuecomment-6341441996)) shows the $21.12 is all tax on the four usage services (Sonnet 4.6 $17.88, Haiku 4.5 $2.17, Bedrock $1.03, Transcribe $0.04) and none on any other, so idle carries no tax and stays $0.26. The alternative, splitting it pro rata between build and eval, would need a build/eval split of billed usage, and we only have the eval estimate and a residual, so the split would rest on an estimate; we kept the usage-tax line beside both.
 - **September counts as the "latest full month", even though it has four days.** Q-3 (a) names the latest full calendar month. October is partial, and a $0.00 September says only that nothing billed before the first of October. So we show October to the 22nd beside it, and the verdict doesn't rest on September alone.
 - **The $104.93 total counts each run once.** The first full scenario run appears in two entries with the same figures, and is in the ledger once. Where an entry gives an approximation ("2.7x"), the row says "about" and shows its basis. The alternative, leaving unreconstructable rows out, would have understated eval further.
 - **Ephemeral envs are named, not priced.** The export has no env dimension; there are no cost-allocation tags on `sched-*` stacks, and changing that is a non-goal of #45.
@@ -109,7 +109,7 @@ The settled decisions are on #45 (r1/Q-1 to Q-6, all recommendations accepted). 
 - **Eval is a minimum, and so is our knowledge of build.** Every run we did get written down came from a task worker's habit of recording its spend. The CI gate's runs, a large unrecorded group, didn't. Because Bedrock can't be told apart by purpose here ([the backstop entry](2026-10-20-the-spend-backstop-covers-voice-not-bedrock.md)), the only record of what an experiment cost is the sentence someone wrote after it. A fresh reader can't turn that into a bill; the residual is what is left when it fails.
 - **The estimate disagreed with the bill most for the cheap models.** The matrix's ten non-Claude cells (Nova Pro, Nova 2 Lite, both gpt-oss models) add up to $33.82 in the harness's estimate; Cost Explorer's whole-period "Bedrock" row is $11.15. We haven't checked which service name those models bill under, so this is a question, not a finding: either they bill elsewhere, or the price table for them ran high. The matrix as a whole came in 30% under its estimate ($57.61 against $75.00, [the matrix entry](2026-10-13-what-the-matrix-chose.md)).
 - **The budgets did what budgets do.** `sched-monthly` and `sched-bedrock-monthly` are alerts, and the templates' defaults ($25 and $10 a month, `infra/bootstrap/bootstrap.yaml`) were far below October's bill. We didn't read what was applied in the account, so we don't say how many alerts fired. What the entries record is that the budgets only send email ([the turn-cap entry](2026-10-20-the-env-gets-its-own-daily-turn-cap.md)), which is why #356 added a cap that stops spend instead.
-- **Tax is 9.2% of the pre-tax total ($21.12 of $228.48)** but posted on a single day, not alongside the usage. That looks like tax on the Claude usage, but nothing in the export shows it.
+- **Tax is 9.2% of the pre-tax total ($21.12 of $228.48) and all of it sits on usage.** It posted on a single day, 2026-10-01, rather than alongside the usage, but the console's Taxes-by-service table puts it on the Claude, Bedrock and Transcribe rows. Post-tax, usage is $249.34 (Sonnet 4.6 $211.16, Haiku 4.5 $25.58, Bedrock $12.18, Transcribe $0.42, per that table).
 
 ## Lessons
 
@@ -155,7 +155,7 @@ Engineering, cheaper, safer or more measurable:
 
 ## Evidence
 
-- Billed figures: [#45 (comment link TBD)](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45), Nick's table from Cost Explorer's daily report, 2026-09-27 to 2026-10-22 (the 22nd partial), retyped and rounded to cents. The agent derived the subtotals; arithmetic: usage 193.28 + 23.40 + 11.15 + 0.38 = 228.22 (from unrounded rows, 228.217); idle 0.23 + 0.02 + 0.01 = 0.26 (0.2584); with tax 228.4755 + 21.12 = 249.5955.
+- Billed figures: [#45 comment](https://github.com/nick-delgado/serverless-ai-scheduling/issues/45#issuecomment-6341441996), Nick's table from Cost Explorer's daily report, 2026-09-27 to 2026-10-22 (the 22nd partial), retyped and rounded to cents. The agent derived the subtotals; arithmetic: usage 193.28 + 23.40 + 11.15 + 0.38 = 228.22 (from unrounded rows, 228.217); idle 0.23 + 0.02 + 0.01 = 0.26 (0.2584); with tax 228.4755 + 21.12 = 249.5955; the tax by service is Nick's table on the same comment.
 - Eval ledger: each row's linked entry or comment; sum 104.93, from the rows as quoted.
 - Residual: 228.217 - 104.93 = 123.29. Build recorded inside it: 0.86 + 0.047 + 0.1220 + 0.13 + 0.16 = 1.32.
 - Prices: `packages/agent/src/profiles.ts`, `PRICES_AS_OF = "2026-09-29"`; the harness figures are list-price estimates, not bills.
@@ -164,6 +164,5 @@ Engineering, cheaper, safer or more measurable:
 
 ## What's next
 
-- Nick: say whether the $21.12 tax belongs to idle (a miss at $21.38) or to usage (met at $0.26). We read it as usage; the export can't settle it.
 - #43 turns this entry and the exit table into the README story; Chapter 6 links here.
 - Re-measure idle in a month with no development traffic, when `demo` is the only env standing.
