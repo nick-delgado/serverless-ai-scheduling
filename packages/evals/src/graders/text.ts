@@ -432,6 +432,8 @@ export interface UnclaimedTime extends WindowedTime {
   time: string;
   /** The sentence that holds the time, trimmed. */
   sentence: string;
+  /** The sentence's text before the time (`hoursRemark`). */
+  lead: string;
   /** The next clock time in the text, claimed or not: a range start's end (`unclaimedTimeLacks`). */
   next?: WindowedTime;
 }
@@ -498,6 +500,7 @@ export function unclaimedTimes(text: string): UnclaimedTime[] {
         time: t.time,
         limit: limitOf(i),
         sentence: text.slice(start, end).trim(),
+        lead: text.slice(start, t.index),
         ...next,
       },
     ];
@@ -583,6 +586,18 @@ function datesBack(text: string, time: string, exact?: number): boolean {
   );
 }
 /**
+ * Whether `text`'s day lines name exactly one date and every day line lists `time` (#360, r1/Q-3 (a)): a one-day
+ * offer's closing question needs no weekday, its day line names the day. Two headings for one date count once,
+ * and each must list the time; a second date, even a heading with no times, fails it. It reaches every sentence
+ * of the text, so a one-date "both days" or "Other days that week" passes too (decision a3f0813/SPEC-1 (a));
+ * `datesBack`'s two-date floor stays for its own callers.
+ */
+function oneDateBack(text: string, time: string): boolean {
+  const lines = dayLines(text);
+  return new Set(lines.map((l) => l.date)).size === 1 && lines.every((l) => l.times.has(time));
+}
+
+/**
  * The words that, right before a time, make it a bound that needs ET only (#320, r1/Q-2 (c)). The list is
  * complete: a new wording needs a weekday until it is added here, in `BOUND_WORDS`, and to the prompt's bound
  * sentence; "the prompt's bound sentence" in `undated-times.test.ts` keeps the two in step (#328). The bound words
@@ -620,26 +635,64 @@ const BOUND_AFTER = new RegExp(
  * 0cdd23a/SPEC-4 (a).
  */
 const RANGE_GAP = new RegExp(`^\\s*${RANGE_END.source}`, "i");
+/**
+ * "between" (any case, whole word) right before a time, and a gap to the next clock time of only "and" (#360,
+ * r1/Q-4 (a)): "between 8:00 AM and 5:00 PM ET" is a range whose start takes the end's ET. `RANGE_END` stays as it
+ * was, because `pairsAndLaterTimes` reads it.
+ */
+const BETWEEN_BEFORE = /\bbetween[ \t]+$/i;
+const BETWEEN_GAP = /^\s*and\s*$/i;
+
+/** The words before the last start of a visit that make its sentence an hours remark (#360, r1/Q-1 (a)). */
+const LATEST_SLOT = /\b(?:latest (?:possible |available )?(?:slot|appointment)|last (?:slot|appointment))\b/i;
+
+/**
+ * Whether the time is the clinic's own hours rather than an offer, so it needs no weekday (#360, r1/Q-1 (a)): the
+ * last start of a visit (`CLINIC.closeHour` less `CLINIC.visitMinutes`, 4:30 PM) with a `LATEST_SLOT` phrase before
+ * it in its sentence, or the opening or closing hour right after a `CLINIC_HOURS_LEAD` phrase. ET is still needed.
+ * The list of phrases is complete: any other wording needs a weekday.
+ */
+function hoursRemark(text: string, t: UnclaimedTime): boolean {
+  const lastStart = CLINIC.closeHour * 60 - CLINIC.visitMinutes;
+  return t.time === hhmm(Math.floor(lastStart / 60), lastStart % 60)
+    ? LATEST_SLOT.test(t.lead)
+    : [CLINIC.openHour, CLINIC.closeHour].some((h) => t.time === hhmm(h, 0)) &&
+        CLINIC_HOURS_LEAD.test(text.slice(0, t.index));
+}
 
 /**
  * What an `unclaimedTimes` time lacks, or undefined (#320, r1/Q-2 (c)): ET within `ZONE_WINDOW` characters after
- * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start (a time followed by only "to",
- * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday
- * (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its sentence, unless the time is a bound
- * (`BOUND_BEFORE`, `BOUND_AFTER`) or `etOnly`. "every day", "each day" and "all five days", then "that week" or
- * "next week", stand for a weekday only when `dayLinesBack` (#337, r1/Q-2 (c); #340); "both days" only when
- * `datesBack` finds exactly two dates and "each of those days" when it finds at least two, each listing the time
- * (#340, r1/Q-2 (a)); "that week", "every day", "today" and "weekdays" are no weekday. `etOnly` is a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time
- * no tool has returned yet, so it needs ET and no weekday.
+ * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start, after its range end, cut the same
+ * way. A range start is a time followed by only "to", "until", "till", "-" or "–" (`RANGE_GAP`) and another clock
+ * time, or a time right after "between" followed by only "and" and another clock time (`BETWEEN_BEFORE`,
+ * `BETWEEN_GAP`; #360, r1/Q-4 (a)). It also needs a weekday (`WEEKDAY_RE`, a weekday range included) or "that day"
+ * (`THAT_DAY`) anywhere in its sentence, unless one of these waives the weekday, ET staying required:
+ * - the time is a bound (`BOUND_BEFORE`, `BOUND_AFTER`);
+ * - `etOnly`, a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time no tool has returned yet;
+ * - `hoursRemark`, the clinic's own hours (#360, r1/Q-1 (a));
+ * - `oneDateBack`, a text whose day lines name one date and list the time (#360, r1/Q-3 (a)): every sentence of
+ *   it, a several-day claim included ("both days", "Other days that week"), as ADR-008's 2026-10-22 amendment
+ *   records (decision a3f0813/SPEC-1 (a));
+ * - a several-day phrase backed by the day lines (#337, r1/Q-2 (c); #340): `SEVERAL_DAYS` ("every day", "each day",
+ *   "all five days", then "that week" or "next week") when `dayLinesBack`, `BOTH_DAYS` when `datesBack` finds
+ *   exactly two dates, `EACH_OF_THOSE_DAYS` when it finds at least two, each listing the time (#340, r1/Q-2 (a)).
+ * "that week", "every day", "today" and "weekdays" are no weekday.
  */
 export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
   const end = t.index + t.raw.length;
-  const rangeEnd = t.next !== undefined && RANGE_GAP.test(text.slice(end, t.next.index)) ? t.next : undefined;
+  /** Whether the next clock time `n` ends a range this time starts (`RANGE_GAP`, or "between" and "and"). */
+  const endsRange = (n: WindowedTime): boolean => {
+    const gap = text.slice(end, n.index);
+    return RANGE_GAP.test(gap) || (BETWEEN_BEFORE.test(text.slice(0, t.index)) && BETWEEN_GAP.test(gap));
+  };
+  const rangeEnd = t.next !== undefined && endsRange(t.next) ? t.next : undefined;
   if (!zoneAfter(text, t, t.limit) && (rangeEnd === undefined || !zoneAfter(text, rangeEnd, rangeEnd.limit)))
     return "ET";
   const bound = BOUND_BEFORE.test(text.slice(0, t.index)) || BOUND_AFTER.test(text.slice(end));
   return bound ||
     etOnly ||
+    hoursRemark(text, t) ||
+    oneDateBack(text, t.time) ||
     WEEKDAY_RE.test(t.sentence) ||
     THAT_DAY.test(t.sentence) ||
     (SEVERAL_DAYS.test(t.sentence) && dayLinesBack(text, t.time)) ||
