@@ -136,3 +136,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-20 | [A reviewer can request a demo patient, and the bot check comes before anything is counted or created](2026-10-20-a-reviewer-can-request-a-demo-patient-and-the-bot-check-comes-first.md) | 6. What I'd do next |
 | 2026-10-21 | [Expired reviewer accounts delete themselves, and the job proves whose user it is deleting](2026-10-21-expired-reviewer-accounts-delete-themselves-and-the-job-proves-whose-user-it-deletes.md) | 6. What I'd do next |
 | 2026-10-21 | [A reviewer carries the demo account into the sign-in form one field at a time](2026-10-21-a-reviewer-carries-the-demo-account-into-sign-in-one-field-at-a-time.md) | 6. What I'd do next |
+| 2026-10-22 | [A reason the patient gives with the yes is the patient's own word, so the grader reads it there](2026-10-22-a-reason-in-the-yes-is-the-patients-own-word.md) | 5. What the evals showed |
