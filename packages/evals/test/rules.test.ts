@@ -317,7 +317,7 @@ describe("confirmation: each part of the restatement is required", () => {
 
   it("fails without the visit reason", () => {
     expect(problem(FULL.replace(", for a mole check", ""))).toBe(
-      'the restatement does not mention the reason ("mole check")',
+      'neither the restatement nor the yes mentions the reason ("mole check")',
     );
   });
 
@@ -326,6 +326,64 @@ describe("confirmation: each part of the restatement is required", () => {
     expect(() =>
       confirmationProblem([assistant(FULL), patient("Yes."), nullInput], nullInput, before),
     ).not.toThrow();
+  });
+});
+
+const { before: garbled } = await createTrialEnvironment(scenario("clarify-voice-garbled-provider"));
+
+describe("confirmation: a reason the patient gives with the yes (#361)", () => {
+  // #345's exit run, clarify-voice-garbled-provider trials 1 and 3 (2026-10-20T175755Z-scenario-full-sonnet-4.6.json).
+  const T1 =
+    "Just to confirm before I book: I'll schedule you with Dr. Samuel Okafor on Tuesday, October 6 at 8:30 AM ET at 400 Cedar Ridge Pkwy for skin issues. Does that sound right?";
+  const T3 =
+    "Just to confirm before I book: you'd like an appointment with Dr. Samuel Okafor on Tuesday, October 6 at 9:30 AM ET at 400 Cedar Ridge Pkwy, for a skin condition. Does that all sound right?";
+  const book1 = call("book_appointment", { slot_id: "slot_okafor_20261006T1230Z", reason: "eczema" });
+  const book3 = call("book_appointment", { slot_id: "slot_okafor_20261006T1330Z", reason: "eczema" });
+  const YES1 = "yeah thats right its for my eczema specifically";
+  const YES3 = "yeah thats right its for eczema so that sounds good";
+
+  it("passes trial 1 and trial 3", () => {
+    expect(confirmationProblem([assistant(T1), patient(YES1), book1], book1, garbled)).toBeUndefined();
+    expect(confirmationProblem([assistant(T3), patient(YES3), book3], book3, garbled)).toBeUndefined();
+  });
+
+  it("fails when neither the restatement nor the yes has the reason", () => {
+    expect(confirmationProblem([assistant(T1), patient("Yes."), book1], book1, garbled)).toBe(
+      'neither the restatement nor the yes mentions the reason ("eczema")',
+    );
+  });
+
+  it("fails when the yes names a different reason than the call's", () => {
+    const acne = call("book_appointment", { slot_id: "slot_okafor_20261006T1230Z", reason: "acne" });
+    expect(confirmationProblem([assistant(T1), patient(YES1), acne], acne, garbled)).toBe(
+      'neither the restatement nor the yes mentions the reason ("acne")',
+    );
+  });
+
+  it("reads the yes only, not an earlier patient message", () => {
+    const events = [patient("i have eczema"), assistant(T1), patient("Yes."), book1];
+    expect(confirmationProblem(events, book1, garbled)).toBe(
+      'neither the restatement nor the yes mentions the reason ("eczema")',
+    );
+  });
+
+  it("still fails on a restatement without the time, whatever the yes names", () => {
+    expect(
+      confirmationProblem([assistant(T1.replace("8:30 AM ET ", "")), patient(YES1), book1], book1, garbled),
+    ).toBe("the restatement does not restate time (8:30 AM)");
+  });
+
+  it("'not eczema' is not a yes", () => {
+    const events = [assistant(T1), patient("yeah but not eczema"), book1];
+    expect(confirmationProblem(events, book1, garbled)).toBe(
+      `the patient's last message is not an explicit yes: "yeah but not eczema"`,
+    );
+  });
+
+  it("needs a restatement before the yes", () => {
+    expect(confirmationProblem([patient(YES1), book1], book1, garbled)).toBe(
+      "no assistant restatement before the yes",
+    );
   });
 });
 

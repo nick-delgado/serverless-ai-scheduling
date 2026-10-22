@@ -93,7 +93,7 @@ Each rule is a one-key map, evaluated over the tool calls and assistant messages
 |---|---|
 | `must_call: <tool>` or `{tool, args_subset}` | At least one call to that tool, and its arguments contain the subset. |
 | `must_call_before: [a, b]` | The first `a` comes before the first `b`. It passes vacuously if `b` never happens; pair it with `end_state` to require `b`. |
-| `must_confirm_before: <write tool>` | Before **each** call, the previous assistant message restates provider, date and time (clinic timezone, with weekday) and reason, and the patient's next message is an explicit yes to those details. A retry of the same slot after an error doesn't need a new confirmation; a different slot does. |
+| `must_confirm_before: <write tool>` | Before **each** call, the previous assistant message restates provider, date and time (clinic timezone, with weekday), and the patient's next message is an explicit yes to those details. For a booking, a keyword of the reason is in the restatement or in that yes (ADR-008, 2026-10-22). A retry of the same slot after an error doesn't need a new confirmation; a different slot does. |
 | `must_ask_before: <tool>` | Some assistant message before the first call asks the patient a question. |
 | `forbid_tools: [..]` | These tools are never called. |
 | `max_calls: {tool: n}` | Call-count ceiling. |
