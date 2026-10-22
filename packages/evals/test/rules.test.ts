@@ -321,6 +321,14 @@ describe("confirmation: each part of the restatement is required", () => {
     );
   });
 
+  it("a reason with no keyword needs no mention", () => {
+    const followUp = call("book_appointment", { slot_id: OKAFOR_THU_1400, reason: "follow up visit" });
+    const restated = FULL.replace(", for a mole check", "");
+    expect(
+      confirmationProblem([assistant(restated), patient("Yes."), followUp], followUp, before),
+    ).toBeUndefined();
+  });
+
   it("a null tool input is graded, not thrown", () => {
     const nullInput = call("book_appointment", null);
     expect(() =>
