@@ -30,5 +30,5 @@ The worker wrote the script from the wording the e2e specs and the manual checkl
 
 ## What's next
 
-- Nick's timed dry run of the script on `demo` as a fresh temporary patient, then the recording and its link in the closing PR (`Closes #44`), uploaded only after the take's account has been deleted.
+- Nick's timed dry run of the script on `demo` as a fresh temporary patient, then the recording and its link in the closing PR (`Closes #44`), uploaded right after the take (r2/Q-1: no blurring and no wait for the account's deletion).
 - #43 rewrites the README's chapters and status line; the "See it working" section stays right after the opening block.

@@ -61,5 +61,5 @@ One caveat to say with it: after that run, two graders changed (#360, #361), and
 
 ## What to leave out
 
-- Don't open the staff inbox, a console or any environment's address.
-- Don't read a username or password aloud or on screen in anything you publish. The account is deleted about 24 hours after it was issued, but the habit is the point.
+- Don't open the staff inbox, a console, or any environment other than `demo`. `demo`'s address in the address bar is fine: it is already public in the repository's About field (r2/Q-2).
+- The take's username and password may show on screen in the recording (r2/Q-1): it is a temporary account, deleted about 24 hours after it was issued, and the per-env turn caps bound what anyone could spend with it before then.

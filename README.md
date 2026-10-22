@@ -14,7 +14,7 @@
 
 - **The demo:** the link in this repository's **About → Website** field. Request a temporary patient account on its sign-in page; no one has to send you a login. How that works, and its limits: [reviewer access](docs/demo/reviewer-access.md).
 - **The walkthrough:** [a 3 to 5 minute script](docs/demo/script.md) (book by text, send a voice message, reschedule, escalate, read the eval report).
-- **The recording:** recording to come.
+- **The recording:** to come.
 
 ## Chapter 1 — The question
 
