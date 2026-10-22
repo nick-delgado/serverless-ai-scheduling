@@ -2,7 +2,7 @@
 
 **Chapter:** 6. What I'd do next
 **Milestone:** M4 (issue M4-02, first part)
-**Related:** #44, PR #TBD, #357, #368, ADR-009, PRD FR-001
+**Related:** #44, PR #374, #357, #368, ADR-009, PRD FR-001
 
 ## What happened
 
