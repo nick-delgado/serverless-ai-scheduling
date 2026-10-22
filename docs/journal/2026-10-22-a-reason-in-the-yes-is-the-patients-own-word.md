@@ -2,7 +2,7 @@
 
 **Chapter:** 5. What the evals showed
 **Milestone:** M3
-**Related:** #361, #345, #347, #360, PR #TBD, ADR-008 (amendment of 2026-10-22), ADR-009, PRD FR-031
+**Related:** #361, #345, #347, #360, PR #371, ADR-008 (amendment of 2026-10-22), ADR-009, PRD FR-031
 
 ## What happened
 
