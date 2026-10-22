@@ -6,7 +6,7 @@ Use desktop Chrome: voice is shown there only (Safari and mobile browsers work t
 
 The script names no username, password or patient name, because the app makes up all three for each account. Where it says "the name the account page showed", use the made-up name from your own account.
 
-Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording. The lines are adapted from the e2e specs, the runbook's check turn and the manual checklist, and Nick's timed dry run checks them before the recording.
+Cedar Ridge Health is a fictional clinic and all data is synthetic. Type the quoted lines as written; the agent understands other wording. The lines are adapted from the e2e specs, the runbook's check turn and the manual checklist, and Nick's timed dry run checked them before the recording.
 
 ## 1. Request an account and sign in (about 30 seconds)
 
