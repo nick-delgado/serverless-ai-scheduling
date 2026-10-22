@@ -2,7 +2,7 @@
 
 **Chapter:** 6. What I'd do next
 **Milestone:** M4
-**Related:** #45, PR #TBD, #37, #43, #44, #345, #356, ADR-002, ADR-008, ADR-009, PRD NFR-003, PRD §7
+**Related:** #45, PR #375, #37, #43, #44, #345, #356, ADR-002, ADR-008, ADR-009, PRD NFR-003, PRD §7
 
 ## What happened
 
