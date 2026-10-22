@@ -588,8 +588,9 @@ function datesBack(text: string, time: string, exact?: number): boolean {
 /**
  * Whether `text`'s day lines name exactly one date and every day line lists `time` (#360, r1/Q-3 (a)): a one-day
  * offer's closing question needs no weekday, its day line names the day. Two headings for one date count once,
- * and each must list the time; a second date, even a heading with no times, fails it. `datesBack`'s two-date floor
- * stays for its own callers.
+ * and each must list the time; a second date, even a heading with no times, fails it. It reaches every sentence
+ * of the text, so a one-date "both days" or "Other days that week" passes too (decision a3f0813/SPEC-1 (a));
+ * `datesBack`'s two-date floor stays for its own callers.
  */
 function oneDateBack(text: string, time: string): boolean {
   const lines = dayLines(text);
@@ -661,14 +662,21 @@ function hoursRemark(text: string, t: UnclaimedTime): boolean {
 
 /**
  * What an `unclaimedTimes` time lacks, or undefined (#320, r1/Q-2 (c)): ET within `ZONE_WINDOW` characters after
- * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start (a time followed by only "to",
- * "until", "till", "-" or "–" and another clock time), after its range end, cut the same way; and a weekday
- * (`WEEKDAY_RE`, a weekday range included) or "that day" anywhere in its sentence, unless the time is a bound
- * (`BOUND_BEFORE`, `BOUND_AFTER`) or `etOnly`. "every day", "each day" and "all five days", then "that week" or
- * "next week", stand for a weekday only when `dayLinesBack` (#337, r1/Q-2 (c); #340); "both days" only when
- * `datesBack` finds exactly two dates and "each of those days" when it finds at least two, each listing the time
- * (#340, r1/Q-2 (a)); "that week", "every day", "today" and "weekdays" are no weekday. `etOnly` is a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time
- * no tool has returned yet, so it needs ET and no weekday.
+ * it and before the next clock time (0cdd23a/SPEC-1 (a)), or, for a range start, after its range end, cut the same
+ * way. A range start is a time followed by only "to", "until", "till", "-" or "–" (`RANGE_GAP`) and another clock
+ * time, or a time right after "between" followed by only "and" and another clock time (`BETWEEN_BEFORE`,
+ * `BETWEEN_GAP`; #360, r1/Q-4 (a)). It also needs a weekday (`WEEKDAY_RE`, a weekday range included) or "that day"
+ * (`THAT_DAY`) anywhere in its sentence, unless one of these waives the weekday, ET staying required:
+ * - the time is a bound (`BOUND_BEFORE`, `BOUND_AFTER`);
+ * - `etOnly`, a pre-tool line without a day line (#337, r1/Q-1 (b)): it names a time no tool has returned yet;
+ * - `hoursRemark`, the clinic's own hours (#360, r1/Q-1 (a));
+ * - `oneDateBack`, a text whose day lines name one date and list the time (#360, r1/Q-3 (a)): every sentence of
+ *   it, a several-day claim included ("both days", "Other days that week"), as ADR-008's 2026-10-22 amendment
+ *   records (decision a3f0813/SPEC-1 (a));
+ * - a several-day phrase backed by the day lines (#337, r1/Q-2 (c); #340): `SEVERAL_DAYS` ("every day", "each day",
+ *   "all five days", then "that week" or "next week") when `dayLinesBack`, `BOTH_DAYS` when `datesBack` finds
+ *   exactly two dates, `EACH_OF_THOSE_DAYS` when it finds at least two, each listing the time (#340, r1/Q-2 (a)).
+ * "that week", "every day", "today" and "weekdays" are no weekday.
  */
 export function unclaimedTimeLacks(text: string, t: UnclaimedTime, etOnly: boolean): string | undefined {
   const end = t.index + t.raw.length;
