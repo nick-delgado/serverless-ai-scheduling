@@ -2,7 +2,7 @@
 
 **Chapter:** 6. What I'd do next
 **Milestone:** M4 (issue M4-02, closing part)
-**Related:** #44, PR #374, [the first part's entry](2026-10-22-the-demo-script-and-access-doc-promise-no-credential-and-no-url.md), #43
+**Related:** #44, PR #374, PR #376, [the first part's entry](2026-10-22-the-demo-script-and-access-doc-promise-no-credential-and-no-url.md), #43
 
 ## What happened
 
