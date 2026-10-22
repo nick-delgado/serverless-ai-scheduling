@@ -135,3 +135,4 @@ A dated, first-person log of how this project was built: the decisions, the surp
 | 2026-10-20 | [The exit re-run on `system.v15` misses task success, reliability and safety; M3 exits with the gaps accepted](2026-10-20-the-exit-rerun-on-system-v15-misses-three-of-six-targets.md) | 5. What the evals showed |
 | 2026-10-20 | [A reviewer can request a demo patient, and the bot check comes before anything is counted or created](2026-10-20-a-reviewer-can-request-a-demo-patient-and-the-bot-check-comes-first.md) | 6. What I'd do next |
 | 2026-10-21 | [Expired reviewer accounts delete themselves, and the job proves whose user it is deleting](2026-10-21-expired-reviewer-accounts-delete-themselves-and-the-job-proves-whose-user-it-deletes.md) | 6. What I'd do next |
+| 2026-10-21 | [A reviewer carries the demo account into the sign-in form one field at a time](2026-10-21-a-reviewer-carries-the-demo-account-into-sign-in-one-field-at-a-time.md) | 6. What I'd do next |

@@ -34,7 +34,9 @@ export function formatExpiry(expiresAt: string): string {
 /**
  * "Request demo access" (#357, FR-001): one button and a bot check. It asks for nothing about the reviewer. The
  * sign-in details come back once and live in this component's state only, never in storage (A-8): a reload shows the
- * button again. The page doesn't sign the reviewer in; it links to /login.
+ * button again. The page doesn't sign the reviewer in. Each of the username and the password has its own copy button
+ * (it copies that value and nothing else, A-1), and "Go to sign in" opens a plain /login in a new tab (#369), so this
+ * tab, and the password in it, stay open while the reviewer fills the form.
  */
 export function RequestAccessPage() {
   const env = import.meta.env;
@@ -45,7 +47,7 @@ export function RequestAccessPage() {
   const [pending, setPending] = useState(false);
   const [account, setAccount] = useState<Account>();
   const [failure, setFailure] = useState<Failure>();
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
   const busy = useRef(false);
   const widget = useRef<TurnstileHandle>(null);
 
@@ -69,12 +71,12 @@ export function RequestAccessPage() {
     }
   }
 
-  async function onCopy(text: string) {
+  async function onCopy(field: "username" | "password", text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
+      setCopyStatus(`Copied the ${field}.`);
     } catch {
-      setCopied(false);
+      setCopyStatus(`Couldn't copy the ${field}. Select it on this page and copy it yourself.`);
     }
   }
 
@@ -84,17 +86,20 @@ export function RequestAccessPage() {
         <title>{pageTitle("Your demo account")}</title>
         <h1>Your demo account</h1>
         <p className="muted">
-          This is a made-up patient at {CLINIC.name}, created just for you. The password is shown once, so
-          copy it now.
+          This is a made-up patient at {CLINIC.name}, created just for you. Each copy button copies one field.
+          "Go to sign in" opens the sign-in page in a new tab, so keep this tab open until you have signed in:
+          the password is shown once, and it is gone when this tab is closed or reloaded.
         </p>
         <dl className="access__details">
           <dt>Username</dt>
           <dd>
             <code>{account.username}</code>
+            <CopyButton label="Copy username" onClick={() => void onCopy("username", account.username)} />
           </dd>
           <dt>Password</dt>
           <dd>
             <code>{account.password}</code>
+            <CopyButton label="Copy password" onClick={() => void onCopy("password", account.password)} />
           </dd>
           <dt>Patient name</dt>
           <dd>
@@ -103,19 +108,12 @@ export function RequestAccessPage() {
         </dl>
         <p className="muted">This account is due to expire on {formatExpiry(account.expiresAt)}.</p>
         <div className="access__actions">
-          <button
-            type="button"
-            className="access__button"
-            onClick={() => void onCopy(`Username: ${account.username}\nPassword: ${account.password}`)}
-          >
-            Copy username and password
-          </button>
-          <Link to="/login" className="access__link">
-            Go to sign in
-          </Link>
+          <a href="/login" target="_blank" rel="noopener noreferrer" className="access__link">
+            Go to sign in (opens in a new tab)
+          </a>
         </div>
         <p role="status" className="access__status">
-          {copied ? "Copied." : ""}
+          {copyStatus}
         </p>
       </div>
     );
@@ -164,5 +162,16 @@ export function RequestAccessPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" className="access__copy" aria-label={label} onClick={onClick}>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+        <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+        <path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </button>
   );
 }
