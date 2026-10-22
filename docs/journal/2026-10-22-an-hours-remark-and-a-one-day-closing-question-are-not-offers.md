@@ -1,7 +1,7 @@
 # 2026-10-22 — An hours remark and a one-day closing question are not offers, so the weekday check stops asking for a weekday on them
 
 **Chapter:** 5. What the evals showed
-**Milestone:** M4
+**Milestone:** M3
 **Related:** #360, #345, #337, #340, #320, #361, #363, ADR-008, PRD FR-035, PRD §7
 
 ## What happened

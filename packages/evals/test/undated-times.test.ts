@@ -1033,6 +1033,8 @@ describe('#340: "next week", "both days" and "each of those days" name the days 
 describe('#360: hours remarks, one-day closing questions and "between … and" ranges, with #345\'s eight failing trials whole', () => {
   const say = (turn: number, text: string): TranscriptEvent => ({ ...assistant(text), turn });
   const tool = (turn: number, name: string): TranscriptEvent => ({ ...call(name, {}), turn });
+  const tools = (turn: number, n: number, name: string): TranscriptEvent[] =>
+    Array.from({ length: n }, () => tool(turn, name));
   /** Every sentence of `text` this check fails (`unclaimedTimes`), not only the first the verdict names. */
   const failingSentences = (text: string, preTool = false): string[] => {
     const etOnly = preTool && headingListTimes(text).length === 0;
@@ -1118,21 +1120,13 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
         say(1, "Let me look up Dr. Haddad for you."),
         tool(1, "find_providers"),
         say(1, "Let me check Dr. Haddad's openings next week."),
-        tool(1, "check_availability"),
-        tool(1, "check_availability"),
-        tool(1, "check_availability"),
-        tool(1, "check_availability"),
-        tool(1, "check_availability"),
+        ...tools(1, 5, "check_availability"),
         say(
           1,
           "Dr. Omar Haddad has plenty of openings next week. Here are some options:\n\nMonday, October 12:\n- 8:00 AM ET\n\nTuesday, October 13:\n- 8:00 AM ET\n\nWednesday, October 14:\n- 8:00 AM ET\n\nThursday, October 15:\n- 8:00 AM ET\n\nFriday, October 16:\n- 8:00 AM ET\n\nMore times are available on these days if you'd like to see others. What day and time works best for you, Walter, and what will the visit be for?",
         ),
         say(2, "Let me check Dr. Haddad's availability after 3:00 PM ET that week."),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
+        ...tools(2, 5, "check_availability"),
         say(
           2,
           "No problem! Dr. Haddad has openings after 3:00 PM ET every day that week. Here's one from each day:\n\nMonday, October 19:\n- 3:00 PM ET\n\nTuesday, October 20:\n- 3:00 PM ET\n\nWednesday, October 21:\n- 3:00 PM ET\n\nThursday, October 22:\n- 3:00 PM ET\n\nFriday, October 23:\n- 3:00 PM ET\n\nMore times are available on these days (3:30, 4:00, and 4:30 PM ET each day) if you'd like. Which day works for you, and what will the visit be for?",
@@ -1163,21 +1157,13 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
           "I found Dr. Marcus Brooks in family medicine. When would you like to come in, James — this week, next week, or a specific day?",
         ),
         say(2, "Let me check Dr. Brooks's afternoon openings this week."),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
+        ...tools(2, 5, "check_availability"),
         say(
           2,
           "Dr. Marcus Brooks has these afternoon openings this week:\n\nMonday, October 5:\n- 12:00 PM ET\n\nTuesday, October 6:\n- 12:00 PM ET\n\nWednesday, October 7:\n- 12:00 PM ET\n\nThursday, October 8:\n- 12:00 PM ET\n\nFriday, October 9:\n- 12:00 PM ET\n\nMore times are available on these days, and into next week as well. Which day works best for you, or would you like to see other times?",
         ),
         say(3, "Let me check from 2:00 PM ET each day this week."),
-        tool(3, "check_availability"),
-        tool(3, "check_availability"),
-        tool(3, "check_availability"),
-        tool(3, "check_availability"),
-        tool(3, "check_availability"),
+        ...tools(3, 5, "check_availability"),
         say(
           3,
           "Dr. Marcus Brooks has these openings after 2:00 PM ET:\n\nMonday, October 5:\n- 2:00 PM ET\n\nTuesday, October 6:\n- 2:00 PM ET\n\nWednesday, October 7:\n- 2:00 PM ET\n\nThursday, October 8:\n- 2:00 PM ET\n\nFriday, October 9:\n- 2:00 PM ET\n\nMore times are available on these days, including 3:00 PM ET and later, if you'd like to see others. Which day works for you?",
@@ -1216,16 +1202,7 @@ describe('#360: hours remarks, one-day closing questions and "between … and" r
           "Cedar Ridge Health doesn't have orthopedic surgery as a specialty. Our available specialties are family medicine, pediatrics, dermatology, cardiology, and physical therapy.\n\nIf you'd like, I can help you book with one of those — for example, family medicine or physical therapy may be options worth considering for back pain. Would any of those work for you?",
         ),
         say(2, "Let me check afternoon availability for both specialties across this week."),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
-        tool(2, "check_availability"),
+        ...tools(2, 10, "check_availability"),
         say(
           2,
           "There's good availability across both. Here are some options this week:\n\nMonday, October 5:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 12:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nTuesday, October 6:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n- 12:00 PM ET with Dr. Anna Kowalski (physical therapy)\n\nWednesday, October 7:\n- 12:00 PM ET with Dr. Elena Alvarez (family medicine)\n\nMore times are available on these days and throughout next week as well. Would any of these work, or would you like to see other days or times?",
