@@ -57,17 +57,54 @@ describe("the request page", () => {
     expect(screen.getByText(MOCK_ISSUED_USER.username)).toBeVisible();
     expect(screen.getByText(MOCK_PASSWORD)).toBeVisible();
     expect(screen.getByText(`${MOCK_ISSUED_USER.givenName} ${MOCK_ISSUED_USER.familyName}`)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Go to sign in" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Go to sign in (opens in a new tab)" })).toBeVisible();
   });
 
-  it("keeps the password in the page's state only: nothing in local or session storage, and a fresh page asks again", async () => {
+  it("explains the copy buttons, the new tab and the lost password before the link is used", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    const text = (await screen.findByText(/Each copy button copies one field/)).textContent ?? "";
+    expect(text).toContain('"Go to sign in" opens the sign-in page in a new tab');
+    expect(text).toContain("keep this tab open until you have signed in");
+    expect(text).toContain("it is gone when this tab is closed or reloaded");
+  });
+
+  it("opens sign in in a new tab on a plain /login, with nothing about the account passed", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    const link = await screen.findByRole("link", { name: "Go to sign in (opens in a new tab)" });
+    expect(link.getAttribute("href")).toBe("/login");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("stays on the account view when the new-tab link is clicked, so the password is still there", async () => {
+    const user = userEvent.setup();
+    const router = renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    await user.click(await screen.findByRole("link", { name: /Go to sign in/ }));
+    expect(router.state.location.pathname).toBe("/request-access");
+    expect(screen.getByText(MOCK_PASSWORD)).toBeVisible();
+  });
+
+  it("keeps the password in the page's state only: not in storage, the cookie, the console or the link, and a fresh page asks again", async () => {
     const set = vi.spyOn(Storage.prototype, "setItem");
+    const logs = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m));
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
     await screen.findByText(MOCK_PASSWORD);
+    await user.click(screen.getByRole("button", { name: "Copy username" }));
+    await user.click(screen.getByRole("button", { name: "Copy password" }));
     expect(set).not.toHaveBeenCalled();
     expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(MOCK_PASSWORD);
+    expect(document.cookie).not.toContain(MOCK_PASSWORD);
+    expect(JSON.stringify(logs.map((spy) => spy.mock.calls))).not.toContain(MOCK_PASSWORD);
+    expect(screen.getByRole("link", { name: /Go to sign in/ }).getAttribute("href")).toBe("/login");
+    expect(window.location.href).not.toContain(MOCK_PASSWORD);
+    expect(window.location.href).not.toContain(MOCK_ISSUED_USER.username);
 
     document.body.innerHTML = "";
     renderApp();
@@ -75,25 +112,70 @@ describe("the request page", () => {
     expect(screen.queryByText(MOCK_PASSWORD)).toBeNull();
   });
 
-  it("copies the username and password", async () => {
+  it("copies the bare username with its button, and says so", async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
-    await user.click(await screen.findByRole("button", { name: "Copy username and password" }));
-    expect(await navigator.clipboard.readText()).toBe(
-      `Username: ${MOCK_ISSUED_USER.username}\nPassword: ${MOCK_PASSWORD}`,
-    );
-    expect(await screen.findByText("Copied.")).toBeVisible();
+    await user.click(await screen.findByRole("button", { name: "Copy username" }));
+    expect(await navigator.clipboard.readText()).toBe(MOCK_ISSUED_USER.username);
+    expect(await screen.findByText("Copied the username.")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Copied the username.");
   });
 
-  it("says nothing was copied when the clipboard refuses", async () => {
+  it("copies the bare password with its button, and says so", async () => {
     const user = userEvent.setup();
-    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
-    await user.click(await screen.findByRole("button", { name: "Copy username and password" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalled());
-    expect(screen.queryByText("Copied.")).toBeNull();
+    await user.click(await screen.findByRole("button", { name: "Copy password" }));
+    expect(await navigator.clipboard.readText()).toBe(MOCK_PASSWORD);
+    expect(screen.getByRole("status")).toHaveTextContent("Copied the password.");
+  });
+
+  it("has no combined copy control and none for the patient's name", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    await screen.findByRole("button", { name: "Copy username" });
+    const icons = document.querySelectorAll(".access__copy svg");
+    expect(icons).toHaveLength(2);
+    for (const svg of icons) {
+      expect(svg).toHaveAttribute("aria-hidden", "true");
+      expect(svg).toHaveAttribute("focusable", "false");
+    }
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Copy username",
+      "Copy password",
+    ]);
+  });
+
+  it.each([
+    ["username", "Copy username"],
+    ["password", "Copy password"],
+  ])(
+    "says the %s copy failed when the clipboard refuses, and keeps the details visible",
+    async (field, name) => {
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("denied"));
+      renderApp();
+      await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+      await user.click(await screen.findByRole("button", { name }));
+      await waitFor(() => expect(writeText).toHaveBeenCalled());
+      expect(screen.getByRole("status")).toHaveTextContent(
+        `Couldn't copy the ${field}. Select it on this page and copy it yourself.`,
+      );
+      expect(screen.getByText(MOCK_ISSUED_USER.username)).toBeVisible();
+      expect(screen.getByText(MOCK_PASSWORD)).toBeVisible();
+    },
+  );
+
+  it("shows the last click's message when two copies follow each other", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Request demo access" }));
+    await user.click(await screen.findByRole("button", { name: "Copy username" }));
+    await user.click(screen.getByRole("button", { name: "Copy password" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Copied the password.");
+    expect(screen.getByRole("status")).not.toHaveTextContent("username");
   });
 
   it("shows the cap message with a link to the README and takes the button away", async () => {
@@ -189,7 +271,7 @@ describe("the request page", () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
-    await screen.findByRole("button", { name: "Copy username and password" });
+    await screen.findByRole("button", { name: "Copy username" });
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
@@ -210,13 +292,21 @@ describe("the request page", () => {
     expect(calls).toBe(1);
   });
 
-  it("lets a reviewer sign in with what the page showed (the mock Cognito accepts the issued user)", async () => {
+  it("lets a reviewer sign in with what the page showed (the values the copy buttons put on the clipboard)", async () => {
     const user = userEvent.setup();
     renderApp();
     await user.click(await screen.findByRole("button", { name: "Request demo access" }));
-    const username = (await screen.findByText(MOCK_ISSUED_USER.username)).textContent ?? "";
-    const password = screen.getByText(MOCK_PASSWORD).textContent ?? "";
-    await user.click(screen.getByRole("link", { name: "Go to sign in" }));
+    await user.click(await screen.findByRole("button", { name: "Copy username" }));
+    const username = await navigator.clipboard.readText();
+    await user.click(screen.getByRole("button", { name: "Copy password" }));
+    const password = await navigator.clipboard.readText();
+
+    // jsdom opens no tab, so the new tab is stood in for by a fresh router at the link's own href (A-5).
+    const link = screen.getByRole("link", { name: "Go to sign in (opens in a new tab)" });
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    cleanup();
+    renderApp(link.getAttribute("href") ?? "");
 
     await user.type(await screen.findByLabelText("Username"), username);
     await user.type(screen.getByLabelText("Password"), `${password}{Enter}`);

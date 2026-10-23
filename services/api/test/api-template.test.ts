@@ -244,6 +244,79 @@ describe("infra/stacks/api.yaml: observability (#38)", () => {
   });
 });
 
+describe("the expiry job (#357, part 2)", () => {
+  const fn = (): string[] => resource("RequestAccessExpiryFunction");
+
+  it("runs hourly from a SAM Schedule event, its only event, with no API route", () => {
+    expect(bodyLines(block(/^\s+Events:$/, fn()))).toEqual([
+      "  Hourly:",
+      "    Type: Schedule",
+      "    Properties:",
+      "      Schedule: rate(1 hour)",
+      "      Description: Run the reviewer-account expiry job (#357).",
+    ]);
+    expect(template).not.toContain("RequestAccessExpiryFunction.Arn}/invocations");
+    expect(template).not.toContain("Type: Api");
+  });
+
+  it("names the function sched-<env>-api-request-access-expiry, which the runbook's on-demand run invokes", () => {
+    expect(entries(block(/^ {4}Properties:$/, fn())).FunctionName).toBe(
+      "!Sub sched-${Env}-api-request-access-expiry",
+    );
+  });
+
+  it("gives the job the table and the pool, and a 5-minute timeout", () => {
+    expect(entries(block(/^\s+Variables:$/, fn()))).toEqual({
+      TABLE_NAME: '!Sub "{{resolve:ssm:/sched/${Env}/data/table-name}}"',
+      USER_POOL_ID: '!Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-id}}"',
+      NODE_OPTIONS: "--enable-source-maps",
+    });
+    expect(entries(block(/^ {4}Properties:$/, fn())).Timeout).toBe("300");
+  });
+
+  it("grants only the registry query, item reads, deletes and updates on the base table and three Cognito calls on this env's pool", () => {
+    // The whole Policies list: no BatchWriteItem (the boundary has none), no PutItem, no Scan, no index, no wildcard.
+    expect(bodyLines(block(/^\s+Policies:$/, fn())).filter((l) => !/^\s+#/.test(l))).toEqual([
+      '  - Version: "2012-10-17"',
+      "    Statement:",
+      "      - Sid: RegistryAndAccountData",
+      "        Effect: Allow",
+      "        Action:",
+      "          - dynamodb:Query",
+      "          - dynamodb:GetItem",
+      "          - dynamodb:DeleteItem",
+      "          - dynamodb:UpdateItem",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/data/table-arn}}"',
+      "      - Sid: DeleteTemporaryUsers",
+      "        Effect: Allow",
+      "        Action:",
+      "          - cognito-idp:AdminGetUser",
+      "          - cognito-idp:AdminUserGlobalSignOut",
+      "          - cognito-idp:AdminDeleteUser",
+      "        Resource:",
+      '          - !Sub "{{resolve:ssm:/sched/${Env}/auth/user-pool-arn}}"',
+    ]);
+    expect(fn().join("\n")).not.toMatch(/^ {6}Role:/m);
+  });
+
+  it("builds the expiry handler with its own Makefile target", () => {
+    const makefile = readFileSync(new URL("../Makefile", import.meta.url), "utf8");
+    expect(makefile).toMatch(
+      /^build-RequestAccessExpiryFunction: check-root\n\t.*services\/api\/src\/handlers\/expire-access\.ts /m,
+    );
+    expect(text(fn())).toContain("BuildMethod: makefile");
+  });
+
+  it("keeps the 14-day log retention, in its own log group", () => {
+    expect(entries(block(/^ {4}Properties:$/, resource("RequestAccessExpiryLogGroup")))).toMatchObject({
+      LogGroupName: "!Sub /aws/lambda/sched-${Env}-api-request-access-expiry",
+      RetentionInDays: "14",
+    });
+    expect(entries(block(/^\s+LoggingConfig:$/, fn())).LogGroup).toBe("!Ref RequestAccessExpiryLogGroup");
+  });
+});
+
 describe("infra/stacks/api.yaml: least privilege and abuse limits (#39, ADR-009)", () => {
   const dataTemplate = readFileSync(new URL("../../../infra/stacks/data.yaml", import.meta.url), "utf8");
   /** The table's indexes, from the CreateTable input that `packages/tools` keeps in step with data.yaml. */
@@ -344,6 +417,8 @@ describe("the request-access route (#357)", () => {
     "RequestAccessLogGroup",
     "RequestAccessFunction",
     "RequestAccessApiInvokePermission",
+    "RequestAccessExpiryLogGroup",
+    "RequestAccessExpiryFunction",
   ];
 
   it("is the API's one method with no authorizer: no security, an integration with its own function, only where RequestAccessOn", () => {
@@ -359,7 +434,7 @@ describe("the request-access route (#357)", () => {
     expect(path).not.toContain("responseTransferMode");
   });
 
-  it("is on only when the RequestAccess parameter is on (default off), and demo does not turn it on in PR 1", () => {
+  it("is on only when the RequestAccess parameter is on (default off), in demo as anywhere else: the page, its function, its route and the expiry job together", () => {
     expect(entries(block(/^ {2}RequestAccess:$/, lines))).toMatchObject({
       Type: "String",
       Default: "off",
@@ -369,7 +444,7 @@ describe("the request-access route (#357)", () => {
     expect(template).not.toMatch(/Equals \[!Ref Env, demo\]/);
   });
 
-  it("puts exactly the log group, the function and the invoke permission under that condition", () => {
+  it("puts exactly the two log groups, the two functions and the invoke permission under that condition", () => {
     const conditioned = lines.flatMap((line, i) => {
       if (!/^ {2}[A-Za-z0-9]+:$/.test(line)) return [];
       const own = block(new RegExp(`^ {2}${line.trim().replace(":", "")}:$`), lines);
@@ -377,7 +452,7 @@ describe("the request-access route (#357)", () => {
         ? [lines[i]?.trim().replace(":", "")]
         : [];
     });
-    expect(conditioned).toEqual(accessResources);
+    expect(conditioned.sort()).toEqual([...accessResources].sort());
   });
 
   it("defaults the caps to 10 a day and 5 at once, expires accounts after 24 hours, each at least 1", () => {

@@ -64,7 +64,7 @@ Resources:
   # workload role grants today (#270): SAM's log and X-Ray writes, the chat role's DynamoDB item
   # actions, the two Bedrock invokes and SendEmail, and the Identity Pool role's Transcribe call.
   # Reviewer access (#357) adds the request function's four Cognito admin calls, the expiry job's
-  # sign-out, and DeleteItem for the job (the job is the second part of #357, unused until it lands).
+  # sign-out, and DeleteItem for the job (the request function and the job both exist where the page is on).
   # A role that needs another action needs a line here first.
   # ---------------------------------------------------------------------------
   WorkloadPermissionsBoundary:
@@ -132,7 +132,7 @@ Resources:
               # One statement per service (#270 F-3, r1/Q-2 (a)): the actions stay service-wide, the resources are
               # named where the ARN carries the sched- name. No stack declares an X-Ray or SES resource, and none
               # a Bedrock one, so those grants are gone. The one Events grant, below, is for the expiry job's schedule
-              # (#357, part 2); no stack declares a rule yet. Where a statement below holds no sched- name, its
+              # (#357, part 2), the only rule any stack declares. Where a statement below holds no sched- name, its
               # comment says why. An action that takes no resource gets its own "*" statement once a deploy shows
               # the AccessDenied.
               - Sid: DynamoDbSchedTables
@@ -150,7 +150,10 @@ Resources:
                 Action: logs:*
                 Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/sched-*
               # The SAM Schedule event of the expiry job (#357, second part) creates an EventBridge rule named
-              # from the stack, so it starts with sched-. The five actions are the ones a rule and its target need.
+              # from the stack, so it starts with sched-. The nine actions are the ones CloudFormation's
+              # AWS::Events::Rule handlers list (schema.cloudformation.us-east-1.amazonaws.com, aws-events-rule.json):
+              # create tags the rule on creation (stack and system tags), update changes tags on every deploy
+              # (git-commit), delete lists the targets first. No iam:PassRole: the rule has no role.
               - Sid: EventsSchedRules
                 Effect: Allow
                 Action:
@@ -159,6 +162,10 @@ Resources:
                   - events:DescribeRule
                   - events:DeleteRule
                   - events:RemoveTargets
+                  - events:TagResource
+                  - events:UntagResource
+                  - events:ListTargetsByRule
+                  - events:ListTagsForResource
                 Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/sched-*
               # A dashboard's ARN has no region.
               - Sid: CloudWatchSchedAlarmsAndDashboards

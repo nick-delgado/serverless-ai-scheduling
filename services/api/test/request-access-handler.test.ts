@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.stubEnv("TURNSTILE_SECRET", PASS_SECRET);
   vi.stubEnv("ACCESS_DAILY_CAP", "1");
   siteverify = vi.fn(() =>
-    Promise.resolve(new Response(JSON.stringify({ success: true, hostname: "localhost" }))),
+    Promise.resolve(new Response(JSON.stringify({ success: true, hostname: "example.com" }))),
   );
   vi.stubGlobal("fetch", siteverify);
 });

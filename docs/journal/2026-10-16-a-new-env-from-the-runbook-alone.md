@@ -116,6 +116,6 @@ What r1/Q-5's edge asked us to record: `retry-escalations.ts` still loads `.env`
 
 ## What's next
 
-- `demo`: #286 tops up its seed before the 4-week window ends (the runbook's "Keeping a standing env seeded"). #44 handles reviewer access and the credential process; the `demo` passwords live only in `.env.demo`.
-- #43: `README.md`'s "Local development and deploys: *coming with M1*" can now link to `docs/runbooks/deploy-env.md`.
+- `demo`: #286 tops up its seed before the 4-week window ends (the runbook's "Keeping a standing env seeded"). #44 handles reviewer access and the credential process; the `demo` passwords live only in `.env.demo`. **Later (2026-10-22):** [reviewer access](../demo/reviewer-access.md) and the [demo script](../demo/script.md) describe the process, with no credential in the repo.
+- #43: `README.md`'s "Local development and deploys: *coming with M1*" can now link to `docs/runbooks/deploy-env.md`. **Later (2026-10-22):** #43 made that link; see [the README story's entry](2026-10-22-the-readme-tells-21-beats-and-quotes-the-v15-exit-table.md).
 - #270: once the `bedrock-mantle:*` pair is dropped, step 3's summary drops it too. **Later (2026-10-19):** #270's first PR dropped the pair and rewrote step 3's Bedrock sentence; see [The boundary keeps only what a workload role grants](2026-10-19-the-boundary-keeps-only-what-a-workload-role-grants.md).

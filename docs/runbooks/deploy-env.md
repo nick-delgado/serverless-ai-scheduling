@@ -9,9 +9,9 @@ Region: **us-east-1** throughout. The commands are for bash or zsh (the macOS de
 | Env | What it is | Teardown |
 |---|---|---|
 | `dev` | Shared, protected. The deploy workflow (`aws-setup.md`, "CI credentials (GitHub OIDC)") or an issue's own stacks. The request page is off (`deploy.sh` refuses it) | Never with `teardown.sh`; see "Teardown" |
-| `demo` | Protected; the env reviewers see (#44). The request page is off until #357's expiry job lands (`deploy.sh` refuses it) | Never with `teardown.sh`; see "Teardown" |
+| `demo` | Protected; the env reviewers see (#44). The request page is off until Nick turns it on with `-- RequestAccess=on` ("Reviewer access"), which `deploy.sh` allows only with the Turnstile secret and `TurnstileExpectedHostname`; any other `api` deploy, the emergency `EnvDailyTurnCap=1` included, leaves the page as it is | Never with `teardown.sh`; see "Teardown" |
 | `e2e` | #40's standing env for the Playwright journeys; the request page is off, so its journeys don't change | Never; see `aws-setup.md`, "Appendix: end-to-end tests (the e2e env)" |
-| anything else | Ephemeral, e.g. `pr52`: a rehearsal or a branch's experiment; the only kind that may turn the request page on ("Reviewer access") | `scripts/teardown.sh <env>` when done |
+| anything else | Ephemeral, e.g. `pr52`: a rehearsal or a branch's experiment; the only kind, besides `demo`, that turns the request page on (`-- RequestAccess=on`, "Reviewer access") | `scripts/teardown.sh <env>` when done |
 
 A name is lowercase, 2–16 characters, starting with a letter (`^[a-z][a-z0-9-]{1,15}$`). Before a first deploy, make sure the name is free; this prints nothing for a new env:
 
@@ -95,7 +95,7 @@ Two caps count new turns per clinic-local day (ADR-009 and its 2026-10-20 amendm
 
 - **Set or change a cap** by deploying `api` with the override: `scripts/deploy.sh api <env> -- EnvDailyTurnCap=<n>`. An ephemeral env takes it on `deploy.sh all <name> -- EnvDailyTurnCap=2`.
 - **A cap persists.** `sam deploy` marks every template parameter that `--parameter-overrides` doesn't name as "use previous value" (`samcli/lib/deploy/deployer.py`, `create_changeset`), so a later deploy without the override keeps the stack's value. A parameter the stack doesn't have yet (the first `api` deploy after #356) takes its template default, so `demo` starts at 200 with no override. Check what a stack holds: `aws cloudformation describe-stacks --profile sched-dev --region us-east-1 --stack-name sched-<env>-api --query "Stacks[0].Parameters"`.
-- **What a patient sees.** Over their own cap: "You've reached today's message limit for the assistant" with the front-desk number and hours. Over the env's cap: "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author." No front-desk number. Both are an error bubble with no Retry (HTTP 429, `RATE_LIMITED`, `retryable: false`); the patient's message wins when both are reached. Until #44 adds a contact line, the README has none, which is fine while Nick hands out access himself.
+- **What a patient sees.** Over their own cap: "You've reached today's message limit for the assistant" with the front-desk number and hours. Over the env's cap: "This demo has reached today's limit for the assistant. Please try again tomorrow, or see the project's README on GitHub to contact its author." No front-desk number. Both are an error bubble with no Retry (HTTP 429, `RATE_LIMITED`, `retryable: false`); the patient's message wins when both are reached. The README's contact line (`README.md`, the opening block) is what it points to; [reviewer access](../demo/reviewer-access.md) says what a reviewer does when the page has run out.
 - **Both reset at midnight Eastern** (the clinic-local date). There is no reset command: to let reviewers in sooner, raise `EnvDailyTurnCap` for the day with the command above and lower it again after. Counters expire two days after their day.
 - **Cost bound.** A short Sonnet 4.6 turn cost about $0.01 and a tool-heavy one several times that (an estimate, not a measurement): 200 turns is roughly $2 to $10 a day.
 
@@ -109,7 +109,7 @@ Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's 
 
 ## Reviewer access (the request page, #357)
 
-`/request-access` lets a reviewer get a temporary synthetic patient without anyone sending credentials (PRD FR-004; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20). It collects nothing: a Cloudflare Turnstile check and one button. This is the first of the issue's two parts: issuance and its caps. The expiry job and its revoke-all step are the second, so for now **only an ephemeral env may turn the page on**; `deploy.sh` refuses `-- RequestAccess=on` for `dev`, `demo` and `e2e`.
+`/request-access` lets a reviewer get a temporary synthetic patient without anyone sending credentials (PRD FR-004; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20). It collects nothing: a Cloudflare Turnstile check and one button. The page, its function and an hourly expiry job that deletes each account after `RequestAccessExpiryHours` exist together, and exist only where an env passes **`-- RequestAccess=on`**: an ephemeral check env, and `demo` when Nick turns it on. `dev` and `e2e` stay off (`deploy.sh` refuses `-- RequestAccess=on` for them). A deploy that passes `-- RequestAccess=on` is refused without `TURNSTILE_SECRET` and without `-- TurnstileExpectedHostname=<domain>`; any other deploy neither asks for them nor changes the page.
 
 **Keys (Nick creates them once per env).** In the Cloudflare dashboard, Turnstile, add a widget (Managed mode) with the env's CloudFront domain as its hostname. Put its two keys in the git-ignored `.env` (`.env.example` lists them): `TURNSTILE_SITE_KEY` (public; `deploy-web.sh` bakes it into the SPA) and `TURNSTILE_SECRET` (`deploy.sh` passes it to the `api` stack as the NoEcho parameter `TurnstileSecret`). For an ephemeral check env, Cloudflare's documented test keys need no dashboard: site key `1x00000000000000000000AA` with secret `1x0000000000000000000000000000000AA` always passes, and the secret `2x0000000000000000000000000000000AA` always fails ([Cloudflare, "Testing"](https://developers.cloudflare.com/turnstile/troubleshooting/testing/)). Never use them on an env that matters: anyone passes.
 
@@ -117,7 +117,7 @@ Besides the daily caps, `demo` has a monthly backstop on voice (#356, ADR-009's 
 
 ```bash
 export TURNSTILE_SITE_KEY=<site key> TURNSTILE_SECRET=<secret>     # or put them in .env
-scripts/deploy.sh all <name> -- RequestAccess=on                   # api publishes /sched/<name>/api/request-access = on
+scripts/deploy.sh all <name> -- RequestAccess=on TurnstileExpectedHostname=example.com   # api publishes /sched/<name>/api/request-access = on; the test keys report example.com
 scripts/deploy-web.sh <name>                                       # builds with VITE_REQUEST_ACCESS=on and the site key
 ```
 
@@ -126,13 +126,13 @@ scripts/deploy-web.sh <name>                                       # builds with
 | Setting | Parameter | Default | Notes |
 |---|---|---|---|
 | Accounts issued per clinic-local day | `RequestAccessDailyCap` | 10 | at least 1; resets at midnight Eastern |
-| Accounts in the registry at once | `RequestAccessActiveCap` | 5 | at least 1; "active" is listed in the registry, and until the expiry job exists nothing leaves it |
-| Hours before an account is due for deletion | `RequestAccessExpiryHours` | 24 | at least 1; recorded in the registry and shown to the reviewer; the deleting job is the second part |
-| Hostname a token must be issued on | `TurnstileExpectedHostname` | empty (not checked) | the env's CloudFront domain once known; leave empty with Cloudflare's test keys, which report `localhost` |
+| Accounts in the registry at once | `RequestAccessActiveCap` | 5 | at least 1; "active" is listed in the registry, from the moment a request reserves its place until the expiry job removes the entry |
+| Hours before an account is due for deletion | `RequestAccessExpiryHours` | 24 | at least 1; recorded in the registry and shown to the reviewer; the hourly job deletes the account at most an hour after it is due |
+| Hostname a token must be issued on | `TurnstileExpectedHostname` | empty in the template; `deploy.sh` refuses to deploy the page without it | `demo`: the env's CloudFront domain (SSM `/sched/demo/web/domain`); an ephemeral check env with Cloudflare's test keys: `example.com`, which they report (seen on a live check: `localhost` made every request a 403 `BOT_CHECK_FAILED`) |
 
-Set them like the turn caps: `scripts/deploy.sh api <name> -- RequestAccessDailyCap=2 RequestAccessActiveCap=2 RequestAccessExpiryHours=1`. They persist across later deploys (`aws cloudformation deploy` and `sam deploy` use the stack's existing value for a parameter the command doesn't name), so a later `deploy.sh api <name>` without `-- RequestAccess=on` keeps the page on.
+Set them like the turn caps: `scripts/deploy.sh api <name> -- RequestAccessDailyCap=2 RequestAccessActiveCap=2 RequestAccessExpiryHours=1`. They persist across later deploys (`aws cloudformation deploy` and `sam deploy` use the stack's existing value for a parameter the command doesn't name), so a later `deploy.sh api <name>` without `-- RequestAccess=on` keeps the page on, and `RequestAccess=off` turns it off. The secret is kept the same way: `TurnstileSecret` is a NoEcho parameter, and a deploy with no `TURNSTILE_SECRET` (environment or `.env`) leaves it out of its overrides, so SAM CLI marks it "use previous value" (`merge_parameters` in `samcli/commands/deploy/deploy_context.py`, SAM CLI 1.166.2: every template parameter the command doesn't name gets `UsePreviousValue`, with no exception for `NoEcho`) and the stack keeps it; it is never blanked. A deploy that does have the secret passes it, which refreshes it. `TurnstileExpectedHostname` persists like the caps.
 
-**What a reviewer sees.** One button; then the username (`user-` and 8 characters), a generated password and a made-up patient name, once, with a copy button and a link to sign in (the page doesn't sign them in). Past a cap: "Demo access requests have run out for now. Please contact Nick through the contact details in the project README." with a link, and nothing is created. A failed check says to try again. A reload shows the button again; the password isn't stored anywhere.
+**What a reviewer sees.** One button; then the username (`user-` and 8 characters), a generated password and a made-up patient name, once, with a copy button beside the username and another beside the password (each copies just that value), and a "Go to sign in" link that opens a plain `/login` in a new tab, so the account page stays open for the second field (the page doesn't sign them in; closing or reloading it loses the password). Past a cap: "Demo access requests have run out for now. Please contact Nick through the contact details in the project README." with a link, and nothing is created. A failed check says to try again. A reload shows the button again; the password isn't stored anywhere.
 
 **Check it on an ephemeral env** (the live check of #357's first part). With the always-passes test keys, caps of 2 and the other steps of "Deploy" above (including seeding one fixture patient and the table data, so a signed-in turn works):
 
@@ -157,7 +157,73 @@ Tear the env down with `scripts/teardown.sh <name>` once Nick approves; its user
 
 **What is and isn't logged.** The request function logs the API Gateway request ID, an outcome (`issued`, `bot_check_failed`, `bot_check_unavailable`, `capped`, `try_again`, `bad_request`, `error`; `bot_check_unavailable` on every request means the secret or Cloudflare is the problem, `try_again` is a passing transaction conflict) and the duration, for 14 days. It never logs or reads an IP address, a user agent, the token, a username or a password. The `api` stage and CloudFront have no access logs. Cloudflare sees the visitor's IP address and browser signals when the widget loads (ADR-009's amendment).
 
-**Revoke all temporary accounts at once, and the expiry job**: the second part of #357. Until it lands, the registry only grows, which is why the page stays off the envs that keep state.
+**Turn it on for `demo` (Nick; needs the keys above).** Prerequisites, in this order:
+
+1. The bootstrap apply that widens `EventsSchedRules` to nine actions (`aws-setup.md`, "The apply for reviewer access"; Nick applied it on 2026-10-21), without which the `api` deploy fails with an AccessDenied on the schedule's rule.
+2. A real Turnstile widget (Managed mode) whose hostname allow-list holds `demo`'s CloudFront domain, and its two keys in the main checkout's git-ignored `.env` as `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET` (never Cloudflare's test keys on `demo`: anyone would pass). The README's contact line (#44) is what the "requests have run out" message points to, so write it before the page is public.
+3. Then, from `main` (or the merged branch), with `aws sso login --profile sched-dev`:
+
+```bash
+host="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name /sched/demo/web/domain --query Parameter.Value --output text)"
+scripts/deploy.sh api demo -- RequestAccess=on TurnstileExpectedHostname="$host"   # the page, its route and the hourly job; /sched/demo/api/request-access = on
+scripts/deploy-web.sh demo                                           # rebuilds the SPA with the link, the page and the site key
+```
+
+The stack keeps `RequestAccess`, the hostname and the secret on later deploys, so a later `demo` deploy such as the emergency stop (`scripts/deploy.sh api demo -- EnvDailyTurnCap=1`, `aws-setup.md`) needs no keys and neither turns the page on nor off. Then check it on `demo` itself (the hostname and secret are real, so only a person passes the widget): the sign-in page links to the request page, a request issues an account that signs in, the hourly job's log group `/aws/lambda/sched-demo-api-request-access-expiry` has an `access-expiry` line each hour (`expired` 0 while nothing is due). **Turn it off** by revoking all accounts first (below), since the hourly job is what deletes them and it goes with the page, then `scripts/deploy.sh api demo -- RequestAccess=off` and `scripts/deploy-web.sh demo` (the SPA drops the link and the route). Accounts that were not revoked stay in the registry and the table while the page is off; they are deleted when the page is turned on again and the job next runs.
+
+**The expiry job.** `sched-<env>-api-request-access-expiry` (`services/api/src/handlers/expire-access.ts`) runs from an EventBridge rule, `rate(1 hour)`, wherever the page is on. For each registry entry whose expiry is at or before now it (1) skips it, logged by request ID, unless the username starts with `user-`; (2) looks the Cognito user up and, only when its `sub` is the entry's, signs it out everywhere and deletes it; (3) deletes the patient's items (profile, appointments, conversations with their messages, escalation record and traces, turn counters) and puts every slot the patient held back to open; (4) removes the entry and frees its active place in one transaction. Any failure leaves the entry and the invocation reports an error (the function's `Errors` metric); the next run finishes it. What it leaves, on purpose: a token issued before the delete works for up to an hour, so a chat turn in that window can write new items, which expire on their TTL (30 days, ADR-009); staff emails an escalation sent stay in the mailbox; and point-in-time recovery keeps the deleted items restorable for 35 days.
+
+Its log (14 days) carries request IDs, outcomes and counts only: one `access-expiry` line per run (`asOf`, `due`, `expired`, `skipped`, `failed`) and one `access-expiry entry` line per entry (`expired`, `released_unissued`, `already_released`, `skipped_prefix` or `failed`). `failed` on every run means a Cognito or DynamoDB call is failing (read the `access-expiry entry failed` line's error name); `skipped_prefix` means a registry entry names a username without `user-`, which nothing in the code writes: look at the entry before doing anything.
+
+**Revoke all temporary accounts at once.** Run the job as of a time after every expiry. This needs `lambda:InvokeFunction`, which `SchedDeployer` doesn't have: use `sched-admin` (Nick):
+
+```bash
+aws lambda invoke --profile sched-admin --region us-east-1 --function-name sched-<env>-api-request-access-expiry \
+  --cli-binary-format raw-in-base64-out --payload '{"asOf":"9999-12-31T23:59:59Z"}' /dev/stdout
+```
+
+It prints the summary (`due`, `expired`, `skipped`, `failed`); a `FunctionError` means some entry failed, so read the log and run it again until `failed` is 0. Afterwards the registry is empty and the active counter is 0 (the queries under "Check it on an ephemeral env"). Do this before `seed-data.ts --reset` on any env with the page on: the reset deletes only the fixture patients' appointments, so a temporary patient's booking would survive it while its slot is recreated open. The `asOf` field is read only from an operator's invocation: the schedule's event has none, so the hourly run always compares with the clock.
+
+**Check the expiry on an ephemeral env** (the live check "an expired account is deleted", and the revoke-all step). Deploy as above but with `RequestAccessDailyCap=4 RequestAccessActiveCap=2 RequestAccessExpiryHours=1`, seed one fixture patient and the table data, then (shell variables hold the accounts' names; record none of them, and no password):
+
+```bash
+env=<name>
+domain="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/$env/web/domain" --query Parameter.Value --output text)"
+table="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/$env/data/table-name" --query Parameter.Value --output text)"
+pool="$(aws ssm get-parameter --profile sched-dev --region us-east-1 --name "/sched/$env/auth/user-pool-id" --query Parameter.Value --output text)"
+fn="sched-$env-api-request-access-expiry"
+issue() { curl -s -X POST "https://$domain/api/request-access" -H 'content-type: application/json' -d '{"turnstileToken":"XXXX.DUMMY.TOKEN.XXXX"}'; }
+registry() { aws dynamodb query --profile sched-dev --region us-east-1 --table-name "$table" --consistent-read --key-condition-expression 'PK = :p' \
+  --expression-attribute-values '{":p":{"S":"ACCESS#ISSUED"}}' "$@"; }
+active() { aws dynamodb get-item --profile sched-dev --region us-east-1 --table-name "$table" --consistent-read \
+  --key '{"PK":{"S":"ACCESS#COUNT"},"SK":{"S":"ACTIVE"}}' --query Item.active.N --output text; }
+inpool() { aws cognito-idp admin-get-user --profile sched-dev --region us-east-1 --user-pool-id "$pool" --username "$1" --query Username --output text 2>&1 | head -c 80; }
+```
+
+1. **An expired account is deleted.** Issue one account, note its username and `sub`, and look at what it has:
+
+```bash
+a="$(issue | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).username')"
+sub_a="$(registry --query 'Items[0].sub.S' --output text)"
+registry --select COUNT --query Count --output text; active                              # 1, 1
+inpool "$a"                                                                              # the username: it exists
+aws dynamodb query --profile sched-dev --region us-east-1 --table-name "$table" --consistent-read \
+  --key-condition-expression 'PK = :p' --expression-attribute-values "{\":p\":{\"S\":\"PATIENT#$sub_a\"}}" --select COUNT --query Count --output text   # 1 (the profile)
+```
+
+   Optionally sign in as it and ask the assistant to book an appointment (one Bedrock turn), so the check also frees a slot; the unit and DynamoDB Local tests already cover that. Then run the job as of two hours from now, which is past the account's one-hour expiry (waiting instead: the account is due an hour after it was issued and the schedule runs every hour, so a real run deletes it within two hours of issue):
+
+```bash
+later="$(node -pe 'new Date(Date.now() + 2 * 3600e3).toISOString().slice(0, 19) + "Z"')"
+aws lambda invoke --profile sched-admin --region us-east-1 --function-name "$fn" \
+  --cli-binary-format raw-in-base64-out --payload "{\"asOf\":\"$later\"}" /dev/stdout     # due 1, expired 1, failed 0
+```
+
+   Expect: the registry is empty and `active` is 0; `inpool "$a"` prints a `UserNotFoundException`; the `PATIENT#<sub>` query above counts 0; `npx tsx scripts/seed-users.ts --env "$env" --env-file "$main/.env" --verify` still shows each fixture patient `verified`; the job's log has `access-expiry` with `expired` 1 (`aws logs filter-log-events --profile sched-dev --region us-east-1 --log-group-name "/aws/lambda/$fn" --filter-pattern '"access-expiry"'`).
+
+2. **Revoke all, and the freed places.** Issue two more accounts (active 2 of 2), then a third: refused with the active cap's message and nothing created. Revoke all (the command under "Revoke all temporary accounts at once"), then issue once more: it succeeds, because the places are free again and the day's count (4 of 4 now) is the only thing left. The registry holds just that one entry, and `active` is 1.
+
+Tear the env down with `scripts/teardown.sh <name>` once Nick approves.
 
 ## Teardown
 

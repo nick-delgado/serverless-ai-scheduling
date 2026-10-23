@@ -31,7 +31,7 @@ const json = (body: unknown, status = 200) =>
 
 describe("createTurnstileVerifier", () => {
   it("accepts a token Cloudflare validates, posting the secret and the token to siteverify", async () => {
-    const f = fakeFetch(() => json({ success: true, hostname: "localhost", "error-codes": [] }));
+    const f = fakeFetch(() => json({ success: true, hostname: "example.com", "error-codes": [] }));
     const verify = createTurnstileVerifier({ secret: PASS_SECRET, fetch: f.impl });
 
     await expect(verify(TOKEN)).resolves.toEqual({ ok: true });
@@ -114,8 +114,10 @@ describe("createTurnstileVerifier", () => {
     await expect(verify(TOKEN)).resolves.toEqual({ ok: true });
   });
 
-  it("skips the hostname check when none is expected (Cloudflare's test keys report localhost)", async () => {
-    const f = fakeFetch(() => json({ success: true, hostname: "localhost" }));
+  // The hostname Cloudflare's test keys report is example.com, as seen on the live check on ex357 (PR #367, comment
+  // 6327781817); this test feeds it, it doesn't check it.
+  it("skips the hostname check when none is expected", async () => {
+    const f = fakeFetch(() => json({ success: true, hostname: "example.com" }));
     await expect(
       createTurnstileVerifier({ secret: PASS_SECRET, expectedHostname: "", fetch: f.impl })(TOKEN),
     ).resolves.toEqual({ ok: true });

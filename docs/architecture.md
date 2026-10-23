@@ -1,48 +1,10 @@
 # Architecture
 
-This is a one-page overview; each part links to the ADR that decided it. It will be updated as spikes land. Anything still marked *Proposed* in an ADR may change.
+This is a one-page overview; each part links to the ADR that decided it. Every spike has landed and no ADR is still *Proposed*, so the overview describes the system as built; an ADR changes by a dated amendment, which this page follows.
 
 ## System diagram
 
-```
-                         ┌──────────────────────────────────────────────┐
-  Patient browser        │ React SPA (apps/web)                         │
-  (desktop / mobile)     │  Login · Chat · Mic overlay · Typewriter     │
-                         └───────┬───────────────────────┬──────────────┘
-                                 │ HTTPS                 │ WebSocket (SigV4, temp creds)
-                                 ▼                       ▼
-                    ┌────────────────────────┐   ┌──────────────────────────────┐
-                    │ CloudFront             │   │ Amazon Transcribe            │
-                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006)          │
-                    │  /api/* → REST API     │   └──────────────────────────────┘
-                    └───────────┬────────────┘            ▲
-                                │                         │ creds via Cognito
-                                ▼                         │ Identity Pool (ADR-005)
-                    ┌────────────────────────────────────────────┐
-                    │ API Gateway REST API (Regional)            │
-                    │  Cognito User Pool authorizer (ADR-005)    │
-                    │  POST /api/chat   (response streaming)     │
-                    │  POST /api/session (greeting + history)    ├───────────────────┐
-                    │  POST /api/request-access (public, if on)  │                   │
-                    └───────────┬────────────────────────────────┘                   │
-                                ▼ POST /api/chat                                     ▼
-                    ┌────────────────────────────────────────────┐    ┌──────────────────────────────┐
-                    │ ChatFn (Lambda, Node 24, streamifyResponse)│    │ SessionFn (Lambda, Node 24)  │
-                    │  runAgentTurn()  — packages/agent (ADR-001)│    │  JSON greeting + restore     │
-                    │   ├─ LlmClient → Bedrock Converse (ADR-010)│    │  DynamoDB GetItem · Query    │
-                    │   └─ ToolRegistry — packages/tools         │    │  no Bedrock                  │
-                    │       find_providers · check_availability  │    └──────────────┬───────────────┘
-                    │       get_my_appointments · get_patient_profile                │
-                    │       book_appointment · reschedule_appointment                │
-                    │       escalate_to_human ──► SES            │                   │
-                    └───────────┬────────────────────────────────┘                   │
-                                ▼                                                    │
-                    ┌────────────────────────────────────────────┐                   │
-                    │ DynamoDB single table (ADR-004)            │◄──────────────────┘
-                    │  patients · providers · slots (sparse GSI) │
-                    │  appointments · conversations · escalations│
-                    └────────────────────────────────────────────┘
-```
+![System diagram. The patient's browser (React SPA) reaches CloudFront with S3 over HTTPS and, through API Gateway with the Cognito User Pool authorizer, three Lambda functions: ChatFn (the agent loop, with Bedrock Converse and the tool registry, which reads and writes DynamoDB and sends escalation email through SES), SessionFn (greeting and restore) and RequestAccessFn (reviewer access, checked by Cloudflare Turnstile). An hourly EventBridge rule starts ExpireFn, which deletes expired reviewer accounts. The browser also streams voice to Amazon Transcribe with credentials from the Cognito Identity Pool. The functions share one DynamoDB single table.](assets/architecture.svg)
 
 ## A chat turn, end to end
 
@@ -62,13 +24,14 @@ This is a one-page overview; each part links to the ADR that decided it. It will
 
 ## Requesting demo access (where the page is on)
 
-Only envs whose `api` stack has `RequestAccess=on` have this route, and in the first part of #357 that is an ephemeral check env only (ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20). It is the API's one route with no authorizer.
+Only envs whose `api` stack is deployed with `RequestAccess=on` have this route: an ephemeral check env, and `demo` once Nick turns it on (never `dev` or `e2e`; ADR-005, ADR-009 and ADR-004's amendments of 2026-10-20 and 2026-10-21). It is the API's one route with no authorizer.
 
 1. The sign-in page links to `/request-access`; the page shows a Cloudflare Turnstile widget and one button, and asks for nothing about the reviewer.
 2. The SPA sends `POST /api/request-access {turnstileToken}` with no `Authorization`. RequestAccessFn (Lambda, no Bedrock, no agent code) posts the token and its secret to Cloudflare's `siteverify` and goes on only if `success` is true. A failed check creates nothing and counts against no cap; an unreachable Cloudflare answers "try again".
 3. It reserves a place: one `TransactWriteItems` adds one to the day's counter and the active counter, each conditional on its cap, and puts a registry entry under `ACCESS#ISSUED`. Past either cap it answers 429 with the "requests have run out" message and creates nothing else.
 4. It creates the Cognito user (`AdminCreateUser`, no message, then `AdminSetUserPassword`, permanent), reads its `sub`, and writes the `PATIENT#<sub>` profile and the entry's `sub` in a second transaction. If a step fails, it deletes the user once and answers "try again".
 5. It answers with the username, a generated password and the synthetic patient's name, `no-store`; the page shows them once and keeps them in memory only. The reviewer then signs in at `/login` like any patient, and everything after that is the chat turn above, with the identity from the verified token.
+6. When the account is due (`RequestAccessExpiryHours` after issue), the hourly ExpireFn (a Lambda started by an EventBridge `rate(1 hour)` rule, no Bedrock) finds the entry with a `Query` on `ACCESS#ISSUED`, checks that the Cognito user's `sub` is the entry's, signs the user out everywhere and deletes it, deletes the patient's items (profile, appointments, conversations with their messages, escalation and traces, turn counters), puts any slot the patient held back to open, and removes the entry and its active place in one transaction. An entry that fails part-way stays and is finished by the next run. An operator can run it as of another time (`{ "asOf": ... }`), which the runbook's revoke-all step does.
 
 ## Greeting and restore
 

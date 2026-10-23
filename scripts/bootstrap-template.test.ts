@@ -601,7 +601,8 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
       resource: [arn("logs", true, "log-group:/aws/lambda/sched-*")],
     },
     {
-      // The expiry job's SAM Schedule event (#357): the five actions a rule and its target need, on sched-* rules.
+      // The expiry job's SAM Schedule event (#357): the nine actions CloudFormation's AWS::Events::Rule handlers
+      // list for create (tag on create), update (tags change every deploy) and delete (lists targets), on sched-* rules.
       sid: "EventsSchedRules",
       action: [
         "events:PutRule",
@@ -609,6 +610,10 @@ describe("sched-cfn-exec's service grants (#270 second PR; F-3)", () => {
         "events:DescribeRule",
         "events:DeleteRule",
         "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource",
+        "events:ListTargetsByRule",
+        "events:ListTagsForResource",
       ],
       resource: [arn("events", true, "rule/sched-*")],
     },

@@ -165,7 +165,8 @@ describe("the offer-format L1 cases pass a reply in the format (#236, r1/Q-4 (a)
 /**
  * Each settled check of the offer-format L1 cases fails a reply that breaks it (#236, r1/Q-4 (a)). A weekday-only line
  * ("Tuesday:") is no day line, so since #320 (r1/Q-1 (a) edges, kept by 0cdd23a/SPEC-3 (a)) its listed times fail the ET check too: their
- * weekday is read from their own line.
+ * weekday is read from their own line. The exception is #360 (r1/Q-3 (a)): the two-day reply that loses one heading
+ * keeps one day line that lists the times, so its times need no weekday and its miss is the contains check alone.
  */
 describe('each settled check of the offer-format L1 cases fails a reply that breaks it (#236, r1/Q-4 (a)), and a "no day line" reply fails the time check too (#320)', () => {
   it.each<FailingReply>([
@@ -197,13 +198,13 @@ describe('each settled check of the offer-format L1 cases fails a reply that bre
       "l1-offer-multi-day",
       "no Tuesday day line",
       TWO_DAYS.replace("Tuesday, October 13:", "Tuesday:"),
-      [CONTAINS, ET],
+      [CONTAINS],
     ],
     [
       "l1-offer-multi-day",
       "no Wednesday day line",
       TWO_DAYS.replace("Wednesday, October 14:", "Wednesday:"),
-      [CONTAINS, ET],
+      [CONTAINS],
     ],
     ["l1-offer-multi-day", "October 13 twice", `${TWO_DAYS}\nOctober 13 is the earlier day.`, [MATCH_NONE]],
     ["l1-offer-multi-day", "October 14 twice", `${TWO_DAYS}\nOctober 14 is the later day.`, [MATCH_NONE]],

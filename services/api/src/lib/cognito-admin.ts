@@ -2,13 +2,16 @@
  * The User Pool admin operations that create a patient, shared by `scripts/seed-users.ts` (the fixture
  * patients) and the request-access handler (temporary reviewer patients, #357). Both create a user the
  * same way (ADR-005): `AdminCreateUser` with no invitation message, then `AdminSetUserPassword` with
- * `Permanent: true`, so the user signs in with SRP straight away. Tests inject a fake, so nothing here needs AWS.
+ * `Permanent: true`, so the user signs in with SRP straight away. The expiry job (`expire-access.ts`) uses
+ * the other three calls: `findSub` (`AdminGetUser`), `globalSignOut` and `deleteUser`. Tests inject a fake,
+ * so nothing here needs AWS.
  */
 import {
   AdminCreateUserCommand,
   AdminDeleteUserCommand,
   AdminGetUserCommand,
   AdminSetUserPasswordCommand,
+  AdminUserGlobalSignOutCommand,
   type CognitoIdentityProviderClient,
   UserNotFoundException,
   UsernameExistsException,
@@ -30,6 +33,14 @@ export interface CognitoAdmin {
   deleteUser(username: string): Promise<void>;
 }
 
+/** What the expiry job calls (#357); `cognitoAdmin` returns both interfaces. */
+export interface CognitoExpiryAdmin extends Pick<CognitoAdmin, "deleteUser"> {
+  /** The user's `sub`, or undefined when there is no such user (the expiry job's ownership check, #357). */
+  findSub(username: string): Promise<string | undefined>;
+  /** Revokes the user's refresh tokens. A user that does not exist counts as signed out. */
+  globalSignOut(username: string): Promise<void>;
+}
+
 /** Mirrors the User Pool's policy in infra/stacks/auth.yaml, so a bad password fails before any AWS call. */
 export function passwordProblems(password: string): string[] {
   const problems: string[] = [];
@@ -40,7 +51,16 @@ export function passwordProblems(password: string): string[] {
   return problems;
 }
 
-export function cognitoAdmin(client: CognitoIdentityProviderClient, userPoolId: string): CognitoAdmin {
+export function cognitoAdmin(
+  client: CognitoIdentityProviderClient,
+  userPoolId: string,
+): CognitoAdmin & CognitoExpiryAdmin {
+  const getSub = async (username: string): Promise<string> => {
+    const out = await client.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: username }));
+    const sub = out.UserAttributes?.find((a) => a.Name === "sub")?.Value;
+    if (!sub) throw new Error(`User ${username} has no sub attribute`);
+    return sub;
+  };
   return {
     async createUser(user) {
       try {
@@ -61,11 +81,21 @@ export function cognitoAdmin(client: CognitoIdentityProviderClient, userPoolId: 
         throw err;
       }
     },
-    async getSub(username) {
-      const out = await client.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: username }));
-      const sub = out.UserAttributes?.find((a) => a.Name === "sub")?.Value;
-      if (!sub) throw new Error(`User ${username} has no sub attribute`);
-      return sub;
+    getSub,
+    async findSub(username) {
+      try {
+        return await getSub(username);
+      } catch (err) {
+        if (err instanceof UserNotFoundException) return undefined;
+        throw err;
+      }
+    },
+    async globalSignOut(username) {
+      try {
+        await client.send(new AdminUserGlobalSignOutCommand({ UserPoolId: userPoolId, Username: username }));
+      } catch (err) {
+        if (!(err instanceof UserNotFoundException)) throw err;
+      }
     },
     async setPermanentPassword(username, password) {
       await client.send(
