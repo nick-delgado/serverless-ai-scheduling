@@ -1,48 +1,10 @@
 # Architecture
 
-This is a one-page overview; each part links to the ADR that decided it. It will be updated as spikes land. Anything still marked *Proposed* in an ADR may change.
+This is a one-page overview; each part links to the ADR that decided it. Every spike has landed and no ADR is still *Proposed*, so the overview describes the system as built; an ADR changes by a dated amendment, which this page follows.
 
 ## System diagram
 
-```
-                         ┌──────────────────────────────────────────────┐
-  Patient browser        │ React SPA (apps/web)                         │
-  (desktop / mobile)     │  Login · Chat · Mic overlay · Typewriter     │
-                         └───────┬───────────────────────┬──────────────┘
-                                 │ HTTPS                 │ WebSocket (SigV4, temp creds)
-                                 ▼                       ▼
-                    ┌────────────────────────┐   ┌──────────────────────────────┐
-                    │ CloudFront             │   │ Amazon Transcribe            │
-                    │  /*     → S3 (OAC)     │   │ Streaming (ADR-006)          │
-                    │  /api/* → REST API     │   └──────────────────────────────┘
-                    └───────────┬────────────┘            ▲
-                                │                         │ creds via Cognito
-                                ▼                         │ Identity Pool (ADR-005)
-                    ┌────────────────────────────────────────────┐
-                    │ API Gateway REST API (Regional)            │
-                    │  Cognito User Pool authorizer (ADR-005)    │
-                    │  POST /api/chat   (response streaming)     │
-                    │  POST /api/session (greeting + history)    ├───────────────────┐
-                    │  POST /api/request-access (public, if on)  │                   │
-                    └───────────┬────────────────────────────────┘                   │
-                                ▼ POST /api/chat                                     ▼
-                    ┌────────────────────────────────────────────┐    ┌──────────────────────────────┐
-                    │ ChatFn (Lambda, Node 24, streamifyResponse)│    │ SessionFn (Lambda, Node 24)  │
-                    │  runAgentTurn()  — packages/agent (ADR-001)│    │  JSON greeting + restore     │
-                    │   ├─ LlmClient → Bedrock Converse (ADR-010)│    │  DynamoDB GetItem · Query    │
-                    │   └─ ToolRegistry — packages/tools         │    │  no Bedrock                  │
-                    │       find_providers · check_availability  │    └──────────────┬───────────────┘
-                    │       get_my_appointments · get_patient_profile                │
-                    │       book_appointment · reschedule_appointment                │
-                    │       escalate_to_human ──► SES            │                   │
-                    └───────────┬────────────────────────────────┘                   │
-                                ▼                                                    │
-                    ┌────────────────────────────────────────────┐                   │
-                    │ DynamoDB single table (ADR-004)            │◄──────────────────┘
-                    │  patients · providers · slots (sparse GSI) │
-                    │  appointments · conversations · escalations│
-                    └────────────────────────────────────────────┘
-```
+![System diagram. The patient's browser (React SPA) reaches CloudFront with S3 over HTTPS and, through API Gateway with the Cognito User Pool authorizer, three Lambda functions: ChatFn (the agent loop, with Bedrock Converse and the tool registry, which reads and writes DynamoDB and sends escalation email through SES), SessionFn (greeting and restore) and RequestAccessFn (reviewer access, checked by Cloudflare Turnstile). An hourly EventBridge rule starts ExpireFn, which deletes expired reviewer accounts. The browser also streams voice to Amazon Transcribe with credentials from the Cognito Identity Pool. The functions share one DynamoDB single table.](assets/architecture.svg)
 
 ## A chat turn, end to end
 

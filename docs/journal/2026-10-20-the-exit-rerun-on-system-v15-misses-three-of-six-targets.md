@@ -53,5 +53,5 @@ The failing trials by cause (counts from the scenario results file, `df05687`): 
 
 ## What's next
 
-- The four fix issues are filed: #360 (the clock-time invariant) and #361 (the restatement reason) in M4, #362 (the possessive provider name) and #363 (`book-multi-constraint`'s `time_of_day`) in Future. #43's README table quotes this table.
+- The four fix issues are filed: #360 (the clock-time invariant) and #361 (the restatement reason) in M4, #362 (the possessive provider name) and #363 (`book-multi-constraint`'s `time_of_day`) in Future. #43's README table quotes this table. **Later (2026-10-22):** the README's table quotes six rows, five from this run's table and NFR-001's first text from #251's 2026-10-19 measurement, not all seven rows above; see [the README story's entry](2026-10-22-the-readme-tells-21-beats-and-quotes-the-v15-exit-table.md).
 - "Recalibrate `estimateRunCost`" isn't needed: the ratio stayed inside the range.

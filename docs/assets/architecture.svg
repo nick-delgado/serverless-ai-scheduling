@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 990" width="1060" height="990" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">System diagram: Cedar Ridge scheduling assistant</title>
+  <desc id="d">The patient's browser (React SPA) reaches CloudFront with S3 over HTTPS and, through API Gateway with the Cognito User Pool authorizer, three Lambda functions: ChatFn (the agent loop, with Bedrock Converse and the tool registry, which reads and writes DynamoDB and sends escalation email through SES), SessionFn (greeting and restore) and RequestAccessFn (reviewer access, checked by Cloudflare Turnstile). An hourly EventBridge rule starts ExpireFn, which deletes expired reviewer accounts. The browser also streams voice to Amazon Transcribe with credentials from the Cognito Identity Pool. The functions share one DynamoDB single table.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#374151"/>
+    </marker>
+    <style>
+      text { fill: #111827; font-size: 12px; }
+      .h { font-weight: 700; font-size: 13px; }
+      .l { font-size: 11px; fill: #374151; }
+      .n { font-size: 11px; fill: #4b5563; }
+      .box { fill: #eef2ff; stroke: #4338ca; stroke-width: 1.5; }
+      .fn { fill: #ecfdf5; stroke: #047857; stroke-width: 1.5; }
+      .ext { fill: #fff7ed; stroke: #c2410c; stroke-width: 1.5; }
+      .data { fill: #fefce8; stroke: #a16207; stroke-width: 1.5; }
+      .inner { fill: #ffffff; stroke: #047857; stroke-width: 1; stroke-dasharray: 4 3; }
+      .e { fill: none; stroke: #374151; stroke-width: 1.5; marker-end: url(#a); }
+      .d { stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1060" height="990" fill="#ffffff"/>
+
+  <!-- Browser -->
+  <rect class="box" x="40" y="30" width="780" height="70" rx="6"/>
+  <text class="h" x="56" y="54">Patient browser (desktop / mobile): React SPA (apps/web)</text>
+  <text x="56" y="76">Login · Chat · Mic overlay · Typewriter · reviewer access page</text>
+
+  <!-- CloudFront + S3 -->
+  <rect class="box" x="40" y="170" width="380" height="80" rx="6"/>
+  <text class="h" x="56" y="194">CloudFront + S3 (ADR-003, ADR-007)</text>
+  <text x="56" y="214">/*  → S3 bucket (origin access control)</text>
+  <text x="56" y="232">/api/*  → REST API</text>
+  <path class="e" d="M230,100 L230,170"/>
+  <text class="l" x="240" y="140">HTTPS</text>
+
+  <!-- Transcribe + Identity Pool -->
+  <rect class="ext" x="540" y="170" width="230" height="80" rx="6"/>
+  <text class="h" x="556" y="194">Amazon Transcribe Streaming</text>
+  <text x="556" y="214">(ADR-006) voice to text,</text>
+  <text x="556" y="232">streamed while the patient talks</text>
+  <path class="e" d="M650,100 L650,170"/>
+  <text class="l" x="660" y="140">WebSocket (SigV4, temp creds)</text>
+
+  <rect class="box" x="800" y="170" width="240" height="80" rx="6"/>
+  <text class="h" x="816" y="194">Cognito Identity Pool</text>
+  <text x="816" y="214">(ADR-005) temporary credentials</text>
+  <text x="816" y="232">that can do nothing but Transcribe</text>
+  <path class="e d" d="M920,170 L920,65 L822,65"/>
+  <text class="l" x="928" y="125">credentials</text>
+
+  <!-- API Gateway -->
+  <rect class="box" x="40" y="290" width="580" height="120" rx="6"/>
+  <text class="h" x="56" y="314">API Gateway REST API, Regional (ADR-007)</text>
+  <text x="56" y="334">Cognito User Pool authorizer (ADR-005): the JWT gives the patient ID</text>
+  <text x="56" y="354">POST /api/chat  (response streaming)</text>
+  <text x="56" y="372">POST /api/session  (greeting + history)</text>
+  <text x="56" y="390">POST /api/request-access  (public, only where an env turns it on)</text>
+  <path class="e" d="M230,250 L230,290"/>
+
+  <!-- Turnstile -->
+  <rect class="ext" x="660" y="290" width="380" height="50" rx="6"/>
+  <text class="h" x="676" y="312">Cloudflare Turnstile (ADR-009)</text>
+  <text x="676" y="330">bot check: widget in the SPA, token verified server-side</text>
+
+  <!-- EventBridge -->
+  <rect class="box" x="855" y="370" width="185" height="45" rx="6"/>
+  <text class="h" x="867" y="390">EventBridge rule</text>
+  <text x="867" y="406">rate(1 hour)</text>
+  <path class="e" d="M947,415 L947,450"/>
+
+  <!-- Functions -->
+  <rect class="fn" x="30" y="450" width="360" height="190" rx="6"/>
+  <text class="h" x="46" y="474">ChatFn (Lambda, Node 24, streamifyResponse)</text>
+  <text x="46" y="494">runAgentTurn(): packages/agent (ADR-001)</text>
+  <rect class="inner" x="44" y="508" width="332" height="118" rx="4"/>
+  <text class="h" x="56" y="528">Tool registry: packages/tools</text>
+  <text x="56" y="548">find_providers · check_availability</text>
+  <text x="56" y="566">get_my_appointments · get_patient_profile</text>
+  <text x="56" y="584">book_appointment · reschedule_appointment</text>
+  <text x="56" y="602">escalate_to_human, then an email through SES</text>
+  <text class="n" x="56" y="618">patient ID injected from the JWT, never by the model</text>
+  <path class="e" d="M200,410 L200,450"/>
+  <text class="l" x="208" y="436">POST /api/chat</text>
+
+  <rect class="fn" x="405" y="450" width="210" height="80" rx="6"/>
+  <text class="h" x="417" y="474">SessionFn (Lambda, Node 24)</text>
+  <text x="417" y="494">JSON greeting + restore</text>
+  <text x="417" y="512">no Bedrock</text>
+  <path class="e" d="M510,410 L510,450"/>
+  <text class="l" x="518" y="436">POST /api/session</text>
+
+  <rect class="fn" x="630" y="450" width="210" height="80" rx="6"/>
+  <text class="h" x="642" y="474">RequestAccessFn (Lambda)</text>
+  <text x="642" y="494">creates the Cognito user and</text>
+  <text x="642" y="512">a synthetic patient; no Bedrock</text>
+  <path class="e" d="M600,410 L700,450"/>
+  <path class="e d" d="M760,450 L760,340"/>
+  <text class="l" x="768" y="400">siteverify</text>
+
+  <rect class="fn" x="855" y="450" width="185" height="80" rx="6"/>
+  <text class="h" x="867" y="474">ExpireFn (Lambda)</text>
+  <text x="867" y="494">deletes expired reviewer</text>
+  <text x="867" y="512">accounts and their data</text>
+
+  <!-- Bedrock + SES -->
+  <rect class="ext" x="30" y="690" width="215" height="70" rx="6"/>
+  <text class="h" x="46" y="714">Bedrock Converse (ADR-010)</text>
+  <text x="46" y="734">Claude Sonnet 4.6 by default;</text>
+  <text x="46" y="750">other profiles by config</text>
+  <path class="e" d="M130,640 L130,690"/>
+  <text class="l" x="138" y="670">LlmClient</text>
+
+  <rect class="ext" x="260" y="690" width="130" height="70" rx="6"/>
+  <text class="h" x="272" y="714">Amazon SES</text>
+  <text x="272" y="734">(ADR-009) staff</text>
+  <text x="272" y="750">escalation email</text>
+  <path class="e" d="M320,640 L320,690"/>
+
+  <!-- DynamoDB -->
+  <rect class="data" x="30" y="820" width="1010" height="90" rx="6"/>
+  <text class="h" x="46" y="846">DynamoDB single table (ADR-004)</text>
+  <text x="46" y="868">patients · providers · slots (sparse GSI) · appointments · conversations · escalations</text>
+  <text x="46" y="888">reviewer access registry · daily turn counters</text>
+  <path class="e" d="M390,610 L398,610 L398,820"/>
+  <path class="e" d="M510,530 L510,820"/>
+  <text class="l" x="518" y="700">GetItem · Query</text>
+  <path class="e" d="M735,530 L735,820"/>
+  <text class="l" x="743" y="700">TransactWriteItems</text>
+  <path class="e" d="M947,530 L947,820"/>
+  <text class="l" x="940" y="700" text-anchor="end">Query · delete</text>
+
+  <text class="n" x="30" y="950">Not shown: dashboards, alarms and the spend backstop. Each ADR label names the decision record behind that part.</text>
+</svg>
