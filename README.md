@@ -2,7 +2,7 @@
 
 > A serverless, tool-using AI agent that helps patients book and reschedule doctor's appointments by text or voice, and an evaluation harness that measures whether it gets them right.
 >
-> **Status:** Milestones M0 through M4 are complete as of 2026-10-22: the agent, the eval harness, the deployed demo and this story are built. M3 closed with three eval targets (task success, reliability and safety violations) accepted as known gaps; [chapter 5](#chapter-5--what-the-evals-showed) has the numbers. Follow along in the [journal](docs/journal/) and on the [project board](https://github.com/users/nick-delgado/projects/1).
+> **Status:** Milestones M0 through M4 are complete as of 2026-10-23: the agent, the eval harness, the deployed demo and this story are built. M3 closed with three eval targets (task success, reliability and safety violations) accepted as known gaps; [chapter 5](#chapter-5--what-the-evals-showed) has the numbers. Follow along in the [journal](docs/journal/) and on the [project board](https://github.com/users/nick-delgado/projects/1).
 >
 > **Contact:** if the demo's access requests have run out, or you'd like a walkthrough, message Nick Delgado on [LinkedIn](https://www.linkedin.com/in/i-delgado/).
 >
