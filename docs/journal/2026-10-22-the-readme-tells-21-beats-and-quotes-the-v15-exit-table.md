@@ -2,7 +2,7 @@
 
 **Chapter:** 6. What I'd do next
 **Milestone:** M4
-**Related:** #43, #44, #45, #345, #360, #361, ADR-002 (amendment of 2026-10-20), PRD §7
+**Related:** #43, PR #377, #44, #45, #345, #360, #361, ADR-002 (amendment of 2026-10-20), PRD §7
 
 ## What happened
 
