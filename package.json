@@ -34,7 +34,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1143.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.0",
-    "@vitest/coverage-v8": "5.0.2",
+    "@vitest/coverage-v8": "5.0.5",
     "amazon-cognito-identity-js": "^6.3.20",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
@@ -46,6 +46,6 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vite": "^8.3.5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   }
 }
