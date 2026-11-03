@@ -82,7 +82,7 @@ Record the result without passwords, tokens, email addresses or the domain: the 
 
 ## Keeping a standing env seeded
 
-The seed covers 4 weeks from the day it ran. For a standing env (`dev`, `demo`), re-run step 4 (`seed-data.ts --env <env>`, no `--reset`) before the window runs out: it only adds the missing slots and keeps every booking. Re-run step 3 only to add a patient or change a password.
+The seed covers 4 weeks from the day it ran. For a standing env (`dev`, `demo`), re-run step 4 (`seed-data.ts --env <env>`, no `--reset`) before the window runs out: it only adds the missing slots and keeps every booking. Re-run step 3 to add a patient or change a password, or when the checkout you run from has no mapping for the env's current User Pool (or point step 4 at another checkout's mapping with `--mapping`). For `demo`, run each top-up 10 to 14 days after the previous window's start date.
 
 ## Daily turn caps
 
